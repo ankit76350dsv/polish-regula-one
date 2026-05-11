@@ -63,7 +63,7 @@ Helps companies avoid violations, penalties, and missing documentation.
 
 ---
 
-# 1. KSeFPilot — E-Invoice System
+# 1. KSeFFlow — E-Invoice System
 
 ### Purpose
 Allows companies to create and send invoices directly to the Polish KSeF government system.
@@ -82,7 +82,7 @@ Allows companies to create and send invoices directly to the Polish KSeF governm
 
 ---
 
-# 2. TimePilot — Time Tracking System
+# 2. WorkPulse — Time Tracking System
 
 ### Purpose
 Tracks employee working hours and attendance.
@@ -101,7 +101,7 @@ Tracks employee working hours and attendance.
 
 ---
 
-# 3. CompliancePilot — HR Compliance System
+# 3. SafeWork — HR Compliance System
 
 ### Purpose
 Tracks employee compliance documents and workplace safety records.
@@ -138,7 +138,7 @@ Allows employees to anonymously report illegal or unethical activities.
 
 ---
 
-# 5. EcoPilot — BDO Waste Reporting
+# 5. WasteSync — BDO Waste Reporting
 
 ### Purpose
 Helps companies manage environmental waste reporting obligations.
