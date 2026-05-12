@@ -17,6 +17,9 @@ public class User {
     @Id
     private String id;
 
+    @Indexed(unique = true)
+    private String cognitoSub;
+
     private String name;
 
     @Indexed(unique = true)
@@ -30,8 +33,6 @@ public class User {
     @Builder.Default
     private boolean enabled = true;
 
-    @Builder.Default
-    private boolean tempPassword = false;
 
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

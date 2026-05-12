@@ -1,4 +1,4 @@
-package com.regulaone.backend.controllers;
+package com.regulaone.backend.utils;
 
 import com.regulaone.backend.dto.MessageResponse;
 import org.springframework.http.ResponseEntity;

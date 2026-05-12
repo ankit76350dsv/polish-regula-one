@@ -18,30 +18,31 @@ public class AdminController {
 
     private final UserService userService;
 
-    /** Send an invitation email with a temporary password */
+    /**
+     * Invite a user — Cognito creates the account and emails a temporary password.
+     * {username} in other endpoints = the invited user's email (Cognito username).
+     */
     @PostMapping("/users/invite")
     public ResponseEntity<UserResponse> inviteUser(@Valid @RequestBody InviteUserRequest request) {
         return ResponseEntity.ok(userService.inviteUser(request));
     }
 
-    /** List all users */
     @GetMapping("/users")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
-    /** Update a user's name, email, or role */
-    @PutMapping("/users/{userId}")
+    /** Update name, email, and/or role of an existing Cognito user. */
+    @PutMapping("/users/{username}")
     public ResponseEntity<UserResponse> updateUser(
-            @PathVariable String userId,
+            @PathVariable String username,
             @RequestBody UpdateUserRequest request) {
-        return ResponseEntity.ok(userService.updateUser(userId, request));
+        return ResponseEntity.ok(userService.updateUser(username, request));
     }
 
-    /** Delete a user by ID */
-    @DeleteMapping("/users/{userId}")
-    public ResponseEntity<MessageResponse> deleteUser(@PathVariable String userId) {
-        userService.deleteUser(userId);
+    @DeleteMapping("/users/{username}")
+    public ResponseEntity<MessageResponse> deleteUser(@PathVariable String username) {
+        userService.deleteUser(username);
         return ResponseEntity.ok(new MessageResponse("User deleted successfully"));
     }
 }

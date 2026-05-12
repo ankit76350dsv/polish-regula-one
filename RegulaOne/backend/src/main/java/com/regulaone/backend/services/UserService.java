@@ -5,116 +5,110 @@ import com.regulaone.backend.models.Role;
 import com.regulaone.backend.models.User;
 import com.regulaone.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserResponse;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeType;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.UserType;
 
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
+    private final CognitoService cognitoService;
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtService jwtService;
-    private final UserDetailsService userDetailsService;
-    private final AuthenticationManager authenticationManager;
-    private final EmailService emailService;
 
-    private static final String CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$";
-    private static final SecureRandom RANDOM = new SecureRandom();
+    // --- Public Auth ---
+    public MessageResponse signup(SignupRequest request) {
+        cognitoService.signUp(request.getName(), request.getEmail(), request.getPassword());
+        return new MessageResponse("Please check your email to verify your account.");
+    }
 
-    public LoginResponse signup(SignupRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already registered");
+    public MessageResponse confirmSignup(ConfirmSignupRequest request) {
+        cognitoService.confirmSignUp(request.getEmail(), request.getCode());
+
+        // Fetch the Cognito sub (UUID) after confirmation and save user to MongoDB
+        if (!userRepository.existsByEmail(request.getEmail())) {
+            AdminGetUserResponse cognitoUser = cognitoService.adminGetUser(request.getEmail());
+            Map<String, String> attrs = cognitoUser.userAttributes().stream()
+                    .collect(Collectors.toMap(AttributeType::name, AttributeType::value));
+
+            User user = User.builder()
+                    .cognitoSub(attrs.get("sub"))
+                    .name(attrs.getOrDefault("name", ""))
+                    .email(attrs.getOrDefault("email", request.getEmail()))
+                    .role(Role.ROLE_USER)
+                    .enabled(true)
+                    .build();
+            userRepository.save(user);
         }
-        User user = User.builder()
-                .name(request.getName())
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.ROLE_USER)
-                .enabled(true)
-                .tempPassword(false)
-                .build();
-        userRepository.save(user);
-        UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        return buildLoginResponse(user, jwtService.generateToken(userDetails));
+
+        return new MessageResponse("Account confirmed. You can now log in.");
+    }
+
+    public MessageResponse resendCode(String email) {
+        cognitoService.resendConfirmationCode(email);
+        return new MessageResponse("Confirmation code resent. Please check your email.");
     }
 
     public LoginResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        return buildLoginResponse(user, jwtService.generateToken(userDetails));
-    }
+        LoginResponse response = cognitoService.signIn(request.getEmail(), request.getPassword());
 
-    public void changePassword(String email, ChangePasswordRequest request) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-
-        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
-            throw new IllegalArgumentException("Current password is incorrect");
+        // On successful login (no challenge), sync role from Cognito groups to MongoDB
+        if (response.getIdToken() != null) {
+            syncRoleToMongoDB(request.getEmail());
         }
 
-        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        user.setTempPassword(false);
-        user.setUpdatedAt(LocalDateTime.now());
-        
-        userRepository.save(user);
+        return response;
     }
+
+    private void syncRoleToMongoDB(String email) {
+        List<String> groups = cognitoService.getUserGroups(email);
+        Role role = groups.contains("ROLE_ADMIN") ? Role.ROLE_ADMIN : Role.ROLE_USER;
+
+        userRepository.findByEmail(email).ifPresent(user -> {
+            user.setRole(role);
+            user.setUpdatedAt(LocalDateTime.now());
+            userRepository.save(user);
+        });
+    }
+
+    public LoginResponse respondToChallenge(RespondChallengeRequest request) {
+        return cognitoService.respondToNewPasswordChallenge(
+                request.getUsername(), request.getSession(), request.getNewPassword()
+        );
+    }
+
+    public void changePassword(ChangePasswordRequest request) {
+        cognitoService.changePassword(
+                request.getAccessToken(), request.getCurrentPassword(), request.getNewPassword()
+        );
+    }
+
+    // --- Admin ---
 
     public UserResponse inviteUser(InviteUserRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already registered");
-        }
-        String tempPassword = generateTempPassword();
+        UserType cognitoUser = cognitoService.adminCreateUser(request.getName(), request.getEmail(), request.getRole());
+
+        Map<String, String> attrs = cognitoUser.attributes().stream()
+                .collect(Collectors.toMap(AttributeType::name, AttributeType::value));
+
+        Role role = parseRole(request.getRole());
+
         User user = User.builder()
-                .name(request.getName())
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(tempPassword))
-                .role(parseRole(request.getRole()))
+                .cognitoSub(attrs.get("sub"))
+                .name(attrs.getOrDefault("name", request.getName()))
+                .email(attrs.getOrDefault("email", request.getEmail()))
+                .role(role)
                 .enabled(true)
-                .tempPassword(true)
                 .build();
         userRepository.save(user);
-        emailService.sendInvitationEmail(request.getEmail(), request.getName(), tempPassword);
+
         return UserResponse.from(user);
-    }
-
-    public void deleteUser(String userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new IllegalArgumentException("User not found");
-        }
-        userRepository.deleteById(userId);
-    }
-
-    public UserResponse updateUser(String userId, UpdateUserRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-        if (request.getName() != null) {
-            user.setName(request.getName());
-        }
-        if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
-            if (userRepository.existsByEmail(request.getEmail())) {
-                throw new IllegalArgumentException("Email already in use");
-            }
-            user.setEmail(request.getEmail());
-        }
-        if (request.getRole() != null) {
-            user.setRole(parseRole(request.getRole()));
-        }
-        user.setUpdatedAt(LocalDateTime.now());
-        return UserResponse.from(userRepository.save(user));
     }
 
     public List<UserResponse> getAllUsers() {
@@ -123,23 +117,39 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
-    private LoginResponse buildLoginResponse(User user, String token) {
-        return LoginResponse.builder()
-                .token(token)
-                .id(user.getId())
-                .name(user.getName())
-                .email(user.getEmail())
-                .role(user.getRole().name())
-                .tempPassword(user.isTempPassword())
-                .build();
+    public UserResponse updateUser(String username, UpdateUserRequest request) {
+        cognitoService.adminUpdateUserAttributes(username, request.getName(), request.getEmail());
+        if (request.getRole() != null) {
+            cognitoService.adminUpdateUserRole(username, request.getRole());
+        }
+
+        // Sync changes to MongoDB
+        User user = userRepository.findByEmail(username)
+                .orElseGet(() -> {
+                    AdminGetUserResponse cognito = cognitoService.adminGetUser(username);
+                    Map<String, String> a = cognito.userAttributes().stream()
+                            .collect(Collectors.toMap(AttributeType::name, AttributeType::value));
+                    return User.builder()
+                            .cognitoSub(a.get("sub"))
+                            .email(a.getOrDefault("email", username))
+                            .name(a.getOrDefault("name", ""))
+                            .role(Role.ROLE_USER)
+                            .enabled(true)
+                            .build();
+                });
+
+        if (request.getName() != null) user.setName(request.getName());
+        if (request.getEmail() != null) user.setEmail(request.getEmail());
+        if (request.getRole() != null) user.setRole(parseRole(request.getRole()));
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        return UserResponse.from(user);
     }
 
-    private String generateTempPassword() {
-        StringBuilder sb = new StringBuilder(12);
-        for (int i = 0; i < 12; i++) {
-            sb.append(CHARS.charAt(RANDOM.nextInt(CHARS.length())));
-        }
-        return sb.toString();
+    public void deleteUser(String username) {
+        cognitoService.adminDeleteUser(username);
+        userRepository.findByEmail(username).ifPresent(userRepository::delete);
     }
 
     private Role parseRole(String roleStr) {
@@ -152,4 +162,5 @@ public class UserService {
             return Role.ROLE_USER;
         }
     }
+
 }

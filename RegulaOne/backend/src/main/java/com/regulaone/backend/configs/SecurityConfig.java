@@ -1,22 +1,16 @@
 package com.regulaone.backend.configs;
 
-import com.regulaone.backend.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -24,8 +18,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthFilter jwtAuthFilter;
-    private final UserDetailsService userDetailsService;
+    private final CognitoJwtConverter cognitoJwtConverter;
+    private final CookieBearerTokenResolver cookieBearerTokenResolver;
+
+    @Value("${aws.cognito.region}")
+    private String region;
+
+    @Value("${aws.cognito.user-pool-id}")
+    private String userPoolId;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -37,26 +37,23 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                 .anyRequest().authenticated())
-            .authenticationProvider(authenticationProvider())
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .bearerTokenResolver(cookieBearerTokenResolver)
+                .jwt(jwt -> jwt
+                    .decoder(jwtDecoder())
+                    .jwtAuthenticationConverter(cognitoJwtConverter)
+                )
+            );
 
         return http.build();
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    @Bean
-    public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
-        provider.setPasswordEncoder(passwordEncoder());
-        return provider;
-    }
-
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
+    public JwtDecoder jwtDecoder() {
+        String jwksUri = String.format(
+            "https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
+            region, userPoolId
+        );
+        return NimbusJwtDecoder.withJwkSetUri(jwksUri).build();
     }
 }
