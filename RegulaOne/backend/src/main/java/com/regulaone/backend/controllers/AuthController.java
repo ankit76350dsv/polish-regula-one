@@ -7,6 +7,7 @@ import com.regulaone.backend.dto.Auth.LoginRequest;
 import com.regulaone.backend.dto.Auth.LoginResponse;
 import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
 import com.regulaone.backend.dto.Auth.SignupRequest;
+import com.regulaone.backend.dto.Auth.UserResponse;
 import com.regulaone.backend.services.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -15,6 +16,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -92,6 +95,15 @@ public class AuthController {
         setCookie(response, "accessToken", loginResponse.getAccessToken(), loginResponse.getExpiresIn());
         setCookie(response, "refreshToken", loginResponse.getRefreshToken(), 30 * 24 * 60 * 60);
         return ResponseEntity.ok(new MessageResponse("Password set. Login successful."));
+    }
+
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/me")
+    public ResponseEntity<UserResponse> me(@AuthenticationPrincipal Jwt jwt) {
+    //! @AuthenticationPrincipal Jwt jwt
+    //? means:
+    // "Spring, give me the current logged-in user's JWT"
+        return ResponseEntity.ok(userService.getCurrentUser(jwt.getSubject()));
     }
 
     @PreAuthorize("isAuthenticated()")

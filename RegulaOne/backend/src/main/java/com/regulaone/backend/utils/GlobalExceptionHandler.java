@@ -25,7 +25,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<MessageResponse> handleAccessDenied(AccessDeniedException e) {
-        return ResponseEntity.status(403).body(new MessageResponse("Access denied"));
+        return ResponseEntity.status(403).body(
+                new MessageResponse("Access denied. You do not have permission to access this resource."));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

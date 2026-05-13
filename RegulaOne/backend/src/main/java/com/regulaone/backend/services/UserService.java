@@ -88,6 +88,12 @@ public class UserService {
                 accessToken, request.getCurrentPassword(), request.getNewPassword());
     }
 
+    public UserResponse getCurrentUser(String cognitoSub) {
+        User user = userRepository.findByCognitoSub(cognitoSub)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        return UserResponse.from(user);
+    }
+
     // --- Admin ---
 
     //! invite
