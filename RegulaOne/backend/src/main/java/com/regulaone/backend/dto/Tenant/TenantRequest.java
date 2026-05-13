@@ -1,12 +1,12 @@
 package com.regulaone.backend.dto.Tenant;
 
-import com.regulaone.backend.models.TenantModule;
 import com.regulaone.backend.models.TenantStatus;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
-import java.util.ArrayList;
-import java.util.List;
+// ArrayList and List imports kept for potential future use
+// import java.util.ArrayList;
+// import java.util.List;
 
 /**
  * Shared DTO used for both Create and Update tenant operations.
@@ -51,6 +51,7 @@ public class TenantRequest {
     // Defaults to ACTIVE for new tenants; admin can set to INACTIVE or SUSPENDED
     private TenantStatus status = TenantStatus.ACTIVE;
 
-    // Which RegulaOne modules are enabled for this tenant — can be empty list
-    private List<TenantModule> enabledModules = new ArrayList<>();
+    // OLD: enabledModules removed — app access is now derived from the assigned package's appIds
+    // The tenant no longer stores a flat list of modules; use currentPackage.appIds instead
+    // private List<TenantModule> enabledModules = new ArrayList<>();
 }

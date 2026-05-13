@@ -3,6 +3,7 @@ package com.regulaone.backend.models;
 import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
@@ -58,12 +59,14 @@ public class Tenant {
     @Builder.Default
     private TenantStatus status = TenantStatus.ACTIVE;
 
-    // List of compliance modules enabled for this tenant
-    // Stored as an enum list so new modules can be added without migration
-    @Builder.Default
-    private List<TenantModule> enabledModules = new ArrayList<>();
+    @DBRef
+    private AppPackage currentPackage;
 
-    // Audit timestamps — createdAt is set once at creation, updatedAt on every save
+    // Ordered history of all packages previously assigned to this tenant.
+    @DBRef
+    @Builder.Default
+    private List<AppPackage> packageHistory = new ArrayList<>();
+
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 

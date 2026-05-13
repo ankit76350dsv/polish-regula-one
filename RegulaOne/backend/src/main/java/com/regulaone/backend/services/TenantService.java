@@ -61,7 +61,8 @@ public class TenantService {
                 .city(request.getCity())
                 .postalCode(request.getPostalCode())
                 .status(request.getStatus() != null ? request.getStatus() : TenantStatus.ACTIVE)
-                .enabledModules(request.getEnabledModules())
+                // OLD: enabledModules removed — package assignment now handled via PackageService.assignPackageToTenant()
+                // .enabledModules(request.getEnabledModules())
                 .build();
 
         return TenantResponse.from(tenantRepository.save(tenant));
@@ -102,7 +103,8 @@ public class TenantService {
         tenant.setCity(request.getCity());
         tenant.setPostalCode(request.getPostalCode());
         tenant.setStatus(request.getStatus() != null ? request.getStatus() : tenant.getStatus());
-        tenant.setEnabledModules(request.getEnabledModules());
+        // OLD: enabledModules removed — package assignment now handled via PackageService.assignPackageToTenant()
+        // tenant.setEnabledModules(request.getEnabledModules());
         tenant.setUpdatedAt(LocalDateTime.now());
 
         return TenantResponse.from(tenantRepository.save(tenant));

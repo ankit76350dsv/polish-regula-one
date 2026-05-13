@@ -1,18 +1,23 @@
 package com.regulaone.backend.dto.Tenant;
 
+import com.regulaone.backend.dto.Package.PackageResponse;
 import com.regulaone.backend.models.Tenant;
-import com.regulaone.backend.models.TenantModule;
 import com.regulaone.backend.models.TenantStatus;
 import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Read-only DTO returned by all Tenant API responses.
- * Mirrors the Tenant document but is decoupled from the entity
- * so internal fields can be added to the model without leaking to the API.
+ *
+ * enabledModules has been removed — app access is now derived from
+ * currentPackage.appIds at query time, not stored on the tenant.
+ *
+ * currentPackage and packageHistory are embedded as full PackageResponse objects
+ * so callers get all package details in a single API response.
  */
 @Data
 @Builder
@@ -28,15 +33,32 @@ public class TenantResponse {
     private String city;
     private String postalCode;
     private TenantStatus status;
-    private List<TenantModule> enabledModules;
+
+    // OLD: enabledModules removed — app access now comes from currentPackage
+    // private List<TenantModule> enabledModules;
+
+    // The package currently active for this tenant (null if none assigned)
+    private PackageResponse currentPackage;
+
+    // All previously assigned packages, in chronological order
+    private List<PackageResponse> packageHistory;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    /**
-     * Maps a Tenant entity to a TenantResponse DTO.
-     * All API responses go through this factory method to ensure consistency.
-     */
     public static TenantResponse from(Tenant tenant) {
+        // Map currentPackage @DBRef to PackageResponse (null-safe)
+        PackageResponse currentPkg = tenant.getCurrentPackage() != null
+                ? PackageResponse.from(tenant.getCurrentPackage())
+                : null;
+
+        // Map packageHistory @DBRef list to PackageResponse list
+        List<PackageResponse> history = tenant.getPackageHistory() != null
+                ? tenant.getPackageHistory().stream()
+                        .map(PackageResponse::from)
+                        .collect(Collectors.toList())
+                : List.of();
+
         return TenantResponse.builder()
                 .id(tenant.getId())
                 .name(tenant.getName())
@@ -48,7 +70,8 @@ public class TenantResponse {
                 .city(tenant.getCity())
                 .postalCode(tenant.getPostalCode())
                 .status(tenant.getStatus())
-                .enabledModules(tenant.getEnabledModules())
+                .currentPackage(currentPkg)
+                .packageHistory(history)
                 .createdAt(tenant.getCreatedAt())
                 .updatedAt(tenant.getUpdatedAt())
                 .build();

@@ -37,6 +37,14 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+
+                        // Added: allow Swagger UI and OpenAPI spec without authentication
+                        // so developers can explore the API docs without logging in
+                        .requestMatchers(
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**").permitAll()
+
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
 
                         // Added: ROLE_SUPER_ADMIN is required for tenant management operations.
