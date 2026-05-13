@@ -80,34 +80,7 @@ public class TenantController {
     }
 
     // ── Read ──────────────────────────────────────────────────────────────────
-
-    /**
-     * GET /api/tenants/{id}
-     * Returns a single Tenant by its MongoDB ID. Returns 404 if not found.
-     */
-    @PreAuthorize("isAuthenticated()")
-    @GetMapping("/tenant/{id}")
-    public ResponseEntity<TenantResponse> getTenantById(@PathVariable String id) {
-        return ResponseEntity.ok(tenantService.getTenantById(id));
-    }
-
-    /**
-     * GET /api/tenants?search=&status=&page=0&size=10&sort=name,asc
-     *
-     * Returns a paginated list of tenants with optional filters.
-     *
-     * Query parameters:
-     *   search — partial company name match (case-insensitive), default: empty (no filter)
-     *   status — filter by TenantStatus (ACTIVE / INACTIVE / SUSPENDED), default: all
-     *   page   — zero-based page index, default: 0
-     *   size   — items per page, default: 10 (max: 100 to prevent large payloads)
-     *   sort   — field and direction, default: createdAt,desc
-     *
-     * Example:
-     *   GET /api/tenants?search=tech&status=ACTIVE&page=0&size=5&sort=name,asc
-     */
-    @PreAuthorize("isAuthenticated()")
-    @GetMapping("/tenants")
+    @GetMapping("/superadmin/tenants")
     public ResponseEntity<TenantPageResponse> getAllTenants(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) TenantStatus status,
@@ -127,5 +100,15 @@ public class TenantController {
         Pageable pageable = PageRequest.of(page, safeSize, Sort.by(direction, sortBy));
 
         return ResponseEntity.ok(tenantService.getAllTenants(search, status, pageable));
+    }
+
+     /**
+     * GET /api/tenants/{id}
+     * Returns a single Tenant by its MongoDB ID. Returns 404 if not found.
+     */
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/tenant/{id}")
+    public ResponseEntity<TenantResponse> getTenantById(@PathVariable String id) {
+        return ResponseEntity.ok(tenantService.getTenantById(id));
     }
 }
