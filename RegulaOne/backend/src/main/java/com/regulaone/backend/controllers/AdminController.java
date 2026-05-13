@@ -33,11 +33,12 @@ public class AdminController {
     }
 
     /** Update name, email, and/or role of an existing Cognito user. */
-    @PutMapping("/users/{username}")
+    @PutMapping("/users/{subId}")
     public ResponseEntity<UserResponse> updateUser(
-            @PathVariable String username,
+            @PathVariable String subId,
             @RequestBody UpdateUserRequest request) {
-        return ResponseEntity.ok(userService.updateUser(username, request));
+               
+        return ResponseEntity.ok(userService.updateUser(subId, request));
     }
 
     @DeleteMapping("/users/{username}")

@@ -84,13 +84,16 @@ public class CognitoService {
         }
     }
 
+    //! login
     public LoginResponse signIn(String email, String password) {
         try {
             Map<String, String> params = new HashMap<>();
             params.put("USERNAME", email);
             params.put("PASSWORD", password);
+
             if (hasClientSecret()) params.put("SECRET_HASH", secretHash(email));
 
+            //? Call Cognito Login API
             InitiateAuthResponse res = cognitoClient.initiateAuth(
                     InitiateAuthRequest.builder()
                             .authFlow(AuthFlowType.USER_PASSWORD_AUTH)
