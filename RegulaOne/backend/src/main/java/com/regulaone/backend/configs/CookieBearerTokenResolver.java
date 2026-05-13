@@ -15,6 +15,7 @@ public class CookieBearerTokenResolver implements BearerTokenResolver {
 
     @Override
     public String resolve(HttpServletRequest request) {
+        //?from the cokkies find the idToken
         if (request.getCookies() != null) {
             for (Cookie cookie : request.getCookies()) {
                 if ("idToken".equals(cookie.getName())) {
@@ -25,7 +26,7 @@ public class CookieBearerTokenResolver implements BearerTokenResolver {
                 }
             }
         }
-        // Fallback: Authorization: Bearer <token>
+        //? Fallback: Authorization: Bearer <token>
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
             return header.substring(7);

@@ -30,30 +30,38 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/health/**").permitAll()
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
-                .anyRequest().authenticated())
-            .oauth2ResourceServer(oauth2 -> oauth2
-                .bearerTokenResolver(cookieBearerTokenResolver)
-                .jwt(jwt -> jwt
-                    .decoder(jwtDecoder())
-                    .jwtAuthenticationConverter(cognitoJwtConverter)
-                )
-            );
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/health/**").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                        .anyRequest().authenticated())
+
+                // ! JWT authentication configuration
+                .oauth2ResourceServer(oauth2 -> oauth2
+
+                        // ? Extract JWT from cookies
+                        .bearerTokenResolver(cookieBearerTokenResolver)
+
+                        .jwt(jwt -> jwt
+
+                                // ? Validate and decode Cognito JWT
+                                .decoder(jwtDecoder())
+
+                                // ? Convert JWT into Spring Security Authentication
+                                // ? and load user roles from MongoDB
+                                .jwtAuthenticationConverter(cognitoJwtConverter)));
 
         return http.build();
     }
 
+    // ! this will validate that token iuuse from the AWS
     @Bean
     public JwtDecoder jwtDecoder() {
         String jwksUri = String.format(
-            "https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
-            region, userPoolId
-        );
+                "https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
+                region, userPoolId);
         return NimbusJwtDecoder.withJwkSetUri(jwksUri).build();
     }
 }
