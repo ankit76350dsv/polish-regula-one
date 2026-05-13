@@ -1,16 +1,16 @@
-package com.regulaone.backend.dto;
+package com.regulaone.backend.dto.Auth;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
-public class LoginRequest {
+public class ConfirmSignupRequest {
 
     @NotBlank
     @Email
     private String email;
 
     @NotBlank
-    private String password;
+    private String code;
 }

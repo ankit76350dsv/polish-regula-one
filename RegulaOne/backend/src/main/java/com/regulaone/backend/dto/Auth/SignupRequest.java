@@ -1,11 +1,11 @@
-package com.regulaone.backend.dto;
+package com.regulaone.backend.dto.Auth;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
-public class InviteUserRequest {
+public class SignupRequest {
 
     @NotBlank
     private String name;
@@ -14,5 +14,6 @@ public class InviteUserRequest {
     @Email
     private String email;
 
-    private String role = "ROLE_USER";
+    @NotBlank
+    private String password;
 }

@@ -1,6 +1,12 @@
 package com.regulaone.backend.controllers;
 
 import com.regulaone.backend.dto.*;
+import com.regulaone.backend.dto.Auth.ChangePasswordRequest;
+import com.regulaone.backend.dto.Auth.ConfirmSignupRequest;
+import com.regulaone.backend.dto.Auth.LoginRequest;
+import com.regulaone.backend.dto.Auth.LoginResponse;
+import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
+import com.regulaone.backend.dto.Auth.SignupRequest;
 import com.regulaone.backend.services.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;

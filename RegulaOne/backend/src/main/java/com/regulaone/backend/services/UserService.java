@@ -1,6 +1,15 @@
 package com.regulaone.backend.services;
 
 import com.regulaone.backend.dto.*;
+import com.regulaone.backend.dto.Auth.ChangePasswordRequest;
+import com.regulaone.backend.dto.Auth.ConfirmSignupRequest;
+import com.regulaone.backend.dto.Auth.InviteUserRequest;
+import com.regulaone.backend.dto.Auth.LoginRequest;
+import com.regulaone.backend.dto.Auth.LoginResponse;
+import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
+import com.regulaone.backend.dto.Auth.SignupRequest;
+import com.regulaone.backend.dto.Auth.UpdateUserRequest;
+import com.regulaone.backend.dto.Auth.UserResponse;
 import com.regulaone.backend.models.Role;
 import com.regulaone.backend.models.User;
 import com.regulaone.backend.repository.UserRepository;

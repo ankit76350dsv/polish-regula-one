@@ -1,8 +1,10 @@
 package com.regulaone.backend.services;
 
-import com.regulaone.backend.dto.LoginResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import com.regulaone.backend.dto.Auth.LoginResponse;
+
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
@@ -143,7 +145,7 @@ public class CognitoService {
         }
     }
 
-    /** Change password for an authenticated user using their Cognito Access Token. */
+   //! /** Change password for an authenticated user using their Cognito Access Token. */
     public void changePassword(String accessToken, String oldPassword, String newPassword) {
         try {
             cognitoClient.changePassword(
@@ -195,6 +197,7 @@ public class CognitoService {
         }
     }
 
+    //! delete user 
     public void adminDeleteUser(String username) {
         try {
             cognitoClient.adminDeleteUser(
@@ -221,6 +224,7 @@ public class CognitoService {
         }
     }
 
+    //! update user info
     public void adminUpdateUserAttributes(String username, String name, String email) {
         List<AttributeType> attrs = new ArrayList<>();
         if (name != null) attrs.add(AttributeType.builder().name("name").value(name).build());
@@ -236,55 +240,8 @@ public class CognitoService {
         );
     }
 
-    public void adminUpdateUserRole(String username, String role) {
-        // Remove all current group memberships, then add the new one
-        cognitoClient.adminListGroupsForUser(
-                AdminListGroupsForUserRequest.builder()
-                        .userPoolId(userPoolId)
-                        .username(username)
-                        .build()
-        ).groups().forEach(g ->
-                cognitoClient.adminRemoveUserFromGroup(
-                        AdminRemoveUserFromGroupRequest.builder()
-                                .userPoolId(userPoolId)
-                                .username(username)
-                                .groupName(g.groupName())
-                                .build()
-                )
-        );
 
-        try {
-            cognitoClient.adminAddUserToGroup(
-                    AdminAddUserToGroupRequest.builder()
-                            .userPoolId(userPoolId)
-                            .username(username)
-                            .groupName(toGroupName(role))
-                            .build()
-            );
-        } catch (ResourceNotFoundException ignored) {}
-    }
-
-    public List<UserType> listUsers() {
-        return cognitoClient.listUsers(
-                ListUsersRequest.builder()
-                        .userPoolId(userPoolId)
-                        .build()
-        ).users();
-    }
-
-    public List<String> getUserGroups(String username) {
-        return cognitoClient.adminListGroupsForUser(
-                AdminListGroupsForUserRequest.builder()
-                        .userPoolId(userPoolId)
-                        .username(username)
-                        .build()
-        ).groups().stream()
-                .map(g -> g.groupName())
-                .collect(java.util.stream.Collectors.toList());
-    }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
+    //! ── Helpers ──────────────────────────────────────────────────────────────
     private LoginResponse tokensToResponse(AuthenticationResultType r) {
         return LoginResponse.builder()
                 .accessToken(r.accessToken())

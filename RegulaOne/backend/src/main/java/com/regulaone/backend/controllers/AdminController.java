@@ -1,6 +1,9 @@
 package com.regulaone.backend.controllers;
 
 import com.regulaone.backend.dto.*;
+import com.regulaone.backend.dto.Auth.InviteUserRequest;
+import com.regulaone.backend.dto.Auth.UpdateUserRequest;
+import com.regulaone.backend.dto.Auth.UserResponse;
 import com.regulaone.backend.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

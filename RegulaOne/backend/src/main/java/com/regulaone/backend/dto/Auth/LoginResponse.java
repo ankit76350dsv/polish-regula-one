@@ -1,4 +1,4 @@
-package com.regulaone.backend.dto;
+package com.regulaone.backend.dto.Auth;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

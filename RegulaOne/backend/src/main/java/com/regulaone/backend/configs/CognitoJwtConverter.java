@@ -36,15 +36,12 @@ public class CognitoJwtConverter implements Converter<Jwt, AbstractAuthenticatio
         String sub = jwt.getSubject();
         String email = jwt.getClaimAsString("email");
 
-        log.info("=== CognitoJwtConverter ===");
-        log.info("JWT sub   : {}", sub);
-        log.info("JWT email : {}", email);
+        log.info("Subject ID : {}", sub);
 
         // ! from here
         List<GrantedAuthority> roles = resolveAuthorities(sub, email);
 
         log.info("Resolved authority : {}", roles);
-        log.info("===========================");
 
         //? Spring Security stores this internally for the current request.
         JwtAuthenticationToken authentication = new JwtAuthenticationToken(
