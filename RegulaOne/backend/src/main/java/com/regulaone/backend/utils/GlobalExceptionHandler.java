@@ -18,6 +18,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
     }
 
+    // Added to handle ResourceNotFoundException thrown when a Tenant (or other resource)
+    // is not found by ID. Returns 404 instead of 400 for semantic correctness.
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<MessageResponse> handleResourceNotFound(ResourceNotFoundException e) {
+        return ResponseEntity.status(404).body(new MessageResponse(e.getMessage()));
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<MessageResponse> handleBadCredentials(BadCredentialsException e) {
         return ResponseEntity.status(401).body(new MessageResponse("Invalid email or password"));

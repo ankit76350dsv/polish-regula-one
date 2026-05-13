@@ -38,6 +38,12 @@ public class SecurityConfig {
                         .requestMatchers("/health/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+
+                        // Added: ROLE_SUPER_ADMIN is required for tenant management operations.
+                        // /api/superadmin/** is a separate route namespace so it is clearly
+                        // distinct from regular admin operations and can have its own audit trail.
+                        .requestMatchers("/api/superadmin/**").hasAuthority("ROLE_SUPER_ADMIN")
+
                         .anyRequest().authenticated())
 
                 // ! custom error responses for auth failures
