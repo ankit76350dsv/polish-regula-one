@@ -50,7 +50,7 @@ function SuperAdminView() {
     { title: 'Active Tenants', value: '142', icon: Building2, trend: '+12%', trendColor: 'text-emerald-500' },
     { title: 'Total Users', value: '4,821', icon: Users, trend: '+4%', trendColor: 'text-emerald-500' },
     { title: 'Monthly Revenue', value: '€82.4k', icon: Activity, trend: 'steady', trendColor: 'text-slate-400' },
-    { title: 'Compliance Score', value: '99.8%', icon: ShieldCheck, trend: 'Target: 100%', trendColor: 'text-indigo-500' },
+    { title: 'Compliance Score', value: '99.8%', icon: ShieldCheck, trend: 'Target: 100%', trendColor: 'text-red-500' },
   ];
 
   return (
@@ -62,7 +62,7 @@ function SuperAdminView() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2">Export Reports</Button>
-          <Button className="bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-semibold px-4 py-2 shadow-sm">+ New Tenant</Button>
+          <Button className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2 shadow-sm">+ New Tenant</Button>
         </div>
       </div>
 
@@ -96,7 +96,7 @@ function SuperAdminView() {
                   <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} dy={10} />
                   <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `€${v}`} />
                   <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px' }} />
-                  <Line type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={3} dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="value" stroke="#dc2626" strokeWidth={3} dot={{ r: 4, fill: '#dc2626', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -112,8 +112,8 @@ function SuperAdminView() {
               { label: 'KSEFFLOW', val: 72, color: 'bg-blue-500' },
               { label: 'WORKPULSE', val: 45, color: 'bg-green-500' },
               { label: 'SAFEWORK', val: 28, color: 'bg-amber-500' },
-              { label: 'PRIVACYPILOT', val: 61, color: 'bg-violet-500' },
-              { label: 'WASTESYNC', val: 38, color: 'bg-purple-500' },
+              { label: 'PRIVACYPILOT', val: 61, color: 'bg-red-500' },
+              { label: 'WASTESYNC', val: 38, color: 'bg-red-500' },
             ].map((mod) => (
               <div key={mod.label}>
                 <div className="flex justify-between text-[10px] font-bold mb-1.5">
@@ -133,7 +133,7 @@ function SuperAdminView() {
         <CardHeader className="border-b border-slate-50 py-4">
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-sm text-slate-800">Recent Tenant Activity</h2>
-            <span className="text-[10px] text-indigo-600 font-bold cursor-pointer uppercase tracking-wider hover:underline">View All Audit Logs</span>
+            <span className="text-[10px] text-red-600 font-bold cursor-pointer uppercase tracking-wider hover:underline">View All Audit Logs</span>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -172,7 +172,7 @@ function SuperAdminView() {
 function AdminView() {
   const stats = [
     { title: 'Active Users', value: '48', icon: Users, trend: '+3 this month', trendColor: 'text-emerald-500' },
-    { title: 'Active Modules', value: '6 / 6', icon: ShieldCheck, trend: 'All enabled', trendColor: 'text-indigo-500' },
+    { title: 'Active Modules', value: '6 / 6', icon: ShieldCheck, trend: 'All enabled', trendColor: 'text-red-500' },
     { title: 'Invoices (Jun)', value: '1,247', icon: ReceiptText, trend: '+18%', trendColor: 'text-emerald-500' },
     { title: 'Compliance Score', value: '94.2%', icon: Activity, trend: '▲ from 91%', trendColor: 'text-emerald-500' },
   ];
@@ -186,7 +186,7 @@ function AdminView() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2">Export Report</Button>
-          <Button className="bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-semibold px-4 py-2 shadow-sm">+ Invite User</Button>
+          <Button className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2 shadow-sm">+ Invite User</Button>
         </div>
       </div>
 
@@ -220,7 +220,7 @@ function AdminView() {
                   <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} dy={10} />
                   <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
                   <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px' }} />
-                  <Line type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={3} dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="value" stroke="#dc2626" strokeWidth={3} dot={{ r: 4, fill: '#dc2626', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -251,7 +251,7 @@ function AdminView() {
         <CardHeader className="border-b border-slate-50 py-4">
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-sm text-slate-800">Recent Module Activity</h2>
-            <span className="text-[10px] text-indigo-600 font-bold cursor-pointer uppercase tracking-wider hover:underline">View Full Log</span>
+            <span className="text-[10px] text-red-600 font-bold cursor-pointer uppercase tracking-wider hover:underline">View Full Log</span>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -294,7 +294,7 @@ function UserView() {
   const stats = [
     { title: 'Pending Tasks', value: '3', icon: CheckSquare, trend: '1 urgent', trendColor: 'text-amber-500' },
     { title: 'Invoices (Jun)', value: '12', icon: ReceiptText, trend: 'All submitted', trendColor: 'text-emerald-500' },
-    { title: 'Compliance Status', value: 'OK', icon: ShieldCheck, trend: 'Valid until Aug', trendColor: 'text-indigo-500' },
+    { title: 'Compliance Status', value: 'OK', icon: ShieldCheck, trend: 'Valid until Aug', trendColor: 'text-red-500' },
     { title: 'Shift Today', value: '08:00–16:00', icon: Clock, trend: 'Clocked in', trendColor: 'text-emerald-500' },
   ];
 

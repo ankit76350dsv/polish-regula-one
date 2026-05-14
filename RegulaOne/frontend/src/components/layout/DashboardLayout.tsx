@@ -48,29 +48,29 @@ export default function DashboardLayout() {
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full bg-slate-50 font-sans antialiased text-slate-900">
-        <Sidebar className="border-r border-slate-800 bg-slate-900 text-slate-300">
-          <SidebarHeader className="p-6">
+        <Sidebar className="border-r border-red-900 bg-red-700 text-red-100">
+          <SidebarHeader className="p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500 text-white font-bold text-xl shadow-lg shadow-indigo-500/20">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-red-700 font-bold text-xl shadow-lg shadow-red-900/30">
                 R
               </div>
               <span className="text-lg font-bold tracking-tight text-white">RegulaOne</span>
             </div>
 
-            <div className="mt-6">
-              <div className="bg-slate-800/50 rounded-md p-3 flex items-center justify-between cursor-pointer border border-slate-700/50 hover:bg-slate-800 transition-colors">
+            <div className="mt-3">
+              <div className="bg-red-800/60 rounded-md p-3 flex items-center justify-between cursor-pointer border border-red-600/50 hover:bg-red-800 transition-colors">
                 <div className="flex flex-col">
-                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Active Tenant</span>
-                  <span className="text-sm text-slate-200 font-medium">{tenantLabel}</span>
+                  <span className="text-[10px] uppercase font-bold text-red-300 tracking-wider">Active Tenant</span>
+                  <span className="text-sm text-white font-medium">{tenantLabel}</span>
                 </div>
-                <Users className="w-3 h-3 text-slate-500" />
+                <Users className="w-3 h-3 text-red-300" />
               </div>
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="px-4">
+          <SidebarContent className="px-3">
             <SidebarGroup>
-              <SidebarGroupLabel className="px-2 text-[10px] uppercase font-bold text-slate-500 mb-2 mt-4 tracking-widest">Platform Admin</SidebarGroupLabel>
+              <SidebarGroupLabel className="px-2 text-[10px] uppercase font-bold text-red-300 mb-1 mt-2 tracking-widest">Platform Admin</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="space-y-1">
                   {navItems.filter(item => item.roles.includes(user?.role || '')).map((item) => (
@@ -78,9 +78,9 @@ export default function DashboardLayout() {
                       <SidebarMenuButton
                         render={<Link to={item.path} />}
                         isActive={location.pathname === item.path}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 ${location.pathname === item.path ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:text-white' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}
+                        className={`flex items-center gap-3 px-3 py-1.5 rounded-md text-sm transition-all duration-200 ${location.pathname === item.path ? 'bg-white text-red-700 font-semibold' : 'text-red-100 hover:bg-red-600 hover:text-white'}`}
                       >
-                        <item.icon className={`h-4 w-4 ${location.pathname === item.path ? 'opacity-100' : 'opacity-60'}`} />
+                        <item.icon className="h-4 w-4 opacity-80" />
                         <span className="font-medium">{item.title}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -89,18 +89,18 @@ export default function DashboardLayout() {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            <SidebarGroup className="mt-6">
-              <SidebarGroupLabel className="px-2 text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-widest">Enabled Modules</SidebarGroupLabel>
+            <SidebarGroup className="mt-3">
+              <SidebarGroupLabel className="px-2 text-[10px] uppercase font-bold text-red-300 mb-1 tracking-widest">Enabled Modules</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="space-y-1">
                   {moduleItems.map((item, index) => {
-                    const dotColors = ['bg-blue-400', 'bg-green-400', 'bg-amber-400', 'bg-red-400', 'bg-purple-400', 'bg-emerald-400'];
+                    const dotColors = ['bg-blue-300', 'bg-green-300', 'bg-amber-300', 'bg-orange-300', 'bg-red-300', 'bg-emerald-300'];
                     return (
                       <SidebarMenuItem key={item.path}>
                         <SidebarMenuButton
                           render={<Link to={item.path} />}
                           isActive={location.pathname === item.path}
-                          className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 ${location.pathname === item.path ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:text-white' : 'hover:bg-slate-800 hover:text-white text-slate-400'}`}
+                          className={`flex items-center gap-3 px-3 py-1.5 rounded-md text-sm transition-all duration-200 ${location.pathname === item.path ? 'bg-white text-red-700 font-semibold' : 'text-red-100 hover:bg-red-600 hover:text-white'}`}
                         >
                           <div className={`w-2 h-2 rounded-full ${dotColors[index % dotColors.length]}`}></div>
                           <span className="font-medium">{item.title}</span>
@@ -113,17 +113,17 @@ export default function DashboardLayout() {
             </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter className="p-4 border-t border-slate-800">
-            <div className="flex items-center gap-3 px-2">
-              <Avatar className="h-8 w-8 border border-slate-700 bg-slate-800">
+          <SidebarFooter className="p-3 border-t border-red-600">
+            <div className="flex items-center gap-2 px-1">
+              <Avatar className="h-8 w-8 border border-red-500 bg-red-800">
                 <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`} />
-                <AvatarFallback className="bg-slate-800 text-slate-400">{user?.email?.[0].toUpperCase()}</AvatarFallback>
+                <AvatarFallback className="bg-red-800 text-red-200">{user?.email?.[0].toUpperCase()}</AvatarFallback>
               </Avatar>
               <div className="flex flex-col min-w-0">
                 <span className="text-xs text-white font-medium truncate">{user?.displayName ?? user?.email?.split('@')[0]}</span>
-                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">{user?.role}</span>
+                <span className="text-[10px] text-red-300 uppercase font-bold tracking-tighter">{user?.role}</span>
               </div>
-              <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-slate-500 hover:text-white hover:bg-slate-800" onClick={handleLogout}>
+              <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-red-300 hover:text-white hover:bg-red-600" onClick={handleLogout}>
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
@@ -138,7 +138,7 @@ export default function DashboardLayout() {
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <Input
                   placeholder="Search across tenants, modules or logs..."
-                  className="w-full bg-slate-50 border-slate-200 rounded-full py-2 pl-10 pr-4 text-xs focus-visible:ring-indigo-500/20 focus-visible:ring-offset-0 focus-visible:border-indigo-500"
+                  className="w-full bg-slate-50 border-slate-200 rounded-full py-2 pl-10 pr-4 text-xs focus-visible:ring-red-500/20 focus-visible:ring-offset-0 focus-visible:border-red-500"
                 />
               </div>
             </div>

@@ -68,7 +68,7 @@ export default function LoginPage() {
         className="z-10 w-full max-w-md"
       >
         <div className="mb-8 flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 shadow-xl shadow-indigo-200 border border-indigo-500 text-white font-bold text-2xl">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-600 shadow-xl shadow-red-200 border border-red-500 text-white font-bold text-2xl">
             R
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">RegulaOne</h1>
@@ -88,7 +88,7 @@ export default function LoginPage() {
                   id="email"
                   type="email"
                   placeholder="name@company.com"
-                  className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500 h-11"
+                  className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-red-500/20 focus-visible:border-red-500 h-11"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -100,7 +100,7 @@ export default function LoginPage() {
                   id="password"
                   type="password"
                   autoComplete="current-password"
-                  className="bg-white border-slate-200 text-slate-900 h-11 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
+                  className="bg-white border-slate-200 text-slate-900 h-11 focus-visible:ring-red-500/20 focus-visible:border-red-500"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -112,16 +112,16 @@ export default function LoginPage() {
                   <p className="text-[10px] font-bold text-rose-600 uppercase tracking-tight">{error}</p>
                 </div>
               )}
-              <Button type="submit" className="w-full bg-indigo-600 text-white hover:bg-indigo-700 h-11 font-bold shadow-lg shadow-indigo-100">
+              <Button type="submit" className="w-full bg-red-600 text-white hover:bg-red-700 h-11 font-bold shadow-lg shadow-red-100">
                 <LogIn className="mr-2 h-4 w-4" /> Sign In
               </Button>
             </form>
 
             {/* DEV: Clickable demo account hints */}
-            <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 p-4 space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 mb-3">Demo Accounts — any password</p>
+            <div className="rounded-xl border border-dashed border-red-200 bg-red-50/50 p-4 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-3">Demo Accounts — any password</p>
               {[
-                { email: 'super@demo.com', role: 'SUPER_ADMIN', color: 'bg-violet-100 text-violet-700' },
+                { email: 'super@demo.com', role: 'SUPER_ADMIN', color: 'bg-red-100 text-red-700' },
                 { email: 'admin@demo.com', role: 'ADMIN', color: 'bg-blue-100 text-blue-700' },
                 { email: 'user@demo.com', role: 'USER', color: 'bg-emerald-100 text-emerald-700' },
               ].map((acc) => (
@@ -129,7 +129,7 @@ export default function LoginPage() {
                   key={acc.email}
                   type="button"
                   onClick={() => setEmail(acc.email)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-slate-100 hover:border-indigo-300 transition-colors text-left cursor-pointer"
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-slate-100 hover:border-red-300 transition-colors text-left cursor-pointer"
                 >
                   <span className="text-xs font-mono text-slate-600">{acc.email}</span>
                   <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${acc.color}`}>{acc.role}</span>
@@ -141,7 +141,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => navigate('/register')}
-                className="text-xs font-bold text-slate-400 hover:text-indigo-600 uppercase tracking-wider transition-colors"
+                className="text-xs font-bold text-slate-400 hover:text-red-600 uppercase tracking-wider transition-colors"
               >
                 No account? Register Organization
               </button>

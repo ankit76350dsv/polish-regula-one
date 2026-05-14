@@ -48,7 +48,7 @@ export default function RegisterPage() {
         className="z-10 w-full max-w-lg"
       >
         <div className="mb-8 flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 shadow-xl shadow-indigo-200 border border-indigo-500 text-white font-bold text-2xl">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-600 shadow-xl shadow-red-200 border border-red-500 text-white font-bold text-2xl">
             R
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">RegulaOne</h1>
@@ -61,8 +61,8 @@ export default function RegisterPage() {
             <CardDescription className="text-slate-500 font-medium">Set up your enterprise tenant account</CardDescription>
 
             <div className="mt-6 flex gap-2">
-              <div className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${step >= 1 ? 'bg-indigo-600' : 'bg-slate-200'}`} />
-              <div className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${step >= 2 ? 'bg-indigo-600' : 'bg-slate-200'}`} />
+              <div className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${step >= 1 ? 'bg-red-600' : 'bg-slate-200'}`} />
+              <div className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${step >= 2 ? 'bg-red-600' : 'bg-slate-200'}`} />
             </div>
           </CardHeader>
           <CardContent className="pt-8">
@@ -73,7 +73,7 @@ export default function RegisterPage() {
                     <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Legal Entity Name</Label>
                     <Input
                       placeholder="e.g. Acme Poland Sp. z o.o."
-                      className="bg-white border-slate-200 text-slate-900 font-medium h-11 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
+                      className="bg-white border-slate-200 text-slate-900 font-medium h-11 focus-visible:ring-red-500/20 focus-visible:border-red-500"
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
                       required
@@ -83,13 +83,13 @@ export default function RegisterPage() {
                     <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Tax Identification (NIP)</Label>
                     <Input
                       placeholder="PL0000000000"
-                      className="bg-white border-slate-200 text-slate-900 font-mono h-11 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
+                      className="bg-white border-slate-200 text-slate-900 font-mono h-11 focus-visible:ring-red-500/20 focus-visible:border-red-500"
                       value={taxId}
                       onChange={(e) => setTaxId(e.target.value)}
                       required
                     />
                   </div>
-                  <Button type="button" onClick={() => setStep(2)} className="w-full bg-indigo-600 text-white hover:bg-indigo-700 h-11 font-bold shadow-lg shadow-indigo-100">
+                  <Button type="button" onClick={() => setStep(2)} className="w-full bg-red-600 text-white hover:bg-red-700 h-11 font-bold shadow-lg shadow-red-100">
                     Next Phase <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </div>
@@ -102,7 +102,7 @@ export default function RegisterPage() {
                     <Input
                       type="email"
                       placeholder="admin@company.pl"
-                      className="bg-white border-slate-200 text-slate-900 font-medium h-11 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
+                      className="bg-white border-slate-200 text-slate-900 font-medium h-11 focus-visible:ring-red-500/20 focus-visible:border-red-500"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -112,7 +112,7 @@ export default function RegisterPage() {
                     <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Security Key (Password)</Label>
                     <Input
                       type="password"
-                      className="bg-white border-slate-200 text-slate-900 h-11 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
+                      className="bg-white border-slate-200 text-slate-900 h-11 focus-visible:ring-red-500/20 focus-visible:border-red-500"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
@@ -120,7 +120,7 @@ export default function RegisterPage() {
                   </div>
                   <div className="flex gap-3">
                     <Button type="button" variant="ghost" onClick={() => setStep(1)} className="text-slate-400 font-bold hover:text-slate-600">Back</Button>
-                    <Button type="submit" disabled={loading} className="flex-1 bg-indigo-600 text-white hover:bg-indigo-700 h-11 font-bold shadow-lg shadow-indigo-100">
+                    <Button type="submit" disabled={loading} className="flex-1 bg-red-600 text-white hover:bg-red-700 h-11 font-bold shadow-lg shadow-red-100">
                       {loading ? 'Deploying Tenant...' : 'Initialize Platform'}
                     </Button>
                   </div>
@@ -136,7 +136,7 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={() => navigate('/login')}
-                className="text-xs font-bold text-slate-400 hover:text-indigo-600 uppercase tracking-wider transition-colors"
+                className="text-xs font-bold text-slate-400 hover:text-red-600 uppercase tracking-wider transition-colors"
               >
                 Already registered? Sign In
               </button>

@@ -32,7 +32,7 @@ export default function KSeFFlow() {
           <Button variant="outline" className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2">
             Archive Access
           </Button>
-          <Button className="bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-semibold px-4 py-2 shadow-sm">
+          <Button className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2 shadow-sm">
             + Create Structured Invoice
           </Button>
         </div>
@@ -106,7 +106,7 @@ export default function KSeFFlow() {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className={`text-xs font-bold ${inv.status === 'draft' ? 'text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700' : 'text-slate-400 opacity-50 cursor-not-allowed'}`}
+                      className={`text-xs font-bold ${inv.status === 'draft' ? 'text-red-600 hover:bg-red-50 hover:text-red-700' : 'text-slate-400 opacity-50 cursor-not-allowed'}`}
                       disabled={inv.status !== 'draft'}
                       onClick={() => handleSendToKSeF(inv.id)}
                     >

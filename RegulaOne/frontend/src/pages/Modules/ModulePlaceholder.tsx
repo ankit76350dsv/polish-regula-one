@@ -9,12 +9,12 @@ export default function ModulePlaceholder() {
   return (
     <div className="flex flex-col items-center justify-center py-32 space-y-6 max-w-7xl mx-auto">
       <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-200/50">
-        <ShieldAlert className="h-16 w-16 text-indigo-500 animate-pulse" />
+        <ShieldAlert className="h-16 w-16 text-red-500 animate-pulse" />
       </div>
       <div className="text-center space-y-2">
         <h3 className="text-2xl font-bold text-slate-900 tracking-tight capitalize">Module: {moduleName}</h3>
         <p className="text-slate-500 max-w-md text-center font-medium">
-          The <span className="text-indigo-600 font-bold uppercase tracking-wider">{moduleName}</span> integration is currently being provisioned for your organization node. 
+          The <span className="text-red-600 font-bold uppercase tracking-wider">{moduleName}</span> integration is currently being provisioned for your organization node. 
           Compliance features will be accessible once the sync is complete.
         </p>
       </div>

@@ -49,7 +49,7 @@ export default function WorkPulse() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="bg-white border-slate-200 shadow-xl shadow-slate-200/50 rounded-2xl relative overflow-hidden group">
-          <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500" />
+          <div className="absolute top-0 left-0 w-full h-1 bg-red-500" />
           <CardHeader className="pt-8 text-center">
             <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Shift Live Session</CardTitle>
           </CardHeader>
@@ -64,19 +64,19 @@ export default function WorkPulse() {
                 className={`w-44 h-14 rounded-full font-bold transition-all duration-300 shadow-lg ${
                   isClockedIn 
                   ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-100' 
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100'
+                  : 'bg-red-600 hover:bg-red-700 text-white shadow-red-100'
                 }`}
                 onClick={handleClockToggle}
               >
                 {isClockedIn ? <><Square className="mr-2 h-4 w-4 fill-current" /> Stop Work</> : <><Play className="mr-2 h-4 w-4 fill-current" /> Start Shift</>}
               </Button>
-              <Button variant="outline" className="h-14 w-14 rounded-full border-slate-200 bg-white text-slate-400 hover:text-indigo-600 hover:border-indigo-100 hover:bg-indigo-50 transition-all">
+              <Button variant="outline" className="h-14 w-14 rounded-full border-slate-200 bg-white text-slate-400 hover:text-red-600 hover:border-red-100 hover:bg-red-50 transition-all">
                 <Coffee className="h-6 w-6" />
               </Button>
             </div>
 
             <div className="flex items-center gap-2 p-2 px-4 bg-slate-50 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-400 border border-slate-100">
-              <MapPin className="h-3 w-3 text-indigo-500" /> Warsaw HQ Node (WWA-01)
+              <MapPin className="h-3 w-3 text-red-500" /> Warsaw HQ Node (WWA-01)
             </div>
           </CardContent>
         </Card>
@@ -102,14 +102,14 @@ export default function WorkPulse() {
                   </div>
                 </div>
                 <span className={`text-[9px] font-black tracking-widest px-2 py-0.5 rounded ${
-                  shift.status === 'OVERTIME' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 bg-slate-100'
+                  shift.status === 'OVERTIME' ? 'bg-red-50 text-red-600' : 'text-slate-400 bg-slate-100'
                 }`}>
                   {shift.status}
                 </span>
               </div>
             ))}
             
-            <Button variant="ghost" className="w-full mt-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 hover:text-indigo-600">
+            <Button variant="ghost" className="w-full mt-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 hover:text-red-600">
               Generate PDF Export
             </Button>
           </CardContent>
