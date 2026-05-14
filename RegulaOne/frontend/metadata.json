@@ -1,0 +1,15 @@
+{
+  "name": "OrdnungsPilot Platform",
+  "description": "Centralized multi-tenant enterprise SaaS managing compliance, e-invoicing (KSeF), time tracking, and HR modules.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "Multi-tenant Architecture",
+    "RBAC Security",
+    "Compliance Management",
+    "Enterprise Analytics"
+  ]
+}

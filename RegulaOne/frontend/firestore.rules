@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSuperAdmin() {
+      return isVerified() && getUserData().role == 'SUPER_ADMIN';
+    }
+
+    function isTenantAdmin(tenantId) {
+      return isVerified() && getUserData().tenantId == tenantId && getUserData().role == 'ADMIN';
+    }
+
+    function isTenantUser(tenantId) {
+      return isVerified() && getUserData().tenantId == tenantId;
+    }
+
+    // User Profiles
+    match /users/{userId} {
+      allow get: if isVerified() && (request.auth.uid == userId || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create: if isVerified() && request.resource.data.role == 'USER'; // Default role
+      allow update: if isVerified() && (request.auth.uid == userId || isSuperAdmin()) && (
+        // Prevent users from changing their own role or tenant
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'tenantId'])) || isSuperAdmin()
+      );
+    }
+
+    // Tenants
+    match /tenants/{tenantId} {
+      allow get: if isVerified() && (isTenantUser(tenantId) || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow write: if isSuperAdmin();
+
+      // Tenant-specific Subcollections
+      match /auditLogs/{logId} {
+        allow read: if isVerified() && (isTenantAdmin(tenantId) || isSuperAdmin());
+        allow create: if isVerified() && isTenantUser(tenantId); // Anyone in tenant can log
+      }
+
+      match /invoices/{invoiceId} {
+        allow read: if isVerified() && (isTenantUser(tenantId) || isSuperAdmin());
+        allow write: if isVerified() && (isTenantAdmin(tenantId) || isSuperAdmin());
+      }
+    }
+  }
+}
