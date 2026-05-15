@@ -15,7 +15,7 @@ import {
   Building2, Search, Plus, Pencil, Trash2, ChevronLeft, ChevronRight,
   Loader2, AlertTriangle,
 } from 'lucide-react';
-import { useTenants, useCreateTenant, useUpdateTenant, useDeleteTenant } from '../../hooks/useTenant';
+import { useTenants, useCreateTenant, useUpdateTenant, useDeleteTenant, useChangeTenantStatus } from '../../hooks/useTenant';
 
 // ── Zod schema matches TenantRequest validation rules ─────────────────────────
 const tenantSchema = z.object({
@@ -36,16 +36,6 @@ const STATUS_STYLES = {
   INACTIVE:  { dot: 'bg-slate-400',   text: 'text-slate-500',   badge: 'border-slate-200 bg-slate-50 text-slate-600' },
   SUSPENDED: { dot: 'bg-rose-500',    text: 'text-rose-600',    badge: 'border-rose-200 bg-rose-50 text-rose-700' },
 };
-
-function StatusBadge({ status }) {
-  const s = STATUS_STYLES[status] ?? STATUS_STYLES.INACTIVE;
-  return (
-    <div className="flex items-center gap-2">
-      <div className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-      <span className={`text-[10px] font-bold uppercase tracking-wider ${s.text}`}>{status}</span>
-    </div>
-  );
-}
 
 // ── Tenant form (shared by create + edit) ─────────────────────────────────────
 function TenantForm({ defaultValues, onSubmit, isPending, submitLabel }) {
@@ -134,9 +124,10 @@ export default function TenantManagement() {
   const params = { search: debouncedSearch, status: statusFilter, page, size: 10 };
   const { data, isLoading, isError, error } = useTenants(params);
 
-  const createTenant = useCreateTenant({ onSuccess: () => setCreateOpen(false) });
-  const updateTenant = useUpdateTenant({ onSuccess: () => setEditTarget(null) });
-  const deleteTenant = useDeleteTenant({ onSuccess: () => setDeleteTarget(null) });
+  const createTenant     = useCreateTenant({ onSuccess: () => setCreateOpen(false) });
+  const updateTenant     = useUpdateTenant({ onSuccess: () => setEditTarget(null) });
+  const deleteTenant     = useDeleteTenant({ onSuccess: () => setDeleteTarget(null) });
+  const changeStatus     = useChangeTenantStatus();
 
   const tenants     = data?.content ?? [];
   const totalPages  = data?.totalPages ?? 0;
@@ -238,7 +229,22 @@ export default function TenantManagement() {
                     <TableCell className="px-6 py-4 text-sm text-slate-600">{tenant.email}</TableCell>
                     <TableCell className="px-6 py-4 text-sm text-slate-500">{tenant.city ?? '—'}</TableCell>
                     <TableCell className="px-6 py-4">
-                      <StatusBadge status={tenant.status} />
+                      <div className="relative inline-flex items-center gap-1.5">
+                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_STYLES[tenant.status]?.dot ?? 'bg-slate-400'}`} />
+                        <select
+                          value={tenant.status}
+                          disabled={changeStatus.isPending}
+                          onChange={(e) => changeStatus.mutate({ id: tenant.id, status: e.target.value })}
+                          className={`text-[10px] font-bold uppercase tracking-wider bg-transparent border-none outline-none cursor-pointer appearance-none pr-3 disabled:cursor-not-allowed disabled:opacity-50 ${STATUS_STYLES[tenant.status]?.text ?? 'text-slate-500'}`}
+                        >
+                          <option value="ACTIVE">Active</option>
+                          <option value="INACTIVE">Inactive</option>
+                          <option value="SUSPENDED">Suspended</option>
+                        </select>
+                        {changeStatus.isPending
+                          ? <Loader2 className="h-3 w-3 animate-spin text-slate-400 shrink-0" />
+                          : <span className={`text-[8px] shrink-0 ${STATUS_STYLES[tenant.status]?.text ?? 'text-slate-400'}`}>▾</span>}
+                      </div>
                     </TableCell>
                     <TableCell className="px-6 py-4">
                       {tenant.currentPackage ? (
@@ -251,6 +257,7 @@ export default function TenantManagement() {
                     </TableCell>
                     <TableCell className="text-right px-6 py-4">
                       <div className="flex justify-end gap-1">
+
                         <Button
                           variant="ghost"
                           size="icon"

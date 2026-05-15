@@ -36,6 +36,19 @@ export function useUpdateTenant(options = {}) {
   });
 }
 
+export function useChangeTenantStatus(options = {}) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }) => tenantService.changeStatus(id, status),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tenants'] });
+      toast.success('Tenant status updated');
+      options.onSuccess?.();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+}
+
 export function useDeleteTenant(options = {}) {
   const qc = useQueryClient();
   return useMutation({

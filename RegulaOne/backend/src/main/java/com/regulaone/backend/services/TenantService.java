@@ -110,6 +110,24 @@ public class TenantService {
         return TenantResponse.from(tenantRepository.save(tenant));
     }
 
+    // ── Change Status ─────────────────────────────────────────────────────────
+
+    /**
+     * Updates only the status field of a tenant.
+     * Separated from updateTenant() so callers can toggle ACTIVE/INACTIVE/SUSPENDED
+     * without having to supply the full TenantRequest payload.
+     */
+    public TenantResponse changeStatus(String id, TenantStatus status) {
+        Tenant tenant = tenantRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Tenant not found with id: " + id));
+
+        tenant.setStatus(status);
+        tenant.setUpdatedAt(LocalDateTime.now());
+
+        return TenantResponse.from(tenantRepository.save(tenant));
+    }
+
     // ── Delete ────────────────────────────────────────────────────────────────
 
     /**

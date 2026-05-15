@@ -23,4 +23,7 @@ export const tenantService = {
 
   delete: (id) =>
     api.del(`/api/superadmin/tenant/${id}`),
+
+  changeStatus: (id, status) =>
+    api.patch(`/api/superadmin/tenant/${id}/status`, { status }),
 };

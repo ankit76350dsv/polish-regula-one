@@ -1,5 +1,6 @@
 package com.regulaone.backend.controllers;
 
+import com.regulaone.backend.dto.Tenant.ChangeStatusRequest;
 import com.regulaone.backend.dto.Tenant.TenantPageResponse;
 import com.regulaone.backend.dto.Tenant.TenantRequest;
 import com.regulaone.backend.dto.Tenant.TenantResponse;
@@ -64,6 +65,21 @@ public class TenantController {
             @PathVariable String id,
             @Valid @RequestBody TenantRequest request) {
         return ResponseEntity.ok(tenantService.updateTenant(id, request));
+    }
+
+    // ── Change Status ─────────────────────────────────────────────────────────
+
+    /**
+     * PATCH /api/superadmin/tenant/{id}/status
+     * Updates only the tenant's status (ACTIVE / INACTIVE / SUSPENDED).
+     * Lighter than PUT /tenant/{id} — no need to supply the full payload.
+     */
+    @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
+    @PatchMapping("/superadmin/tenant/{id}/status")
+    public ResponseEntity<TenantResponse> changeStatus(
+            @PathVariable String id,
+            @Valid @RequestBody ChangeStatusRequest request) {
+        return ResponseEntity.ok(tenantService.changeStatus(id, request.getStatus()));
     }
 
     // ── Delete ────────────────────────────────────────────────────────────────
