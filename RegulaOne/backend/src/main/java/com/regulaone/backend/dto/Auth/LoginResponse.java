@@ -22,4 +22,11 @@ public class LoginResponse {
     private String challengeName;
     private String session;
     private String username;
+
+    // Added: machine-readable status so the frontend doesn't need to parse message strings.
+    // Values: "SUCCESS" | "CHALLENGE" | "ERROR"
+    private String status;
+
+    // Added: human-readable message for success confirmations and error details.
+    private String message;
 }

@@ -42,8 +42,22 @@ public class AuthController {
         return ResponseEntity.ok(userService.resendCode(email));
     }
 
+    // OLD IMPLEMENTATION — Replaced because the original returned a plain MessageResponse which
+    // forced the frontend to parse challenge data (challengeName, session, username) out of a
+    // human-readable string ("Challenge required: X | session=Y | username=Z"), making the
+    // frontend brittle. The new implementation returns a structured LoginResponse with a
+    // machine-readable "status" field so the frontend can reliably branch on "SUCCESS" vs "CHALLENGE".
+    //
+    // @PostMapping("/login")
+    // public ResponseEntity<MessageResponse> login(...) { ... legacy message-string approach ... }
+
+    // NEW IMPLEMENTATION
+    // Returns LoginResponse with:
+    //   status="SUCCESS"   — tokens stored in HTTP-only cookies, frontend redirects to dashboard
+    //   status="CHALLENGE" — challengeName/session/username present, frontend shows new-password form
+    //   HTTP 400 with status="ERROR" — bad credentials or Cognito error
     @PostMapping("/login")
-    public ResponseEntity<MessageResponse> login(
+    public ResponseEntity<LoginResponse> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletResponse response) {
 
@@ -67,26 +81,43 @@ public class AuthController {
                         30 * 24 * 60 * 60);
 
                 return ResponseEntity.ok(
-                        new MessageResponse("Login successful"));
+                        LoginResponse.builder()
+                                .status("SUCCESS")
+                                .message("Login successful")
+                                .build());
             }
 
-            // Cognito challenge (e.g. NEW_PASSWORD_REQUIRED)
+            // Cognito challenge (e.g. NEW_PASSWORD_REQUIRED for invited/temporary-password users)
             return ResponseEntity.ok(
-                    new MessageResponse(
-                            "Challenge required: "
-                                    + loginResponse.getChallengeName()
-                                    + " | session=" + loginResponse.getSession()
-                                    + " | username=" + loginResponse.getUsername()));
+                    LoginResponse.builder()
+                            .status("CHALLENGE")
+                            .challengeName(loginResponse.getChallengeName())
+                            .session(loginResponse.getSession())
+                            .username(loginResponse.getUsername())
+                            .build());
 
         } catch (IllegalArgumentException e) {
 
             return ResponseEntity.badRequest()
-                    .body(new MessageResponse(e.getMessage()));
+                    .body(LoginResponse.builder()
+                            .status("ERROR")
+                            .message(e.getMessage())
+                            .build());
         }
     }
 
+    // OLD IMPLEMENTATION — Replaced to return consistent LoginResponse structure instead of
+    // MessageResponse, so the frontend can use a single response type for all auth outcomes.
+    //
+    // @PostMapping("/respond-challenge")
+    // public ResponseEntity<MessageResponse> respondToChallenge(...) {
+    //     ...
+    //     return ResponseEntity.ok(new MessageResponse("Password set. Login successful."));
+    // }
+
+    // NEW IMPLEMENTATION — Returns LoginResponse with status="SUCCESS" after setting cookies.
     @PostMapping("/respond-challenge")
-    public ResponseEntity<MessageResponse> respondToChallenge(
+    public ResponseEntity<LoginResponse> respondToChallenge(
             @Valid @RequestBody RespondChallengeRequest request,
             HttpServletResponse response) {
 
@@ -94,7 +125,10 @@ public class AuthController {
         setCookie(response, "idToken", loginResponse.getIdToken(), loginResponse.getExpiresIn());
         setCookie(response, "accessToken", loginResponse.getAccessToken(), loginResponse.getExpiresIn());
         setCookie(response, "refreshToken", loginResponse.getRefreshToken(), 30 * 24 * 60 * 60);
-        return ResponseEntity.ok(new MessageResponse("Password set. Login successful."));
+        return ResponseEntity.ok(LoginResponse.builder()
+                .status("SUCCESS")
+                .message("Password set. Login successful.")
+                .build());
     }
 
     @PreAuthorize("isAuthenticated()")

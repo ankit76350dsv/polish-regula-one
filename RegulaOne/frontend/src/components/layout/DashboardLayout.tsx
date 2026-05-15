@@ -1,6 +1,6 @@
-// Firebase signOut removed - logout now clears authStore directly
-import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import { useLogout } from '../../hooks/useAuth';
 import {
   Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger,
   SidebarInset, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarGroupContent
@@ -15,14 +15,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Toaster } from '@/components/ui/sonner';
 
 export default function DashboardLayout() {
-  const { user, setUser } = useAuthStore();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const handleLogout = () => {
-    setUser(null);
-    navigate('/login');
-  };
+  const { user } = useAuthStore();
+  const location  = useLocation();
+  const logout    = useLogout();
 
   // Tenant display label based on role
   const tenantLabel = user?.role === 'ROLE_SUPER_ADMIN'
@@ -127,7 +122,7 @@ export default function DashboardLayout() {
                 <span className="text-xs text-white font-medium truncate">{user?.displayName ?? user?.email?.split('@')[0]}</span>
                 <span className="text-[10px] text-red-300 uppercase font-bold tracking-tighter">{user?.role?.replace('ROLE_', '').replace(/_/g, ' ')}</span>
               </div>
-              <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-red-300 hover:text-white hover:bg-red-600" onClick={handleLogout}>
+              <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-red-300 hover:text-white hover:bg-red-600" disabled={logout.isPending} onClick={() => logout.mutate()}>
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>

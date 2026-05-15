@@ -1,62 +1,53 @@
-// Firebase auth removed - using mock accounts for role-based navigation
-import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../store/authStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { LogIn } from 'lucide-react';
+import { LogIn, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useLogin } from '../../hooks/useAuth';
+import { useAuthStore } from '../../store/authStore';
 import { UserProfile } from '../../types';
 
-// DEV: Demo accounts — any password accepted, email determines role
+const schema = z.object({
+  email:    z.email('Invalid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+type FormData = z.infer<typeof schema>;
+
+// DEV: Demo accounts bypass the real API — any password accepted when using these emails.
+// Remove or gate behind an env flag in production.
 const MOCK_ACCOUNTS: Record<string, UserProfile> = {
-  'super@demo.com': {
-    uid: 'mock-super',
-    email: 'super@demo.com',
-    role: 'ROLE_SUPER_ADMIN',
-    displayName: 'Platform Root',
-    status: 'active',
-  },
-  'admin@demo.com': {
-    uid: 'mock-admin',
-    email: 'admin@demo.com',
-    role: 'ROLE_ADMIN',
-    tenantId: 'tenant-001',
-    displayName: 'Tenant Administrator',
-    status: 'active',
-  },
-  'user@demo.com': {
-    uid: 'mock-user',
-    email: 'user@demo.com',
-    role: 'ROLE_USER',
-    tenantId: 'tenant-001',
-    displayName: 'Jane Kowalski',
-    status: 'active',
-  },
+  'super@demo.com': { uid: 'mock-super', email: 'super@demo.com', role: 'ROLE_SUPER_ADMIN', displayName: 'Platform Root',         status: 'active' },
+  'admin@demo.com': { uid: 'mock-admin', email: 'admin@demo.com', role: 'ROLE_ADMIN',       tenantId: 'tenant-001', displayName: 'Tenant Administrator', status: 'active' },
+  'user@demo.com':  { uid: 'mock-user',  email: 'user@demo.com',  role: 'ROLE_USER',        tenantId: 'tenant-001', displayName: 'Jane Kowalski',        status: 'active' },
 };
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const navigate = useNavigate();
-  const { setUser } = useAuthStore();
+  const navigate          = useNavigate();
+  const { setUser }       = useAuthStore();
+  const login             = useLogin();
 
-  const handleEmailLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
+    resolver: zodResolver(schema),
+  });
 
-    const mockUser = MOCK_ACCOUNTS[email.toLowerCase()];
-    if (mockUser) {
-      setUser(mockUser);
+  const onSubmit = handleSubmit((data) => {
+    // DEV bypass: skip API call for demo accounts
+    const mock = MOCK_ACCOUNTS[data.email.toLowerCase()];
+    if (mock) {
+      setUser(mock);
       navigate('/');
       return;
     }
 
-    setError('Invalid credentials. Use one of the demo accounts below.');
-  };
+    // Production: hit the real backend
+    login.mutate({ email: data.email, password: data.password });
+  });
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 font-sans antialiased text-slate-900">
@@ -68,9 +59,7 @@ export default function LoginPage() {
         className="z-10 w-full max-w-md"
       >
         <div className="mb-8 flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-600 shadow-xl shadow-red-200 border border-red-500 text-white font-bold text-2xl">
-            R
-          </div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-600 shadow-xl shadow-red-200 border border-red-500 text-white font-bold text-2xl">R</div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">RegulaOne</h1>
           <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">Enterprise Compliance OS</p>
         </div>
@@ -80,59 +69,64 @@ export default function LoginPage() {
             <CardTitle className="text-slate-900 text-xl">Sign In</CardTitle>
             <CardDescription className="text-slate-500 font-medium">Access your enterprise compliance dashboard</CardDescription>
           </CardHeader>
+
           <CardContent className="space-y-6 pt-8">
-            <form onSubmit={handleEmailLogin} className="space-y-4">
+            <form onSubmit={onSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wider text-slate-500">Email</Label>
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Email</Label>
                 <Input
-                  id="email"
                   type="email"
                   placeholder="name@company.com"
                   className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-red-500/20 focus-visible:border-red-500 h-11"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
+                  {...register('email')}
                 />
+                {errors.email && (
+                  <p className="text-[10px] text-rose-600 font-bold">{errors.email.message}</p>
+                )}
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-xs font-bold uppercase tracking-wider text-slate-500">Password</Label>
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Password</Label>
                 <Input
-                  id="password"
                   type="password"
                   autoComplete="current-password"
                   className="bg-white border-slate-200 text-slate-900 h-11 focus-visible:ring-red-500/20 focus-visible:border-red-500"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
+                  {...register('password')}
                 />
+                {errors.password && (
+                  <p className="text-[10px] text-rose-600 font-bold">{errors.password.message}</p>
+                )}
               </div>
-              {error && (
-                <div className="p-3 rounded-lg bg-rose-50 border border-rose-100 flex items-center gap-2">
-                  <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                  <p className="text-[10px] font-bold text-rose-600 uppercase tracking-tight">{error}</p>
-                </div>
-              )}
-              <Button type="submit" className="w-full bg-red-600 text-white hover:bg-red-700 h-11 font-bold shadow-lg shadow-red-100">
-                <LogIn className="mr-2 h-4 w-4" /> Sign In
+
+              <Button
+                type="submit"
+                disabled={login.isPending}
+                className="w-full bg-red-600 text-white hover:bg-red-700 h-11 font-bold shadow-lg shadow-red-100"
+              >
+                {login.isPending
+                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in…</>
+                  : <><LogIn className="mr-2 h-4 w-4" />Sign In</>}
               </Button>
             </form>
 
-            {/* DEV: Clickable demo account hints */}
+            {/* DEV: Clickable demo account hints — bypasses real API for development */}
             <div className="rounded-xl border border-dashed border-red-200 bg-red-50/50 p-4 space-y-2">
               <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-3">Demo Accounts — any password</p>
               {[
                 { email: 'super@demo.com', role: 'ROLE_SUPER_ADMIN', color: 'bg-red-100 text-red-700' },
-                { email: 'admin@demo.com', role: 'ROLE_ADMIN', color: 'bg-blue-100 text-blue-700' },
-                { email: 'user@demo.com', role: 'ROLE_USER', color: 'bg-emerald-100 text-emerald-700' },
+                { email: 'admin@demo.com', role: 'ROLE_ADMIN',       color: 'bg-blue-100 text-blue-700' },
+                { email: 'user@demo.com',  role: 'ROLE_USER',        color: 'bg-emerald-100 text-emerald-700' },
               ].map((acc) => (
                 <button
                   key={acc.email}
                   type="button"
-                  onClick={() => setEmail(acc.email)}
+                  onClick={() => setValue('email', acc.email)}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-slate-100 hover:border-red-300 transition-colors text-left cursor-pointer"
                 >
                   <span className="text-xs font-mono text-slate-600">{acc.email}</span>
-                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${acc.color}`}>{acc.role.replace('ROLE_', '').replace(/_/g, ' ')}</span>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${acc.color}`}>
+                    {acc.role.replace('ROLE_', '').replace(/_/g, ' ')}
+                  </span>
                 </button>
               ))}
             </div>
@@ -140,7 +134,7 @@ export default function LoginPage() {
             <div className="text-center">
               <button
                 type="button"
-                onClick={() => navigate('/register')}
+                onClick={() => navigate('/auth/signup')}
                 className="text-xs font-bold text-slate-400 hover:text-red-600 uppercase tracking-wider transition-colors"
               >
                 No account? Register Organization

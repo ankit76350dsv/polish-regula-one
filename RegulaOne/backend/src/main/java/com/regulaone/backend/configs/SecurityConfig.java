@@ -13,6 +13,9 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
@@ -29,10 +32,19 @@ public class SecurityConfig {
     @Value("${aws.cognito.user-pool-id}")
     private String userPoolId;
 
+    // Comma-separated list of allowed frontend origins — set per environment in application*.properties.
+    // Must be an explicit origin (not *) because credentials: true requires a known origin.
+    @Value("${cors.allowed-origins}")
+    private String allowedOrigins;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                // Added: apply the CORS configuration bean so preflight OPTIONS requests are handled
+                // before any auth filter runs. Without this, the browser's preflight is rejected
+                // with no Access-Control-Allow-Origin header and all real requests fail.
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health/**").permitAll()
@@ -80,6 +92,28 @@ public class SecurityConfig {
                                 .jwtAuthenticationConverter(cognitoJwtConverter)));
 
         return http.build();
+    }
+
+    // Added: CORS configuration source — called for every preflight and actual cross-origin request.
+    // allowCredentials(true) is required so the browser includes HTTP-only cookies (idToken, accessToken).
+    // The wildcard origin "*" cannot be used with allowCredentials(true); explicit origins are mandatory.
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+
+        // Split the comma-separated list from application*.properties
+        for (String origin : allowedOrigins.split(",")) {
+            config.addAllowedOrigin(origin.trim());
+        }
+
+        config.setAllowCredentials(true);
+        config.addAllowedMethod("*");   // GET, POST, PUT, DELETE, OPTIONS, PATCH
+        config.addAllowedHeader("*");   // Content-Type, Authorization, etc.
+        config.setMaxAge(3600L);        // cache preflight response for 1 hour
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 
     // ? called when token is missing, invalid, or expired → 401
