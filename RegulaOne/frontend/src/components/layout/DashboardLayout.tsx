@@ -114,15 +114,17 @@ export default function DashboardLayout() {
 
           <SidebarFooter className="p-3 border-t border-red-600">
             <div className="flex items-center gap-2 px-1">
-              <Avatar className="h-8 w-8 border border-red-500 bg-red-800">
-                <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`} />
-                <AvatarFallback className="bg-red-800 text-red-200">{user?.email?.[0].toUpperCase()}</AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col min-w-0">
-                <span className="text-xs text-white font-medium truncate">{user?.displayName ?? user?.email?.split('@')[0]}</span>
-                <span className="text-[10px] text-red-300 uppercase font-bold tracking-tighter">{user?.role?.replace('ROLE_', '').replace(/_/g, ' ')}</span>
-              </div>
-              <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-red-300 hover:text-white hover:bg-red-600" disabled={logout.isPending} onClick={() => logout.mutate()}>
+              <Link to="/profile" className="flex items-center gap-2 min-w-0 flex-1 group">
+                <Avatar className="h-8 w-8 border border-red-500 bg-red-800 flex-shrink-0">
+                  <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`} />
+                  <AvatarFallback className="bg-red-800 text-red-200">{user?.email?.[0].toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs text-white font-medium truncate group-hover:text-red-200 transition-colors">{user?.displayName ?? user?.email?.split('@')[0]}</span>
+                  <span className="text-[10px] text-red-300 uppercase font-bold tracking-tighter">{user?.role?.replace('ROLE_', '').replace(/_/g, ' ')}</span>
+                </div>
+              </Link>
+              <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-red-300 hover:text-white hover:bg-red-600 flex-shrink-0" disabled={logout.isPending} onClick={() => logout.mutate()}>
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>

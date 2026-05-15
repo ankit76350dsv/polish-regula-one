@@ -51,7 +51,10 @@ public class UserService {
                     .cognitoSub(attrs.get("sub"))
                     .name(attrs.getOrDefault("name", ""))
                     .email(attrs.getOrDefault("email", request.getEmail()))
-                    .role(Role.ROLE_USER)
+                    // Changed from ROLE_USER → ROLE_ADMIN.
+                    // Self-registered users (via the signup form) are tenant admins by default.
+                    // ROLE_USER is reserved for members invited by an admin via the Team Management page.
+                    .role(Role.ROLE_ADMIN)
                     .enabled(true)
                     .build();
             userRepository.save(user);
