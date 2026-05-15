@@ -382,7 +382,7 @@ function UserView() {
 export default function Overview() {
   const { user } = useAuthStore();
 
-  if (user?.role === 'SUPER_ADMIN') return <SuperAdminView />;
-  if (user?.role === 'ADMIN') return <AdminView />;
+  if (user?.role === 'ROLE_SUPER_ADMIN') return <SuperAdminView />;
+  if (user?.role === 'ROLE_ADMIN') return <AdminView />;
   return <UserView />;
 }

@@ -15,14 +15,14 @@ const MOCK_ACCOUNTS: Record<string, UserProfile> = {
   'super@demo.com': {
     uid: 'mock-super',
     email: 'super@demo.com',
-    role: 'SUPER_ADMIN',
+    role: 'ROLE_SUPER_ADMIN',
     displayName: 'Platform Root',
     status: 'active',
   },
   'admin@demo.com': {
     uid: 'mock-admin',
     email: 'admin@demo.com',
-    role: 'ADMIN',
+    role: 'ROLE_ADMIN',
     tenantId: 'tenant-001',
     displayName: 'Tenant Administrator',
     status: 'active',
@@ -30,7 +30,7 @@ const MOCK_ACCOUNTS: Record<string, UserProfile> = {
   'user@demo.com': {
     uid: 'mock-user',
     email: 'user@demo.com',
-    role: 'USER',
+    role: 'ROLE_USER',
     tenantId: 'tenant-001',
     displayName: 'Jane Kowalski',
     status: 'active',
@@ -121,9 +121,9 @@ export default function LoginPage() {
             <div className="rounded-xl border border-dashed border-red-200 bg-red-50/50 p-4 space-y-2">
               <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-3">Demo Accounts — any password</p>
               {[
-                { email: 'super@demo.com', role: 'SUPER_ADMIN', color: 'bg-red-100 text-red-700' },
-                { email: 'admin@demo.com', role: 'ADMIN', color: 'bg-blue-100 text-blue-700' },
-                { email: 'user@demo.com', role: 'USER', color: 'bg-emerald-100 text-emerald-700' },
+                { email: 'super@demo.com', role: 'ROLE_SUPER_ADMIN', color: 'bg-red-100 text-red-700' },
+                { email: 'admin@demo.com', role: 'ROLE_ADMIN', color: 'bg-blue-100 text-blue-700' },
+                { email: 'user@demo.com', role: 'ROLE_USER', color: 'bg-emerald-100 text-emerald-700' },
               ].map((acc) => (
                 <button
                   key={acc.email}
@@ -132,7 +132,7 @@ export default function LoginPage() {
                   className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-slate-100 hover:border-red-300 transition-colors text-left cursor-pointer"
                 >
                   <span className="text-xs font-mono text-slate-600">{acc.email}</span>
-                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${acc.color}`}>{acc.role}</span>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${acc.color}`}>{acc.role.replace('ROLE_', '').replace(/_/g, ' ')}</span>
                 </button>
               ))}
             </div>

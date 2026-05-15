@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/sidebar';
 import {
   LayoutDashboard, Building2, ReceiptText, Clock, ShieldAlert, LogOut, Search, Bell, Settings,
-  MessageSquare, Trash2, ShieldCheck, Users
+  MessageSquare, Trash2, ShieldCheck, Users, Package
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,24 +25,28 @@ export default function DashboardLayout() {
   };
 
   // Tenant display label based on role
-  const tenantLabel = user?.role === 'SUPER_ADMIN'
+  const tenantLabel = user?.role === 'ROLE_SUPER_ADMIN'
     ? 'Global HQ (Root)'
     : user?.tenantId === 'tenant-001'
       ? 'PolCorp Sp. z o.o.'
       : 'My Tenant';
 
   const navItems = [
-    { title: 'Overview', icon: LayoutDashboard, path: '/', roles: ['SUPER_ADMIN', 'ADMIN', 'USER'] },
-    { title: 'Tenants', icon: Building2, path: '/tenants', roles: ['SUPER_ADMIN'] },
+    { title: 'Overview',       icon: LayoutDashboard, path: '/',              roles: ['ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_USER'] },
+    { title: 'Tenants',        icon: Building2,        path: '/tenants',       roles: ['ROLE_SUPER_ADMIN'] },
+    { title: 'Users',          icon: Users,            path: '/users',         roles: ['ROLE_SUPER_ADMIN'] },
+    { title: 'License Tiers',  icon: Package,          path: '/package-tiers', roles: ['ROLE_SUPER_ADMIN'] },
+    { title: 'Team',           icon: Users,            path: '/team',          roles: ['ROLE_ADMIN'] },
+    { title: 'My Plan',        icon: Package,          path: '/my-plan',       roles: ['ROLE_ADMIN'] },
   ];
 
   const moduleItems = [
-    { title: 'KSeFFlow', icon: ReceiptText, path: '/modules/ksef', roles: ['ADMIN', 'USER', 'SUPER_ADMIN'] },
-    { title: 'WorkPulse', icon: Clock, path: '/modules/workpulse', roles: ['ADMIN', 'USER', 'SUPER_ADMIN'] },
-    { title: 'SafeWork', icon: ShieldCheck, path: '/modules/safework', roles: ['ADMIN', 'USER', 'SUPER_ADMIN'] },
-    { title: 'SafeVoice', icon: MessageSquare, path: '/modules/safevoice', roles: ['ADMIN', 'USER', 'SUPER_ADMIN'] },
-    { title: 'WasteSync', icon: Trash2, path: '/modules/wastesync', roles: ['ADMIN', 'USER', 'SUPER_ADMIN'] },
-    { title: 'PrivacyPilot', icon: ShieldAlert, path: '/modules/privacypilot', roles: ['ADMIN', 'USER', 'SUPER_ADMIN'] },
+    { title: 'KSeFFlow', icon: ReceiptText, path: '/modules/ksef', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
+    { title: 'WorkPulse', icon: Clock, path: '/modules/workpulse', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
+    { title: 'SafeWork', icon: ShieldCheck, path: '/modules/safework', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
+    { title: 'SafeVoice', icon: MessageSquare, path: '/modules/safevoice', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
+    { title: 'WasteSync', icon: Trash2, path: '/modules/wastesync', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
+    { title: 'PrivacyPilot', icon: ShieldAlert, path: '/modules/privacypilot', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
   ];
 
   return (
@@ -121,7 +125,7 @@ export default function DashboardLayout() {
               </Avatar>
               <div className="flex flex-col min-w-0">
                 <span className="text-xs text-white font-medium truncate">{user?.displayName ?? user?.email?.split('@')[0]}</span>
-                <span className="text-[10px] text-red-300 uppercase font-bold tracking-tighter">{user?.role}</span>
+                <span className="text-[10px] text-red-300 uppercase font-bold tracking-tighter">{user?.role?.replace('ROLE_', '').replace(/_/g, ' ')}</span>
               </div>
               <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-red-300 hover:text-white hover:bg-red-600" onClick={handleLogout}>
                 <LogOut className="h-4 w-4" />

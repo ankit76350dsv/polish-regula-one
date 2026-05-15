@@ -29,7 +29,7 @@ export default function RegisterPage() {
       setUser({
         uid: `reg-${Date.now()}`,
         email,
-        role: 'ADMIN',
+        role: 'ROLE_ADMIN',
         tenantId: `tenant-${Date.now()}`,
         displayName: `${companyName} Admin`,
         status: 'active',

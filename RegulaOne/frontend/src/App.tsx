@@ -7,6 +7,10 @@ import LoginPage from './pages/Auth/LoginPage';
 import RegisterPage from './pages/Auth/RegisterPage';
 import Overview from './pages/Dashboard/Overview';
 import TenantManagement from './pages/Admin/TenantManagement';
+import UserManagement from './pages/Admin/UserManagement';
+import PackageTiers from './pages/Admin/PackageTiers';
+import AdminTeam from './pages/Admin/AdminTeam';
+import AdminPlan from './pages/Admin/AdminPlan';
 import KSeFFlow from './pages/Modules/KSeFFlow';
 import WorkPulse from './pages/Modules/WorkPulse';
 import ModulePlaceholder from './pages/Modules/ModulePlaceholder';
@@ -33,8 +37,20 @@ export default function App() {
           <Route path="/" element={<Overview />} />
 
           {/* Super Admin only routes */}
-          {user?.role === 'SUPER_ADMIN' && (
-            <Route path="/tenants" element={<TenantManagement />} />
+          {user?.role === 'ROLE_SUPER_ADMIN' && (
+            <>
+              <Route path="/tenants" element={<TenantManagement />} />
+              <Route path="/users" element={<UserManagement />} />
+              <Route path="/package-tiers" element={<PackageTiers />} />
+            </>
+          )}
+
+          {/* Admin only routes */}
+          {user?.role === 'ROLE_ADMIN' && (
+            <>
+              <Route path="/team" element={<AdminTeam />} />
+              <Route path="/my-plan" element={<AdminPlan />} />
+            </>
           )}
 
           {/* Compliance module routes */}
