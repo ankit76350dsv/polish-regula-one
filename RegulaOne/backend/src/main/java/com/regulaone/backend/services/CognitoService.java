@@ -241,6 +241,37 @@ public class CognitoService {
     }
 
 
+    // Added: exchanges an unexpired Cognito refresh token for fresh idToken + accessToken.
+    // Called by AuthController.refresh() when the short-lived tokens have expired (after 1 hour).
+    // Cognito does NOT return a new refreshToken in the response — the existing one stays valid.
+    // The username (email) is required to compute the SECRET_HASH when a client secret is configured.
+    public LoginResponse refreshToken(String refreshTokenValue, String username) {
+        try {
+            Map<String, String> params = new HashMap<>();
+            params.put("REFRESH_TOKEN", refreshTokenValue);
+            if (hasClientSecret()) params.put("SECRET_HASH", secretHash(username));
+
+            InitiateAuthResponse res = cognitoClient.initiateAuth(
+                    InitiateAuthRequest.builder()
+                            .authFlow(AuthFlowType.REFRESH_TOKEN_AUTH)
+                            .clientId(clientId)
+                            .authParameters(params)
+                            .build()
+            );
+
+            AuthenticationResultType result = res.authenticationResult();
+            // refreshToken is intentionally omitted here — Cognito does not rotate it on refresh
+            return LoginResponse.builder()
+                    .idToken(result.idToken())
+                    .accessToken(result.accessToken())
+                    .expiresIn(result.expiresIn())
+                    .tokenType(result.tokenType())
+                    .build();
+        } catch (NotAuthorizedException e) {
+            throw new IllegalArgumentException("Refresh token expired or invalid. Please log in again.");
+        }
+    }
+
     //! ── Helpers ──────────────────────────────────────────────────────────────
     private LoginResponse tokensToResponse(AuthenticationResultType r) {
         return LoginResponse.builder()

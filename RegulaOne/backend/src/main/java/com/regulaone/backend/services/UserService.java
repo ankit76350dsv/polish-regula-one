@@ -86,6 +86,12 @@ public class UserService {
                 request.getUsername(), request.getSession(), request.getNewPassword());
     }
 
+    // Added: exchanges an unexpired refresh token for new short-lived tokens.
+    // Delegates to Cognito REFRESH_TOKEN_AUTH. Username (email) is needed for the SECRET_HASH.
+    public LoginResponse refreshTokens(String refreshToken, String username) {
+        return cognitoService.refreshToken(refreshToken, username);
+    }
+
     public void changePassword(ChangePasswordRequest request, String accessToken) {
         cognitoService.changePassword(
                 accessToken, request.getCurrentPassword(), request.getNewPassword());

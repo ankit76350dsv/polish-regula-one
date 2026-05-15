@@ -80,6 +80,14 @@ public class AuthController {
                         loginResponse.getRefreshToken(),
                         30 * 24 * 60 * 60);
 
+                // Added: store username (email) in an httpOnly cookie alongside the tokens.
+                // Cognito's REFRESH_TOKEN_AUTH flow requires a SECRET_HASH that is computed using
+                // the username — without this we cannot silently refresh without asking the user to
+                // type their email again. The email is not secret, but httpOnly prevents XSS reads.
+                setCookie(response, "username",
+                        request.getEmail(),
+                        30 * 24 * 60 * 60);
+
                 return ResponseEntity.ok(
                         LoginResponse.builder()
                                 .status("SUCCESS")
@@ -125,6 +133,8 @@ public class AuthController {
         setCookie(response, "idToken", loginResponse.getIdToken(), loginResponse.getExpiresIn());
         setCookie(response, "accessToken", loginResponse.getAccessToken(), loginResponse.getExpiresIn());
         setCookie(response, "refreshToken", loginResponse.getRefreshToken(), 30 * 24 * 60 * 60);
+        // Added: same username cookie as in /login — needed for silent refresh (see /refresh endpoint)
+        setCookie(response, "username", request.getUsername(), 30 * 24 * 60 * 60);
         return ResponseEntity.ok(LoginResponse.builder()
                 .status("SUCCESS")
                 .message("Password set. Login successful.")
@@ -150,12 +160,47 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("Password changed successfully"));
     }
 
+    // Added: silent token refresh endpoint.
+    // Called automatically by the frontend when any request returns 401 (idToken/accessToken expired).
+    // Reads the refreshToken and username HTTP-only cookies set during login.
+    // On success: issues new idToken + accessToken cookies (same 1-hour TTL).
+    // On failure (refresh token expired/revoked): clears all cookies and returns 401 so the frontend
+    //   redirects the user to /login.
+    // No @PreAuthorize — the request intentionally has no valid idToken at this point.
+    @PostMapping("/refresh")
+    public ResponseEntity<MessageResponse> refresh(
+            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            @CookieValue(name = "username",     required = false) String username,
+            HttpServletResponse response) {
+
+        if (refreshToken == null || username == null) {
+            return ResponseEntity.status(401)
+                    .body(new MessageResponse("Session expired. Please log in again."));
+        }
+
+        try {
+            LoginResponse loginResponse = userService.refreshTokens(refreshToken, username);
+            setCookie(response, "idToken",      loginResponse.getIdToken(),      loginResponse.getExpiresIn());
+            setCookie(response, "accessToken",  loginResponse.getAccessToken(),  loginResponse.getExpiresIn());
+            return ResponseEntity.ok(new MessageResponse("Tokens refreshed"));
+        } catch (IllegalArgumentException e) {
+            // Refresh token is expired or revoked — force full re-login
+            clearCookie(response, "idToken");
+            clearCookie(response, "accessToken");
+            clearCookie(response, "refreshToken");
+            clearCookie(response, "username");
+            return ResponseEntity.status(401)
+                    .body(new MessageResponse(e.getMessage()));
+        }
+    }
+
     @PreAuthorize("isAuthenticated()")
     @PostMapping("/logout")
     public ResponseEntity<MessageResponse> logout(HttpServletResponse response) {
         clearCookie(response, "idToken");
         clearCookie(response, "accessToken");
         clearCookie(response, "refreshToken");
+        clearCookie(response, "username");
         return ResponseEntity.ok(new MessageResponse("Logged out successfully"));
     }
 

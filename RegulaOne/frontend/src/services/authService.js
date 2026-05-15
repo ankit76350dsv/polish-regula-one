@@ -41,8 +41,14 @@ export const authService = {
   changePassword: (data) =>
     api.put('/api/auth/change-password', data),
 
+  // POST /api/auth/refresh  [no auth required — called when idToken/accessToken have expired]
+  // Backend reads the refreshToken + username HTTP-only cookies and issues new short-lived tokens.
+  // You rarely call this directly — api.js intercepts 401s and calls it automatically.
+  refresh: () =>
+    api.post('/api/auth/refresh'),
+
   // POST /api/auth/logout  [requires valid session]
-  // Clears idToken/accessToken/refreshToken HTTP-only cookies.
+  // Clears idToken/accessToken/refreshToken/username HTTP-only cookies.
   logout: () =>
     api.post('/api/auth/logout'),
 };
