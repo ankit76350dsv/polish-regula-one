@@ -4,11 +4,14 @@ import com.regulaone.backend.dto.*;
 import com.regulaone.backend.dto.Auth.InviteUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
+import com.regulaone.backend.dto.Tenant.TenantRequest;
 import com.regulaone.backend.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,6 +23,17 @@ import java.util.List;
 public class AdminController {
 
     private final UserService userService;
+
+    // Added: first-login org setup for ROLE_ADMIN.
+    // On first login the admin has no tenant linked (tenantId == null in /me response).
+    // The frontend shows a "Setup your organisation" modal; on submit it calls this endpoint.
+    // After success, /me returns tenantStatus == "ACTIVE" and the dashboard is unlocked.
+    @PostMapping("/org/setup")
+    public ResponseEntity<UserResponse> setupOrganisation(
+            @Valid @RequestBody TenantRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(userService.setupOrganisation(jwt.getSubject(), request));
+    }
 
     /**
      * Invite a user — Cognito creates the account and emails a temporary password.

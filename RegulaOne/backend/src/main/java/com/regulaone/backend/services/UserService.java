@@ -10,8 +10,12 @@ import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
 import com.regulaone.backend.dto.Auth.SignupRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
+import com.regulaone.backend.dto.Tenant.TenantRequest;
+import com.regulaone.backend.dto.Tenant.TenantResponse;
 import com.regulaone.backend.models.Role;
+import com.regulaone.backend.models.Tenant;
 import com.regulaone.backend.models.User;
+import com.regulaone.backend.repository.TenantRepository;
 import com.regulaone.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,6 +35,9 @@ public class UserService {
 
     private final CognitoService cognitoService;
     private final UserRepository userRepository;
+    // Added: needed to create and link the tenant during admin org setup
+    private final TenantService tenantService;
+    private final TenantRepository tenantRepository;
 
     //! --- Public Auth ---
     public MessageResponse signup(SignupRequest request) {
@@ -100,6 +107,33 @@ public class UserService {
     public UserResponse getCurrentUser(String cognitoSub) {
         User user = userRepository.findByCognitoSub(cognitoSub)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        return UserResponse.from(user);
+    }
+
+    // Added: called by POST /api/admin/org/setup on the admin's first login.
+    // Creates the tenant organisation and links it to the authenticated admin user.
+    // After this call the /me response will have tenantStatus == "ACTIVE", letting
+    // the frontend drop the setup modal and show the dashboard.
+    public UserResponse setupOrganisation(String cognitoSub, TenantRequest request) {
+        User user = userRepository.findByCognitoSub(cognitoSub)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        // Guard: prevent double-setup if the admin already has an organisation
+        if (user.getTenant() != null) {
+            throw new IllegalStateException("Organisation is already set up for this account");
+        }
+
+        // Delegate creation to TenantService so NIP/email uniqueness rules are enforced
+        TenantResponse created = tenantService.createTenant(request);
+
+        // Fetch the persisted Tenant entity so @DBRef stores a valid document reference
+        Tenant tenant = tenantRepository.findById(created.getId())
+                .orElseThrow(() -> new IllegalStateException("Tenant creation failed unexpectedly"));
+
+        user.setTenant(tenant);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+
         return UserResponse.from(user);
     }
 

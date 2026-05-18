@@ -3,6 +3,7 @@ package com.regulaone.backend.models;
 import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
@@ -38,4 +39,12 @@ public class User {
     private LocalDateTime createdAt = LocalDateTime.now();
 
     private LocalDateTime updatedAt;
+
+
+    // Added: reference to the Tenant (organisation) this user belongs to.
+    // Null for ROLE_ADMIN until they complete the "Setup Organisation" flow on first login.
+    // Null for ROLE_USER until an admin creates the org and links/invites them.
+    // Frontend reads tenantId/tenantStatus from /me to decide which modal to show.
+    @DBRef
+    private Tenant tenant;
 }
