@@ -2,6 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { tenantService } from '../services/tenantService';
 
+export function useTenantById(id) {
+  return useQuery({
+    queryKey: ['tenant', id],
+    queryFn: () => tenantService.getById(id),
+    enabled: !!id,
+  });
+}
+
 export function useTenants(params) {
   return useQuery({
     queryKey: ['tenants', params],

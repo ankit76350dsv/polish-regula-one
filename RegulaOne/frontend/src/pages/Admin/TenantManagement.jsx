@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -104,13 +105,14 @@ function TenantForm({ defaultValues, onSubmit, isPending, submitLabel }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function TenantManagement() {
+  const navigate = useNavigate();
   const [search, setSearch]               = useState('');
   const [debouncedSearch, setDebounced]   = useState('');
   const [statusFilter, setStatusFilter]   = useState('');
   const [page, setPage]                   = useState(0);
   const [createOpen, setCreateOpen]       = useState(false);
-  const [editTarget, setEditTarget]       = useState(null); // TenantResponse | null
-  const [deleteTarget, setDeleteTarget]   = useState(null); // TenantResponse | null
+  const [editTarget, setEditTarget]       = useState(null);
+  const [deleteTarget, setDeleteTarget]   = useState(null);
 
   // Debounce search — reset page on new query
   useEffect(() => {
@@ -212,7 +214,11 @@ export default function TenantManagement() {
               </TableHeader>
               <TableBody>
                 {tenants.map((tenant) => (
-                  <TableRow key={tenant.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                  <TableRow
+                    key={tenant.id}
+                    className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer"
+                    onClick={() => navigate(`/tenants/${tenant.id}`)}
+                  >
                     <TableCell className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
@@ -228,7 +234,7 @@ export default function TenantManagement() {
                     </TableCell>
                     <TableCell className="px-6 py-4 text-sm text-slate-600">{tenant.email}</TableCell>
                     <TableCell className="px-6 py-4 text-sm text-slate-500">{tenant.city ?? '—'}</TableCell>
-                    <TableCell className="px-6 py-4">
+                    <TableCell className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                       <div className="relative inline-flex items-center gap-1.5">
                         <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_STYLES[tenant.status]?.dot ?? 'bg-slate-400'}`} />
                         <select
@@ -255,7 +261,7 @@ export default function TenantManagement() {
                         <span className="text-[10px] text-slate-400 font-medium">No package</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right px-6 py-4">
+                    <TableCell className="text-right px-6 py-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
 
                         <Button

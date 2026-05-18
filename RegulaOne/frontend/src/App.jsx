@@ -15,8 +15,9 @@ import Overview    from './pages/Dashboard/Overview';
 import ProfilePage from './pages/Dashboard/ProfilePage';
 
 // Admin pages
-import TenantManagement from './pages/Admin/TenantManagement';
-import UserManagement   from './pages/Admin/UserManagement';
+import TenantManagement  from './pages/Admin/TenantManagement';
+import TenantDetailPage  from './pages/Admin/TenantDetailPage';
+import UserManagement    from './pages/Admin/UserManagement';
 import PackageTiers     from './pages/Admin/PackageTiers';
 import AdminTeam        from './pages/Admin/AdminTeam';
 import AdminPlan        from './pages/Admin/AdminPlan';
@@ -68,7 +69,8 @@ export default function App() {
           {/* Super Admin only */}
           {user?.role === 'ROLE_SUPER_ADMIN' && (
             <>
-              <Route path="/tenants"       element={<TenantManagement />} />
+              <Route path="/tenants"        element={<TenantManagement />} />
+              <Route path="/tenants/:id"   element={<TenantDetailPage />} />
               <Route path="/users"         element={<UserManagement />} />
               <Route path="/package-tiers" element={<PackageTiers />} />
             </>
