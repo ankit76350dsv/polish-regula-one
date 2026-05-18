@@ -100,6 +100,8 @@ public class PackageController {
         return ResponseEntity.noContent().build();
     }
 
+
+    //! get package using package id
     @Operation(summary = "Get a single package by ID")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Package found"),
@@ -146,66 +148,4 @@ public class PackageController {
         return ResponseEntity.ok(packageService.getAllPackages(search, status, pageable));
     }
 
-    // ── Tenant–Package Assignment ─────────────────────────────────────────────
-
-    /**
-     * POST /api/superadmin/tenants/{tenantId}/packages/{packageId}
-     *
-     * Assigns a package to a tenant. On success:
-     *   - Creates a TenantPackage junction record
-     *   - Re-syncs Tenant.enabledModules to include the new package's apps
-     *
-     * @param jwt injected by Spring Security — used to record who performed the assignment
-     */
-    @Operation(summary = "Assign a package to a tenant")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Package assigned successfully"),
-        @ApiResponse(responseCode = "400", description = "Package already assigned to this tenant"),
-        @ApiResponse(responseCode = "404", description = "Tenant or package not found")
-    })
-    @PostMapping("/tenants/{tenantId}/packages/{packageId}")
-    public ResponseEntity<TenantResponse> assignPackage(
-            @PathVariable String tenantId,
-            @PathVariable String packageId,
-            @AuthenticationPrincipal Jwt jwt) {
-
-        // Record the super admin's identity for audit purposes
-        String assignedBy = jwt.getSubject();
-
-        return ResponseEntity.ok(
-                packageService.assignPackageToTenant(tenantId, packageId, assignedBy));
-    }
-
-    /**
-     * DELETE /api/superadmin/tenants/{tenantId}/packages/{packageId}
-     *
-     * Removes a package from a tenant. On success:
-     *   - Deletes the TenantPackage junction record
-     *   - Re-syncs Tenant.enabledModules (apps only from this package are removed)
-     */
-    @Operation(summary = "Remove a package from a tenant")
-    @ApiResponses({
-        @ApiResponse(responseCode = "204", description = "Package removed from tenant"),
-        @ApiResponse(responseCode = "404", description = "Tenant, package, or assignment not found")
-    })
-    @DeleteMapping("/tenants/{tenantId}/packages/{packageId}")
-    public ResponseEntity<Void> removePackage(
-            @PathVariable String tenantId,
-            @PathVariable String packageId) {
-        packageService.removePackageFromTenant(tenantId, packageId);
-        return ResponseEntity.noContent().build();
-    }
-
-    /**
-     * GET /api/superadmin/tenants/{tenantId}/packages
-     *
-     * Returns all packages assigned to a tenant with full package details embedded.
-     */
-    @Operation(summary = "Get current package and package history for a specific tenant")
-    @ApiResponse(responseCode = "404", description = "Tenant not found")
-    @GetMapping("/tenants/{tenantId}/packages")
-    public ResponseEntity<TenantPackagesResponse> getPackagesForTenant(
-            @PathVariable String tenantId) {
-        return ResponseEntity.ok(packageService.getPackagesForTenant(tenantId));
-    }
 }

@@ -3,19 +3,11 @@ package com.regulaone.backend.services;
 import com.regulaone.backend.dto.Package.PackagePageResponse;
 import com.regulaone.backend.dto.Package.PackageRequest;
 import com.regulaone.backend.dto.Package.PackageResponse;
-import com.regulaone.backend.dto.Package.TenantPackagesResponse;
-// OLD: TenantPackageResponse removed — assignPackageToTenant now returns TenantResponse (full tenant with package embedded)
-// import com.regulaone.backend.dto.Package.TenantPackageResponse;
-import com.regulaone.backend.dto.Tenant.TenantResponse;
+
 import com.regulaone.backend.models.AppPackage;
 import com.regulaone.backend.models.PackageStatus;
-// OLD: TenantModule and TenantPackage removed — syncTenantModules() removed in favour of @DBRef approach
-// import com.regulaone.backend.models.TenantModule;
-// import com.regulaone.backend.models.TenantPackage;
 import com.regulaone.backend.models.Tenant;
 import com.regulaone.backend.repository.PackageRepository;
-// OLD: TenantPackageRepository removed — package assignment now stored directly on Tenant via @DBRef
-// import com.regulaone.backend.repository.TenantPackageRepository;
 import com.regulaone.backend.repository.TenantRepository;
 import com.regulaone.backend.utils.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -26,15 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class PackageService {
 
     private final PackageRepository packageRepository;
-    // OLD: TenantPackageRepository removed — package assignment is now stored directly on Tenant via @DBRef
-    // private final TenantPackageRepository tenantPackageRepository;
     private final TenantRepository tenantRepository;
 
     // ── Package CRUD ──────────────────────────────────────────────────────────
@@ -183,106 +172,7 @@ public class PackageService {
         return PackagePageResponse.from(page);
     }
 
-    // ── Tenant–Package Assignment ─────────────────────────────────────────────
-    /**
-     * Assigns an AppPackage to a Tenant using @DBRef (new approach).
-     *
-     * Steps:
-     * 1. Validate both tenant and package exist
-     * 2. Prevent assigning the same package that is already active
-     * 3. Move the current package to packageHistory (if not already there)
-     * 4. Set the new package as currentPackage and save the tenant
-     *
-     *
-     * @param tenantId   MongoDB ID of the Tenant
-     * @param packageId  MongoDB ID of the AppPackage
-     * @param assignedBy Cognito sub of the super admin (kept for audit logging if needed later)
-     */
-    public TenantResponse assignPackageToTenant(String tenantId, String packageId, String assignedBy) {
-        
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Tenant not found with id: " + tenantId));
-
-        AppPackage pkg = packageRepository.findById(packageId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Package not found with id: " + packageId));
-
-        // Prevent re-assigning the package that is already active
-        if (tenant.getCurrentPackage() != null
-                && tenant.getCurrentPackage().getId().equals(packageId)) {
-            throw new IllegalArgumentException(
-                    "Package '" + pkg.getName() + "' is already the active package for this tenant");
-        }
-
-        // Move the current active package to history before replacing it.
-        // Guard against duplicates in history (e.g., if the same package was active before).
-        if (tenant.getCurrentPackage() != null) {
-            String currentId = tenant.getCurrentPackage().getId();
-            boolean alreadyInHistory = tenant.getPackageHistory().stream()
-                    .anyMatch(p -> p.getId().equals(currentId));
-            if (!alreadyInHistory) {
-                tenant.getPackageHistory().add(tenant.getCurrentPackage());
-            }
-        }
-
-        tenant.setCurrentPackage(pkg);
-        tenant.setUpdatedAt(LocalDateTime.now());
-
-        return TenantResponse.from(tenantRepository.save(tenant));
-    }
-
-    /**
-     * Removes the active package from a Tenant.
-     *
-     * Verifies that the given packageId matches the tenant's currentPackage before clearing it.
-     * The removed package stays in packageHistory — history is never deleted.
-     */
-    public void removePackageFromTenant(String tenantId, String packageId) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Tenant not found with id: " + tenantId));
-
-        // Confirm the given package is actually the one currently assigned
-        if (tenant.getCurrentPackage() == null
-                || !tenant.getCurrentPackage().getId().equals(packageId)) {
-            throw new ResourceNotFoundException(
-                    "Package '" + packageId + "' is not the active package for this tenant");
-        }
-
-        tenant.setCurrentPackage(null);
-        tenant.setUpdatedAt(LocalDateTime.now());
-        tenantRepository.save(tenant);
-    }
-
-    /**
-     * Returns the current package and full package history for a tenant.
-     *
-     * NEW: reads directly from Tenant.currentPackage and Tenant.packageHistory (@DBRef).
-     * No separate junction collection query needed.
-     *
-     */
-    public TenantPackagesResponse getPackagesForTenant(String tenantId) {
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Tenant not found with id: " + tenantId));
-
-        PackageResponse current = tenant.getCurrentPackage() != null
-                ? PackageResponse.from(tenant.getCurrentPackage())
-                : null;
-
-        List<PackageResponse> history = tenant.getPackageHistory() != null
-                ? tenant.getPackageHistory().stream()
-                        .map(PackageResponse::from)
-                        .collect(Collectors.toList())
-                : List.of();
-
-        return TenantPackagesResponse.builder()
-                .tenantId(tenantId)
-                .currentPackage(current)
-                .packageHistory(history)
-                .build();
-    }
-
-    // ── Private Helpers ───────────────────────────────────────────────────────
+    //TODO: ── Private Helpers ───────────────────────────────────────────────────────
 
     // OLD: syncTenantModules() removed — app access is now derived from Tenant.currentPackage.appIds
     // at query time, so there is no denormalized list to keep in sync.
