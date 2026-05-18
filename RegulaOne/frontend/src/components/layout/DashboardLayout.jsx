@@ -1,6 +1,8 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useLogout } from '../../hooks/useAuth';
+import SetupOrgModal  from '../modals/SetupOrgModal';
+import OrgBlockedModal from '../modals/OrgBlockedModal';
 import {
   Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger,
   SidebarInset, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarGroupContent
@@ -19,12 +21,21 @@ export default function DashboardLayout() {
   const location  = useLocation();
   const logout    = useLogout();
 
-  // Tenant display label based on role
+  // Tenant guard — intercept before rendering the full layout.
+  // ROLE_ADMIN with no org → must complete setup first.
+  // ROLE_USER  with no org or inactive/suspended org → blocked until admin fixes it.
+  // ROLE_SUPER_ADMIN is platform-level and never requires a tenant.
+  if (user?.role === 'ROLE_ADMIN' && !user?.tenantId) {
+    return <SetupOrgModal />;
+  }
+  if (user?.role === 'ROLE_USER' && (!user?.tenantId || user?.tenantStatus !== 'ACTIVE')) {
+    return <OrgBlockedModal />;
+  }
+
+  // Tenant display label — use real name from /me response
   const tenantLabel = user?.role === 'ROLE_SUPER_ADMIN'
     ? 'Global HQ (Root)'
-    : user?.tenantId === 'tenant-001'
-      ? 'PolCorp Sp. z o.o.'
-      : 'My Tenant';
+    : user?.tenantName ?? 'My Organisation';
 
   const navItems = [
     { title: 'Overview',       icon: LayoutDashboard, path: '/',              roles: ['ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_USER'] },

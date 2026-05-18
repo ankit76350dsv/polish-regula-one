@@ -5,11 +5,16 @@ import { authService } from '../services/authService';
 // Centralised here so all hooks/pages get consistent user objects.
 export function mapApiUserToProfile(res) {
   return {
-    uid:         res.id,
-    email:       res.email,
-    displayName: res.name,
-    role:        res.role,
-    status:      res.enabled ? 'active' : 'suspended',
+    uid:          res.id,
+    email:        res.email,
+    displayName:  res.name,
+    role:         res.role,
+    status:       res.enabled ? 'active' : 'suspended',
+    // Tenant fields — null until the admin completes org setup.
+    // Used by DashboardLayout to decide which modal to show.
+    tenantId:     res.tenantId     ?? null,
+    tenantName:   res.tenantName   ?? null,
+    tenantStatus: res.tenantStatus ?? null,
   };
 }
 

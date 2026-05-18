@@ -26,4 +26,9 @@ export const tenantService = {
 
   changeStatus: (id, status) =>
     api.patch(`/api/superadmin/tenant/${id}/status`, { status }),
+
+  // Called by ROLE_ADMIN on first login when tenantId is null.
+  // Creates the org and links it to the current admin's account in one step.
+  setupOrg: (data) =>
+    api.post('/api/admin/org/setup', data),
 };
