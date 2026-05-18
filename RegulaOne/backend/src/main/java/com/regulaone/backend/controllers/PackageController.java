@@ -3,10 +3,6 @@ package com.regulaone.backend.controllers;
 import com.regulaone.backend.dto.Package.PackagePageResponse;
 import com.regulaone.backend.dto.Package.PackageRequest;
 import com.regulaone.backend.dto.Package.PackageResponse;
-import com.regulaone.backend.dto.Package.TenantPackagesResponse;
-// OLD: TenantPackageResponse replaced — assignPackage now returns TenantResponse; getPackagesForTenant returns TenantPackagesResponse
-// import com.regulaone.backend.dto.Package.TenantPackageResponse;
-import com.regulaone.backend.dto.Tenant.TenantResponse;
 import com.regulaone.backend.models.PackageStatus;
 import com.regulaone.backend.services.PackageService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,8 +16,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;

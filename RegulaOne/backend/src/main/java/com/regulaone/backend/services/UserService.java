@@ -215,6 +215,8 @@ public class UserService {
 
     // ! invite
     public UserResponse inviteUser(InviteUserRequest request) {
+
+        
         UserType cognitoUser = cognitoService.adminCreateUser(request.getName(), request.getEmail(), request.getRole());
 
         Map<String, String> attrs = cognitoUser.attributes().stream()
