@@ -41,6 +41,11 @@ public class PackageRequest {
     @NotNull(message = "Duration type is required")
     private DurationType durationType;
 
+    // Number of billing units (e.g. 1 month, 12 months). Must be a positive integer.
+    @NotNull(message = "Duration is required")
+    @Min(value = 1, message = "Duration must be at least 1")
+    private Integer duration;
+
     // At least one app must be included — an empty package has no value to the tenant
     @NotEmpty(message = "At least one app must be included in the package")
     private List<TenantModule> appIds = new ArrayList<>();

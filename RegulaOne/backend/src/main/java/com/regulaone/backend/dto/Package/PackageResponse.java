@@ -27,6 +27,7 @@ public class PackageResponse {
     private BigDecimal price;
     private String currency;
     private DurationType durationType;
+    private Integer duration;
     private List<TenantModule> appIds;
     private PackageStatus status;
     private LocalDateTime startingDate;
@@ -46,6 +47,7 @@ public class PackageResponse {
                 .price(pkg.getPrice())
                 .currency(pkg.getCurrency())
                 .durationType(pkg.getDurationType())
+                .duration(pkg.getDuration())
                 .appIds(pkg.getAppIds())
                 .status(pkg.getStatus())
                 // startingDate / expiringDate removed from AppPackage — they now live on
@@ -67,6 +69,7 @@ public class PackageResponse {
                 .price(pkg.getPrice())
                 .currency(pkg.getCurrency())
                 .durationType(pkg.getDurationType())
+                .duration(pkg.getDuration())
                 .appIds(pkg.getAppIds())
                 .status(pkg.getStatus())
                 .startingDate(details.getPlanStarted())
@@ -88,6 +91,7 @@ public class PackageResponse {
                 .price(pkg.getPrice())
                 .currency(pkg.getCurrency())
                 .durationType(pkg.getDurationType())
+                .duration(pkg.getDuration())
                 .appIds(pkg.getAppIds())
                 .status(pkg.getStatus())
                 .startingDate(history.getPlanStarted())

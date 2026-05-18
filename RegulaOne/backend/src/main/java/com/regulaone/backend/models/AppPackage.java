@@ -36,6 +36,8 @@ public class AppPackage {
     // Billing cycle: MONTHLY, YEARLY, or LIFETIME
     private DurationType durationType;
 
+    private Integer duration;
+
     // The compliance apps included in this package.
     // Reuses TenantModule enum — adding a new app only requires adding an enum value.
     @Builder.Default

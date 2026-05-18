@@ -12,13 +12,18 @@ import com.regulaone.backend.dto.Auth.UpdateUserRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
 import com.regulaone.backend.dto.Tenant.TenantRequest;
 import com.regulaone.backend.dto.Tenant.TenantResponse;
+import com.regulaone.backend.models.AppPackage;
+import com.regulaone.backend.models.PackageStatus;
 import com.regulaone.backend.models.Role;
 import com.regulaone.backend.models.Tenant;
 import com.regulaone.backend.models.User;
+import com.regulaone.backend.repository.PackageRepository;
 import com.regulaone.backend.repository.TenantRepository;
 import com.regulaone.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminGetUserResponse;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeType;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UserType;
@@ -38,8 +43,9 @@ public class UserService {
     // Added: needed to create and link the tenant during admin org setup
     private final TenantService tenantService;
     private final TenantRepository tenantRepository;
+    private final PackageRepository appPackageRepository;
 
-    //! --- Public Auth ---
+    // ! --- Public Auth ---
     public MessageResponse signup(SignupRequest request) {
         cognitoService.signUp(request.getName(), request.getEmail(), request.getPassword());
         return new MessageResponse("Please check your email to verify your account.");
@@ -60,7 +66,8 @@ public class UserService {
                     .email(attrs.getOrDefault("email", request.getEmail()))
                     // Changed from ROLE_USER → ROLE_ADMIN.
                     // Self-registered users (via the signup form) are tenant admins by default.
-                    // ROLE_USER is reserved for members invited by an admin via the Team Management page.
+                    // ROLE_USER is reserved for members invited by an admin via the Team Management
+                    // page.
                     .role(Role.ROLE_ADMIN)
                     .enabled(true)
                     .build();
@@ -100,7 +107,8 @@ public class UserService {
     // However, this Cognito User Pool uses UUID sub values as the internal username
     // (email is only an alias). AWS requires the SECRET_HASH for REFRESH_TOKEN_AUTH
     // to be computed with the cognito:username (UUID), NOT the email alias.
-    // Passing the email produced a SECRET_HASH mismatch → Cognito NotAuthorizedException
+    // Passing the email produced a SECRET_HASH mismatch → Cognito
+    // NotAuthorizedException
     // → "Refresh token expired or invalid" even with a perfectly valid token.
     //
     // FIX: look up the user's cognitoSub by email and pass the sub to Cognito.
@@ -122,36 +130,88 @@ public class UserService {
         return UserResponse.from(user);
     }
 
-    // Added: called by POST /api/admin/org/setup on the admin's first login.
-    // Creates the tenant organisation and links it to the authenticated admin user.
-    // After this call the /me response will have tenantStatus == "ACTIVE", letting
-    // the frontend drop the setup modal and show the dashboard.
+    // Called during the admin's first-time organisation setup flow.
+    // Creates a new tenant organisation, assigns the default subscription package,
+    // and links the tenant to the authenticated admin user.
+    //
+    // Once setup is completed, the `/me` response will return:
+    // tenantStatus == "ACTIVE"
+    //
+    // This allows the frontend to:
+    // - close the organisation setup modal
+    // - unlock platform access
+    // - navigate the admin to the main dashboard
+    // TODO: setup org
+    @Transactional
     public UserResponse setupOrganisation(String cognitoSub, TenantRequest request) {
-        User user = userRepository.findByCognitoSub(cognitoSub)
+
+        User currentAdminUser = userRepository.findByCognitoSub(cognitoSub)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         // Guard: prevent double-setup if the admin already has an organisation
-        if (user.getTenant() != null) {
+        if (currentAdminUser.getTenant() != null) {
             throw new IllegalStateException("Organisation is already set up for this account");
         }
 
-        // Delegate creation to TenantService so NIP/email uniqueness rules are enforced
+        // Todo: 1st write: Create tenant
         TenantResponse created = tenantService.createTenant(request);
 
-        // Fetch the persisted Tenant entity so @DBRef stores a valid document reference
-        Tenant tenant = tenantRepository.findById(created.getId())
+        // Fetch tenant entity
+        Tenant tenantAfterCreation = tenantRepository.findById(created.getId())
                 .orElseThrow(() -> new IllegalStateException("Tenant creation failed unexpectedly"));
 
-        user.setTenant(tenant);
-        user.setUpdatedAt(LocalDateTime.now());
-        userRepository.save(user);
+        // Fetch default package
+        AppPackage basicPackage = appPackageRepository
+                .findById("6a0466e9361d1caa88cba7ed")
+                .orElseThrow(() -> new IllegalStateException("Default package not found"));
 
-        return UserResponse.from(user);
+        // Ensure package is active
+        if (basicPackage.getStatus() != PackageStatus.ACTIVE) {
+            throw new IllegalStateException(
+                    "Cannot setup organisation because the default package is inactive");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // 1 month subscription
+        LocalDateTime expiryDate = now.plusMonths(1);
+
+        // Set current package
+        Tenant.PackageDetails packageDetails = Tenant.PackageDetails.builder()
+                .appPackage(basicPackage)
+                .planStarted(now)
+                .planExpiring(expiryDate)
+                .build();
+
+        tenantAfterCreation.setCurrentPackage(packageDetails);
+
+        // Add package history
+        Tenant.PackageHistory history = Tenant.PackageHistory.builder()
+                .appPackage(basicPackage)
+                .planStarted(now)
+                .planExpired(expiryDate)
+                .build();
+
+        tenantAfterCreation.getPackageHistory().add(history);
+
+        tenantAfterCreation.setUpdatedAt(now);
+
+        // TODO: 2nd Save tenant
+        tenantRepository.save(tenantAfterCreation);
+
+        // Link tenant to user
+        currentAdminUser.setTenant(tenantAfterCreation);
+        currentAdminUser.setUpdatedAt(now);
+
+        // TODO: 3rd write save user with the tenant
+        userRepository.save(currentAdminUser);
+
+        return UserResponse.from(currentAdminUser);
     }
 
     // --- Admin ---
 
-    //! invite
+    // ! invite
     public UserResponse inviteUser(InviteUserRequest request) {
         UserType cognitoUser = cognitoService.adminCreateUser(request.getName(), request.getEmail(), request.getRole());
 
@@ -172,15 +232,14 @@ public class UserService {
         return UserResponse.from(user);
     }
 
-    //! list all users
+    // ! list all users
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
                 .map(UserResponse::from)
                 .collect(Collectors.toList());
     }
 
-
-    //! Update
+    // ! Update
     public UserResponse updateUser(String subId, UpdateUserRequest request) {
 
         User user = userRepository.findByCognitoSub(subId)
@@ -210,7 +269,7 @@ public class UserService {
         return UserResponse.from(user);
     }
 
-    //! delete
+    // ! delete
     public void deleteUser(String username) {
         cognitoService.adminDeleteUser(username);
         userRepository.findByCognitoSub(username).ifPresent(userRepository::delete);
