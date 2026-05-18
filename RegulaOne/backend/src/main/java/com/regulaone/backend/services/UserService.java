@@ -94,9 +94,21 @@ public class UserService {
     }
 
     // Added: exchanges an unexpired refresh token for new short-lived tokens.
-    // Delegates to Cognito REFRESH_TOKEN_AUTH. Username (email) is needed for the SECRET_HASH.
-    public LoginResponse refreshTokens(String refreshToken, String username) {
-        return cognitoService.refreshToken(refreshToken, username);
+    //
+    // ROOT CAUSE OF PREVIOUS BUG:
+    // The 'username' cookie stores the user's email (e.g. "user@company.pl").
+    // However, this Cognito User Pool uses UUID sub values as the internal username
+    // (email is only an alias). AWS requires the SECRET_HASH for REFRESH_TOKEN_AUTH
+    // to be computed with the cognito:username (UUID), NOT the email alias.
+    // Passing the email produced a SECRET_HASH mismatch → Cognito NotAuthorizedException
+    // → "Refresh token expired or invalid" even with a perfectly valid token.
+    //
+    // FIX: look up the user's cognitoSub by email and pass the sub to Cognito.
+    public LoginResponse refreshTokens(String refreshToken, String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Session expired. Please log in again."));
+        return cognitoService.refreshToken(refreshToken, user.getCognitoSub());
     }
 
     public void changePassword(ChangePasswordRequest request, String accessToken) {

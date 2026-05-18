@@ -20,6 +20,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -177,6 +180,12 @@ public class AuthController {
             return ResponseEntity.status(401)
                     .body(new MessageResponse("Session expired. Please log in again."));
         }
+
+        // ResponseCookie URL-encodes special characters (@ → %40) in the Set-Cookie header.
+        // Tomcat does not auto-decode cookie values, so we decode here before passing to the service.
+        try {
+            username = URLDecoder.decode(username, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException ignored) {}
 
         try {
             LoginResponse loginResponse = userService.refreshTokens(refreshToken, username);
