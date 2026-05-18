@@ -174,13 +174,14 @@ public class UserService {
         LocalDateTime now = LocalDateTime.now();
 
         // 1 month subscription
-        LocalDateTime expiryDate = now.plusMonths(1);
+        LocalDateTime expiryDate = now.plusDays(basicPackage.getDuration());
 
         // Set current package
         Tenant.PackageDetails packageDetails = Tenant.PackageDetails.builder()
                 .appPackage(basicPackage)
                 .planStarted(now)
                 .planExpiring(expiryDate)
+                .usersCapacity(String.valueOf(basicPackage.getUsersCapacity()))
                 .build();
 
         tenantAfterCreation.setCurrentPackage(packageDetails);
@@ -190,6 +191,7 @@ public class UserService {
                 .appPackage(basicPackage)
                 .planStarted(now)
                 .planExpired(expiryDate)
+                .usersCapacity(String.valueOf(basicPackage.getUsersCapacity()))
                 .build();
 
         tenantAfterCreation.getPackageHistory().add(history);

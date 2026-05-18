@@ -103,6 +103,8 @@ public class Tenant {
 
         // Date the current plan expires — null means no expiry configured yet
         private LocalDateTime planExpiring;
+
+        private String usersCapacity;
     }
 
     // ── Embedded: historical plan record ─────────────────────────────────────────
@@ -124,5 +126,7 @@ public class Tenant {
 
         // When this plan ended (was replaced or expired)
         private LocalDateTime planExpired;
+
+        private String usersCapacity;
     }
 }

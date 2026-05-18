@@ -38,6 +38,9 @@ public class AppPackage {
 
     private Integer duration;
 
+    private Integer usersCapacity;
+
+
     // The compliance apps included in this package.
     // Reuses TenantModule enum — adding a new app only requires adding an enum value.
     @Builder.Default
