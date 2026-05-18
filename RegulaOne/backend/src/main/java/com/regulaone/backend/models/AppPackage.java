@@ -45,11 +45,6 @@ public class AppPackage {
     @Builder.Default
     private PackageStatus status = PackageStatus.ACTIVE;
 
-    // Validity window — expiringDate must be after startingDate (enforced in service)
-    @Builder.Default
-    private LocalDateTime startingDate = LocalDateTime.now();
-    
-    private LocalDateTime expiringDate;
 
     // Audit timestamps
     @Builder.Default

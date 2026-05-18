@@ -7,16 +7,16 @@ import jakarta.validation.constraints.*;
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+// import java.time.LocalDateTime; — removed: startingDate/expiringDate moved to Tenant.PackageDetails
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Request body DTO used for both Create and Update package operations.
  *
- * Date validation (expiringDate must be after startingDate) is handled in
- * PackageService rather than here, because Jakarta class-level constraints
- * require a custom annotation — service-layer validation keeps the DTO simple.
+ * startingDate / expiringDate were removed from AppPackage and moved to
+ * Tenant.PackageDetails (per-tenant validity window). They are no longer
+ * part of the catalogue entry request.
  */
 @Data
 public class PackageRequest {
@@ -48,10 +48,9 @@ public class PackageRequest {
     // Defaults to ACTIVE so newly created packages are immediately assignable
     private PackageStatus status = PackageStatus.ACTIVE;
 
-    // Optional — defaults to LocalDateTime.now() in the service if not provided
-    private LocalDateTime startingDate;
-
-    // Must be after startingDate — validated in PackageService.validateDates()
-    @NotNull(message = "Expiring date is required")
-    private LocalDateTime expiringDate;
+    // OLD: startingDate / expiringDate removed — moved to Tenant.PackageDetails (per-tenant).
+    // The package catalogue entry (AppPackage) is now date-agnostic.
+    // Dates are supplied in the tenant-package assignment request instead.
+    // private LocalDateTime startingDate;
+    // private LocalDateTime expiringDate;
 }

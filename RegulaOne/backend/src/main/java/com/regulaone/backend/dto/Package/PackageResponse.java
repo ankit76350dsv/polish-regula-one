@@ -3,6 +3,7 @@ package com.regulaone.backend.dto.Package;
 import com.regulaone.backend.models.AppPackage;
 import com.regulaone.backend.models.DurationType;
 import com.regulaone.backend.models.PackageStatus;
+import com.regulaone.backend.models.Tenant;
 import com.regulaone.backend.models.TenantModule;
 import lombok.Builder;
 import lombok.Data;
@@ -33,10 +34,10 @@ public class PackageResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    /**
-     * Maps an AppPackage entity to a PackageResponse DTO.
-     * All API responses go through this factory method to ensure consistency.
-     */
+    // ── Factory methods ───────────────────────────────────────────────────────────
+
+    // Maps a standalone AppPackage catalogue entry (no tenant-specific dates).
+    // startingDate / expiringDate are left null — they live on the tenant assignment.
     public static PackageResponse from(AppPackage pkg) {
         return PackageResponse.builder()
                 .id(pkg.getId())
@@ -47,8 +48,50 @@ public class PackageResponse {
                 .durationType(pkg.getDurationType())
                 .appIds(pkg.getAppIds())
                 .status(pkg.getStatus())
-                .startingDate(pkg.getStartingDate())
-                .expiringDate(pkg.getExpiringDate())
+                // startingDate / expiringDate removed from AppPackage — they now live on
+                // Tenant.PackageDetails and Tenant.PackageHistory (per-tenant validity window)
+                .createdAt(pkg.getCreatedAt())
+                .updatedAt(pkg.getUpdatedAt())
+                .build();
+    }
+
+    // Maps a Tenant.PackageDetails (active assignment) to PackageResponse.
+    // Merges catalogue fields from appPackage with tenant-specific validity dates.
+    public static PackageResponse from(Tenant.PackageDetails details) {
+        if (details == null || details.getAppPackage() == null) return null;
+        AppPackage pkg = details.getAppPackage();
+        return PackageResponse.builder()
+                .id(pkg.getId())
+                .name(pkg.getName())
+                .description(pkg.getDescription())
+                .price(pkg.getPrice())
+                .currency(pkg.getCurrency())
+                .durationType(pkg.getDurationType())
+                .appIds(pkg.getAppIds())
+                .status(pkg.getStatus())
+                .startingDate(details.getPlanStarted())
+                .expiringDate(details.getPlanExpiring())
+                .createdAt(pkg.getCreatedAt())
+                .updatedAt(pkg.getUpdatedAt())
+                .build();
+    }
+
+    // Maps a Tenant.PackageHistory entry (past assignment) to PackageResponse.
+    // planExpired maps to expiringDate so the API surface stays uniform.
+    public static PackageResponse from(Tenant.PackageHistory history) {
+        if (history == null || history.getAppPackage() == null) return null;
+        AppPackage pkg = history.getAppPackage();
+        return PackageResponse.builder()
+                .id(pkg.getId())
+                .name(pkg.getName())
+                .description(pkg.getDescription())
+                .price(pkg.getPrice())
+                .currency(pkg.getCurrency())
+                .durationType(pkg.getDurationType())
+                .appIds(pkg.getAppIds())
+                .status(pkg.getStatus())
+                .startingDate(history.getPlanStarted())
+                .expiringDate(history.getPlanExpired())
                 .createdAt(pkg.getCreatedAt())
                 .updatedAt(pkg.getUpdatedAt())
                 .build();

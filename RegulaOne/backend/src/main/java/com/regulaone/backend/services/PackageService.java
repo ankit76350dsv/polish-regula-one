@@ -35,11 +35,10 @@ public class PackageService {
 
         validateNameUniqueness(request.getName(), null);
 
-        // ! expire-date select from the frontend calculate in the frontend
-        // if from the caledar date will be selected then the send it
-        // if the monthly or year selcted then calalcyut in the fronted and send it to
-        // backend means here
-        validateDates(LocalDateTime.now(), request.getExpiringDate());
+        // OLD: date validation was here when startingDate/expiringDate lived on AppPackage.
+        // Dates are now tenant-specific (Tenant.PackageDetails.planStarted / planExpiring)
+        // and are set when a super-admin assigns this package to a tenant — not here.
+        // validateDates(LocalDateTime.now(), request.getExpiringDate());
 
         AppPackage pkg = AppPackage.builder()
                 .name(request.getName())
@@ -49,8 +48,8 @@ public class PackageService {
                 .durationType(request.getDurationType())
                 .appIds(request.getAppIds())
                 .status(request.getStatus() != null ? request.getStatus() : PackageStatus.ACTIVE)
-                .startingDate(LocalDateTime.now())
-                .expiringDate(request.getExpiringDate())
+                // OLD: .startingDate(LocalDateTime.now())   — moved to Tenant.PackageDetails.planStarted
+                // OLD: .expiringDate(request.getExpiringDate()) — moved to Tenant.PackageDetails.planExpiring
                 .build();
 
         return PackageResponse.from(packageRepository.save(pkg));
@@ -68,12 +67,12 @@ public class PackageService {
 
         validateNameUniqueness(request.getName(), id);
 
-        // If startingDate not provided
-        LocalDateTime effectiveStart = request.getStartingDate() != null
-                ? request.getStartingDate()
-                : LocalDateTime.now();
-
-        validateDates(effectiveStart, request.getExpiringDate());
+        // OLD: startingDate/expiringDate lived on AppPackage — now on Tenant.PackageDetails.
+        // Kept commented for history.
+        // LocalDateTime effectiveStart = request.getStartingDate() != null
+        //         ? request.getStartingDate()
+        //         : LocalDateTime.now();
+        // validateDates(effectiveStart, request.getExpiringDate());
 
         pkg.setName(request.getName());
         pkg.setDescription(request.getDescription());
@@ -82,8 +81,8 @@ public class PackageService {
         pkg.setDurationType(request.getDurationType());
         pkg.setAppIds(request.getAppIds());
         pkg.setStatus(request.getStatus() != null ? request.getStatus() : pkg.getStatus());
-        pkg.setStartingDate(effectiveStart);
-        pkg.setExpiringDate(request.getExpiringDate());
+        // OLD: pkg.setStartingDate(effectiveStart);   — moved to Tenant.PackageDetails.planStarted
+        // OLD: pkg.setExpiringDate(request.getExpiringDate()); — moved to Tenant.PackageDetails.planExpiring
         pkg.setUpdatedAt(LocalDateTime.now());
 
         PackageResponse saved = PackageResponse.from(packageRepository.save(pkg));
@@ -111,7 +110,9 @@ public class PackageService {
 
         // Nullify currentPackage on any tenant that currently holds a reference to this package.
         // This prevents a MappingException when Spring resolves the @DBRef after the document is deleted.
-        List<Tenant> affectedTenants = tenantRepository.findByCurrentPackageId(id);
+        // Updated path: currentPackage is now PackageDetails (embedded), so the AppPackage
+        // ID lives at currentPackage.appPackage.id — not directly at currentPackage.id.
+        List<Tenant> affectedTenants = tenantRepository.findByCurrentPackageAppPackageId(id);
         
         affectedTenants.forEach(tenant -> {
             tenant.setCurrentPackage(null);
@@ -178,16 +179,15 @@ public class PackageService {
     // at query time, so there is no denormalized list to keep in sync.
     // private void syncTenantModules(String tenantId) { ... }
 
-    /**
-     * Validates that expiringDate is strictly after startingDate.
-     * Called on both create and update to enforce date order.
-     */
-    private void validateDates(LocalDateTime startingDate, LocalDateTime expiringDate) {
-        if (!expiringDate.isAfter(startingDate)) {
-            throw new IllegalArgumentException(
-                    "expiringDate must be after startingDate");
-        }
-    }
+    // OLD: validateDates() removed from PackageService — startingDate/expiringDate now live
+    // on Tenant.PackageDetails (per-tenant assignment), not on the AppPackage catalogue entry.
+    // Date validation should be performed in the tenant-package assignment flow instead.
+    //
+    // private void validateDates(LocalDateTime startingDate, LocalDateTime expiringDate) {
+    //     if (!expiringDate.isAfter(startingDate)) {
+    //         throw new IllegalArgumentException("expiringDate must be after startingDate");
+    //     }
+    // }
 
     /**
      * Validates package name uniqueness.

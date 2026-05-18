@@ -39,7 +39,8 @@ public interface TenantRepository extends MongoRepository<Tenant, String> {
     // Used on update — checks for email conflicts excluding the current tenant's own record
     boolean existsByEmailAndIdNot(String email, String id);
 
-    // Finds all tenants whose currentPackage @DBRef points to the given package ID.
+    // Finds all tenants whose active plan references the given AppPackage ID.
+    // Path: Tenant.currentPackage (PackageDetails) → appPackage (@DBRef AppPackage) → id.
     // Used by deletePackage() to nullify stale references before the package document is removed.
-    java.util.List<Tenant> findByCurrentPackageId(String packageId);
+    java.util.List<Tenant> findByCurrentPackageAppPackageId(String packageId);
 }

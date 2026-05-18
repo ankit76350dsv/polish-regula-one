@@ -62,6 +62,10 @@ export function mapApiUserToProfile(res) {
     tenantId:     res.tenantId     ?? null,
     tenantName:   res.tenantName   ?? null,
     tenantStatus: res.tenantStatus ?? null,
+    // Plan expiry — null/false when no package is assigned
+    planExpiresAt:    res.planExpiresAt    ?? null,
+    planExpired:      res.planExpired      ?? false,
+    planExpiringSoon: res.planExpiringSoon ?? false,
   };
 }
 

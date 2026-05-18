@@ -47,12 +47,10 @@ public class TenantResponse {
     private LocalDateTime updatedAt;
 
     public static TenantResponse from(Tenant tenant) {
-        // Map currentPackage @DBRef to PackageResponse (null-safe)
-        PackageResponse currentPkg = tenant.getCurrentPackage() != null
-                ? PackageResponse.from(tenant.getCurrentPackage())
-                : null;
+        // currentPackage is now Tenant.PackageDetails (embedded with @DBRef appPackage + validity dates)
+        PackageResponse currentPkg = PackageResponse.from(tenant.getCurrentPackage());
 
-        // Map packageHistory @DBRef list to PackageResponse list
+        // packageHistory entries are Tenant.PackageHistory — use the dedicated overload
         List<PackageResponse> history = tenant.getPackageHistory() != null
                 ? tenant.getPackageHistory().stream()
                         .map(PackageResponse::from)

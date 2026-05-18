@@ -1,8 +1,10 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useLogout } from '../../hooks/useAuth';
-import SetupOrgModal  from '../modals/SetupOrgModal';
-import OrgBlockedModal from '../modals/OrgBlockedModal';
+import SetupOrgModal    from '../modals/SetupOrgModal';
+import OrgBlockedModal  from '../modals/OrgBlockedModal';
+import PlanExpiredModal from '../modals/PlanExpiredModal';
+import PlanExpiryBanner from '../modals/PlanExpiryBanner';
 import {
   Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger,
   SidebarInset, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarGroupContent
@@ -30,6 +32,12 @@ export default function DashboardLayout() {
   }
   if (user?.role === 'ROLE_USER' && (!user?.tenantId || user?.tenantStatus !== 'ACTIVE')) {
     return <OrgBlockedModal />;
+  }
+
+  // Plan expiry guard — block access to everything except /my-plan so the admin
+  // can still navigate to the plan page to renew. ROLE_SUPER_ADMIN has no tenant plan.
+  if (user?.planExpired && user?.role !== 'ROLE_SUPER_ADMIN' && location.pathname !== '/my-plan') {
+    return <PlanExpiredModal />;
   }
 
   // Tenant display label — use real name from /me response
@@ -169,6 +177,9 @@ export default function DashboardLayout() {
               </Button>
             </div>
           </header>
+
+          {/* Expiring-soon warning — dismissable, only when plan hasn't expired yet */}
+          {user?.planExpiringSoon && user?.role !== 'ROLE_SUPER_ADMIN' && <PlanExpiryBanner />}
 
           <main className="flex-1 overflow-y-auto p-8 lg:px-12">
             <Outlet />

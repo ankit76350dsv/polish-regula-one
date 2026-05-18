@@ -34,6 +34,15 @@ public class UserResponse {
     private String tenantName;
     private String tenantStatus;
 
+    // Plan expiry fields — derived from tenant.currentPackage.expiringDate.
+    // Frontend logic:
+    //   planExpired      → show "Plan Expired" blocking modal
+    //   planExpiringSoon → show dismissable warning banner (within 7 days)
+    //   planExpiresAt    → display exact expiry date in UI
+    private LocalDateTime planExpiresAt;
+    private boolean planExpired;
+    private boolean planExpiringSoon;
+
     public static UserResponse from(User user) {
         // Derive tenant fields — Tenant may be null when no organisation has been set up yet
         String tenantId = null;
@@ -47,6 +56,23 @@ public class UserResponse {
                     : null;
         }
 
+        // Derive plan expiry — read from the @DBRef-resolved currentPackage.
+        // Handles null tenant, null package, and null expiringDate gracefully.
+        LocalDateTime planExpiresAt = null;
+        boolean planExpired = false;
+        boolean planExpiringSoon = false;
+        if (user.getTenant() != null && user.getTenant().getCurrentPackage() != null) {
+            // planExpiring lives on Tenant.PackageDetails (tenant-specific validity window),
+            // not on AppPackage (which is a shared catalogue entry without per-tenant dates).
+            LocalDateTime expiresAt = user.getTenant().getCurrentPackage().getPlanExpiring();
+            if (expiresAt != null) {
+                LocalDateTime now = LocalDateTime.now();
+                planExpiresAt    = expiresAt;
+                planExpired      = expiresAt.isBefore(now);
+                planExpiringSoon = !planExpired && expiresAt.isBefore(now.plusDays(7));
+            }
+        }
+
         return UserResponse.builder()
                 .id(user.getId())
                 .name(user.getName())
@@ -58,6 +84,9 @@ public class UserResponse {
                 .tenantId(tenantId)
                 .tenantName(tenantName)
                 .tenantStatus(tenantStatus)
+                .planExpiresAt(planExpiresAt)
+                .planExpired(planExpired)
+                .planExpiringSoon(planExpiringSoon)
                 .build();
     }
 
