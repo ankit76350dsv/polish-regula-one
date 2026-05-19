@@ -9,7 +9,9 @@ import com.regulaone.backend.dto.Auth.LoginResponse;
 import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
 import com.regulaone.backend.dto.Auth.SignupRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
+import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
+import com.regulaone.backend.dto.Tenant.TeamManagementStatsResponse;
 import com.regulaone.backend.dto.Tenant.TenantRequest;
 import com.regulaone.backend.dto.Tenant.TenantResponse;
 import com.regulaone.backend.models.AppPackage;
@@ -213,10 +215,22 @@ public class UserService {
 
     // --- Admin ---
 
-    // ! invite
+    // ! invite : latter make reinvite api....
     public UserResponse inviteUser(InviteUserRequest request) {
 
-        
+        Tenant tenant = tenantRepository.findById(request.getTenantId())
+                .orElseThrow(() -> new RuntimeException("Tenant not found"));
+
+        int usersCapacity = Integer.parseInt(
+                tenant.getCurrentPackage().getUsersCapacity());
+
+        long currentUsers = userRepository.countByTenant_Id(tenant.getId());
+
+        if (currentUsers >= usersCapacity) {
+            throw new RuntimeException(
+                    "User capacity exceeded. To add more users, please request a higher user quota or upgrade the package.");
+        }
+
         UserType cognitoUser = cognitoService.adminCreateUser(request.getName(), request.getEmail(), request.getRole());
 
         Map<String, String> attrs = cognitoUser.attributes().stream()
@@ -231,12 +245,101 @@ public class UserService {
                 .role(role)
                 .enabled(true)
                 .build();
+
         userRepository.save(user);
 
         return UserResponse.from(user);
     }
 
-    // ! list all users
+    // ! list all users for tenant
+    public List<UserResponse> getAllUsers(String tenantId) {
+
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new RuntimeException("Tenant not found"));
+
+        return userRepository.findByTenant_Id(tenant.getId())
+                .stream()
+                .map(UserResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    // ! team management dashboard stats
+    public TeamManagementStatsResponse getTeamManagementStats(String tenantId) {
+
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new RuntimeException("Tenant not found"));
+
+        long totalMembers = userRepository.countByTenant_Id(tenantId);
+
+        long activeMembers = userRepository.countByTenant_IdAndEnabledTrue(tenantId);
+
+        long suspendedMembers = userRepository.countByTenant_IdAndEnabledFalse(tenantId);
+
+        int tierLimit = 0;
+
+        if (tenant.getCurrentPackage() != null
+                && tenant.getCurrentPackage().getUsersCapacity() != null) {
+
+            tierLimit = Integer.parseInt(
+                    tenant.getCurrentPackage().getUsersCapacity());
+        }
+
+        int remainingSeats = tierLimit - (int) totalMembers;
+
+        String currentPlan = tenant.getCurrentPackage() != null
+                && tenant.getCurrentPackage().getAppPackage() != null
+                        ? tenant.getCurrentPackage().getAppPackage().getName()
+                        : "No Plan";
+
+        return TeamManagementStatsResponse.builder()
+                .tenantName(tenant.getName())
+                .totalMembers(totalMembers)
+                .activeMembers(activeMembers)
+                .suspendedMembers(suspendedMembers)
+                .tierLimit(tierLimit)
+                .seatUsage(totalMembers + " / " + tierLimit + " seats used")
+                .remainingSeats(remainingSeats)
+                .currentPlan(currentPlan)
+                .build();
+    }
+
+    // ! team management superadmin
+
+    public TeamManagementStatsResponse getTeamManagementStats() {
+
+        long totalUsers = userRepository.count();
+
+        long activeUsers = userRepository.countByEnabledTrue();
+
+        long suspendedUsers = userRepository.countByEnabledFalse();
+
+        long admins = userRepository.countByRole(Role.ROLE_ADMIN);
+
+        return TeamManagementStatsResponse.builder()
+                .totalMembers(totalUsers)
+                .activeMembers(activeUsers)
+                .suspendedMembers(suspendedUsers)
+                .admins(admins)
+                .build();
+    }
+
+    // ! enable / disable user
+    public UserResponse updateUserStatus(
+            String userId,
+            UpdateUserStatusRequest request) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setEnabled(request.isEnabled());
+        user.setUpdatedAt(LocalDateTime.now());
+
+        userRepository.save(user);
+
+        return UserResponse.from(user);
+    }
+
+    // ! list all users for superadmin
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
                 .map(UserResponse::from)

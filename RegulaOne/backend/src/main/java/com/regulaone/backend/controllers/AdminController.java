@@ -3,7 +3,9 @@ package com.regulaone.backend.controllers;
 import com.regulaone.backend.dto.*;
 import com.regulaone.backend.dto.Auth.InviteUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
+import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
+import com.regulaone.backend.dto.Tenant.TeamManagementStatsResponse;
 import com.regulaone.backend.dto.Tenant.TenantRequest;
 import com.regulaone.backend.services.UserService;
 import jakarta.validation.Valid;
@@ -25,9 +27,12 @@ public class AdminController {
     private final UserService userService;
 
     // Added: first-login org setup for ROLE_ADMIN.
-    // On first login the admin has no tenant linked (tenantId == null in /me response).
-    // The frontend shows a "Setup your organisation" modal; on submit it calls this endpoint.
-    // After success, /me returns tenantStatus == "ACTIVE" and the dashboard is unlocked.
+    // On first login the admin has no tenant linked (tenantId == null in /me
+    // response).
+    // The frontend shows a "Setup your organisation" modal; on submit it calls this
+    // endpoint.
+    // After success, /me returns tenantStatus == "ACTIVE" and the dashboard is
+    // unlocked.
     @PostMapping("/org/setup")
     public ResponseEntity<UserResponse> setupOrganisation(
             @Valid @RequestBody TenantRequest request,
@@ -44,9 +49,39 @@ public class AdminController {
         return ResponseEntity.ok(userService.inviteUser(request));
     }
 
-    @GetMapping("/users")
+    @GetMapping("/users/{tenantId}")
+    public ResponseEntity<List<UserResponse>> getAllUsers(
+            @PathVariable String tenantId) {
+        return ResponseEntity.ok(userService.getAllUsers(tenantId));
+    }
+
+    @GetMapping("/team-management/{tenantId}")
+    public ResponseEntity<TeamManagementStatsResponse> getTeamManagementStats(
+            @PathVariable String tenantId) {
+        return ResponseEntity.ok(
+                userService.getTeamManagementStats(tenantId));
+    }
+
+    @PatchMapping("/users/{userId}/status")
+    public ResponseEntity<UserResponse> updateUserStatus(
+            @PathVariable String userId,
+            @RequestBody UpdateUserStatusRequest request) {
+        return ResponseEntity.ok(
+                userService.updateUserStatus(userId, request));
+    }
+
+    @GetMapping("/superadmin/team-management")
+    public ResponseEntity<TeamManagementStatsResponse> getTeamManagementStats() {
+
+        return ResponseEntity.ok(
+                userService.getTeamManagementStats());
+    }
+
+    @GetMapping("/superadmin/list-all-users")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
+
+        return ResponseEntity.ok(
+                userService.getAllUsers());
     }
 
     /** Update name, email, and/or role of an existing Cognito user. */
@@ -54,7 +89,7 @@ public class AdminController {
     public ResponseEntity<UserResponse> updateUser(
             @PathVariable String subId,
             @RequestBody UpdateUserRequest request) {
-               
+
         return ResponseEntity.ok(userService.updateUser(subId, request));
     }
 

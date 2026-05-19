@@ -15,4 +15,7 @@ public class InviteUserRequest {
     private String email;
 
     private String role = "ROLE_USER";
+
+    @NotBlank
+    private String tenantId;
 }
