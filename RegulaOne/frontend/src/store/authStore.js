@@ -66,6 +66,10 @@ export function mapApiUserToProfile(res) {
     planExpiresAt:    res.planExpiresAt    ?? null,
     planExpired:      res.planExpired      ?? false,
     planExpiringSoon: res.planExpiringSoon ?? false,
+    // Package and module access — used by the sidebar to show/hide modules
+    // and by the profile page to display what the user can access.
+    packageId: res.packageId ?? null,
+    moduleIds: res.moduleIds ?? [],
   };
 }
 

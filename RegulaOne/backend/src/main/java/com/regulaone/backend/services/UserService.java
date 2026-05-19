@@ -9,6 +9,7 @@ import com.regulaone.backend.dto.Auth.LoginResponse;
 import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
 import com.regulaone.backend.dto.Auth.SignupRequest;
 import com.regulaone.backend.dto.Auth.UpdateProfileRequest;
+import com.regulaone.backend.dto.Auth.UpdateModulesRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
@@ -20,6 +21,7 @@ import com.regulaone.backend.models.AppPackage;
 import com.regulaone.backend.models.PackageStatus;
 import com.regulaone.backend.models.Role;
 import com.regulaone.backend.models.Tenant;
+import com.regulaone.backend.models.TenantModule;
 import com.regulaone.backend.models.User;
 import com.regulaone.backend.repository.PackageRepository;
 import com.regulaone.backend.repository.TenantRepository;
@@ -209,6 +211,10 @@ public class UserService {
         currentAdminUser.setTenant(tenantAfterCreation);
         currentAdminUser.setUpdatedAt(now);
 
+        // Assign the package's default module list to the admin user so the sidebar
+        // reflects exactly what the purchased plan includes from day one.
+        currentAdminUser.setModuleIds(basicPackage.getAppIds());
+
         // TODO: 3rd write save user with the tenant
         userRepository.save(currentAdminUser);
 
@@ -248,6 +254,9 @@ public class UserService {
 
         Role role = parseRole(request.getRole());
 
+        // Module access: admin explicitly passes the moduleIds during invite.
+        List<TenantModule> moduleIds = request.getModuleIds();
+
         // Link the invited user to the tenant so that their /me response
         // returns the correct tenantId and they are not shown the
         // "Organisation not found" modal on first login.
@@ -258,6 +267,7 @@ public class UserService {
                 .role(role)
                 .enabled(true)
                 .tenant(tenant)
+                .moduleIds(moduleIds)
                 .build();
 
         userRepository.save(user);
@@ -342,6 +352,24 @@ public class UserService {
                 .suspendedMembers(suspendedUsers)
                 .admins(admins)
                 .build();
+    }
+
+    // ! update user module access
+    // Replaces the user's entire moduleIds list with the one supplied by the admin.
+    // Uses the MongoDB document id (not cognitoSub) for consistency with updateUserStatus.
+    public UserResponse updateUserModules(String userId, UpdateModulesRequest request) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // OLD: no module update existed — module access was only set at invite time
+        // NEW: allow admin to revise module access at any time from the Team panel
+        user.setModuleIds(request.getModuleIds());
+        user.setUpdatedAt(LocalDateTime.now());
+
+        userRepository.save(user);
+
+        return UserResponse.from(user);
     }
 
     // ! enable / disable user

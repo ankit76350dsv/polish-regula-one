@@ -1,5 +1,6 @@
 package com.regulaone.backend.dto.Auth;
 
+import com.regulaone.backend.models.TenantModule;
 import com.regulaone.backend.models.User;
 import lombok.Builder;
 import lombok.Data;
@@ -8,6 +9,8 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.UserType;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -43,6 +46,15 @@ public class UserResponse {
     private boolean planExpired;
     private boolean planExpiringSoon;
 
+    // Added: the AppPackage id assigned to this user's tenant.
+    // Frontend uses this to know which plan tier the user is on.
+    private String packageId;
+
+    // Added: per-user list of compliance modules the user is allowed to access.
+    // Assigned during org setup (from package defaults) or during invite (admin choice).
+    // Frontend reads this to show/hide sidebar items — a module absent here is hidden.
+    private List<TenantModule> moduleIds;
+
     public static UserResponse from(User user) {
         // Derive tenant fields — Tenant may be null when no organisation has been set up yet
         String tenantId = null;
@@ -73,6 +85,21 @@ public class UserResponse {
             }
         }
 
+        // Derive packageId — the AppPackage catalogue id assigned to this tenant.
+        // Null when tenant has no active package (e.g. just created, not yet assigned).
+        String packageId = null;
+        if (user.getTenant() != null
+                && user.getTenant().getCurrentPackage() != null
+                && user.getTenant().getCurrentPackage().getAppPackage() != null) {
+            packageId = user.getTenant().getCurrentPackage().getAppPackage().getId();
+        }
+
+        // User-level module access list — empty list instead of null so the frontend
+        // never has to null-check before iterating.
+        List<TenantModule> moduleIds = (user.getModuleIds() != null)
+                ? user.getModuleIds()
+                : new ArrayList<>();
+
         return UserResponse.builder()
                 .id(user.getId())
                 .name(user.getName())
@@ -87,6 +114,8 @@ public class UserResponse {
                 .planExpiresAt(planExpiresAt)
                 .planExpired(planExpired)
                 .planExpiringSoon(planExpiringSoon)
+                .packageId(packageId)
+                .moduleIds(moduleIds)
                 .build();
     }
 

@@ -77,14 +77,21 @@ export default function DashboardLayout() {
     { title: 'My Plan',        icon: Package,          path: '/my-plan',       roles: ['ROLE_ADMIN'] },
   ];
 
-  const moduleItems = [
-    { title: 'KSeFFlow', icon: ReceiptText, path: '/modules/ksef', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
-    { title: 'WorkPulse', icon: Clock, path: '/modules/workpulse', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
-    { title: 'SafeWork', icon: ShieldCheck, path: '/modules/safework', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
-    { title: 'SafeVoice', icon: MessageSquare, path: '/modules/safevoice', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
-    { title: 'WasteSync', icon: Trash2, path: '/modules/wastesync', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
-    { title: 'PrivacyPilot', icon: ShieldAlert, path: '/modules/privacypilot', roles: ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_SUPER_ADMIN'] },
+  // All compliance modules with their backend enum key for access control.
+  // ROLE_SUPER_ADMIN sees every module regardless of moduleIds.
+  // ROLE_ADMIN and ROLE_USER only see the modules listed in user.moduleIds.
+  const ALL_MODULES = [
+    { title: 'KSeFFlow',    icon: ReceiptText,   path: '/modules/ksef',         moduleKey: 'KSEFFLOW',     dotColor: 'bg-blue-300' },
+    { title: 'WorkPulse',   icon: Clock,         path: '/modules/workpulse',    moduleKey: 'WORKPULSE',    dotColor: 'bg-green-300' },
+    { title: 'SafeWork',    icon: ShieldCheck,   path: '/modules/safework',     moduleKey: 'SAFEWORK',     dotColor: 'bg-amber-300' },
+    { title: 'SafeVoice',   icon: MessageSquare, path: '/modules/safevoice',    moduleKey: 'SAFEVOICE',    dotColor: 'bg-orange-300' },
+    { title: 'WasteSync',   icon: Trash2,        path: '/modules/wastesync',    moduleKey: 'WASTESYNC',    dotColor: 'bg-red-300' },
+    { title: 'PrivacyPilot',icon: ShieldAlert,   path: '/modules/privacypilot', moduleKey: 'PRIVACYPILOT', dotColor: 'bg-emerald-300' },
   ];
+
+  const visibleModules = user?.role === 'ROLE_SUPER_ADMIN'
+    ? ALL_MODULES
+    : ALL_MODULES.filter((m) => (user?.moduleIds ?? []).includes(m.moduleKey));
 
   return (
     <SidebarProvider>
@@ -134,21 +141,20 @@ export default function DashboardLayout() {
               <SidebarGroupLabel className="px-2 text-[10px] uppercase font-bold text-red-300 mb-1 tracking-widest">Enabled Modules</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="space-y-1">
-                  {moduleItems.map((item, index) => {
-                    const dotColors = ['bg-blue-300', 'bg-green-300', 'bg-amber-300', 'bg-orange-300', 'bg-red-300', 'bg-emerald-300'];
-                    return (
-                      <SidebarMenuItem key={item.path}>
-                        <SidebarMenuButton
-                          render={<Link to={item.path} />}
-                          isActive={location.pathname === item.path}
-                          className={`flex items-center gap-3 px-3 py-1.5 rounded-md text-sm transition-all duration-200 ${location.pathname === item.path ? 'bg-white text-red-700 font-semibold' : 'text-red-100 hover:bg-red-600 hover:text-white'}`}
-                        >
-                          <div className={`w-2 h-2 rounded-full ${dotColors[index % dotColors.length]}`}></div>
-                          <span className="font-medium">{item.title}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
+                  {visibleModules.length === 0 ? (
+                    <p className="px-3 py-2 text-[10px] text-red-400 italic">No modules assigned</p>
+                  ) : visibleModules.map((item) => (
+                    <SidebarMenuItem key={item.path}>
+                      <SidebarMenuButton
+                        render={<Link to={item.path} />}
+                        isActive={location.pathname === item.path}
+                        className={`flex items-center gap-3 px-3 py-1.5 rounded-md text-sm transition-all duration-200 ${location.pathname === item.path ? 'bg-white text-red-700 font-semibold' : 'text-red-100 hover:bg-red-600 hover:text-white'}`}
+                      >
+                        <div className={`w-2 h-2 rounded-full ${item.dotColor}`}></div>
+                        <span className="font-medium">{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

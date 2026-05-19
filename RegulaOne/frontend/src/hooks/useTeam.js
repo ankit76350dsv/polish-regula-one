@@ -69,6 +69,22 @@ export function useInviteUser() {
   });
 }
 
+// Replaces a user's module access list and refreshes the members list on success.
+// Caller passes { userId, moduleIds }.
+export function useUpdateUserModules() {
+  const tenantId = useAuthStore((s) => s.user?.tenantId);
+  const qc       = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, moduleIds }) => userService.updateUserModules(userId, moduleIds),
+    onSuccess: () => {
+      toast.success('Module access updated');
+      qc.invalidateQueries({ queryKey: TEAM_KEYS.members(tenantId) });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to update module access'),
+  });
+}
+
 // Enables or disables a user and refreshes both members and stats on success.
 // Caller passes { userId, enabled } — where enabled: true = ACTIVE, false = SUSPENDED.
 export function useUpdateUserStatus() {

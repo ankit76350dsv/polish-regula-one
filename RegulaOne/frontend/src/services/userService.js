@@ -39,6 +39,12 @@ export const userService = {
   updateUser: (subId, data) =>
     api.put(`/api/admin/users/${subId}`, data),
 
+  // PATCH /api/admin/users/{userId}/modules
+  // Body: { moduleIds: TenantModule[] } — replaces the user's module access list.
+  // Uses MongoDB document id (same field as updateUserStatus).
+  updateUserModules: (userId, moduleIds) =>
+    api.patch(`/api/admin/users/${userId}/modules`, { moduleIds }),
+
   // DELETE /api/admin/users/{username}
   // Kept here for future delete-user flow.
   deleteUser: (username) =>

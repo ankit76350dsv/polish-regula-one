@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   User, Mail, ShieldCheck, Calendar, Hash, CheckCircle2, XCircle,
   Lock, KeyRound, Pencil, Building2, Phone, MapPin, X, Loader2,
+  LayoutGrid,
 } from 'lucide-react';
 import {
   useMyProfile, useUpdateMyProfile, useMyOrg, useUpdateMyOrg,
@@ -66,6 +67,16 @@ function InfoRow({ icon: Icon, label, value, mono = false }) {
 function Skel({ w = 'w-32', h = 'h-4' }) {
   return <div className={`${h} ${w} bg-slate-100 rounded animate-pulse`} />;
 }
+
+// Friendly display names and dot colours for each TenantModule enum value.
+const MODULE_META = {
+  KSEFFLOW:     { label: 'KSeFFlow',    dot: 'bg-blue-400' },
+  WORKPULSE:    { label: 'WorkPulse',   dot: 'bg-green-400' },
+  SAFEWORK:     { label: 'SafeWork',    dot: 'bg-amber-400' },
+  SAFEVOICE:    { label: 'SafeVoice',   dot: 'bg-orange-400' },
+  WASTESYNC:    { label: 'WasteSync',   dot: 'bg-red-400' },
+  PRIVACYPILOT: { label: 'PrivacyPilot', dot: 'bg-emerald-400' },
+};
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -379,6 +390,54 @@ export default function ProfilePage() {
                 } />
                 <InfoRow icon={Calendar}  label="Registered"  value={fmtDate(org?.createdAt)} />
               </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Module Access (admin + user with a tenant) ───────────────────── */}
+      {hasOrg && (
+        <Card className="bg-white border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+          <CardHeader className="border-b border-slate-100 py-5 px-6">
+            <CardTitle className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <LayoutGrid className="h-4 w-4 text-slate-400" /> Module Access
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-4">
+            {profileLoading ? (
+              <div className="grid grid-cols-2 gap-2">
+                {[...Array(6)].map((_, i) => <Skel key={i} w="w-full" h="h-8" />)}
+              </div>
+            ) : (
+              <>
+                {/* Package ID — small reference for admins / support */}
+                {profile?.packageId && (
+                  <div className="flex items-center gap-2 pb-3 border-b border-slate-50">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-24 flex-shrink-0">Plan ID</span>
+                    <span className="text-[11px] font-mono text-slate-500 break-all">{profile.packageId}</span>
+                  </div>
+                )}
+
+                {/* Module badges */}
+                {(!profile?.moduleIds || profile.moduleIds.length === 0) ? (
+                  <p className="text-sm text-slate-400 font-medium">No modules assigned to your account.</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {profile.moduleIds.map((key) => {
+                      const meta = MODULE_META[key] ?? { label: key, dot: 'bg-slate-300' };
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-100 bg-slate-50"
+                        >
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.dot}`} />
+                          <span className="text-xs font-semibold text-slate-700">{meta.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

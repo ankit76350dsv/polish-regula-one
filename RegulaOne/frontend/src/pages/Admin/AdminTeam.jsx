@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Users, UserCheck, UserX, UserPlus, X, AlertTriangle, Loader2 } from 'lucide-react';
+import { Users, UserCheck, UserX, UserPlus, X, AlertTriangle, Loader2, LayoutGrid } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import { useTeamStats, useTeamMembers, useInviteUser, useUpdateUserStatus } from '../../hooks/useTeam';
+import { useTeamStats, useTeamMembers, useInviteUser, useUpdateUserStatus, useUpdateUserModules } from '../../hooks/useTeam';
 
 // OLD MOCK DATA — commented out in favour of real API data from /api/admin/*
 // const MOCK_TENANT_USERS = [
@@ -52,12 +52,55 @@ export default function AdminTeam() {
   // Mutations
   const inviteUser        = useInviteUser();
   const updateUserStatus  = useUpdateUserStatus();
+  const updateUserModules = useUpdateUserModules();
+
+  // Edit-modules modal state — holds the user whose modules are being edited
+  const [editModulesUser, setEditModulesUser] = useState(null); // full user object
+  const [editModules,     setEditModules]     = useState([]);
+
+  const openEditModules = (user) => {
+    setEditModulesUser(user);
+    setEditModules(user.moduleIds ?? []);
+  };
+
+  const closeEditModules = () => {
+    setEditModulesUser(null);
+    setEditModules([]);
+  };
+
+  const toggleEditModule = (key) =>
+    setEditModules((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
+
+  const handleSaveModules = () => {
+    updateUserModules.mutate(
+      { userId: editModulesUser.id, moduleIds: editModules },
+      { onSuccess: closeEditModules },
+    );
+  };
 
   // Invite modal state
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteName,  setInviteName]  = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole,  setInviteRole]  = useState('ROLE_USER');
+  const [showInvite,   setShowInvite]   = useState(false);
+  const [inviteName,   setInviteName]   = useState('');
+  const [inviteEmail,  setInviteEmail]  = useState('');
+  const [inviteRole,   setInviteRole]   = useState('ROLE_USER');
+  const [inviteModules, setInviteModules] = useState([]);
+
+  // All available compliance modules the admin can assign to the invited user
+  const MODULES = [
+    { key: 'KSEFFLOW',     label: 'KSeFFlow' },
+    { key: 'WORKPULSE',    label: 'WorkPulse' },
+    { key: 'SAFEWORK',     label: 'SafeWork' },
+    { key: 'SAFEVOICE',    label: 'SafeVoice' },
+    { key: 'WASTESYNC',    label: 'WasteSync' },
+    { key: 'PRIVACYPILOT', label: 'PrivacyPilot' },
+  ];
+
+  const toggleModule = (key) =>
+    setInviteModules((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
 
   // Confirmation modal state — holds the user pending a status change
   const [confirmUser, setConfirmUser] = useState(null); // { id, name, enabled }
@@ -66,13 +109,14 @@ export default function AdminTeam() {
   const handleInvite = (e) => {
     e.preventDefault();
     inviteUser.mutate(
-      { name: inviteName, email: inviteEmail, role: inviteRole },
+      { name: inviteName, email: inviteEmail, role: inviteRole, moduleIds: inviteModules },
       {
         onSuccess: () => {
           setShowInvite(false);
           setInviteName('');
           setInviteEmail('');
           setInviteRole('ROLE_USER');
+          setInviteModules([]);
         },
       },
     );
@@ -244,6 +288,44 @@ export default function AdminTeam() {
                     ))}
                   </div>
                 </div>
+
+                {/* Module access — admin picks which modules the user can see */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Module Access
+                    </Label>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {inviteModules.length} of {MODULES.length} selected
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {MODULES.map((m) => {
+                      const active = inviteModules.includes(m.key);
+                      return (
+                        <button
+                          key={m.key}
+                          type="button"
+                          onClick={() => toggleModule(m.key)}
+                          disabled={inviteUser.isPending}
+                          className={`h-9 rounded-lg border text-xs font-bold tracking-wide transition-all ${
+                            active
+                              ? 'bg-red-50 text-red-700 border-red-400'
+                              : 'bg-white text-slate-400 border-slate-200 hover:border-red-200'
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {inviteModules.length === 0 && (
+                    <p className="text-[10px] text-amber-500 font-medium">
+                      No modules selected — user will not see any modules.
+                    </p>
+                  )}
+                </div>
+
                 <div className="flex gap-3 pt-2">
                   <Button
                     type="button"
@@ -317,6 +399,84 @@ export default function AdminTeam() {
                   {updateUserStatus.isPending ? (
                     <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Updating…</>
                   ) : confirmUser.enabled ? 'Yes, Suspend' : 'Yes, Reactivate'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Edit modules modal ────────────────────────────────────────────── */}
+      {editModulesUser && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
+          <Card className="w-full max-w-md bg-white rounded-2xl shadow-2xl border-slate-200">
+            <CardHeader className="border-b border-slate-100 py-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold text-slate-900">Edit Module Access</CardTitle>
+                  <p className="text-xs text-slate-400 mt-0.5 font-medium">{editModulesUser.name}</p>
+                </div>
+                <button
+                  onClick={closeEditModules}
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                  disabled={updateUserModules.isPending}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-5 pb-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-500 font-medium">Select which modules this user can access</p>
+                <span className="text-[10px] font-bold text-slate-400">
+                  {editModules.length} of {MODULES.length} selected
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {MODULES.map((m) => {
+                  const active = editModules.includes(m.key);
+                  return (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => toggleEditModule(m.key)}
+                      disabled={updateUserModules.isPending}
+                      className={`h-9 rounded-lg border text-xs font-bold tracking-wide transition-all ${
+                        active
+                          ? 'bg-red-50 text-red-700 border-red-400'
+                          : 'bg-white text-slate-400 border-slate-200 hover:border-red-200'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {editModules.length === 0 && (
+                <p className="text-[10px] text-amber-500 font-medium">
+                  No modules selected — user will not see any modules in the sidebar.
+                </p>
+              )}
+              <div className="flex gap-3 pt-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={closeEditModules}
+                  className="flex-1 text-slate-400 font-bold"
+                  disabled={updateUserModules.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSaveModules}
+                  className="flex-1 bg-red-600 text-white hover:bg-red-700 font-bold"
+                  disabled={updateUserModules.isPending}
+                >
+                  {updateUserModules.isPending
+                    ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Saving…</>
+                    : 'Save Changes'
+                  }
                 </Button>
               </div>
             </CardContent>
@@ -410,27 +570,38 @@ export default function AdminTeam() {
                         {formatDate(u.createdAt)}
                       </TableCell>
 
-                      {/* Action button — opens confirmation modal */}
+                      {/* Action buttons — status toggle + module editor */}
                       <TableCell className="text-right px-6 py-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`text-xs font-bold h-7 px-3 ${
-                            isActive
-                              ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                              : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
-                          }`}
-                          onClick={() => handleStatusClick(u)}
-                          disabled={isPendingThis}
-                        >
-                          {isPendingThis ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : isActive ? (
-                            <><UserX     className="h-3.5 w-3.5 mr-1" />Suspend</>
-                          ) : (
-                            <><UserCheck className="h-3.5 w-3.5 mr-1" />Reactivate</>
-                          )}
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs font-bold h-7 px-3 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => openEditModules(u)}
+                            disabled={updateUserModules.isPending}
+                          >
+                            <LayoutGrid className="h-3.5 w-3.5 mr-1" />Modules
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`text-xs font-bold h-7 px-3 ${
+                              isActive
+                                ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                                : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                            }`}
+                            onClick={() => handleStatusClick(u)}
+                            disabled={isPendingThis}
+                          >
+                            {isPendingThis ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : isActive ? (
+                              <><UserX     className="h-3.5 w-3.5 mr-1" />Suspend</>
+                            ) : (
+                              <><UserCheck className="h-3.5 w-3.5 mr-1" />Reactivate</>
+                            )}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

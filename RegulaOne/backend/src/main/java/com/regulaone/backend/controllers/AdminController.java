@@ -2,6 +2,7 @@ package com.regulaone.backend.controllers;
 
 import com.regulaone.backend.dto.*;
 import com.regulaone.backend.dto.Auth.InviteUserRequest;
+import com.regulaone.backend.dto.Auth.UpdateModulesRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
@@ -62,6 +63,15 @@ public class AdminController {
             @PathVariable String tenantId) {
         return ResponseEntity.ok(
                 userService.getTeamManagementStats(tenantId));
+    }
+
+    // Replaces the module access list for a user — admin picks which modules
+    // the user can see in the sidebar. Uses MongoDB document id (same as updateUserStatus).
+    @PatchMapping("/users/{userId}/modules")
+    public ResponseEntity<UserResponse> updateUserModules(
+            @PathVariable String userId,
+            @RequestBody UpdateModulesRequest request) {
+        return ResponseEntity.ok(userService.updateUserModules(userId, request));
     }
 
     @PatchMapping("/users/{userId}/status")
