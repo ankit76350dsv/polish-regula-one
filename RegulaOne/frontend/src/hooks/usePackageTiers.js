@@ -6,7 +6,7 @@
 //   useAllTierChanges()      — GET /api/superadmin/tier-changes  (full history)
 //   useExportBilling()       — GET /api/superadmin/tier-changes/export → CSV download
 
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { packageService } from '../services/packageService';
 
@@ -39,6 +39,38 @@ export function useAllTierChanges() {
     queryFn:  () => packageService.getTierChanges(0),
     // Not fetched until explicitly enabled — avoids an extra call on mount.
     enabled:  false,
+  });
+}
+
+// Deletes a package tier by ID.
+// On success, invalidates tier stats so the deleted card disappears immediately.
+// The backend nullifies currentPackage on any tenant assigned to this tier before
+// removing it — the frontend doesn't need to handle orphaned tenants itself.
+export function useDeletePackage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => packageService.deletePackage(id),
+    onSuccess: (_, id) => {
+      toast.success('Package deleted successfully');
+      qc.invalidateQueries({ queryKey: TIER_KEYS.stats });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to delete package'),
+  });
+}
+
+// Creates a new package tier and refreshes the stats + tier cards on success.
+// Caller passes the full PackageRequest shape:
+//   { name, description, price, currency, durationType, duration, usersCapacity, appIds[] }
+export function useCreatePackage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data) => packageService.createPackage(data),
+    onSuccess: (res) => {
+      toast.success(`Package "${res.name}" created successfully`);
+      // Refresh the tier stats so the new card appears immediately
+      qc.invalidateQueries({ queryKey: TIER_KEYS.stats });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to create package'),
   });
 }
 

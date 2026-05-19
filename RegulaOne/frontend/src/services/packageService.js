@@ -26,6 +26,20 @@ export const packageService = {
   exportBillingCsv: () =>
     api.get('/api/superadmin/tier-changes/export'),
 
+  // POST /api/superadmin/packages
+  // Body: { name, description?, price, currency, durationType, duration,
+  //         usersCapacity?, appIds[], status? }
+  // Returns PackageResponse for the newly created package (201 Created).
+  createPackage: (data) =>
+    api.post('/api/superadmin/packages', data),
+
+  // DELETE /api/superadmin/packages/{id}
+  // Nullifies currentPackage on any tenant assigned to this package before
+  // removing the catalogue entry — prevents stale @DBRef errors. Returns 204.
+  // api.del (not api.delete — "delete" is a reserved JS keyword so the helper uses "del")
+  deletePackage: (id) =>
+    api.del(`/api/superadmin/packages/${id}`),
+
   // GET /api/superadmin/packages  (existing endpoint — paginated catalogue list)
   getAllPackages: (params = {}) => {
     const qs = new URLSearchParams(

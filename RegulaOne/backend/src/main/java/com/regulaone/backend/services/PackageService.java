@@ -51,6 +51,11 @@ public class PackageService {
                 .price(request.getPrice())
                 .currency(request.getCurrency().toUpperCase())
                 .durationType(request.getDurationType())
+                .duration(request.getDuration())
+                // Added: usersCapacity is now part of PackageRequest so it can be set on creation.
+                // 0 is stored as-is; the seat-enforcement logic in UserService.inviteUser()
+                // treats null or 0 as no limit (unlimited seats).
+                .usersCapacity(request.getUsersCapacity())
                 .appIds(request.getAppIds())
                 .status(request.getStatus() != null ? request.getStatus() : PackageStatus.ACTIVE)
                 // OLD: .startingDate(LocalDateTime.now())   — moved to Tenant.PackageDetails.planStarted
@@ -84,6 +89,9 @@ public class PackageService {
         pkg.setPrice(request.getPrice());
         pkg.setCurrency(request.getCurrency().toUpperCase());
         pkg.setDurationType(request.getDurationType());
+        pkg.setDuration(request.getDuration());
+        // Added: keep usersCapacity in sync on updates — mirrors createPackage handling.
+        pkg.setUsersCapacity(request.getUsersCapacity());
         pkg.setAppIds(request.getAppIds());
         pkg.setStatus(request.getStatus() != null ? request.getStatus() : pkg.getStatus());
         // OLD: pkg.setStartingDate(effectiveStart);   — moved to Tenant.PackageDetails.planStarted
@@ -257,12 +265,20 @@ public class PackageService {
     }
 
     /**
-     * Returns tier-change events across all tenants, newest first.
+     * Returns package assignment events across all tenants, newest first.
      *
-     * A tier change is detected when consecutive packageHistory entries for a
-     * tenant have different package names — i.e. the tenant switched plans.
-     * The most recent change (last history entry → currentPackage) is also
-     * included when the plan names differ.
+     * Updated algorithm — collects ALL assignment events, not just plan-name changes:
+     *  1. For each tenant with a currentPackage: add one entry for the active assignment.
+     *  2. For each tenant's packageHistory: add one entry per historical assignment.
+     *  3. Sort all events newest-first by planStarted.
+     *  4. Apply limit if specified.
+     *
+     * This allows the frontend to display "Recent Plan Assignments" (who bought what and when)
+     * rather than only showing tenants that switched plans.
+     *
+     * OLD approach (commented out below) — was detecting consecutive packageHistory entries
+     * with different package names. This missed initial assignments and produced an empty table
+     * for tenants that only ever had one plan.
      *
      * @param limit max results to return; null or 0 means return all
      *
@@ -271,64 +287,90 @@ public class PackageService {
      */
     public List<TierChangeResponse> getTierChanges(Integer limit) {
 
-        List<TierChangeResponse> changes = new ArrayList<>();
+        List<TierChangeResponse> assignments = new ArrayList<>();
 
         for (Tenant tenant : tenantRepository.findAll()) {
-            List<Tenant.PackageHistory> history = tenant.getPackageHistory();
-            if (history == null || history.isEmpty()) continue;
 
-            // Detect changes between consecutive history entries
-            for (int i = 1; i < history.size(); i++) {
-                Tenant.PackageHistory prev = history.get(i - 1);
-                Tenant.PackageHistory curr = history.get(i);
-                if (prev.getAppPackage() == null || curr.getAppPackage() == null) continue;
+            // Capture the planStarted of the current assignment so we can skip the
+            // matching packageHistory entry below (the same assignment is written to
+            // both currentPackage and packageHistory, causing duplicates).
+            LocalDateTime currentPlanStarted = null;
 
-                String prevName = prev.getAppPackage().getName();
-                String currName = curr.getAppPackage().getName();
-
-                if (!prevName.equals(currName)) {
-                    changes.add(TierChangeResponse.builder()
-                            .tenantId(tenant.getId())
-                            .tenantName(tenant.getName())
-                            .fromPlan(prevName)
-                            .toPlan(currName)
-                            .changedAt(curr.getPlanStarted())
-                            .reason(curr.getReason())
-                            .build());
-                }
+            // 1. Current active assignment — always included; carries planExpiring.
+            if (tenant.getCurrentPackage() != null
+                    && tenant.getCurrentPackage().getAppPackage() != null) {
+                currentPlanStarted = tenant.getCurrentPackage().getPlanStarted();
+                assignments.add(TierChangeResponse.builder()
+                        .tenantId(tenant.getId())
+                        .tenantName(tenant.getName())
+                        .toPlan(tenant.getCurrentPackage().getAppPackage().getName())
+                        .changedAt(currentPlanStarted)
+                        .planExpiring(tenant.getCurrentPackage().getPlanExpiring())
+                        // PackageDetails has no reason field — reason is only on PackageHistory.
+                        .reason(null)
+                        .build());
             }
 
-            // Also check if the current active plan differs from the last history entry
-            Tenant.PackageHistory last = history.get(history.size() - 1);
-            if (tenant.getCurrentPackage() != null
-                    && tenant.getCurrentPackage().getAppPackage() != null
-                    && last.getAppPackage() != null) {
+            // 2. Historical assignments — skip the entry whose planStarted matches the
+            //    current package to avoid the duplicate that appears when the same
+            //    assignment is written to both currentPackage and packageHistory.
+            List<Tenant.PackageHistory> history = tenant.getPackageHistory();
+            if (history != null) {
+                for (Tenant.PackageHistory h : history) {
+                    if (h.getAppPackage() == null) continue;
 
-                String lastName    = last.getAppPackage().getName();
-                String currentName = tenant.getCurrentPackage().getAppPackage().getName();
+                    // Skip if this history entry IS the current active assignment
+                    if (currentPlanStarted != null
+                            && currentPlanStarted.equals(h.getPlanStarted())) {
+                        continue;
+                    }
 
-                if (!currentName.equals(lastName)) {
-                    changes.add(TierChangeResponse.builder()
+                    assignments.add(TierChangeResponse.builder()
                             .tenantId(tenant.getId())
                             .tenantName(tenant.getName())
-                            .fromPlan(lastName)
-                            .toPlan(currentName)
-                            .changedAt(tenant.getCurrentPackage().getPlanStarted())
-                            .reason(null)
+                            .toPlan(h.getAppPackage().getName())
+                            .changedAt(h.getPlanStarted())
+                            // planExpiring is not stored on PackageHistory (only planExpired is);
+                            // left null for past entries — frontend renders "—".
+                            .planExpiring(null)
+                            .reason(h.getReason())
                             .build());
                 }
             }
         }
 
         // Sort newest first so callers don't have to sort themselves
-        changes.sort(Comparator.comparing(TierChangeResponse::getChangedAt,
+        assignments.sort(Comparator.comparing(TierChangeResponse::getChangedAt,
                 Comparator.nullsLast(Comparator.reverseOrder())));
 
-        if (limit != null && limit > 0 && changes.size() > limit) {
-            return changes.subList(0, limit);
+        if (limit != null && limit > 0 && assignments.size() > limit) {
+            return assignments.subList(0, limit);
         }
 
-        return changes;
+        return assignments;
+
+        // OLD implementation — kept for history:
+        // Was detecting plan-name changes between consecutive packageHistory entries.
+        // Problem: missed initial assignments (first plan has no "from") and returned
+        // nothing for tenants that never changed plans.
+        //
+        // for (Tenant tenant : tenantRepository.findAll()) {
+        //     List<Tenant.PackageHistory> history = tenant.getPackageHistory();
+        //     if (history == null || history.isEmpty()) continue;
+        //     for (int i = 1; i < history.size(); i++) {
+        //         Tenant.PackageHistory prev = history.get(i - 1);
+        //         Tenant.PackageHistory curr = history.get(i);
+        //         if (prev.getAppPackage() == null || curr.getAppPackage() == null) continue;
+        //         if (!prev.getAppPackage().getName().equals(curr.getAppPackage().getName())) {
+        //             changes.add(TierChangeResponse.builder()
+        //                 .tenantId(tenant.getId()).tenantName(tenant.getName())
+        //                 .fromPlan(prev.getAppPackage().getName())
+        //                 .toPlan(curr.getAppPackage().getName())
+        //                 .changedAt(curr.getPlanStarted()).reason(curr.getReason()).build());
+        //         }
+        //     }
+        //     // Also checked currentPackage vs last history entry ...
+        // }
     }
 
     /**

@@ -46,6 +46,11 @@ public class PackageRequest {
     @Min(value = 1, message = "Duration must be at least 1")
     private Integer duration;
 
+    // Maximum number of users allowed on this tier.
+    // null or 0 is treated as unlimited by the service layer.
+    @Min(value = 0, message = "Users capacity must be zero or greater")
+    private Integer usersCapacity;
+
     // At least one app must be included — an empty package has no value to the tenant
     @NotEmpty(message = "At least one app must be included in the package")
     private List<TenantModule> appIds = new ArrayList<>();

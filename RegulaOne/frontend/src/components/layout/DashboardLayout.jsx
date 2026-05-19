@@ -1,10 +1,12 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useLogout } from '../../hooks/useAuth';
-import SetupOrgModal    from '../modals/SetupOrgModal';
-import OrgBlockedModal  from '../modals/OrgBlockedModal';
-import PlanExpiredModal from '../modals/PlanExpiredModal';
-import PlanExpiryBanner from '../modals/PlanExpiryBanner';
+import UserDisabledModal    from '../modals/UserDisabledModal';
+import SetupOrgModal        from '../modals/SetupOrgModal';
+import OrgBlockedModal      from '../modals/OrgBlockedModal';
+import TenantSuspendedModal from '../modals/TenantSuspendedModal';
+import PlanExpiredModal     from '../modals/PlanExpiredModal';
+import PlanExpiryBanner     from '../modals/PlanExpiryBanner';
 import {
   Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger,
   SidebarInset, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarGroupContent
@@ -23,19 +25,40 @@ export default function DashboardLayout() {
   const location  = useLocation();
   const logout    = useLogout();
 
-  // Tenant guard — intercept before rendering the full layout.
-  // ROLE_ADMIN with no org → must complete setup first.
-  // ROLE_USER  with no org or inactive/suspended org → blocked until admin fixes it.
-  // ROLE_SUPER_ADMIN is platform-level and never requires a tenant.
+  // ── Tenant + plan guards (evaluated in priority order) ───────────────────
+  //
+  // 0. Individual user account disabled (enabled: false in /me response).
+  //    Checked first — if the account is disabled, all other guards are irrelevant.
+  //    ROLE_USER  → contact your admin.
+  //    ROLE_ADMIN → contact RegulaOne support.
+  //    ROLE_SUPER_ADMIN → should never be disabled, but guard fires just in case.
+  if (user?.status === 'suspended') {
+    return <UserDisabledModal />;
+  }
+
+  // 1. ROLE_ADMIN with no org → must complete setup first.
   if (user?.role === 'ROLE_ADMIN' && !user?.tenantId) {
     return <SetupOrgModal />;
   }
+
+  // 2. ROLE_ADMIN whose tenant is INACTIVE or SUSPENDED → contact RegulaOne.
+  //    Checked before the plan-expiry guard so a suspended admin never lands on
+  //    /my-plan (renewing a plan doesn't fix a suspended org; only support can).
+  if (
+    user?.role === 'ROLE_ADMIN' &&
+    user?.tenantId &&
+    (user?.tenantStatus === 'INACTIVE' || user?.tenantStatus === 'SUSPENDED')
+  ) {
+    return <TenantSuspendedModal />;
+  }
+
+  // 3. ROLE_USER with no org or inactive/suspended org → blocked until admin fixes it.
   if (user?.role === 'ROLE_USER' && (!user?.tenantId || user?.tenantStatus !== 'ACTIVE')) {
     return <OrgBlockedModal />;
   }
 
-  // Plan expiry guard — block access to everything except /my-plan so the admin
-  // can still navigate to the plan page to renew. ROLE_SUPER_ADMIN has no tenant plan.
+  // 4. Plan expiry — block access to everything except /my-plan so the admin can
+  //    still navigate to the plan page to renew. ROLE_SUPER_ADMIN has no tenant plan.
   if (user?.planExpired && user?.role !== 'ROLE_SUPER_ADMIN' && location.pathname !== '/my-plan') {
     return <PlanExpiredModal />;
   }

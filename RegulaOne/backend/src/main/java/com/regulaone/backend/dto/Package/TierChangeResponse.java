@@ -8,13 +8,19 @@ import java.time.LocalDateTime;
 /**
  * Response for GET /api/superadmin/tier-changes.
  *
- * One entry represents a plan upgrade or downgrade event for a tenant.
- * Built by PackageService.getTierChanges() by scanning Tenant.packageHistory
- * and detecting consecutive entries with different package names.
+ * Updated: one entry now represents any package assignment event for a tenant
+ * (initial assignment or renewal), not just plan-name changes.
+ * getTierChanges() collects all currentPackage + packageHistory entries across
+ * all tenants, sorted newest-first, so the frontend can show "Recent Plan Assignments".
  *
- * reason is nullable — only populated when it was explicitly set via an
- * admin action that recorded a reason. Historical or auto-generated entries
- * will have reason == null; the frontend should display "—" in that case.
+ * reason is nullable — only set when the admin explicitly supplied one.
+ * planExpiring is nullable — null for LIFETIME plans or when not set.
+ *
+ * OLD behaviour (kept for history):
+ * Was: detected consecutive packageHistory entries with different package names.
+ * fromPlan held the previous plan name; toPlan held the new plan name.
+ * That approach missed initial assignments (no "from" plan) and produced an
+ * empty table for tenants that never changed plans.
  */
 @Data
 @Builder
@@ -22,19 +28,24 @@ public class TierChangeResponse {
 
     private String tenantId;
 
-    // Display name of the tenant org that changed plans.
+    // Display name of the tenant org that was assigned the plan.
     private String tenantName;
 
-    // Package name the tenant was on before the change (null for initial assignment).
+    // OLD: previous plan name before the change — was used for change-detection logic.
+    // Now always null; kept in the DTO for backward compatibility.
+    // private String fromPlan; — no longer populated, see service update
     private String fromPlan;
 
-    // Package name the tenant moved to.
+    // The package that was assigned (current or historical).
     private String toPlan;
 
-    // Timestamp when the new plan became active (planStarted of the new assignment).
+    // When the assignment became active (Tenant.PackageDetails.planStarted or PackageHistory.planStarted).
     private LocalDateTime changedAt;
 
-    // Human-readable reason for the change — set by the admin who initiated it.
-    // Null if the change was automated or predates the reason field.
+    // Added: when this assignment expires (Tenant.PackageDetails.planExpiring).
+    // Null for LIFETIME plans or history entries where planExpiring was not recorded.
+    private LocalDateTime planExpiring;
+
+    // Human-readable reason supplied by the admin. Null for initial or legacy entries.
     private String reason;
 }

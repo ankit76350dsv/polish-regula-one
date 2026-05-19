@@ -130,7 +130,7 @@ export default function UserManagement() {
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Platform Users</h2>
           <p className="text-sm text-slate-500 font-medium">Manage all user accounts across every tenant node.</p>
         </div>
-        <div className="flex gap-2">
+        {/* <div className="flex gap-2">
           <Button
             variant="outline"
             className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2"
@@ -140,7 +140,7 @@ export default function UserManagement() {
           <Button className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2 shadow-sm">
             <UserPlus className="h-3.5 w-3.5 mr-1.5" /> Invite User
           </Button>
-        </div>
+        </div> */}
       </div>
 
       {/* ── Stats error banner ────────────────────────────────────────────── */}

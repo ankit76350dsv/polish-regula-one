@@ -70,19 +70,6 @@ public class AdminController {
                 userService.updateUserStatus(userId, request));
     }
 
-    @GetMapping("/superadmin/team-management")
-    public ResponseEntity<TeamManagementStatsResponse> getTeamManagementStats() {
-
-        return ResponseEntity.ok(
-                userService.getTeamManagementStats());
-    }
-
-    @GetMapping("/superadmin/list-all-users")
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
-
-        return ResponseEntity.ok(
-                userService.getAllUsers());
-    }
 
     /** Update name, email, and/or role of an existing Cognito user. */
     @PutMapping("/users/{subId}")
