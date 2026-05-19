@@ -42,6 +42,15 @@ public class SuperAdminController {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
+    // Returns users belonging to a specific tenant.
+    // Mirrors GET /api/admin/users/{tenantId} but under the superadmin namespace so
+    // ROLE_SUPER_ADMIN is authorised — /api/admin/** requires ROLE_ADMIN and rejects them with 403.
+    // Used by TenantDetailPage to show the tenant's user list alongside company info.
+    @GetMapping("/tenants/{tenantId}/users")
+    public ResponseEntity<List<UserResponse>> getUsersByTenant(@PathVariable String tenantId) {
+        return ResponseEntity.ok(userService.getAllUsers(tenantId));
+    }
+
     // Enables or disables any user by their MongoDB document ID.
     // ROLE_SUPER_ADMIN cannot call /api/admin/users/{userId}/status (403 — wrong role namespace),
     // so this endpoint mirrors that PATCH under the superadmin route prefix.

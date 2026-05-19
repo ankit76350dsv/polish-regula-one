@@ -89,6 +89,19 @@ export function useUpdateUserStatus() {
 
 // ── Superadmin hooks ──────────────────────────────────────────────────────────
 
+// Fetches users for a specific tenant — used by superadmin's TenantDetailPage.
+// tenantId comes from the URL param (useParams), not the auth store, because
+// a superadmin has no tenantId of their own.
+export function useTenantUsers(tenantId) {
+  return useQuery({
+    queryKey: ['superadmin', 'tenant-users', tenantId],
+    queryFn:  () => userService.getTenantUsers(tenantId),
+    enabled:  !!tenantId,
+  });
+}
+
+
+
 // Fetches platform-wide stats (all tenants aggregated).
 // Always enabled — superadmin has no tenantId constraint.
 export function useSuperAdminStats() {

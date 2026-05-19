@@ -1,12 +1,15 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import {
   Building2, ArrowLeft, Mail, Phone, MapPin, Hash, Calendar,
-  Package, Clock, Loader2, AlertTriangle, CheckCircle2, XCircle, PauseCircle,
+  Package, Clock, Loader2, AlertTriangle, Users, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useTenantById } from '../../hooks/useTenant';
+import { useTenantUsers } from '../../hooks/useTeam';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -119,10 +122,20 @@ function PackageCard({ pkg, isCurrent }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 10;
+
 export default function TenantDetailPage() {
   const { id }   = useParams();
   const navigate = useNavigate();
   const { data: tenant, isLoading, isError, error } = useTenantById(id);
+
+  // Users table state — fetched via the superadmin-namespaced endpoint
+  const { data: users = [], isLoading: usersLoading } = useTenantUsers(id);
+  const [userPage, setUserPage] = useState(1);
+
+  const totalUserPages = Math.max(1, Math.ceil(users.length / PAGE_SIZE));
+  const safePage       = Math.min(userPage, totalUserPages);
+  const pagedUsers     = users.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   if (isLoading) {
     return (
@@ -236,6 +249,137 @@ export default function TenantDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ── Users ── */}
+      <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden">
+        <CardHeader className="pb-3 border-b border-slate-100">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+              <Users className="h-4 w-4 text-slate-400" />
+              Users
+              {!usersLoading && (
+                <span className="ml-1 text-slate-400 font-medium normal-case tracking-normal">
+                  ({users.length})
+                </span>
+              )}
+            </CardTitle>
+
+            {/* Pagination controls — shown only when there are multiple pages */}
+            {totalUserPages > 1 && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400 font-medium">
+                  Page {safePage} of {totalUserPages}
+                </span>
+                <button
+                  onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="h-7 w-7 rounded-md border border-slate-200 flex items-center justify-center text-slate-500 hover:text-red-600 hover:border-red-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setUserPage((p) => Math.min(totalUserPages, p + 1))}
+                  disabled={safePage === totalUserPages}
+                  className="h-7 w-7 rounded-md border border-slate-200 flex items-center justify-center text-slate-500 hover:text-red-600 hover:border-red-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          {usersLoading ? (
+            // Skeleton rows while the users query is in flight
+            <div className="divide-y divide-slate-50">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-6 py-4 animate-pulse">
+                  <div className="h-8 w-8 rounded-full bg-slate-100" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-32 bg-slate-100 rounded" />
+                    <div className="h-2.5 w-48 bg-slate-100 rounded" />
+                  </div>
+                  <div className="h-5 w-16 bg-slate-100 rounded-full" />
+                  <div className="h-5 w-14 bg-slate-100 rounded-full" />
+                  <div className="h-3 w-20 bg-slate-100 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : users.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-slate-400">
+              <Users className="h-8 w-8 text-slate-200" />
+              <p className="text-sm font-medium text-slate-500">No users in this organisation.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader className="bg-slate-50/60">
+                <TableRow className="hover:bg-transparent border-b border-slate-100">
+                  <TableHead className="px-6 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">User</TableHead>
+                  <TableHead className="px-6 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Role</TableHead>
+                  <TableHead className="px-6 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</TableHead>
+                  <TableHead className="px-6 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-right">Joined</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pagedUsers.map((u) => {
+                  const initials = (u.name ?? u.email ?? '?')
+                    .split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+                  const roleLabel = u.role === 'ROLE_ADMIN' ? 'Admin' : 'User';
+                  const active    = u.enabled !== false;
+
+                  return (
+                    <TableRow key={u.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      {/* Avatar + name + email */}
+                      <TableCell className="px-6 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full bg-red-600 flex items-center justify-center shrink-0">
+                            <span className="text-[10px] font-bold text-white">{initials}</span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 truncate">{u.name ?? '—'}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{u.email}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      {/* Role */}
+                      <TableCell className="px-6 py-3">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-bold uppercase tracking-wide ${
+                            u.role === 'ROLE_ADMIN'
+                              ? 'border-red-200 bg-red-50 text-red-700'
+                              : 'border-slate-200 bg-slate-50 text-slate-600'
+                          }`}
+                        >
+                          {roleLabel}
+                        </Badge>
+                      </TableCell>
+
+                      {/* Status (enabled flag) */}
+                      <TableCell className="px-6 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-rose-400'}`} />
+                          <span className={`text-[10px] font-bold uppercase tracking-wide ${active ? 'text-emerald-700' : 'text-rose-600'}`}>
+                            {active ? 'Active' : 'Disabled'}
+                          </span>
+                        </div>
+                      </TableCell>
+
+                      {/* Joined date */}
+                      <TableCell className="px-6 py-3 text-[10px] text-slate-400 text-right font-medium">
+                        {fmt(u.createdAt)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
     </div>
   );
 }

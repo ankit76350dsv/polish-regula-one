@@ -58,4 +58,11 @@ export const userService = {
   // Each UserResponse includes tenantId, tenantName for the superadmin table.
   getAllUsersGlobal: () =>
     api.get('/api/superadmin/list-all-users'),
+
+  // GET /api/superadmin/tenants/{tenantId}/users
+  // Returns List<UserResponse> for a single tenant — used by TenantDetailPage.
+  // Mirrors /api/admin/users/{tenantId} but under superadmin namespace so
+  // ROLE_SUPER_ADMIN is authorised to call it (admin namespace rejects them with 403).
+  getTenantUsers: (tenantId) =>
+    api.get(`/api/superadmin/tenants/${tenantId}/users`),
 };

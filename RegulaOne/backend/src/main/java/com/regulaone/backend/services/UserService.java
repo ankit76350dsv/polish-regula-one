@@ -263,6 +263,13 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
+    // ! list all users for superadmin
+    public List<UserResponse> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(UserResponse::from)
+                .collect(Collectors.toList());
+    }
+
     // ! team management dashboard stats
     public TeamManagementStatsResponse getTeamManagementStats(String tenantId) {
 
@@ -339,12 +346,7 @@ public class UserService {
         return UserResponse.from(user);
     }
 
-    // ! list all users for superadmin
-    public List<UserResponse> getAllUsers() {
-        return userRepository.findAll().stream()
-                .map(UserResponse::from)
-                .collect(Collectors.toList());
-    }
+    
 
     // ! Update
     public UserResponse updateUser(String subId, UpdateUserRequest request) {

@@ -60,10 +60,10 @@ function SuperAdminView() {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Platform Overview</h1>
           <p className="text-sm text-slate-500 font-medium">Monitoring 142 enterprise tenants across 6 modules.</p>
         </div>
-        <div className="flex gap-2">
+        {/* <div className="flex gap-2">
           <Button variant="outline" className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2">Export Reports</Button>
           <Button className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2 shadow-sm">+ New Tenant</Button>
-        </div>
+        </div> */}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
