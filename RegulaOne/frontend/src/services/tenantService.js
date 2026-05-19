@@ -31,4 +31,10 @@ export const tenantService = {
   // Creates the org and links it to the current admin's account in one step.
   setupOrg: (data) =>
     api.post('/api/admin/org/setup', data),
+
+  // PUT /api/admin/org
+  // Lets ROLE_ADMIN update their own org's contact/address details.
+  // Excluded fields: nip, regon (legal IDs), status (superadmin-only).
+  updateMyOrg: (data) =>
+    api.put('/api/admin/org', data),
 };

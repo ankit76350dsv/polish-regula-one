@@ -7,6 +7,7 @@ import com.regulaone.backend.dto.Auth.LoginRequest;
 import com.regulaone.backend.dto.Auth.LoginResponse;
 import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
 import com.regulaone.backend.dto.Auth.SignupRequest;
+import com.regulaone.backend.dto.Auth.UpdateProfileRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
 import com.regulaone.backend.services.UserService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -151,6 +152,17 @@ public class AuthController {
     //? means:
     // "Spring, give me the current logged-in user's JWT"
         return ResponseEntity.ok(userService.getCurrentUser(jwt.getSubject()));
+    }
+
+    // Added: lets any authenticated user update their own display name.
+    // Only name is accepted — email is the Cognito identity key and role is admin-only.
+    // Returns a fresh UserResponse so the frontend can update the auth store immediately.
+    @PreAuthorize("isAuthenticated()")
+    @PatchMapping("/me")
+    public ResponseEntity<UserResponse> updateMe(
+            @Valid @RequestBody UpdateProfileRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(userService.updateCurrentUserProfile(jwt.getSubject(), request));
     }
 
     @PreAuthorize("isAuthenticated()")

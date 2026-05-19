@@ -7,6 +7,8 @@ import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
 import com.regulaone.backend.dto.Tenant.TeamManagementStatsResponse;
 import com.regulaone.backend.dto.Tenant.TenantRequest;
+import com.regulaone.backend.dto.Tenant.TenantResponse;
+import com.regulaone.backend.dto.Tenant.UpdateOrgRequest;
 import com.regulaone.backend.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -70,6 +72,16 @@ public class AdminController {
                 userService.updateUserStatus(userId, request));
     }
 
+
+    // Added: lets ROLE_ADMIN update their own organisation's contact/address details.
+    // Excludes nip, regon, and status — those require superadmin action.
+    // The admin's tenantId is resolved inside the service from the JWT subject.
+    @PutMapping("/org")
+    public ResponseEntity<TenantResponse> updateMyOrg(
+            @Valid @RequestBody UpdateOrgRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(userService.updateMyOrg(jwt.getSubject(), request));
+    }
 
     /** Update name, email, and/or role of an existing Cognito user. */
     @PutMapping("/users/{subId}")

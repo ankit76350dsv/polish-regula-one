@@ -36,6 +36,12 @@ export const authService = {
   getMe: () =>
     api.get('/api/auth/me'),
 
+  // PATCH /api/auth/me
+  // Lets any authenticated user update their own name.
+  // Email and role are excluded — email is the Cognito identity key, role is admin-only.
+  updateMe: (data) =>
+    api.patch('/api/auth/me', data),
+
   // PUT /api/auth/change-password  [requires valid accessToken cookie]
   // Changes the current user's password via Cognito.
   changePassword: (data) =>

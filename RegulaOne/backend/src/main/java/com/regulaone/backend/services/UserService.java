@@ -8,12 +8,14 @@ import com.regulaone.backend.dto.Auth.LoginRequest;
 import com.regulaone.backend.dto.Auth.LoginResponse;
 import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
 import com.regulaone.backend.dto.Auth.SignupRequest;
+import com.regulaone.backend.dto.Auth.UpdateProfileRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
 import com.regulaone.backend.dto.Tenant.TeamManagementStatsResponse;
 import com.regulaone.backend.dto.Tenant.TenantRequest;
 import com.regulaone.backend.dto.Tenant.TenantResponse;
+import com.regulaone.backend.dto.Tenant.UpdateOrgRequest;
 import com.regulaone.backend.models.AppPackage;
 import com.regulaone.backend.models.PackageStatus;
 import com.regulaone.backend.models.Role;
@@ -221,8 +223,16 @@ public class UserService {
         Tenant tenant = tenantRepository.findById(request.getTenantId())
                 .orElseThrow(() -> new RuntimeException("Tenant not found"));
 
-        int usersCapacity = Integer.parseInt(
-                tenant.getCurrentPackage().getUsersCapacity());
+        // Guard: tenant must have an active package with a defined usersCapacity before
+        // inviting users. Integer.parseInt(null) would throw a cryptic NumberFormatException
+        // otherwise, so we surface a clear error message instead.
+        if (tenant.getCurrentPackage() == null
+                || tenant.getCurrentPackage().getUsersCapacity() == null) {
+            throw new RuntimeException(
+                    "No package assigned to this organisation. Please assign a package before inviting users.");
+        }
+
+        int usersCapacity = Integer.parseInt(tenant.getCurrentPackage().getUsersCapacity());
 
         long currentUsers = userRepository.countByTenant_Id(tenant.getId());
 
@@ -376,6 +386,62 @@ public class UserService {
         userRepository.save(user);
 
         return UserResponse.from(user);
+    }
+
+    /**
+     * Lets any authenticated user update their own display name.
+     * Only name is editable — email is the Cognito identity key (changing it
+     * requires admin tooling) and role cannot be self-assigned.
+     *
+     * Called by PATCH /api/auth/me via AuthController.
+     */
+    public UserResponse updateCurrentUserProfile(String cognitoSub, UpdateProfileRequest request) {
+        User user = userRepository.findByCognitoSub(cognitoSub)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (request.getName() != null && !request.getName().isBlank()) {
+            // Sync the new name to Cognito so the display name stays consistent
+            cognitoService.adminUpdateUserAttributes(user.getEmail(), request.getName(), null);
+            user.setName(request.getName());
+        }
+
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        return UserResponse.from(user);
+    }
+
+    /**
+     * Lets ROLE_ADMIN update their own organisation's contact/address details.
+     * Uses the admin's cognitoSub to locate their tenant record.
+     *
+     * Intentionally excludes nip, regon, and status — those require superadmin action.
+     * All fields are optional (null = leave unchanged).
+     *
+     * Called by PUT /api/admin/org via AdminController.
+     */
+    public TenantResponse updateMyOrg(String cognitoSub, UpdateOrgRequest request) {
+        User user = userRepository.findByCognitoSub(cognitoSub)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        // User stores a @DBRef to the full Tenant object, not a raw tenantId field.
+        if (user.getTenant() == null) {
+            throw new IllegalStateException("No organisation linked to this account");
+        }
+
+        Tenant tenant = tenantRepository.findById(user.getTenant().getId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Organisation not found with id: " + user.getTenant().getId()));
+
+        // Apply only the fields supplied in the request; null fields are left unchanged
+        if (request.getName() != null)       tenant.setName(request.getName());
+        if (request.getEmail() != null)      tenant.setEmail(request.getEmail());
+        if (request.getPhone() != null)      tenant.setPhone(request.getPhone());
+        if (request.getAddress() != null)    tenant.setAddress(request.getAddress());
+        if (request.getCity() != null)       tenant.setCity(request.getCity());
+        if (request.getPostalCode() != null) tenant.setPostalCode(request.getPostalCode());
+        tenant.setUpdatedAt(LocalDateTime.now());
+
+        return TenantResponse.from(tenantRepository.save(tenant));
     }
 
     // ! delete
