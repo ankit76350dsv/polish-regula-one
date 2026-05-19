@@ -248,12 +248,16 @@ public class UserService {
 
         Role role = parseRole(request.getRole());
 
+        // Link the invited user to the tenant so that their /me response
+        // returns the correct tenantId and they are not shown the
+        // "Organisation not found" modal on first login.
         User user = User.builder()
                 .cognitoSub(attrs.get("sub"))
                 .name(attrs.getOrDefault("name", request.getName()))
                 .email(attrs.getOrDefault("email", request.getEmail()))
                 .role(role)
                 .enabled(true)
+                .tenant(tenant)
                 .build();
 
         userRepository.save(user);
