@@ -3,6 +3,8 @@ package com.regulaone.backend.services;
 import com.regulaone.backend.dto.Package.PackagePageResponse;
 import com.regulaone.backend.dto.Package.PackageRequest;
 import com.regulaone.backend.dto.Package.PackageResponse;
+import com.regulaone.backend.dto.Package.PackageTierStatsResponse;
+import com.regulaone.backend.dto.Package.TierChangeResponse;
 
 import com.regulaone.backend.models.AppPackage;
 import com.regulaone.backend.models.PackageStatus;
@@ -16,8 +18,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -171,6 +176,203 @@ public class PackageService {
         }
 
         return PackagePageResponse.from(page);
+    }
+
+    // ── Stats, tier-change history, and billing export ───────────────────────
+
+    /**
+     * Aggregates tenant counts per active package and calculates MRR figures.
+     *
+     * Algorithm:
+     *  1. Load all ACTIVE packages from the catalogue.
+     *  2. Group all tenants by their currentPackage.appPackage.id.
+     *  3. Build a TierStat for each package with tenantCount and tierMrr.
+     *  4. Sort descending by tenantCount; mark the first entry as mostPopular.
+     *  5. Sum totalMrr and payingTenants across all tiers.
+     *
+     * Called by GET /api/superadmin/packages/tier-stats.
+     */
+    public PackageTierStatsResponse getPackageTierStats() {
+
+        List<AppPackage> activePackages = packageRepository.findAll()
+                .stream()
+                .filter(p -> p.getStatus() == PackageStatus.ACTIVE)
+                .collect(Collectors.toList());
+
+        // Count how many tenants are currently on each package ID
+        Map<String, Long> countByPackageId = tenantRepository.findAll()
+                .stream()
+                .filter(t -> t.getCurrentPackage() != null
+                        && t.getCurrentPackage().getAppPackage() != null)
+                .collect(Collectors.groupingBy(
+                        t -> t.getCurrentPackage().getAppPackage().getId(),
+                        Collectors.counting()));
+
+        // Build per-tier stats sorted by tenant count descending
+        List<PackageTierStatsResponse.TierStat> tierStats = activePackages.stream()
+                .map(pkg -> {
+                    long count = countByPackageId.getOrDefault(pkg.getId(), 0L);
+                    BigDecimal tierMrr = pkg.getPrice() != null
+                            ? pkg.getPrice().multiply(BigDecimal.valueOf(count))
+                            : BigDecimal.ZERO;
+                    return PackageTierStatsResponse.TierStat.builder()
+                            .packageId(pkg.getId())
+                            .packageName(pkg.getName())
+                            .price(pkg.getPrice())
+                            .currency(pkg.getCurrency())
+                            .tenantCount((int) count)
+                            .tierMrr(tierMrr)
+                            .usersCapacity(pkg.getUsersCapacity())
+                            .appIds(pkg.getAppIds())
+                            .mostPopular(false)
+                            .status(pkg.getStatus().name())
+                            .build();
+                })
+                .sorted(Comparator.comparingInt(PackageTierStatsResponse.TierStat::getTenantCount)
+                        .reversed())
+                .collect(Collectors.toList());
+
+        // Mark the single most-popular tier (highest tenant count)
+        if (!tierStats.isEmpty()) {
+            tierStats.get(0).setMostPopular(true);
+        }
+
+        BigDecimal totalMrr = tierStats.stream()
+                .map(PackageTierStatsResponse.TierStat::getTierMrr)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        int payingTenants = tierStats.stream()
+                .mapToInt(PackageTierStatsResponse.TierStat::getTenantCount)
+                .sum();
+
+        PackageTierStatsResponse.TierStat topTier = tierStats.isEmpty() ? null : tierStats.get(0);
+
+        return PackageTierStatsResponse.builder()
+                .totalMrr(totalMrr)
+                .payingTenants(payingTenants)
+                .mostPopularPlan(topTier != null ? topTier.getPackageName() : "—")
+                .mostPopularPlanTenantCount(topTier != null ? topTier.getTenantCount() : 0)
+                .tiers(tierStats)
+                .build();
+    }
+
+    /**
+     * Returns tier-change events across all tenants, newest first.
+     *
+     * A tier change is detected when consecutive packageHistory entries for a
+     * tenant have different package names — i.e. the tenant switched plans.
+     * The most recent change (last history entry → currentPackage) is also
+     * included when the plan names differ.
+     *
+     * @param limit max results to return; null or 0 means return all
+     *
+     * Called by GET /api/superadmin/tier-changes?limit=4 (recent)
+     *        and GET /api/superadmin/tier-changes          (full history).
+     */
+    public List<TierChangeResponse> getTierChanges(Integer limit) {
+
+        List<TierChangeResponse> changes = new ArrayList<>();
+
+        for (Tenant tenant : tenantRepository.findAll()) {
+            List<Tenant.PackageHistory> history = tenant.getPackageHistory();
+            if (history == null || history.isEmpty()) continue;
+
+            // Detect changes between consecutive history entries
+            for (int i = 1; i < history.size(); i++) {
+                Tenant.PackageHistory prev = history.get(i - 1);
+                Tenant.PackageHistory curr = history.get(i);
+                if (prev.getAppPackage() == null || curr.getAppPackage() == null) continue;
+
+                String prevName = prev.getAppPackage().getName();
+                String currName = curr.getAppPackage().getName();
+
+                if (!prevName.equals(currName)) {
+                    changes.add(TierChangeResponse.builder()
+                            .tenantId(tenant.getId())
+                            .tenantName(tenant.getName())
+                            .fromPlan(prevName)
+                            .toPlan(currName)
+                            .changedAt(curr.getPlanStarted())
+                            .reason(curr.getReason())
+                            .build());
+                }
+            }
+
+            // Also check if the current active plan differs from the last history entry
+            Tenant.PackageHistory last = history.get(history.size() - 1);
+            if (tenant.getCurrentPackage() != null
+                    && tenant.getCurrentPackage().getAppPackage() != null
+                    && last.getAppPackage() != null) {
+
+                String lastName    = last.getAppPackage().getName();
+                String currentName = tenant.getCurrentPackage().getAppPackage().getName();
+
+                if (!currentName.equals(lastName)) {
+                    changes.add(TierChangeResponse.builder()
+                            .tenantId(tenant.getId())
+                            .tenantName(tenant.getName())
+                            .fromPlan(lastName)
+                            .toPlan(currentName)
+                            .changedAt(tenant.getCurrentPackage().getPlanStarted())
+                            .reason(null)
+                            .build());
+                }
+            }
+        }
+
+        // Sort newest first so callers don't have to sort themselves
+        changes.sort(Comparator.comparing(TierChangeResponse::getChangedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+
+        if (limit != null && limit > 0 && changes.size() > limit) {
+            return changes.subList(0, limit);
+        }
+
+        return changes;
+    }
+
+    /**
+     * Generates a CSV string covering all tenants with an active package.
+     *
+     * Columns: Tenant Name, NIP, Package, Price, Currency, Plan Started, Plan Expiring, Status
+     *
+     * Called by GET /api/superadmin/tier-changes/export — the controller sets
+     * Content-Type: text/csv and Content-Disposition so the browser saves the file.
+     */
+    public String exportBillingCsv() {
+
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("Tenant Name,NIP,Package,Price,Currency,Plan Started,Plan Expiring,Status\n");
+
+        for (Tenant tenant : tenantRepository.findAll()) {
+            if (tenant.getCurrentPackage() == null
+                    || tenant.getCurrentPackage().getAppPackage() == null) continue;
+
+            AppPackage pkg = tenant.getCurrentPackage().getAppPackage();
+            String started  = tenant.getCurrentPackage().getPlanStarted() != null
+                    ? tenant.getCurrentPackage().getPlanStarted().format(fmt) : "";
+            String expiring = tenant.getCurrentPackage().getPlanExpiring() != null
+                    ? tenant.getCurrentPackage().getPlanExpiring().format(fmt) : "";
+
+            csv.append(String.format("\"%s\",\"%s\",\"%s\",%.2f,%s,%s,%s,%s%n",
+                    escapeCsv(tenant.getName()),
+                    tenant.getNip() != null ? tenant.getNip() : "",
+                    pkg.getName(),
+                    pkg.getPrice() != null ? pkg.getPrice() : BigDecimal.ZERO,
+                    pkg.getCurrency() != null ? pkg.getCurrency() : "",
+                    started,
+                    expiring,
+                    tenant.getStatus().name()));
+        }
+
+        return csv.toString();
+    }
+
+    // Escapes double-quotes inside CSV field values to prevent injection.
+    private String escapeCsv(String value) {
+        return value != null ? value.replace("\"", "\"\"") : "";
     }
 
     //TODO: ── Private Helpers ───────────────────────────────────────────────────────

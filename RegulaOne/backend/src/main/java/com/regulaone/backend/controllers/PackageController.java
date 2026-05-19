@@ -3,6 +3,8 @@ package com.regulaone.backend.controllers;
 import com.regulaone.backend.dto.Package.PackagePageResponse;
 import com.regulaone.backend.dto.Package.PackageRequest;
 import com.regulaone.backend.dto.Package.PackageResponse;
+import com.regulaone.backend.dto.Package.PackageTierStatsResponse;
+import com.regulaone.backend.dto.Package.TierChangeResponse;
 import com.regulaone.backend.models.PackageStatus;
 import com.regulaone.backend.services.PackageService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,6 +23,8 @@ import org.springframework.web.bind.annotation.*;
 import java.net.URI;
 // OLD: List import removed — getPackagesForTenant now returns TenantPackagesResponse (not a List)
 // import java.util.List;
+// Re-added: List is now used by getTierChanges() which returns List<TierChangeResponse>.
+import java.util.List;
 
 /**
  * REST controller for Package management and Tenant-Package assignments.
@@ -140,6 +144,58 @@ public class PackageController {
         Pageable pageable = PageRequest.of(page, safeSize, Sort.by(direction, sortBy));
 
         return ResponseEntity.ok(packageService.getAllPackages(search, status, pageable));
+    }
+
+    // ── License Tiers dashboard endpoints ────────────────────────────────────
+
+    /**
+     * GET /api/superadmin/packages/tier-stats
+     *
+     * Returns platform-wide MRR, paying tenant count, the most popular tier,
+     * and per-tier stats (tenantCount, tierMrr, usersCapacity, appIds).
+     * Consumed by the License Tiers page stats cards and package tier cards.
+     */
+    @Operation(summary = "Get MRR and per-tier tenant stats for the License Tiers dashboard")
+    @GetMapping("/packages/tier-stats")
+    public ResponseEntity<PackageTierStatsResponse> getPackageTierStats() {
+        return ResponseEntity.ok(packageService.getPackageTierStats());
+    }
+
+    /**
+     * GET /api/superadmin/tier-changes
+     *
+     * Returns a list of plan upgrade/downgrade events across all tenants,
+     * sorted newest first.
+     *
+     * Optional query params:
+     *   limit — max results to return; omit or set 0 for full history
+     *
+     * Examples:
+     *   GET /api/superadmin/tier-changes?limit=4   → recent 4 changes
+     *   GET /api/superadmin/tier-changes            → full history
+     */
+    @Operation(summary = "Get recent or full tier-change history across all tenants")
+    @GetMapping("/tier-changes")
+    public ResponseEntity<List<TierChangeResponse>> getTierChanges(
+            @RequestParam(required = false) Integer limit) {
+        return ResponseEntity.ok(packageService.getTierChanges(limit));
+    }
+
+    /**
+     * GET /api/superadmin/tier-changes/export
+     *
+     * Streams a CSV file containing one row per active tenant with their
+     * current package, price, currency, plan start/expiry, and status.
+     * The browser receives it as a downloadable file.
+     */
+    @Operation(summary = "Export billing data for all active tenants as a CSV file")
+    @GetMapping("/tier-changes/export")
+    public ResponseEntity<String> exportBillingCsv() {
+        String csv = packageService.exportBillingCsv();
+        return ResponseEntity.ok()
+                .header("Content-Type", "text/csv; charset=UTF-8")
+                .header("Content-Disposition", "attachment; filename=\"billing-export.csv\"")
+                .body(csv);
     }
 
 }

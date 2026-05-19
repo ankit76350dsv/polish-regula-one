@@ -116,9 +116,10 @@ export default function UserManagement() {
   const activeMembers    = stats?.activeMembers     ?? 0;
   const suspendedMembers = stats?.suspendedMembers  ?? 0;
   const userCapacity     = stats?.tierLimit         ?? 0;
-  const remainingCapacity= stats?.remainingSeats    ?? 0;
-  const packageName      = stats?.currentPlan       ?? '—';
-  const packageExpiry    = stats?.planExpiresAt     ?? null;
+  const admins     = stats?.admins         ?? 0;
+  // const remainingCapacity= stats?.remainingSeats    ?? 0;
+  // const packageName      = stats?.currentPlan       ?? '—';
+  // const packageExpiry    = stats?.planExpiresAt     ?? null;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
@@ -156,7 +157,7 @@ export default function UserManagement() {
           { label: 'Total Members',  value: totalMembers,     icon: Users,      color: 'text-slate-300'   },
           { label: 'Active',         value: activeMembers,    icon: UserCheck,  color: 'text-emerald-300' },
           { label: 'Suspended',      value: suspendedMembers, icon: UserX,      color: 'text-rose-300'    },
-          { label: 'User Capacity',  value: userCapacity,     icon: ShieldCheck, color: 'text-red-300'   },
+          { label: 'Admins',  value: admins,     icon: ShieldCheck, color: 'text-red-300'   },
         ].map((s) => (
           <Card key={s.label} className="bg-white border-slate-200 shadow-sm rounded-xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -173,49 +174,6 @@ export default function UserManagement() {
         ))}
       </div>
 
-      {/* ── Row 2: Package / capacity info cards ──────────────────────────── */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Remaining Capacity</CardTitle>
-            <Users className="h-4 w-4 text-amber-300" />
-          </CardHeader>
-          <CardContent>
-            {statsLoading
-              ? <div className="h-8 w-12 bg-slate-100 rounded animate-pulse" />
-              : <p className="text-2xl font-bold text-slate-900 tracking-tight">{remainingCapacity}</p>
-            }
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Package</CardTitle>
-            <Package className="h-4 w-4 text-violet-300" />
-          </CardHeader>
-          <CardContent>
-            {statsLoading
-              ? <div className="h-6 w-24 bg-slate-100 rounded animate-pulse" />
-              : <p className="text-xl font-bold text-slate-900 tracking-tight">{packageName}</p>
-            }
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Package Expiry</CardTitle>
-            <CalendarDays className="h-4 w-4 text-rose-300" />
-          </CardHeader>
-          <CardContent>
-            {statsLoading
-              ? <div className="h-6 w-28 bg-slate-100 rounded animate-pulse" />
-              : <p className={`text-lg font-bold tracking-tight ${packageExpiry ? 'text-slate-900' : 'text-slate-300'}`}>
-                  {formatDate(packageExpiry)}
-                </p>
-            }
-          </CardContent>
-        </Card>
-      </div>
 
       {/* ── Confirmation modal ────────────────────────────────────────────── */}
       {confirmUser && (

@@ -111,6 +111,8 @@ public class Tenant {
     //
     // Each entry records a past plan assignment.
     // planExpired is set to the moment the plan was replaced or expired.
+    // reason was added to support the tier-change audit log — records why the
+    // admin changed the plan (e.g. "Volume growth", "Module expansion").
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -128,5 +130,9 @@ public class Tenant {
         private LocalDateTime planExpired;
 
         private String usersCapacity;
+
+        // Added: free-text reason recorded when a super-admin changes a tenant's plan.
+        // Null for auto-generated history entries (e.g. initial setup) or legacy records.
+        private String reason;
     }
 }
