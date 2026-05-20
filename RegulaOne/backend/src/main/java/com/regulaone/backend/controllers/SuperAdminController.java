@@ -2,7 +2,9 @@ package com.regulaone.backend.controllers;
 
 import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
+import com.regulaone.backend.dto.Platform.PlatformOverviewResponse;
 import com.regulaone.backend.dto.Tenant.TeamManagementStatsResponse;
+import com.regulaone.backend.services.PlatformService;
 import com.regulaone.backend.services.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +27,16 @@ import java.util.List;
 @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
 public class SuperAdminController {
 
-    private final UserService userService;
+    private final UserService     userService;
+    private final PlatformService platformService;
+
+    // Aggregates active tenants, total users, MRR, compliance score, 6-month
+    // revenue chart data, and per-module adoption percentages for the
+    // SuperAdmin Platform Overview dashboard.
+    @GetMapping("/overview")
+    public ResponseEntity<PlatformOverviewResponse> getPlatformOverview() {
+        return ResponseEntity.ok(platformService.getPlatformOverview());
+    }
 
     // Returns platform-wide stats aggregated across all tenants:
     // totalMembers, activeMembers, suspendedMembers, admins.

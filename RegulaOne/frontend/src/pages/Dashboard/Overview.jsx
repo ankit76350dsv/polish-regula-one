@@ -1,9 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
+import { tenantService } from '../../services/tenantService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import {
-  Building2, Users, ReceiptText, Activity, ShieldCheck, Clock, FileText, CheckSquare
+  Building2, Users, ReceiptText, Activity, ShieldCheck, Clock, FileText, CheckSquare, Loader2,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -11,14 +13,15 @@ import {
 
 // ─── Mock data sets per role ───────────────────────────────────────────────
 
-const revenueData = [
-  { name: 'Jan', value: 4000 },
-  { name: 'Feb', value: 3000 },
-  { name: 'Mar', value: 2000 },
-  { name: 'Apr', value: 2780 },
-  { name: 'May', value: 1890 },
-  { name: 'Jun', value: 2390 },
-];
+// OLD MOCK — SuperAdminView now fetches revenue data from GET /api/superadmin/overview
+// const revenueData = [
+//   { name: 'Jan', value: 4000 },
+//   { name: 'Feb', value: 3000 },
+//   { name: 'Mar', value: 2000 },
+//   { name: 'Apr', value: 2780 },
+//   { name: 'May', value: 1890 },
+//   { name: 'Jun', value: 2390 },
+// ];
 
 const invoiceData = [
   { name: 'Jan', value: 210 },
@@ -45,27 +48,88 @@ const recentModuleActivity = [
 
 // ─── Sub-views ─────────────────────────────────────────────────────────────
 
+// Dot colours for each module in the Module Usage bar chart.
+const MODULE_COLORS = {
+  KSEFFLOW:     'bg-blue-500',
+  WORKPULSE:    'bg-green-500',
+  SAFEWORK:     'bg-amber-500',
+  SAFEVOICE:    'bg-orange-500',
+  WASTESYNC:    'bg-rose-500',
+  PRIVACYPILOT: 'bg-red-500',
+};
+
+// Returns a Tailwind text-colour class based on the trend string.
+function trendColor(t) {
+  if (!t || t === 'steady' || t === '—') return 'text-slate-400';
+  if (t.startsWith('+') || t === 'New') return 'text-emerald-500';
+  return 'text-rose-500';
+}
+
+// Formats a raw BigDecimal MRR number as "€82.4k" or "€950".
+function fmtRevenue(val) {
+  const n = Number(val ?? 0);
+  if (n >= 1000) return `€${(n / 1000).toFixed(1)}k`;
+  return `€${n.toFixed(0)}`;
+}
+
 function SuperAdminView() {
+  const { data: overview, isLoading } = useQuery({
+    queryKey: ['platform-overview'],
+    queryFn:  tenantService.getPlatformOverview,
+    staleTime: 60_000,
+  });
+
   const stats = [
-    { title: 'Active Tenants', value: '142', icon: Building2, trend: '+12%', trendColor: 'text-emerald-500' },
-    { title: 'Total Users', value: '4,821', icon: Users, trend: '+4%', trendColor: 'text-emerald-500' },
-    { title: 'Monthly Revenue', value: '€82.4k', icon: Activity, trend: 'steady', trendColor: 'text-slate-400' },
-    { title: 'Compliance Score', value: '99.8%', icon: ShieldCheck, trend: 'Target: 100%', trendColor: 'text-red-500' },
+    {
+      title: 'Active Tenants',
+      value: isLoading ? '…' : String(overview?.activeTenants ?? '—'),
+      icon: Building2,
+      trend: overview?.tenantTrend ?? '—',
+      trendColor: trendColor(overview?.tenantTrend),
+    },
+    {
+      title: 'Total Users',
+      value: isLoading ? '…' : (overview?.totalUsers?.toLocaleString() ?? '—'),
+      icon: Users,
+      trend: overview?.userTrend ?? '—',
+      trendColor: trendColor(overview?.userTrend),
+    },
+    {
+      title: 'Monthly Revenue',
+      value: isLoading ? '…' : fmtRevenue(overview?.monthlyRevenue),
+      icon: Activity,
+      trend: overview?.revenueTrend ?? '—',
+      trendColor: trendColor(overview?.revenueTrend),
+    },
+    {
+      title: 'Compliance Score',
+      value: isLoading ? '…' : (overview?.complianceScore ?? '—'),
+      icon: ShieldCheck,
+      trend: 'Target: 100%',
+      trendColor: 'text-red-500',
+    },
   ];
+
+  // Map backend MonthlyRevenueStat[] to recharts data format
+  const chartData = (overview?.revenueByMonth ?? []).map((m) => ({
+    name:  m.month,
+    value: Number(m.value ?? 0),
+  }));
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Platform Overview</h1>
-          <p className="text-sm text-slate-500 font-medium">Monitoring 142 enterprise tenants across 6 modules.</p>
-        </div>
-        {/* <div className="flex gap-2">
-          <Button variant="outline" className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2">Export Reports</Button>
-          <Button className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2 shadow-sm">+ New Tenant</Button>
-        </div> */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Platform Overview</h1>
+        <p className="text-sm text-slate-500 font-medium">
+          Monitoring{' '}
+          <span className="font-bold text-slate-700">
+            {isLoading ? '…' : (overview?.activeTenants ?? '—')}
+          </span>{' '}
+          enterprise tenants across 6 modules.
+        </p>
       </div>
 
+      {/* ── Stat cards ──────────────────────────────────────────────────── */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat, i) => (
           <Card key={i} className="bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all rounded-xl">
@@ -83,6 +147,7 @@ function SuperAdminView() {
         ))}
       </div>
 
+      {/* ── Revenue chart + Module usage ─────────────────────────────────── */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
         <Card className="lg:col-span-4 bg-white border-slate-200 shadow-sm rounded-xl">
           <CardHeader className="border-b border-slate-50">
@@ -90,15 +155,21 @@ function SuperAdminView() {
           </CardHeader>
           <CardContent className="pt-6">
             <div className="h-[260px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={revenueData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} dy={10} />
-                  <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `€${v}`} />
-                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px' }} />
-                  <Line type="monotone" dataKey="value" stroke="#dc2626" strokeWidth={3} dot={{ r: 4, fill: '#dc2626', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              {isLoading ? (
+                <div className="h-full flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-slate-200" />
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} dy={10} />
+                    <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `€${v}`} />
+                    <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px' }} />
+                    <Line type="monotone" dataKey="value" stroke="#dc2626" strokeWidth={3} dot={{ r: 4, fill: '#dc2626', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -108,27 +179,34 @@ function SuperAdminView() {
             <CardTitle className="text-sm font-bold text-slate-800">Module Usage</CardTitle>
           </CardHeader>
           <CardContent className="py-6 space-y-5">
-            {[
-              { label: 'KSEFFLOW', val: 72, color: 'bg-blue-500' },
-              { label: 'WORKPULSE', val: 45, color: 'bg-green-500' },
-              { label: 'SAFEWORK', val: 28, color: 'bg-amber-500' },
-              { label: 'PRIVACYPILOT', val: 61, color: 'bg-red-500' },
-              { label: 'WASTESYNC', val: 38, color: 'bg-red-500' },
-            ].map((mod) => (
-              <div key={mod.label}>
-                <div className="flex justify-between text-[10px] font-bold mb-1.5">
-                  <span className="text-slate-500 tracking-wider">{mod.label}</span>
-                  <span className="text-slate-900">{mod.val}%</span>
+            {isLoading ? (
+              [...Array(6)].map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className="h-3 w-28 bg-slate-100 rounded animate-pulse" />
+                  <div className="h-1.5 w-full bg-slate-100 rounded-full animate-pulse" />
                 </div>
-                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                  <div className={`h-1.5 ${mod.color} rounded-full`} style={{ width: `${mod.val}%` }} />
+              ))
+            ) : (
+              (overview?.moduleUsage ?? []).map((mod) => (
+                <div key={mod.module}>
+                  <div className="flex justify-between text-[10px] font-bold mb-1.5">
+                    <span className="text-slate-500 tracking-wider">{mod.module}</span>
+                    <span className="text-slate-900">{mod.usagePct}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-1.5 rounded-full ${MODULE_COLORS[mod.module] ?? 'bg-slate-400'}`}
+                      style={{ width: `${mod.usagePct}%` }}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
 
+      {/* ── Recent Tenant Activity (mock — audit log API not yet built) ───── */}
       <Card className="bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="border-b border-slate-50 py-4">
           <div className="flex items-center justify-between">

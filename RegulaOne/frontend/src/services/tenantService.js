@@ -27,6 +27,12 @@ export const tenantService = {
   changeStatus: (id, status) =>
     api.patch(`/api/superadmin/tenant/${id}/status`, { status }),
 
+  // GET /api/superadmin/overview
+  // Returns PlatformOverviewResponse: stat card values, 6-month revenue chart,
+  // and per-module adoption percentages for the SuperAdmin Platform Overview page.
+  getPlatformOverview: () =>
+    api.get('/api/superadmin/overview'),
+
   // Called by ROLE_ADMIN on first login when tenantId is null.
   // Creates the org and links it to the current admin's account in one step.
   setupOrg: (data) =>
