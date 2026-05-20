@@ -2,6 +2,7 @@ package com.regulaone.backend.controllers;
 
 import com.regulaone.backend.dto.*;
 import com.regulaone.backend.dto.Admin.AdminPackageResponse;
+import com.regulaone.backend.dto.Admin.InvoiceResponse;
 import com.regulaone.backend.dto.Auth.InviteUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateModulesRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
@@ -11,6 +12,7 @@ import com.regulaone.backend.dto.Tenant.TeamManagementStatsResponse;
 import com.regulaone.backend.dto.Tenant.TenantRequest;
 import com.regulaone.backend.dto.Tenant.TenantResponse;
 import com.regulaone.backend.dto.Tenant.UpdateOrgRequest;
+import com.regulaone.backend.services.BillingService;
 import com.regulaone.backend.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ import java.util.List;
 public class AdminController {
 
     private final UserService userService;
+    private final BillingService billingService;
 
     // Added: first-login org setup for ROLE_ADMIN.
     // On first login the admin has no tenant linked (tenantId == null in /me
@@ -90,6 +93,16 @@ public class AdminController {
     @GetMapping("/packages")
     public ResponseEntity<List<AdminPackageResponse>> getActivePackages() {
         return ResponseEntity.ok(userService.getActivePackages());
+    }
+
+    // Returns all invoices for the authenticated admin's tenant, newest first.
+    // Resolves the tenantId from the JWT subject via getCurrentUser so the admin
+    // can only ever see their own billing history — no tenantId path param to spoof.
+    @GetMapping("/billing")
+    public ResponseEntity<List<InvoiceResponse>> getBillingHistory(
+            @AuthenticationPrincipal Jwt jwt) {
+        String tenantId = userService.getCurrentUser(jwt.getSubject()).getTenantId();
+        return ResponseEntity.ok(billingService.getTenantInvoices(tenantId));
     }
 
     // Added: lets ROLE_ADMIN update their own organisation's contact/address details.

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { Check, RefreshCw, ArrowUpCircle, CreditCard, Calendar, AlertTriangle, Users, Loader2 } from 'lucide-react';
+import { Check, RefreshCw, ArrowUpCircle, CreditCard, Calendar, AlertTriangle, Users, Loader2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { packageService } from '../../services/packageService';
 import { useMyProfile } from '../../hooks/useProfile';
@@ -20,13 +20,12 @@ const MODULE_DISPLAY = {
 // Ordered list for consistent rendering — same order as the old ALL_MODULES constant
 const MODULE_ORDER = ['KSEFFLOW', 'WORKPULSE', 'SAFEWORK', 'SAFEVOICE', 'WASTESYNC', 'PRIVACYPILOT'];
 
-const BILLING_HISTORY = [
-  { invoice: 'INV-2026-0005', period: 'May 2026', amount: '€399.00', status: 'PAID', date: '2026-05-01' },
-  { invoice: 'INV-2026-0004', period: 'Apr 2026', amount: '€399.00', status: 'PAID', date: '2026-04-01' },
-  { invoice: 'INV-2026-0003', period: 'Mar 2026', amount: '€399.00', status: 'PAID', date: '2026-03-01' },
-  { invoice: 'INV-2026-0002', period: 'Feb 2026', amount: '€399.00', status: 'PAID', date: '2026-02-01' },
-  { invoice: 'INV-2026-0001', period: 'Jan 2026', amount: '€149.00', status: 'PAID', date: '2026-01-01' },
-];
+// Status badge styling — FREE gets a blue tint since it's not a payment
+const STATUS_STYLE = {
+  PAID:    'bg-emerald-50 text-emerald-600 border-emerald-100',
+  FREE:    'bg-blue-50 text-blue-600 border-blue-100',
+  PENDING: 'bg-amber-50 text-amber-600 border-amber-100',
+};
 
 function daysUntil(isoDateStr) {
   if (!isoDateStr) return null;
@@ -40,6 +39,11 @@ export default function AdminPlan() {
   const { data: packages = [], isLoading } = useQuery({
     queryKey: ['admin-packages'],
     queryFn:  packageService.getAdminPackages,
+  });
+
+  const { data: billingHistory = [], isLoading: billingLoading } = useQuery({
+    queryKey: ['admin-billing'],
+    queryFn:  packageService.getAdminBilling,
   });
 
   const currentPackageId = profile?.packageId ?? null;
@@ -219,6 +223,7 @@ export default function AdminPlan() {
           <TableHeader className="bg-slate-50/50">
             <TableRow className="hover:bg-transparent border-b border-slate-100">
               <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400 tracking-wider">Invoice</TableHead>
+              <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400 tracking-wider">Plan</TableHead>
               <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400 tracking-wider">Period</TableHead>
               <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400 tracking-wider">Amount</TableHead>
               <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400 tracking-wider">Status</TableHead>
@@ -226,19 +231,43 @@ export default function AdminPlan() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {BILLING_HISTORY.map((row, i) => (
-              <TableRow key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                <TableCell className="px-6 py-4 text-xs font-mono font-bold text-slate-700">{row.invoice}</TableCell>
-                <TableCell className="px-6 py-4 text-xs text-slate-500">{row.period}</TableCell>
-                <TableCell className="px-6 py-4 text-xs font-bold text-slate-900">{row.amount}</TableCell>
-                <TableCell className="px-6 py-4">
-                  <span className="px-2.5 py-1 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
-                    {row.status}
-                  </span>
+            {billingLoading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="px-6 py-8 text-center">
+                  <Loader2 className="h-4 w-4 animate-spin text-slate-400 mx-auto" />
                 </TableCell>
-                <TableCell className="px-6 py-4 text-xs text-slate-400 text-right">{row.date}</TableCell>
               </TableRow>
-            ))}
+            ) : billingHistory.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="px-6 py-8 text-center">
+                  <div className="flex flex-col items-center gap-2 text-slate-400">
+                    <FileText className="h-5 w-5" />
+                    <span className="text-xs font-medium">No billing records yet</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              billingHistory.map((row) => {
+                const currencySymbol = row.currency === 'EUR' ? '€' : row.currency;
+                const badgeClass = STATUS_STYLE[row.status] ?? STATUS_STYLE.PAID;
+                return (
+                  <TableRow key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                    <TableCell className="px-6 py-4 text-xs font-mono font-bold text-slate-700">{row.invoiceNumber}</TableCell>
+                    <TableCell className="px-6 py-4 text-xs text-slate-500">{row.packageName}</TableCell>
+                    <TableCell className="px-6 py-4 text-xs text-slate-500">{row.period}</TableCell>
+                    <TableCell className="px-6 py-4 text-xs font-bold text-slate-900">
+                      {row.status === 'FREE' ? 'Free' : `${currencySymbol}${Number(row.amount).toFixed(2)}`}
+                    </TableCell>
+                    <TableCell className="px-6 py-4">
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold border ${badgeClass}`}>
+                        {row.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-6 py-4 text-xs text-slate-400 text-right">{row.createdAt}</TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
       </Card>

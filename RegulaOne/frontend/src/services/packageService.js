@@ -53,4 +53,10 @@ export const packageService = {
   // Used by ROLE_ADMIN on the My Plan page to compare available tiers.
   getAdminPackages: () =>
     api.get('/api/admin/packages'),
+
+  // GET /api/admin/billing
+  // Returns the authenticated admin's tenant invoice history, newest first.
+  // Each entry: { invoiceNumber, packageName, amount, currency, period, createdAt, status }
+  getAdminBilling: () =>
+    api.get('/api/admin/billing'),
 };

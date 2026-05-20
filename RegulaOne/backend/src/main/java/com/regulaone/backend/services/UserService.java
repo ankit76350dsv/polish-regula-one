@@ -52,6 +52,8 @@ public class UserService {
     private final TenantService tenantService;
     private final TenantRepository tenantRepository;
     private final PackageRepository appPackageRepository;
+    // Added: generates a billing invoice whenever a plan is assigned to a tenant
+    private final BillingService billingService;
 
     // ! --- Public Auth ---
     public MessageResponse signup(SignupRequest request) {
@@ -208,6 +210,10 @@ public class UserService {
 
         // TODO: 2nd Save tenant
         tenantRepository.save(tenantAfterCreation);
+
+        // Generate a FREE invoice for the default package assigned at org setup.
+        // isFree=true so amount=0 and status=FREE — the default plan is no-charge.
+        billingService.generateInvoice(tenantAfterCreation, basicPackage, true);
 
         // Link tenant to user
         currentAdminUser.setTenant(tenantAfterCreation);
