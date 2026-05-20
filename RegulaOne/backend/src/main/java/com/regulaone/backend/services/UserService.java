@@ -1,6 +1,7 @@
 package com.regulaone.backend.services;
 
 import com.regulaone.backend.dto.*;
+import com.regulaone.backend.dto.Admin.AdminPackageResponse;
 import com.regulaone.backend.dto.Auth.ChangePasswordRequest;
 import com.regulaone.backend.dto.Auth.ConfirmSignupRequest;
 import com.regulaone.backend.dto.Auth.InviteUserRequest;
@@ -35,6 +36,7 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeTy
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UserType;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -474,6 +476,16 @@ public class UserService {
         tenant.setUpdatedAt(LocalDateTime.now());
 
         return TenantResponse.from(tenantRepository.save(tenant));
+    }
+
+    // Returns all ACTIVE packages sorted by price ascending.
+    // Used by GET /api/admin/packages so ROLE_ADMIN can compare plan tiers on the My Plan page.
+    public List<AdminPackageResponse> getActivePackages() {
+        return appPackageRepository.findAll().stream()
+                .filter(p -> p.getStatus() == PackageStatus.ACTIVE)
+                .sorted(Comparator.comparing(AppPackage::getPrice))
+                .map(AdminPackageResponse::from)
+                .collect(Collectors.toList());
     }
 
     // ! delete

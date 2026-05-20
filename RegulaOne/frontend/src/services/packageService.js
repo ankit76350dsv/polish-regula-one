@@ -47,4 +47,10 @@ export const packageService = {
     ).toString();
     return api.get(`/api/superadmin/packages${qs ? `?${qs}` : ''}`);
   },
+
+  // GET /api/admin/packages
+  // Returns all ACTIVE packages sorted by price ascending.
+  // Used by ROLE_ADMIN on the My Plan page to compare available tiers.
+  getAdminPackages: () =>
+    api.get('/api/admin/packages'),
 };

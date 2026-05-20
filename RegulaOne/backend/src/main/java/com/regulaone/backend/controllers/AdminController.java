@@ -1,6 +1,7 @@
 package com.regulaone.backend.controllers;
 
 import com.regulaone.backend.dto.*;
+import com.regulaone.backend.dto.Admin.AdminPackageResponse;
 import com.regulaone.backend.dto.Auth.InviteUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateModulesRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
@@ -82,6 +83,14 @@ public class AdminController {
                 userService.updateUserStatus(userId, request));
     }
 
+
+    // Returns all ACTIVE packages sorted by price so ROLE_ADMIN can compare tiers
+    // on the My Plan page. The admin's current plan is identified on the frontend
+    // by matching packageId from /me against pkg.id in this list.
+    @GetMapping("/packages")
+    public ResponseEntity<List<AdminPackageResponse>> getActivePackages() {
+        return ResponseEntity.ok(userService.getActivePackages());
+    }
 
     // Added: lets ROLE_ADMIN update their own organisation's contact/address details.
     // Excludes nip, regon, and status — those require superadmin action.
