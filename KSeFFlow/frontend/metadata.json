@@ -1,0 +1,6 @@
+{
+  "name": "KSeFFlow",
+  "description": "RegulaOne Polish e-invoicing compliance platform integrated with Polish Government KSeF APIs",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

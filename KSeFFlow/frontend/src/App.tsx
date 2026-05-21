@@ -1,0 +1,698 @@
+import { useState } from 'react';
+import { 
+  Tenant, 
+  Invoice, 
+  Certificate, 
+  AuditLog, 
+  Notification, 
+  UserRole 
+} from './types';
+import { 
+  INITIAL_TENANTS, 
+  INITIAL_INVOICES, 
+  INITIAL_CERTIFICATES, 
+  INITIAL_AUDIT_LOGS, 
+  INITIAL_NOTIFICATIONS 
+} from './data/mockData';
+
+// Modular Child Components
+import Dashboard from './components/Dashboard';
+import InvoiceForm from './components/InvoiceForm';
+import InvoiceList from './components/InvoiceList';
+import IntegrationCenter from './components/IntegrationCenter';
+import CertificateManager from './components/CertificateManager';
+import OfflineQueue from './components/OfflineQueue';
+import AuditCenter from './components/AuditCenter';
+import ArchitectureDocs from './components/ArchitectureDocs';
+import Login from './components/Login';
+
+// Icons
+import { 
+  Building2, 
+  UserSquare, 
+  Home, 
+  FileEdit, 
+  FolderSearch, 
+  AlertTriangle, 
+  Cpu, 
+  ShieldCheck, 
+  BookOpen, 
+  FileClock, 
+  Bell, 
+  LogOut, 
+  CornerDownRight, 
+  LayoutDashboard,
+  CheckCircle,
+  TrendingUp,
+  Download,
+  Info,
+  Calendar,
+  Layers,
+  Lock,
+  UserCheck
+} from 'lucide-react';
+
+export default function App() {
+  // Security session states
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('ksefflow_authenticated') === 'true');
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    try {
+      const stored = localStorage.getItem('ksefflow_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [sessionToken, setSessionToken] = useState<string | null>(() => localStorage.getItem('ksefflow_jwt') || null);
+
+  // SaaS States
+  const [activeTenant, setActiveTenant] = useState<Tenant>(() => {
+    const stored = localStorage.getItem('ksefflow_user');
+    if (stored) {
+      try {
+        const usr = JSON.parse(stored);
+        const found = INITIAL_TENANTS.find(t => t.id === usr.tenantId);
+        if (found) return found;
+      } catch { }
+    }
+    return INITIAL_TENANTS[0];
+  });
+  const [activeRole, setActiveRole] = useState<UserRole>(() => {
+    const stored = localStorage.getItem('ksefflow_user');
+    if (stored) {
+      try {
+        const usr = JSON.parse(stored);
+        return usr.role;
+      } catch { }
+    }
+    return 'Company Admin';
+  });
+  const [invoices, setInvoices] = useState<Invoice[]>(INITIAL_INVOICES);
+  const [certificates, setCertificates] = useState<Certificate[]>(INITIAL_CERTIFICATES);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
+  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
+  const [govStatus, setGovStatus] = useState<'Connected' | 'Restricted' | 'Disconnected' | 'Downtime Sim'>('Connected');
+  const [activePage, setActivePage] = useState<string>('dashboard');
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Appending Audit Trail Helper
+  const logAuditAction = (action: string, detail: string, targetTenantId: string = activeTenant.id) => {
+    const newLog: AuditLog = {
+      id: `log-gen-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      tenantId: targetTenantId,
+      userId: activeRole === 'Super Admin' ? 'user-super-00' : 'user-02',
+      userEmail: currentUser?.email || (activeRole === 'Super Admin' ? 'superadmin@regulaone.com' : 'admin@ksefflow.com'),
+      userRole: activeRole,
+      action,
+      ipAddress: '194.29.130.' + Math.floor(Math.random() * 250 + 1), // Realistic Polish ISP Warsaw blocks
+      newValue: detail,
+      complianceChecked: true
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+  };
+
+  // Notification Handler
+  const addNotification = (title: string, message: string, type: 'info' | 'success' | 'warn' | 'error') => {
+    const newNotif: Notification = {
+      id: `notif-${Date.now()}`,
+      tenantId: activeTenant.id,
+      title,
+      message,
+      type,
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+  };
+
+  const handleLoginSuccess = (userSession: {
+    email: string;
+    role: UserRole;
+    name: string;
+    tenantId: string;
+    token: string;
+    refreshToken: string;
+  }) => {
+    localStorage.setItem('ksefflow_authenticated', 'true');
+    localStorage.setItem('ksefflow_user', JSON.stringify({
+      email: userSession.email,
+      name: userSession.name,
+      role: userSession.role,
+      tenantId: userSession.tenantId
+    }));
+    localStorage.setItem('ksefflow_jwt', userSession.token);
+
+    setIsAuthenticated(true);
+    setCurrentUser({
+      email: userSession.email,
+      name: userSession.name,
+      role: userSession.role,
+      tenantId: userSession.tenantId
+    });
+    setSessionToken(userSession.token);
+
+    // Apply role-based active states directly to active workspace session elements
+    setActiveRole(userSession.role);
+    
+    const matchedTenant = INITIAL_TENANTS.find(t => t.id === userSession.tenantId) || INITIAL_TENANTS[0];
+    setActiveTenant(matchedTenant);
+
+    // Move to respective role default views:
+    // SUPER_ADMIN / COMPANY_ADMIN -> dashboard
+    // ACCOUNTANT -> invoices repository
+    // FINANCE_USER -> invoices repository
+    // AUDITOR -> compliance audit logs
+    if (userSession.role === 'Super Admin' || userSession.role === 'Company Admin') {
+      setActivePage('dashboard');
+    } else if (userSession.role === 'Accountant' || userSession.role === 'Finance User') {
+      setActivePage('invoices');
+    } else if (userSession.role === 'Auditor') {
+      setActivePage('audit');
+    } else {
+      setActivePage('dashboard');
+    }
+
+    // Add visual logs
+    const emailHeader = userSession.email;
+    const newLog: AuditLog = {
+      id: `log-gen-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      tenantId: userSession.tenantId,
+      userId: 'user-id-dyn',
+      userEmail: emailHeader,
+      userRole: userSession.role,
+      action: 'USER_JWT_AUTH_SUCCESS',
+      ipAddress: '194.29.130.' + Math.floor(Math.random() * 250 + 1),
+      newValue: `JWT Authentication Successful. Handshake approved with Spring Security. Role: ${userSession.role}.`,
+      complianceChecked: true
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+
+    const newNotif: Notification = {
+      id: `notif-${Date.now()}`,
+      tenantId: userSession.tenantId,
+      title: 'Decryption Key Seeded',
+      message: `Welcome back, ${userSession.name}! Your workspace is unlocked.`,
+      type: 'success',
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+  };
+
+  const handleLogout = () => {
+    // Audit logout action before clearing email context
+    logAuditAction('USER_SESSION_TERMINATED', `JWT token destroyed. Workspace session reset successfully.`, activeTenant.id);
+
+    localStorage.removeItem('ksefflow_authenticated');
+    localStorage.removeItem('ksefflow_user');
+    localStorage.removeItem('ksefflow_jwt');
+
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setSessionToken(null);
+    
+    // Switch active state configs back to fallback defaults
+    setActiveRole('Company Admin');
+    setActiveTenant(INITIAL_TENANTS[0]);
+    setActivePage('dashboard');
+  };
+
+  // Add Invoice Callback (Form handler)
+  const addInvoice = (invoice: Invoice, silentAuditAction?: string) => {
+    setInvoices(prev => [invoice, ...prev]);
+    if (silentAuditAction) {
+      logAuditAction(silentAuditAction, `Invoiced registration processed for Buyer ${invoice.buyerNIP}. Number: ${invoice.invoiceNumber}. Pre-tax: ${invoice.totalNet}.`);
+    }
+  };
+
+  // Remove Certificate (Cert Manager Handler)
+  const removeCertificate = (id: string) => {
+    const cert = certificates.find(c => c.id === id);
+    setCertificates(prev => prev.filter(c => c.id !== id));
+    if (cert) {
+      logAuditAction('CERTIFICATE_REVOKED', `Corporate signature certificate key ${cert.fileName} stripped from digital active directories.`);
+    }
+  };
+
+  // Add Certificate (Cert Manager Handler)
+  const addCertificate = (cert: Certificate) => {
+    setCertificates(prev => [cert, ...prev]);
+    logAuditAction('CERTIFICATE_ADDED', `Qualified credential file ${cert.fileName} integrated into HSM vault.`);
+  };
+
+  // Process Offline Handover Sync
+  const processOfflineItem = (invoiceId: string, success: boolean, newKsefId?: string) => {
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id === invoiceId) {
+        if (success) {
+          logAuditAction('OFFLINE_QUEUE_FLUSHED', `Invoice ${inv.invoiceNumber} successfully transmitted to Polish Sandbox KSeF APIs. Reference token generated.`);
+          return {
+            ...inv,
+            status: 'SENT',
+            ksefId: newKsefId,
+            upoStatus: 'RECEIVED',
+            upoTimestamp: new Date().toISOString(),
+            submissionAttempts: inv.submissionAttempts + 1
+          };
+        } else {
+          return {
+            ...inv,
+            submissionAttempts: inv.submissionAttempts + 1,
+            lastErrorMessage: 'HTTP 503 Service Unavailable - KSeF national processing queue is saturated.'
+          };
+        }
+      }
+      return inv;
+    }));
+  };
+
+  // Clear unread notifications
+  const clearNotificationsUnread = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  // Active unread metrics countdown
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const PAGE_ROLES_REQUIRED: Record<string, UserRole[]> = {
+    dashboard: ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
+    create: ['Super Admin', 'Company Admin', 'Accountant'],
+    invoices: ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
+    offline: ['Super Admin', 'Company Admin', 'Accountant'],
+    integration: ['Super Admin', 'Company Admin'],
+    certificates: ['Super Admin', 'Company Admin', 'Accountant'],
+    audit: ['Super Admin', 'Company Admin', 'Auditor'],
+    architecture: ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor']
+  };
+
+  if (!isAuthenticated) {
+    return <Login onLoginSuccess={handleLoginSuccess} tenants={INITIAL_TENANTS} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col antialiased">
+      
+      {/* Platform Top Masthead Bar */}
+      <header className="bg-white border-b border-slate-200 h-16 px-6 flex items-center justify-between sticky top-0 z-40">
+        <div className="flex items-center gap-3">
+          <div className="bg-red-700 text-white rounded-lg p-1.5 font-sans font-black flex items-center justify-center text-sm shadow-xs leading-none">
+            R1
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-extrabold text-[15px] tracking-tight text-slate-800 uppercase">RegulaOne</span>
+              <span className="text-[11px] bg-red-50 text-red-650 px-1.5 py-0.5 rounded font-mono font-bold leading-none">KSeFFlow</span>
+            </div>
+            <p className="text-[10px] text-slate-400 font-medium">Poland e-Invoicing Compliance SaaS Node</p>
+          </div>
+        </div>
+
+        {/* Global Multi-tenant switcher + Role selection dashboard filters */}
+        <div className="flex items-center gap-4">
+          
+          {/* Tenant Selector */}
+          <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
+            <Building2 size={13} className="text-slate-400" />
+            <span className="text-slate-500">Corporate Tenant:</span>
+            <select 
+              value={activeTenant.id}
+              disabled={activeRole !== 'Super Admin'}
+              onChange={(e) => {
+                const found = INITIAL_TENANTS.find(t => t.id === e.target.value);
+                if (found) {
+                  setActiveTenant(found);
+                  logAuditAction('SaaS_TENANT_SWITCHED', `Auditor session transitioned workspace focus directly to corporate tenant: ${found.name}`);
+                  addNotification('Tenant Changed', `Switched workspace details to ${found.name}`, 'info');
+                }
+              }}
+              className={`bg-transparent border-0 font-bold text-slate-700 focus:outline-none focus:ring-0 leading-tight pr-1 ${activeRole !== 'Super Admin' ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
+            >
+              {INITIAL_TENANTS.map(tenant => (
+                <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* User Role Selector */}
+          <div className="hidden sm:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
+            <UserSquare size={13} className="text-slate-400" />
+            {activeRole !== 'Super Admin' ? (
+              <Lock size={12} className="text-red-550 shrink-0 select-none" title="Session role bound by active JWT" />
+            ) : null}
+            <span className="text-slate-500 font-medium">Session Role (RBAC):</span>
+            <select 
+              value={activeRole}
+              disabled={activeRole !== 'Super Admin'}
+              onChange={(e) => {
+                const requestedRole = e.target.value as UserRole;
+                setActiveRole(requestedRole);
+                logAuditAction('RBAC_ROLE_TRANSITION', `Workspace security session authorization changed role to: ${requestedRole}. Permissions applied.`);
+                addNotification('Role Adjusted', `Active permissions changed to: ${requestedRole}`, 'info');
+              }}
+              className={`bg-transparent border-0 font-bold text-red-650 focus:ring-0 focus:outline-none leading-tight pr-1 ${activeRole !== 'Super Admin' ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
+            >
+              <option value="Company Admin">Company Admin (All permissions)</option>
+              <option value="Accountant">Accountant (Issue invoices, certs)</option>
+              <option value="Finance User">Finance User (Issue invoices, files)</option>
+              <option value="Auditor">Auditor (View Only compliance)</option>
+              <option value="Super Admin">Super Admin (Universal Root)</option>
+            </select>
+          </div>
+
+          {/* Notifications Panel Trigger */}
+          <div className="relative">
+            <button 
+              onClick={() => {
+                setShowNotifications(!showNotifications);
+                if (!showNotifications) clearNotificationsUnread();
+              }}
+              className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition text-slate-500 border border-slate-200 flex items-center justify-center cursor-pointer"
+            >
+              <Bell size={15} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 text-[9px] font-bold text-white rounded-full flex items-center justify-center animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Notification drop menu */}
+            {showNotifications && (
+              <div className="absolute right-0 mt-2.5 w-85 bg-white border border-slate-200 rounded-xl shadow-lg z-50 p-4 space-y-3 font-sans text-xs">
+                <div className="flex justify-between items-center border-b pb-2 border-slate-100">
+                  <strong className="text-slate-800 font-bold text-xs uppercase tracking-wide">Compliance Signals</strong>
+                  <button 
+                    onClick={() => setShowNotifications(false)}
+                    className="text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                  {notifications.filter(n => n.tenantId === activeTenant.id).map((notif) => (
+                    <div key={notif.id} className="p-2.5 bg-slate-50 rounded-lg border border-slate-150 leading-relaxed">
+                      <div className="flex justify-between font-semibold text-[11px]">
+                        <span className={notif.type === 'error' ? 'text-red-600' : 'text-slate-705'}>{notif.title}</span>
+                        <span className="text-[9px] text-slate-400">{new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1 leading-snug">{notif.message}</p>
+                    </div>
+                  ))}
+                  {notifications.filter(n => n.tenantId === activeTenant.id).length === 0 && (
+                    <p className="text-center text-slate-400 py-6">All compliant channels clear. No warnings logs.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Active User profile details & Log Out */}
+          {currentUser && (
+            <div className="flex items-center gap-3 pl-3 border-l border-slate-200">
+              <div className="hidden lg:block text-right">
+                <p className="text-xs font-black text-slate-800 leading-tight flex items-center gap-1 justify-end">
+                  <UserCheck size={12} className="text-emerald-600" />
+                  {currentUser.name}
+                </p>
+                <span className="text-[10px] font-mono text-slate-400 leading-none block mt-0.5">{currentUser.email}</span>
+              </div>
+              <button 
+                onClick={handleLogout}
+                title="Secure Sign Out (Prune JWT Cookies)"
+                className="p-2 hover:bg-red-50 hover:text-red-700 text-slate-500 rounded-xl transition border border-slate-200 bg-slate-50 flex items-center justify-center cursor-pointer"
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
+          )}
+
+        </div>
+      </header>
+
+      {/* Main Container Shell: Sidebar + Active View area */}
+      <div className="flex-1 flex flex-col md:flex-row">
+        
+        {/* Left Side Platform Navigation Menu */}
+        <aside className="w-full md:w-64 bg-white border-r border-slate-200 p-4 flex flex-col justify-between shrink-0 font-sans">
+          <div className="space-y-6">
+            
+            {/* Quick Context specs */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs md:block hidden shadow-xs">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Active Tenant Vault</span>
+              <p className="font-semibold text-slate-700 truncate text-[11.5px] mt-1">{activeTenant.name}</p>
+              <div className="flex justify-between text-[10px] text-slate-400 mt-1.5 pt-1 border-t border-slate-100">
+                <span>NIP: <strong className="text-slate-600">{activeTenant.nip}</strong></span>
+                <span className="text-emerald-600 font-bold">{activeTenant.subscriptionPlan}</span>
+              </div>
+            </div>
+
+            {/* Nav Menu */}
+            <nav className="space-y-1">
+              <button 
+                onClick={() => { setActivePage('dashboard'); setShowNotifications(false); }}
+                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
+                  activePage === 'dashboard' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <LayoutDashboard size={15} /> Dashboard Summary
+                </span>
+                {!PAGE_ROLES_REQUIRED['dashboard']?.includes(activeRole) && (
+                  <Lock size={11} className="text-slate-400" />
+                )}
+              </button>
+
+              <button 
+                onClick={() => { setActivePage('create'); setShowNotifications(false); }}
+                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
+                  activePage === 'create' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <FileEdit size={15} /> Create FA(3) Invoice
+                </span>
+                {!PAGE_ROLES_REQUIRED['create']?.includes(activeRole) && (
+                  <Lock size={11} className="text-slate-400" />
+                )}
+              </button>
+
+              <button 
+                onClick={() => { setActivePage('invoices'); setShowNotifications(false); }}
+                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
+                  activePage === 'invoices' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <FolderSearch size={15} /> Document Repository
+                </span>
+                {!PAGE_ROLES_REQUIRED['invoices']?.includes(activeRole) && (
+                  <Lock size={11} className="text-slate-400" />
+                )}
+              </button>
+
+              <button 
+                onClick={() => { setActivePage('offline'); setShowNotifications(false); }}
+                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
+                  activePage === 'offline' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <AlertTriangle size={15} /> Offline Queue & Retries
+                </span>
+                <span className="flex items-center gap-1.5">
+                  {!PAGE_ROLES_REQUIRED['offline']?.includes(activeRole) && (
+                    <Lock size={11} className="text-slate-400" />
+                  )}
+                  {invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length > 0 && (
+                    <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
+                      {invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length}
+                    </span>
+                  )}
+                </span>
+              </button>
+
+              <button 
+                onClick={() => { setActivePage('integration'); setShowNotifications(false); }}
+                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
+                  activePage === 'integration' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Cpu size={15} /> Government API Center
+                </span>
+                {!PAGE_ROLES_REQUIRED['integration']?.includes(activeRole) && (
+                  <Lock size={11} className="text-slate-450 shrink-0" />
+                )}
+              </button>
+
+              <button 
+                onClick={() => { setActivePage('certificates'); setShowNotifications(false); }}
+                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
+                  activePage === 'certificates' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <ShieldCheck size={15} /> HSM Certificates Key
+                </span>
+                {!PAGE_ROLES_REQUIRED['certificates']?.includes(activeRole) && (
+                  <Lock size={11} className="text-slate-400" />
+                )}
+              </button>
+
+              <button 
+                onClick={() => { setActivePage('audit'); setShowNotifications(false); }}
+                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
+                  activePage === 'audit' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <BookOpen size={15} /> Compliance Audit Center
+                </span>
+                {!PAGE_ROLES_REQUIRED['audit']?.includes(activeRole) && (
+                  <Lock size={11} className="text-slate-400 shrink-0" />
+                )}
+              </button>
+
+              <button 
+                onClick={() => { setActivePage('architecture'); setShowNotifications(false); }}
+                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
+                  activePage === 'architecture' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <FileClock size={15} /> Developer blueprints
+                </span>
+                {!PAGE_ROLES_REQUIRED['architecture']?.includes(activeRole) && (
+                  <Lock size={11} className="text-slate-400" />
+                )}
+              </button>
+            </nav>
+
+          </div>
+
+          {/* Micro Footer status block */}
+          <div className="pt-4 border-t border-slate-100 hidden md:block text-[10.5px] text-slate-400 space-y-1">
+            <p>Platform status: <strong>SECURE RODO_OK</strong></p>
+            <p>Database: <strong>Postgres schemas</strong></p>
+            <p className="truncate">SLA Handshake: <strong>Frankfurt AWS</strong></p>
+          </div>
+        </aside>
+
+        {/* Content Panel Box container */}
+        <main className="flex-1 p-6 md:p-8 min-w-0 overflow-y-auto">
+          {!PAGE_ROLES_REQUIRED[activePage]?.includes(activeRole) ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-8 max-w-lg mx-auto mt-12 text-center space-y-4 shadow-xs">
+              <div className="mx-auto w-12 h-12 bg-red-50 text-red-650 rounded-full flex items-center justify-center">
+                <Lock size={20} />
+              </div>
+              <div className="space-y-1 border-slate-100 border-b pb-4">
+                <h3 className="text-base font-bold text-slate-800 font-sans tracking-tight">RBAC Access Restricted</h3>
+                <p className="text-xs text-slate-500 leading-normal">
+                  Your active security clearance level (<strong className="font-mono text-[11px] text-red-650 font-bold">{activeRole}</strong>) is insufficient to authorize KSeF operations inside the <strong>{activeTenant.name}</strong> namespace.
+                </p>
+              </div>
+              
+              <div className="bg-slate-50 rounded-lg p-3 text-[11px] text-slate-450 font-mono text-left leading-normal border border-slate-150">
+                <p>Status Code: <strong className="text-red-600">403 Forbidden (JWT Signature Valid)</strong></p>
+                <p>Required Clearances: [{PAGE_ROLES_REQUIRED[activePage]?.join(', ')}]</p>
+                <p>Identity context: <span className="text-slate-600 text-wrap break-all">{currentUser?.email}</span></p>
+              </div>
+
+              <div className="pt-2">
+                <button 
+                  onClick={() => setActivePage('dashboard')}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-xl text-xs transition cursor-pointer"
+                >
+                  Return to Active Portal Directory
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {activePage === 'dashboard' && (
+                <Dashboard 
+                  tenant={activeTenant} 
+                  invoices={invoices} 
+                  certificates={certificates} 
+                  onNavigate={setActivePage}
+                  govStatus={govStatus}
+                  role={activeRole}
+                />
+              )}
+
+              {activePage === 'create' && (
+                <InvoiceForm 
+                  tenant={activeTenant}
+                  role={activeRole}
+                  onAddInvoice={addInvoice}
+                  onAddNotification={addNotification}
+                  onNavigate={setActivePage}
+                  govStatus={govStatus}
+                />
+              )}
+
+              {activePage === 'invoices' && (
+                <InvoiceList 
+                  tenant={activeTenant}
+                  role={activeRole}
+                  invoices={invoices}
+                  onAddNotification={addNotification}
+                />
+              )}
+
+              {activePage === 'offline' && (
+                <OfflineQueue 
+                  tenant={activeTenant}
+                  role={activeRole}
+                  invoices={invoices}
+                  govStatus={govStatus}
+                  onSetGovStatus={setGovStatus}
+                  onProcessOfflineItem={processOfflineItem}
+                  onAddNotification={addNotification}
+                />
+              )}
+
+              {activePage === 'integration' && (
+                <IntegrationCenter 
+                  tenant={activeTenant}
+                  role={activeRole}
+                  govStatus={govStatus}
+                  onSetGovStatus={setGovStatus}
+                  onAddNotification={addNotification}
+                />
+              )}
+
+              {activePage === 'certificates' && (
+                <CertificateManager 
+                  tenant={activeTenant}
+                  role={activeRole}
+                  certificates={certificates}
+                  onAddCertificate={addCertificate}
+                  onRemoveCertificate={removeCertificate}
+                  onAddNotification={addNotification}
+                />
+              )}
+
+              {activePage === 'audit' && (
+                <AuditCenter 
+                  tenant={activeTenant}
+                  role={activeRole}
+                  auditLogs={auditLogs}
+                  onAddNotification={addNotification}
+                />
+              )}
+
+              {activePage === 'architecture' && (
+                <ArchitectureDocs />
+              )}
+            </>
+          )}
+        </main>
+
+      </div>
+
+    </div>
+  );
+}
