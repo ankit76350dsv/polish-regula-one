@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Tenant,
   Invoice,
@@ -27,20 +28,20 @@ import ArchitectureDocs from './components/ArchitectureDocs';
 import Login from './components/Login';
 
 // Icons
-import { 
-  Building2, 
-  UserSquare, 
-  Home, 
-  FileEdit, 
-  FolderSearch, 
-  AlertTriangle, 
-  Cpu, 
-  ShieldCheck, 
-  BookOpen, 
-  FileClock, 
-  Bell, 
-  LogOut, 
-  CornerDownRight, 
+import {
+  Building2,
+  UserSquare,
+  Home,
+  FileEdit,
+  FolderSearch,
+  AlertTriangle,
+  Cpu,
+  ShieldCheck,
+  BookOpen,
+  FileClock,
+  Bell,
+  LogOut,
+  CornerDownRight,
   LayoutDashboard,
   CheckCircle,
   TrendingUp,
@@ -53,8 +54,23 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  // Security session states
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => localStorage.getItem('ksefflow_authenticated') === 'true');
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // ── URL-based routing ────────────────────────────────────────────────────────
+  // Route patterns:
+  //   /company/:tenantId/:section
+  //   /company/:tenantId/invoices/:invoiceId   (detail view)
+  const pathParts = location.pathname.split('/').filter(Boolean);
+  const urlTenantId   = pathParts[1] ?? null;
+  const currentSection  = pathParts[2] || 'dashboard';
+  const currentInvoiceId = (pathParts[2] === 'invoices' && pathParts[3]) ? pathParts[3] : null;
+  const pageKey = currentSection === 'invoices' && currentInvoiceId ? 'invoice-detail' : currentSection;
+
+  // ── Security session states ──────────────────────────────────────────────────
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
+    () => localStorage.getItem('ksefflow_authenticated') === 'true'
+  );
   const [currentUser, setCurrentUser] = useState<any>(() => {
     try {
       const stored = localStorage.getItem('ksefflow_user');
@@ -63,9 +79,11 @@ export default function App() {
       return null;
     }
   });
-  const [sessionToken, setSessionToken] = useState<string | null>(() => localStorage.getItem('ksefflow_jwt') || null);
+  const [sessionToken, setSessionToken] = useState<string | null>(
+    () => localStorage.getItem('ksefflow_jwt') || null
+  );
 
-  // SaaS States
+  // ── SaaS States ──────────────────────────────────────────────────────────────
   const [activeTenant, setActiveTenant] = useState<Tenant>(() => {
     const stored = localStorage.getItem('ksefflow_user');
     if (stored) {
@@ -77,6 +95,7 @@ export default function App() {
     }
     return INITIAL_TENANTS[0];
   });
+
   const [activeRole, setActiveRole] = useState<UserRole>(() => {
     const stored = localStorage.getItem('ksefflow_user');
     if (stored) {
@@ -87,16 +106,53 @@ export default function App() {
     }
     return 'Company Admin';
   });
+
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
   const [certificates, setCertificates] = useState<Certificate[]>(INITIAL_CERTIFICATES);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
   const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
   const [govStatus, setGovStatus] = useState<'Connected' | 'Restricted' | 'Disconnected' | 'Downtime Sim'>('Connected');
-  const [activePage, setActivePage] = useState<string>('dashboard');
   const [showNotifications, setShowNotifications] = useState(false);
-  const [selectedInvoiceForDetail, setSelectedInvoiceForDetail] = useState<Invoice | null>(null);
 
-  // Appending Audit Trail Helper
+  // ── Navigation helper ────────────────────────────────────────────────────────
+  // Builds /company/:tenantId/:page and pushes to history.
+  const navigateTo = (page: string) => navigate(`/company/${activeTenant.id}/${page}`);
+
+  // ── Sync activeTenant from URL param ────────────────────────────────────────
+  // Keeps activeTenant in step with the :tenantId in the URL so that all
+  // downstream components and filters use the correct tenant even on deep links.
+  useEffect(() => {
+    if (!urlTenantId) return;
+    const found = INITIAL_TENANTS.find(t => t.id === urlTenantId);
+    if (found && found.id !== activeTenant.id) setActiveTenant(found);
+  }, [urlTenantId]);
+
+  // ── Redirect authenticated users away from / and /login ─────────────────────
+  useEffect(() => {
+    if (isAuthenticated && (location.pathname === '/' || location.pathname === '/login')) {
+      navigate(`/company/${activeTenant.id}/dashboard`, { replace: true });
+    }
+  }, [isAuthenticated, location.pathname]);
+
+  // ── Reload invoices whenever the URL tenant changes ──────────────────────────
+  // urlTenantId is the authoritative source — it comes directly from the URL
+  // and is always correct even when activeTenant state hasn't synced yet.
+  useEffect(() => {
+    const tenantId = urlTenantId ?? activeTenant.id;
+    if (!isAuthenticated || !tenantId) return;
+    setIsLoadingInvoices(true);
+    listInvoices(tenantId)
+      .then(fetched => { setInvoices(fetched); setIsLoadingInvoices(false); })
+      .catch(() => { setIsLoadingInvoices(false); });
+  }, [urlTenantId, isAuthenticated]);
+
+  // ── Invoice detail lookup (for /invoices/:invoiceId route) ───────────────────
+  const currentInvoiceObj: Invoice | null = currentInvoiceId
+    ? invoices.find(inv => inv.id === currentInvoiceId) ?? null
+    : null;
+
+  // ── Audit Trail Helper ───────────────────────────────────────────────────────
   const logAuditAction = (action: string, detail: string, targetTenantId: string = activeTenant.id) => {
     const newLog: AuditLog = {
       id: `log-gen-${Date.now()}`,
@@ -106,14 +162,14 @@ export default function App() {
       userEmail: currentUser?.email || (activeRole === 'Super Admin' ? 'superadmin@regulaone.com' : 'admin@ksefflow.com'),
       userRole: activeRole,
       action,
-      ipAddress: '194.29.130.' + Math.floor(Math.random() * 250 + 1), // Realistic Polish ISP Warsaw blocks
+      ipAddress: '194.29.130.' + Math.floor(Math.random() * 250 + 1),
       newValue: detail,
       complianceChecked: true
     };
     setAuditLogs(prev => [newLog, ...prev]);
   };
 
-  // Notification Handler
+  // ── Notification Handler ─────────────────────────────────────────────────────
   const addNotification = (title: string, message: string, type: 'info' | 'success' | 'warn' | 'error') => {
     const newNotif: Notification = {
       id: `notif-${Date.now()}`,
@@ -127,15 +183,7 @@ export default function App() {
     setNotifications(prev => [newNotif, ...prev]);
   };
 
-  // Reload invoices from the backend whenever the active tenant changes (or on login).
-  // Falls back gracefully if the backend is unavailable.
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    listInvoices(activeTenant.id)
-      .then(fetched => setInvoices(fetched))
-      .catch(() => { /* backend unreachable — invoices list stays empty */ });
-  }, [activeTenant.id, isAuthenticated]);
-
+  // ── Login ────────────────────────────────────────────────────────────────────
   const handleLoginSuccess = (userSession: {
     email: string;
     role: UserRole;
@@ -154,52 +202,35 @@ export default function App() {
     localStorage.setItem('ksefflow_jwt', userSession.token);
 
     setIsAuthenticated(true);
-    setCurrentUser({
-      email: userSession.email,
-      name: userSession.name,
-      role: userSession.role,
-      tenantId: userSession.tenantId
-    });
+    setCurrentUser({ email: userSession.email, name: userSession.name, role: userSession.role, tenantId: userSession.tenantId });
     setSessionToken(userSession.token);
-
-    // Apply role-based active states directly to active workspace session elements
     setActiveRole(userSession.role);
-    
+
     const matchedTenant = INITIAL_TENANTS.find(t => t.id === userSession.tenantId) || INITIAL_TENANTS[0];
     setActiveTenant(matchedTenant);
 
-    // Move to respective role default views:
-    // SUPER_ADMIN / COMPANY_ADMIN -> dashboard
-    // ACCOUNTANT -> invoices repository
-    // FINANCE_USER -> invoices repository
-    // AUDITOR -> compliance audit logs
-    if (userSession.role === 'Super Admin' || userSession.role === 'Company Admin') {
-      setActivePage('dashboard');
-    } else if (userSession.role === 'Accountant' || userSession.role === 'Finance User') {
-      setActivePage('invoices');
-    } else if (userSession.role === 'Auditor') {
-      setActivePage('audit');
-    } else {
-      setActivePage('dashboard');
-    }
+    // Role-based landing page
+    let landingPage = 'dashboard';
+    if (userSession.role === 'Accountant' || userSession.role === 'Finance User') landingPage = 'invoices';
+    else if (userSession.role === 'Auditor') landingPage = 'audit';
 
-    // Add visual logs
-    const emailHeader = userSession.email;
+    navigate(`/company/${userSession.tenantId}/${landingPage}`);
+
     const newLog: AuditLog = {
       id: `log-gen-${Date.now()}`,
       timestamp: new Date().toISOString(),
       tenantId: userSession.tenantId,
       userId: 'user-id-dyn',
-      userEmail: emailHeader,
+      userEmail: userSession.email,
       userRole: userSession.role,
       action: 'USER_JWT_AUTH_SUCCESS',
       ipAddress: '194.29.130.' + Math.floor(Math.random() * 250 + 1),
-      newValue: `JWT Authentication Successful. Handshake approved with Spring Security. Role: ${userSession.role}.`,
+      newValue: `JWT Authentication Successful. Role: ${userSession.role}.`,
       complianceChecked: true
     };
     setAuditLogs(prev => [newLog, ...prev]);
 
-    const newNotif: Notification = {
+    setNotifications(prev => [{
       id: `notif-${Date.now()}`,
       tenantId: userSession.tenantId,
       title: 'Decryption Key Seeded',
@@ -207,105 +238,108 @@ export default function App() {
       type: 'success',
       timestamp: new Date().toISOString(),
       read: false
-    };
-    setNotifications(prev => [newNotif, ...prev]);
+    }, ...prev]);
   };
 
+  // ── Logout ───────────────────────────────────────────────────────────────────
   const handleLogout = () => {
-    // Audit logout action before clearing email context
-    logAuditAction('USER_SESSION_TERMINATED', `JWT token destroyed. Workspace session reset successfully.`, activeTenant.id);
-
+    logAuditAction('USER_SESSION_TERMINATED', 'JWT token destroyed. Workspace session reset successfully.');
     localStorage.removeItem('ksefflow_authenticated');
     localStorage.removeItem('ksefflow_user');
     localStorage.removeItem('ksefflow_jwt');
-
     setIsAuthenticated(false);
     setCurrentUser(null);
     setSessionToken(null);
-    
-    // Switch active state configs back to fallback defaults
     setActiveRole('Company Admin');
     setActiveTenant(INITIAL_TENANTS[0]);
-    setActivePage('dashboard');
+    navigate('/login', { replace: true });
   };
 
-  // Add Invoice Callback (Form handler)
+  // ── Invoice Callback ─────────────────────────────────────────────────────────
   const addInvoice = (invoice: Invoice, silentAuditAction?: string) => {
     setInvoices(prev => [invoice, ...prev]);
     if (silentAuditAction) {
-      logAuditAction(silentAuditAction, `Invoiced registration processed for Buyer ${invoice.buyerNIP}. Number: ${invoice.invoiceNumber}. Pre-tax: ${invoice.totalNet}.`);
+      logAuditAction(silentAuditAction, `Invoice ${invoice.invoiceNumber} processed for Buyer ${invoice.buyerNIP}. Pre-tax: ${invoice.totalNet}.`);
     }
   };
 
-  // Remove Certificate (Cert Manager Handler)
+  // ── Certificate Handlers ─────────────────────────────────────────────────────
   const removeCertificate = (id: string) => {
     const cert = certificates.find(c => c.id === id);
     setCertificates(prev => prev.filter(c => c.id !== id));
-    if (cert) {
-      logAuditAction('CERTIFICATE_REVOKED', `Corporate signature certificate key ${cert.fileName} stripped from digital active directories.`);
-    }
+    if (cert) logAuditAction('CERTIFICATE_REVOKED', `Certificate ${cert.fileName} stripped from digital directories.`);
   };
 
-  // Add Certificate (Cert Manager Handler)
   const addCertificate = (cert: Certificate) => {
     setCertificates(prev => [cert, ...prev]);
-    logAuditAction('CERTIFICATE_ADDED', `Qualified credential file ${cert.fileName} integrated into HSM vault.`);
+    logAuditAction('CERTIFICATE_ADDED', `Certificate ${cert.fileName} integrated into HSM vault.`);
   };
 
-  // Process Offline Handover Sync
+  // ── Offline Queue Processor ──────────────────────────────────────────────────
   const processOfflineItem = (invoiceId: string, success: boolean, newKsefId?: string) => {
     setInvoices(prev => prev.map(inv => {
-      if (inv.id === invoiceId) {
-        if (success) {
-          logAuditAction('OFFLINE_QUEUE_FLUSHED', `Invoice ${inv.invoiceNumber} successfully transmitted to Polish Sandbox KSeF APIs. Reference token generated.`);
-          return {
-            ...inv,
-            status: 'SENT',
-            ksefId: newKsefId,
-            upoStatus: 'RECEIVED',
-            upoTimestamp: new Date().toISOString(),
-            submissionAttempts: inv.submissionAttempts + 1
-          };
-        } else {
-          return {
-            ...inv,
-            submissionAttempts: inv.submissionAttempts + 1,
-            lastErrorMessage: 'HTTP 503 Service Unavailable - KSeF national processing queue is saturated.'
-          };
-        }
+      if (inv.id !== invoiceId) return inv;
+      if (success) {
+        logAuditAction('OFFLINE_QUEUE_FLUSHED', `Invoice ${inv.invoiceNumber} transmitted to KSeF.`);
+        return { ...inv, status: 'SENT', ksefId: newKsefId, upoStatus: 'RECEIVED', upoTimestamp: new Date().toISOString(), submissionAttempts: inv.submissionAttempts + 1 };
       }
-      return inv;
+      return { ...inv, submissionAttempts: inv.submissionAttempts + 1, lastErrorMessage: 'HTTP 503 Service Unavailable - KSeF queue saturated.' };
     }));
   };
 
-  // Clear unread notifications
-  const clearNotificationsUnread = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-
-  // Active unread metrics countdown
+  // ── Notifications ────────────────────────────────────────────────────────────
+  const clearNotificationsUnread = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  // ── RBAC page-access map ─────────────────────────────────────────────────────
   const PAGE_ROLES_REQUIRED: Record<string, UserRole[]> = {
-    dashboard: ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
-    create: ['Super Admin', 'Company Admin', 'Accountant'],
-    invoices: ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
-    'invoice-detail': ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
-    offline: ['Super Admin', 'Company Admin', 'Accountant'],
-    integration: ['Super Admin', 'Company Admin'],
-    certificates: ['Super Admin', 'Company Admin', 'Accountant'],
-    audit: ['Super Admin', 'Company Admin', 'Auditor'],
-    architecture: ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor']
+    dashboard:       ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
+    create:          ['Super Admin', 'Company Admin', 'Accountant'],
+    invoices:        ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
+    'invoice-detail':['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
+    offline:         ['Super Admin', 'Company Admin', 'Accountant'],
+    integration:     ['Super Admin', 'Company Admin'],
+    certificates:    ['Super Admin', 'Company Admin', 'Accountant'],
+    audit:           ['Super Admin', 'Company Admin', 'Auditor'],
+    architecture:    ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor']
   };
 
+  // ── Not authenticated → show Login ──────────────────────────────────────────
   if (!isAuthenticated) {
     return <Login onLoginSuccess={handleLoginSuccess} tenants={INITIAL_TENANTS} />;
   }
 
+  // ── Sidebar nav item helper ──────────────────────────────────────────────────
+  const navItem = (
+    section: string,
+    label: string,
+    Icon: any,
+    extra?: React.ReactNode
+  ) => {
+    const isActive = currentSection === section || (section === 'invoices' && currentSection === 'invoices');
+    const allowed  = PAGE_ROLES_REQUIRED[section]?.includes(activeRole);
+    return (
+      <button
+        onClick={() => { navigateTo(section); setShowNotifications(false); }}
+        className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
+          isActive ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+        }`}
+      >
+        <span className="flex items-center gap-3">
+          <Icon size={15} /> {label}
+        </span>
+        <span className="flex items-center gap-1.5">
+          {!allowed && <Lock size={11} className="text-slate-400" />}
+          {extra}
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col antialiased">
-      
-      {/* Platform Top Masthead Bar */}
+
+      {/* ── Top Masthead ─────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-slate-200 h-16 px-6 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <div className="bg-red-700 text-white rounded-lg p-1.5 font-sans font-black flex items-center justify-center text-sm shadow-xs leading-none">
@@ -320,22 +354,22 @@ export default function App() {
           </div>
         </div>
 
-        {/* Global Multi-tenant switcher + Role selection dashboard filters */}
         <div className="flex items-center gap-4">
-          
+
           {/* Tenant Selector */}
           <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
             <Building2 size={13} className="text-slate-400" />
             <span className="text-slate-500">Corporate Tenant:</span>
-            <select 
+            <select
               value={activeTenant.id}
               disabled={activeRole !== 'Super Admin'}
               onChange={(e) => {
                 const found = INITIAL_TENANTS.find(t => t.id === e.target.value);
                 if (found) {
                   setActiveTenant(found);
-                  logAuditAction('SaaS_TENANT_SWITCHED', `Auditor session transitioned workspace focus directly to corporate tenant: ${found.name}`);
-                  addNotification('Tenant Changed', `Switched workspace details to ${found.name}`, 'info');
+                  logAuditAction('SaaS_TENANT_SWITCHED', `Workspace transitioned to tenant: ${found.name}`);
+                  addNotification('Tenant Changed', `Switched workspace to ${found.name}`, 'info');
+                  navigate(`/company/${found.id}/dashboard`);
                 }
               }}
               className={`bg-transparent border-0 font-bold text-slate-700 focus:outline-none focus:ring-0 leading-tight pr-1 ${activeRole !== 'Super Admin' ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
@@ -346,21 +380,19 @@ export default function App() {
             </select>
           </div>
 
-          {/* User Role Selector */}
+          {/* Role Selector */}
           <div className="hidden sm:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
             <UserSquare size={13} className="text-slate-400" />
-            {activeRole !== 'Super Admin' ? (
-              <Lock size={12} className="text-red-550 shrink-0 select-none" title="Session role bound by active JWT" />
-            ) : null}
+            {activeRole !== 'Super Admin' && <Lock size={12} className="text-red-550 shrink-0" />}
             <span className="text-slate-500 font-medium">Session Role (RBAC):</span>
-            <select 
+            <select
               value={activeRole}
               disabled={activeRole !== 'Super Admin'}
               onChange={(e) => {
-                const requestedRole = e.target.value as UserRole;
-                setActiveRole(requestedRole);
-                logAuditAction('RBAC_ROLE_TRANSITION', `Workspace security session authorization changed role to: ${requestedRole}. Permissions applied.`);
-                addNotification('Role Adjusted', `Active permissions changed to: ${requestedRole}`, 'info');
+                const r = e.target.value as UserRole;
+                setActiveRole(r);
+                logAuditAction('RBAC_ROLE_TRANSITION', `Role changed to: ${r}.`);
+                addNotification('Role Adjusted', `Active permissions changed to: ${r}`, 'info');
               }}
               className={`bg-transparent border-0 font-bold text-red-650 focus:ring-0 focus:outline-none leading-tight pr-1 ${activeRole !== 'Super Admin' ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
             >
@@ -372,13 +404,10 @@ export default function App() {
             </select>
           </div>
 
-          {/* Notifications Panel Trigger */}
+          {/* Notifications */}
           <div className="relative">
-            <button 
-              onClick={() => {
-                setShowNotifications(!showNotifications);
-                if (!showNotifications) clearNotificationsUnread();
-              }}
+            <button
+              onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) clearNotificationsUnread(); }}
               className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition text-slate-500 border border-slate-200 flex items-center justify-center cursor-pointer"
             >
               <Bell size={15} />
@@ -388,18 +417,11 @@ export default function App() {
                 </span>
               )}
             </button>
-
-            {/* Notification drop menu */}
             {showNotifications && (
               <div className="absolute right-0 mt-2.5 w-85 bg-white border border-slate-200 rounded-xl shadow-lg z-50 p-4 space-y-3 font-sans text-xs">
                 <div className="flex justify-between items-center border-b pb-2 border-slate-100">
                   <strong className="text-slate-800 font-bold text-xs uppercase tracking-wide">Compliance Signals</strong>
-                  <button 
-                    onClick={() => setShowNotifications(false)}
-                    className="text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer"
-                  >
-                    Close
-                  </button>
+                  <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer">Close</button>
                 </div>
                 <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
                   {notifications.filter(n => n.tenantId === activeTenant.id).map((notif) => (
@@ -412,14 +434,14 @@ export default function App() {
                     </div>
                   ))}
                   {notifications.filter(n => n.tenantId === activeTenant.id).length === 0 && (
-                    <p className="text-center text-slate-400 py-6">All compliant channels clear. No warnings logs.</p>
+                    <p className="text-center text-slate-400 py-6">All compliant channels clear.</p>
                   )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Active User profile details & Log Out */}
+          {/* User Profile */}
           {currentUser && (
             <div className="flex items-center gap-3 pl-3 border-l border-slate-200">
               <div className="hidden lg:block text-right">
@@ -429,27 +451,26 @@ export default function App() {
                 </p>
                 <span className="text-[10px] font-mono text-slate-400 leading-none block mt-0.5">{currentUser.email}</span>
               </div>
-              <button 
+              <button
                 onClick={handleLogout}
-                title="Secure Sign Out (Prune JWT Cookies)"
+                title="Secure Sign Out"
                 className="p-2 hover:bg-red-50 hover:text-red-700 text-slate-500 rounded-xl transition border border-slate-200 bg-slate-50 flex items-center justify-center cursor-pointer"
               >
                 <LogOut size={15} />
               </button>
             </div>
           )}
-
         </div>
       </header>
 
-      {/* Main Container Shell: Sidebar + Active View area */}
+      {/* ── Main Shell ───────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col md:flex-row">
-        
-        {/* Left Side Platform Navigation Menu */}
+
+        {/* ── Sidebar ────────────────────────────────────────────────────────── */}
         <aside className="w-full md:w-64 bg-white border-r border-slate-200 p-4 flex flex-col justify-between shrink-0 font-sans">
           <div className="space-y-6">
-            
-            {/* Quick Context specs */}
+
+            {/* Active tenant info */}
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs md:block hidden shadow-xs">
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Active Tenant Vault</span>
               <p className="font-semibold text-slate-700 truncate text-[11.5px] mt-1">{activeTenant.name}</p>
@@ -459,131 +480,25 @@ export default function App() {
               </div>
             </div>
 
-            {/* Nav Menu */}
+            {/* Nav */}
             <nav className="space-y-1">
-              <button 
-                onClick={() => { setActivePage('dashboard'); setShowNotifications(false); }}
-                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
-                  activePage === 'dashboard' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <LayoutDashboard size={15} /> Dashboard Summary
-                </span>
-                {!PAGE_ROLES_REQUIRED['dashboard']?.includes(activeRole) && (
-                  <Lock size={11} className="text-slate-400" />
-                )}
-              </button>
-
-              <button 
-                onClick={() => { setActivePage('create'); setShowNotifications(false); }}
-                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
-                  activePage === 'create' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <FileEdit size={15} /> Create FA(3) Invoice
-                </span>
-                {!PAGE_ROLES_REQUIRED['create']?.includes(activeRole) && (
-                  <Lock size={11} className="text-slate-400" />
-                )}
-              </button>
-
-              <button 
-                onClick={() => { setActivePage('invoices'); setShowNotifications(false); }}
-                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
-                  activePage === 'invoices' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <FolderSearch size={15} /> Document Repository
-                </span>
-                {!PAGE_ROLES_REQUIRED['invoices']?.includes(activeRole) && (
-                  <Lock size={11} className="text-slate-400" />
-                )}
-              </button>
-
-              <button 
-                onClick={() => { setActivePage('offline'); setShowNotifications(false); }}
-                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
-                  activePage === 'offline' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <AlertTriangle size={15} /> Offline Queue & Retries
-                </span>
-                <span className="flex items-center gap-1.5">
-                  {!PAGE_ROLES_REQUIRED['offline']?.includes(activeRole) && (
-                    <Lock size={11} className="text-slate-400" />
-                  )}
-                  {invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length > 0 && (
-                    <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
-                      {invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length}
-                    </span>
-                  )}
-                </span>
-              </button>
-
-              <button 
-                onClick={() => { setActivePage('integration'); setShowNotifications(false); }}
-                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
-                  activePage === 'integration' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <Cpu size={15} /> Government API Center
-                </span>
-                {!PAGE_ROLES_REQUIRED['integration']?.includes(activeRole) && (
-                  <Lock size={11} className="text-slate-450 shrink-0" />
-                )}
-              </button>
-
-              <button 
-                onClick={() => { setActivePage('certificates'); setShowNotifications(false); }}
-                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
-                  activePage === 'certificates' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <ShieldCheck size={15} /> HSM Certificates Key
-                </span>
-                {!PAGE_ROLES_REQUIRED['certificates']?.includes(activeRole) && (
-                  <Lock size={11} className="text-slate-400" />
-                )}
-              </button>
-
-              <button 
-                onClick={() => { setActivePage('audit'); setShowNotifications(false); }}
-                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
-                  activePage === 'audit' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <BookOpen size={15} /> Compliance Audit Center
-                </span>
-                {!PAGE_ROLES_REQUIRED['audit']?.includes(activeRole) && (
-                  <Lock size={11} className="text-slate-400 shrink-0" />
-                )}
-              </button>
-
-              <button 
-                onClick={() => { setActivePage('architecture'); setShowNotifications(false); }}
-                className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
-                  activePage === 'architecture' ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <FileClock size={15} /> Developer blueprints
-                </span>
-                {!PAGE_ROLES_REQUIRED['architecture']?.includes(activeRole) && (
-                  <Lock size={11} className="text-slate-400" />
-                )}
-              </button>
+              {navItem('dashboard', 'Dashboard Summary', LayoutDashboard)}
+              {navItem('create', 'Create FA(3) Invoice', FileEdit)}
+              {navItem('invoices', 'Document Repository', FolderSearch)}
+              {navItem('offline', 'Offline Queue & Retries', AlertTriangle,
+                invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length > 0 ? (
+                  <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
+                    {invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length}
+                  </span>
+                ) : undefined
+              )}
+              {navItem('integration', 'Government API Center', Cpu)}
+              {navItem('certificates', 'HSM Certificates Key', ShieldCheck)}
+              {navItem('audit', 'Compliance Audit Center', BookOpen)}
+              {navItem('architecture', 'Developer Blueprints', FileClock)}
             </nav>
-
           </div>
 
-          {/* Micro Footer status block */}
           <div className="pt-4 border-t border-slate-100 hidden md:block text-[10.5px] text-slate-400 space-y-1">
             <p>Platform status: <strong>SECURE RODO_OK</strong></p>
             <p>Database: <strong>Postgres schemas</strong></p>
@@ -591,9 +506,11 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Content Panel Box container */}
+        {/* ── Content ──────────────────────────────────────────────────────────── */}
         <main className="flex-1 p-6 md:p-8 min-w-0 overflow-y-auto">
-          {!PAGE_ROLES_REQUIRED[activePage]?.includes(activeRole) ? (
+
+          {/* RBAC gate */}
+          {!PAGE_ROLES_REQUIRED[pageKey]?.includes(activeRole) ? (
             <div className="bg-white border border-slate-200 rounded-xl p-8 max-w-lg mx-auto mt-12 text-center space-y-4 shadow-xs">
               <div className="mx-auto w-12 h-12 bg-red-50 text-red-650 rounded-full flex items-center justify-center">
                 <Lock size={20} />
@@ -601,76 +518,84 @@ export default function App() {
               <div className="space-y-1 border-slate-100 border-b pb-4">
                 <h3 className="text-base font-bold text-slate-800 font-sans tracking-tight">RBAC Access Restricted</h3>
                 <p className="text-xs text-slate-500 leading-normal">
-                  Your active security clearance level (<strong className="font-mono text-[11px] text-red-650 font-bold">{activeRole}</strong>) is insufficient to authorize KSeF operations inside the <strong>{activeTenant.name}</strong> namespace.
+                  Your active security clearance (<strong className="font-mono text-[11px] text-red-650 font-bold">{activeRole}</strong>) is insufficient for the <strong>{activeTenant.name}</strong> namespace.
                 </p>
               </div>
-              
               <div className="bg-slate-50 rounded-lg p-3 text-[11px] text-slate-450 font-mono text-left leading-normal border border-slate-150">
                 <p>Status Code: <strong className="text-red-600">403 Forbidden (JWT Signature Valid)</strong></p>
-                <p>Required Clearances: [{PAGE_ROLES_REQUIRED[activePage]?.join(', ')}]</p>
-                <p>Identity context: <span className="text-slate-600 text-wrap break-all">{currentUser?.email}</span></p>
+                <p>Required: [{PAGE_ROLES_REQUIRED[pageKey]?.join(', ')}]</p>
+                <p>Identity: <span className="text-slate-600 break-all">{currentUser?.email}</span></p>
               </div>
-
-              <div className="pt-2">
-                <button 
-                  onClick={() => setActivePage('dashboard')}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-xl text-xs transition cursor-pointer"
-                >
-                  Return to Active Portal Directory
-                </button>
-              </div>
+              <button
+                onClick={() => navigateTo('dashboard')}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-xl text-xs transition cursor-pointer"
+              >
+                Return to Active Portal Directory
+              </button>
             </div>
           ) : (
             <>
-              {activePage === 'dashboard' && (
-                <Dashboard 
-                  tenant={activeTenant} 
-                  invoices={invoices} 
-                  certificates={certificates} 
-                  onNavigate={setActivePage}
-                  govStatus={govStatus}
-                  role={activeRole}
-                />
-              )}
-
-              {activePage === 'create' && (
-                <InvoiceForm 
+              {currentSection === 'dashboard' && (
+                <Dashboard
                   tenant={activeTenant}
-                  role={activeRole}
-                  onAddInvoice={addInvoice}
-                  onAddNotification={addNotification}
-                  onNavigate={setActivePage}
-                  govStatus={govStatus}
-                />
-              )}
-
-              {activePage === 'invoices' && (
-                <InvoiceList
-                  tenant={activeTenant}
-                  role={activeRole}
                   invoices={invoices}
-                  onAddNotification={addNotification}
-                  onViewInvoiceDetail={(inv) => {
-                    setSelectedInvoiceForDetail(inv);
-                    setActivePage('invoice-detail');
-                  }}
+                  certificates={certificates}
+                  onNavigate={navigateTo}
+                  govStatus={govStatus}
+                  role={activeRole}
                 />
               )}
 
-              {activePage === 'invoice-detail' && selectedInvoiceForDetail && (
+              {currentSection === 'create' && (
                 <InvoiceForm
                   tenant={activeTenant}
                   role={activeRole}
                   onAddInvoice={addInvoice}
                   onAddNotification={addNotification}
-                  onNavigate={setActivePage}
+                  onNavigate={navigateTo}
                   govStatus={govStatus}
-                  existingInvoice={selectedInvoiceForDetail}
                 />
               )}
 
-              {activePage === 'offline' && (
-                <OfflineQueue 
+              {currentSection === 'invoices' && !currentInvoiceId && (
+                <InvoiceList
+                  tenant={activeTenant}
+                  role={activeRole}
+                  invoices={invoices}
+                  onAddNotification={addNotification}
+                  onViewInvoiceDetail={(inv) =>
+                    navigate(`/company/${activeTenant.id}/invoices/${inv.id}`)
+                  }
+                />
+              )}
+
+              {currentSection === 'invoices' && currentInvoiceId && (
+                isLoadingInvoices ? (
+                  <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
+                    Loading invoice…
+                  </div>
+                ) : currentInvoiceObj ? (
+                  <InvoiceForm
+                    tenant={activeTenant}
+                    role={activeRole}
+                    onAddInvoice={addInvoice}
+                    onAddNotification={addNotification}
+                    onNavigate={navigateTo}
+                    govStatus={govStatus}
+                    existingInvoice={currentInvoiceObj}
+                  />
+                ) : (
+                  <div className="bg-white border border-slate-200 rounded-xl p-8 max-w-lg mx-auto mt-12 text-center space-y-4 shadow-xs">
+                    <p className="text-slate-500 text-sm">Invoice <strong className="font-mono">{currentInvoiceId}</strong> not found.</p>
+                    <button onClick={() => navigateTo('invoices')} className="bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-slate-800 transition">
+                      Back to Repository
+                    </button>
+                  </div>
+                )
+              )}
+
+              {currentSection === 'offline' && (
+                <OfflineQueue
                   tenant={activeTenant}
                   role={activeRole}
                   invoices={invoices}
@@ -681,8 +606,8 @@ export default function App() {
                 />
               )}
 
-              {activePage === 'integration' && (
-                <IntegrationCenter 
+              {currentSection === 'integration' && (
+                <IntegrationCenter
                   tenant={activeTenant}
                   role={activeRole}
                   govStatus={govStatus}
@@ -691,8 +616,8 @@ export default function App() {
                 />
               )}
 
-              {activePage === 'certificates' && (
-                <CertificateManager 
+              {currentSection === 'certificates' && (
+                <CertificateManager
                   tenant={activeTenant}
                   role={activeRole}
                   certificates={certificates}
@@ -702,8 +627,8 @@ export default function App() {
                 />
               )}
 
-              {activePage === 'audit' && (
-                <AuditCenter 
+              {currentSection === 'audit' && (
+                <AuditCenter
                   tenant={activeTenant}
                   role={activeRole}
                   auditLogs={auditLogs}
@@ -711,15 +636,13 @@ export default function App() {
                 />
               )}
 
-              {activePage === 'architecture' && (
+              {currentSection === 'architecture' && (
                 <ArchitectureDocs />
               )}
             </>
           )}
         </main>
-
       </div>
-
     </div>
   );
 }

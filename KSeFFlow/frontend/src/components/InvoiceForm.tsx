@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Invoice, InvoiceItem, Tenant, UserRole } from '../types';
 import { createInvoice, submitInvoice, getInvoice } from '../api/ksefApi';
 import { 
@@ -29,6 +30,10 @@ interface InvoiceFormProps {
 export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotification, onNavigate, govStatus, existingInvoice }: InvoiceFormProps) {
   // Check if role is allowed to create invoices
   const canModify = role === 'Super Admin' || role === 'Company Admin' || role === 'Accountant' || role === 'Finance User';
+
+  // Tenant ID sourced from the URL (/company/:tenantId/...) — authoritative for all API calls.
+  const { pathname } = useLocation();
+  const tenantIdFromUrl = pathname.split('/').filter(Boolean)[1] ?? tenant.id;
 
   // Whether this is a read-only view of an already-processed invoice
   const isViewOnly = !!existingInvoice && existingInvoice.status !== 'DRAFT';
@@ -279,7 +284,7 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
 
     try {
       const draft = await createInvoice({
-        tenantId: tenant.id,
+        tenantId: tenantIdFromUrl,
         userId,
         invoiceNumber,
         issueDate,
@@ -341,7 +346,7 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
       onAddNotification('Creating Invoice', `Saving ${invoiceNumber} as draft…`, 'info');
 
       const draft = await createInvoice({
-        tenantId: tenant.id,
+        tenantId: tenantIdFromUrl,
         userId,
         invoiceNumber,
         issueDate,
@@ -367,10 +372,10 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
       // Step 2: Submit to KSeF — backend handles online/offline automatically
       onAddNotification('Submitting to KSeF', 'Generating FA(3) XML and opening KSeF session…', 'info');
 
-      const submitResult = await submitInvoice(tenant.id, draft.id, tenant.nip, userId);
+      const submitResult = await submitInvoice(tenantIdFromUrl, draft.id, tenant.nip, userId);
 
       // Step 3: Fetch the fully updated invoice from the backend
-      const finalInvoice = await getInvoice(tenant.id, draft.id);
+      const finalInvoice = await getInvoice(tenantIdFromUrl, draft.id);
 
       if (submitResult.status === 'SENT') {
         onAddInvoice(finalInvoice, 'INVOICE_SEALED_KSEF_SENT');
