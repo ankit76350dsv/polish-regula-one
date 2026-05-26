@@ -1,19 +1,19 @@
-import { useState } from 'react';
-import { 
-  Tenant, 
-  Invoice, 
-  Certificate, 
-  AuditLog, 
-  Notification, 
-  UserRole 
+import { useState, useEffect } from 'react';
+import {
+  Tenant,
+  Invoice,
+  Certificate,
+  AuditLog,
+  Notification,
+  UserRole
 } from './types';
-import { 
-  INITIAL_TENANTS, 
-  INITIAL_INVOICES, 
-  INITIAL_CERTIFICATES, 
-  INITIAL_AUDIT_LOGS, 
-  INITIAL_NOTIFICATIONS 
+import {
+  INITIAL_TENANTS,
+  INITIAL_CERTIFICATES,
+  INITIAL_AUDIT_LOGS,
+  INITIAL_NOTIFICATIONS
 } from './data/mockData';
+import { listInvoices } from './api/ksefApi';
 
 // Modular Child Components
 import Dashboard from './components/Dashboard';
@@ -87,7 +87,7 @@ export default function App() {
     }
     return 'Company Admin';
   });
-  const [invoices, setInvoices] = useState<Invoice[]>(INITIAL_INVOICES);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>(INITIAL_CERTIFICATES);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
   const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
@@ -125,6 +125,15 @@ export default function App() {
     };
     setNotifications(prev => [newNotif, ...prev]);
   };
+
+  // Reload invoices from the backend whenever the active tenant changes (or on login).
+  // Falls back gracefully if the backend is unavailable.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    listInvoices(activeTenant.id)
+      .then(fetched => setInvoices(fetched))
+      .catch(() => { /* backend unreachable — invoices list stays empty */ });
+  }, [activeTenant.id, isAuthenticated]);
 
   const handleLoginSuccess = (userSession: {
     email: string;

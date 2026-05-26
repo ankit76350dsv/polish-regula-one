@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Invoice, InvoiceItem, Tenant, UserRole } from '../types';
+import { createInvoice, submitInvoice, getInvoice } from '../api/ksefApi';
 import { 
   Plus, 
   Trash2, 
@@ -74,6 +75,7 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
   const [activeTab, setActiveTab] = useState<'form' | 'xml' | 'pdf'>('form');
   const [isAutosaving, setIsAutosaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Auto VAT & total calculations
   const calculateTotals = (currentItems: InvoiceItem[]) => {
@@ -244,66 +246,91 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
     return xml;
   };
 
-  // Handle Live Compliance Submission (Success / Offline Fallback)
-  const handleSubmit = (forceOffline: boolean = false) => {
+  // Resolve the stored userId from the JWT session for API audit headers
+  const getSessionUserId = (): string | undefined => {
+    try {
+      const stored = localStorage.getItem('ksefflow_user');
+      return stored ? (JSON.parse(stored)?.email ?? undefined) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  // Submit invoice through the real KSeF backend pipeline:
+  //   POST /api/v1/invoices (create DRAFT)  →  POST /api/v1/invoices/{id}/submit
+  // The backend decides SENT vs OFFLINE_MODE based on KSeF API availability.
+  const handleSubmit = async (_forceOffline: boolean = false) => {
     if (!canModify) {
       onAddNotification('RBAC Permission Denied', 'Your active role does not permit sealing or generating compliance invoices.', 'error');
       return;
     }
 
     if (!buyerNip || !buyerName) {
-      alert("NIP and Buyer Name are mandatory for legitimate invoices.");
+      onAddNotification('Validation Error', 'NIP and Buyer Name are mandatory for legitimate invoices.', 'error');
       return;
     }
 
-    const isFailover = forceOffline || govStatus === 'Offline' || govStatus === 'Downtime Sim';
-    
-    const newInvoice: Invoice = {
-      id: `inv-sim-${Date.now()}`,
-      invoiceNumber,
-      issueDate,
-      dueDate,
-      tenantId: tenant.id,
-      sellerName: tenant.name,
-      sellerNIP: tenant.nip,
-      sellerAddress: `${tenant.address}, ${tenant.postalCode} ${tenant.city}`,
-      buyerName,
-      buyerNIP: buyerNip,
-      buyerAddress,
-      currency,
-      items,
-      totalNet,
-      totalVat,
-      totalGross,
-      paymentMethod,
-      bankAccount,
-      paymentStatus: 'UNPAID',
-      notes,
-      status: isFailover ? 'OFFLINE_MODE' : 'SENT',
-      ksefId: isFailover ? undefined : `${tenant.nip}-${new Date().toISOString().slice(0,10).replace(/[^0-9]/g, '')}-EF8A9B48102`,
-      upoStatus: isFailover ? 'NONE' : 'RECEIVED',
-      upoTimestamp: isFailover ? undefined : new Date().toISOString(),
-      offlineQrCode: isFailover ? `https://ksef.mf.gov.pl/qr/${tenant.nip}/${invoiceNumber}-OFFLINE` : undefined,
-      submissionAttempts: 1,
-      createdAt: new Date().toISOString()
-    };
+    setIsSubmitting(true);
+    const userId = getSessionUserId();
 
-    if (isFailover) {
-      onAddInvoice(newInvoice, 'OFFLINE_FALLBACK_ACTIVATED');
-      onAddNotification(
-        'Offline Fallback Saved', 
-        `Polish KSeF APIs unreachable. Invoice ${invoiceNumber} stored in local retry queue. QR Validation Stamp generated.`, 
-        'warn'
-      );
-      onNavigate('offline');
-    } else {
-      onAddInvoice(newInvoice, 'INVOICE_SEALED_KSEF_SENT');
-      onAddNotification(
-        'KSeF Submission Success', 
-        `Invoice ${invoiceNumber} successfully sealed with qualified signature and registered on Polish Gov sandbox. ID acquired!`, 
-        'success'
-      );
-      onNavigate('invoices');
+    try {
+      // Step 1: Create DRAFT invoice in the backend
+      onAddNotification('Creating Invoice', `Saving ${invoiceNumber} as draft…`, 'info');
+
+      const draft = await createInvoice({
+        tenantId: tenant.id,
+        userId,
+        invoiceNumber,
+        issueDate,
+        dueDate,
+        sellerName: tenant.name,
+        sellerNip: tenant.nip,
+        sellerAddress: tenant.address,
+        sellerPostalCode: tenant.postalCode,
+        sellerCity: tenant.city,
+        buyerName,
+        buyerNip,
+        buyerAddress,
+        currency,
+        totalNet,
+        totalVat,
+        totalGross,
+        paymentMethod,
+        bankAccount,
+        notes,
+        items,
+      });
+
+      // Step 2: Submit to KSeF — backend handles online/offline automatically
+      onAddNotification('Submitting to KSeF', 'Generating FA(3) XML and opening KSeF session…', 'info');
+
+      const submitResult = await submitInvoice(tenant.id, draft.id, tenant.nip, userId);
+
+      // Step 3: Fetch the fully updated invoice from the backend
+      const finalInvoice = await getInvoice(tenant.id, draft.id);
+
+      if (submitResult.status === 'SENT') {
+        onAddInvoice(finalInvoice, 'INVOICE_SEALED_KSEF_SENT');
+        onAddNotification(
+          'KSeF Submission Success',
+          `Invoice ${invoiceNumber} sealed and registered on KSeF. ID: ${submitResult.ksefId}`,
+          'success'
+        );
+        onNavigate('invoices');
+      } else {
+        onAddInvoice(finalInvoice, 'OFFLINE_FALLBACK_ACTIVATED');
+        onAddNotification(
+          'Offline Fallback Saved',
+          `KSeF APIs unreachable. Invoice ${invoiceNumber} queued for retry. QR stamp generated.`,
+          'warn'
+        );
+        onNavigate('offline');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error during submission';
+      onAddNotification('Submission Failed', message, 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -718,24 +745,24 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
               
               <div className="space-y-2">
                 {/* Standard KSeF Submission */}
-                <button 
+                <button
                   onClick={() => handleSubmit(false)}
-                  disabled={!canModify || govStatus === 'Offline'}
+                  disabled={!canModify || isSubmitting}
                   className={`w-full py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-xs ${
-                    govStatus === 'Offline' 
-                      ? 'bg-stone-100 border border-stone-250 text-stone-400 cursor-not-allowed'
+                    isSubmitting
+                      ? 'bg-stone-400 text-white cursor-not-allowed'
                       : 'bg-red-700 hover:bg-red-800 text-white'
                   }`}
                 >
-                  <FileCheck2 size={15} /> 
-                  {govStatus === 'Offline' ? 'KSeF Server is offline' : 'Sign & Submit to Central KSeF'}
+                  <FileCheck2 size={15} />
+                  {isSubmitting ? 'Submitting to KSeF…' : 'Sign & Submit to Central KSeF'}
                 </button>
 
                 {/* Force Offline Failover (Triggering retry queue) */}
-                <button 
+                <button
                   onClick={() => handleSubmit(true)}
-                  disabled={!canModify}
-                  className="w-full border border-stone-300 hover:border-orange-200 hover:bg-orange-50/50 py-2.5 px-4 rounded-xl text-stone-700 text-xs font-medium flex items-center justify-center gap-2 transition"
+                  disabled={!canModify || isSubmitting}
+                  className="w-full border border-stone-300 hover:border-orange-200 hover:bg-orange-50/50 py-2.5 px-4 rounded-xl text-stone-700 text-xs font-medium flex items-center justify-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <AlertCircle size={15} className="text-orange-600" />
                   Force Offline Fallback Mode
