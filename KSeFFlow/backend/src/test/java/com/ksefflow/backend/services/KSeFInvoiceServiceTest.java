@@ -1,0 +1,328 @@
+package com.ksefflow.backend.services;
+
+import com.ksefflow.backend.config.KsefApiProperties;
+import com.ksefflow.backend.dto.ksefapi.KsefInvoiceStatusResponse;
+import com.ksefflow.backend.dto.ksefapi.KsefSendInvoiceResponse;
+import com.ksefflow.backend.exceptions.KsefSubmissionException;
+import com.ksefflow.backend.models.KsefInvoice;
+import com.ksefflow.backend.models.utils.KsefCurrency;
+import com.ksefflow.backend.models.utils.KsefEnvironment;
+import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
+import com.ksefflow.backend.models.utils.KsefPaymentMethod;
+import com.ksefflow.backend.models.utils.KsefVatRate;
+import com.ksefflow.backend.repository.KsefAuditLogRepository;
+import com.ksefflow.backend.repository.KsefInvoiceRepository;
+import com.ksefflow.backend.services.ksefauthutils.KsefApiClient;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.concurrent.atomic.AtomicInteger;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+// Pure unit tests — no Spring context, no MongoDB, no HTTP.
+// All dependencies are mocked with Mockito.
+@ExtendWith(MockitoExtension.class)
+class KSeFInvoiceServiceTest {
+
+    @Mock private KsefInvoiceRepository invoiceRepository;
+    @Mock private KsefAuditLogRepository auditLogRepository;
+    @Mock private FA3XmlGeneratorService xmlGeneratorService;
+    @Mock private FA3XmlValidatorService xmlValidatorService;
+    @Mock private KSeFAuthService authService;
+    @Mock private KsefApiClient apiClient;
+    @Mock private UPOStorageService upoStorageService;
+    @Mock private OfflinePdfService offlinePdfService;
+    @Mock private KsefApiProperties apiProperties;
+
+    @InjectMocks
+    private KSeFInvoiceService invoiceService;
+
+    private static final String TENANT_ID   = "tenant-pl-001";
+    private static final String INVOICE_ID  = "inv-abc-123";
+    private static final String NIP         = "1234567890";
+    private static final String SESSION_TOK = "gov-session-xyz";
+    private static final String ELEM_REF    = "elem-ref-001";
+    private static final String KSEF_ID     = "1234567890-20260526-ABCDEF1234567890";
+
+    // ── createInvoice ──────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("createInvoice: saves invoice as DRAFT and returns saved entity")
+    void createInvoice_validRequest_savedAsDraft() {
+        KsefInvoice input = buildDraftInvoice();
+        KsefInvoice saved = buildDraftInvoice();
+        saved.setId(INVOICE_ID);
+
+        when(apiProperties.getEnvironment()).thenReturn(KsefEnvironment.SANDBOX);
+        when(invoiceRepository.existsByTenantIdAndInvoiceNumber(TENANT_ID, "FV/2026/05/0001"))
+                .thenReturn(false);
+        when(invoiceRepository.save(any(KsefInvoice.class))).thenReturn(saved);
+
+        KsefInvoice result = invoiceService.createInvoice(input);
+
+        assertThat(result.getId()).isEqualTo(INVOICE_ID);
+        verify(invoiceRepository).save(argThat(inv ->
+                inv.getStatus() == KsefInvoiceStatus.DRAFT &&
+                inv.getKsefEnvironment() == KsefEnvironment.SANDBOX));
+    }
+
+    @Test
+    @DisplayName("createInvoice: throws on duplicate invoice number within same tenant")
+    void createInvoice_duplicateNumber_throws() {
+        when(invoiceRepository.existsByTenantIdAndInvoiceNumber(TENANT_ID, "FV/2026/05/0001"))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> invoiceService.createInvoice(buildDraftInvoice()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already exists");
+
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    // ── submitInvoice: happy path ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("submitInvoice: full happy path — DRAFT → SENT with ksefId + upoDocumentId set")
+    void submitInvoice_happyPath_transitionsDraftToSent() {
+        KsefInvoice draft = buildDraftInvoice();
+        draft.setId(INVOICE_ID);
+
+        // thenAnswer returns the invoice as-is for intermediate saves, and enriches it on
+        // the final SENT save — avoids NPE from argThat receiving null during mock matching.
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any(KsefInvoice.class))).thenAnswer(invMock -> {
+            KsefInvoice inv = invMock.getArgument(0);
+            if (inv.getStatus() == KsefInvoiceStatus.SENT) {
+                inv.setKsefId(KSEF_ID);
+                inv.setUpoDocumentId("upo-doc-999");
+            }
+            return inv;
+        });
+
+        FA3XmlGeneratorService.FA3XmlResult xmlResult =
+                new FA3XmlGeneratorService.FA3XmlResult("<Faktura/>", "deadbeef");
+        when(xmlGeneratorService.generateXml(any())).thenReturn(xmlResult);
+        when(authService.openSession(TENANT_ID, NIP)).thenReturn(SESSION_TOK);
+
+        KsefSendInvoiceResponse sendResp = new KsefSendInvoiceResponse();
+        sendResp.setElementReferenceNumber(ELEM_REF);
+        sendResp.setProcessingCode(200);
+        when(apiClient.sendInvoice(SESSION_TOK, "<Faktura/>")).thenReturn(sendResp);
+
+        KsefInvoiceStatusResponse statusResp = new KsefInvoiceStatusResponse();
+        KsefInvoiceStatusResponse.InvoiceStatus invoiceStatus =
+                new KsefInvoiceStatusResponse.InvoiceStatus();
+        invoiceStatus.setKsefReferenceNumber(KSEF_ID);
+        statusResp.setInvoiceStatus(invoiceStatus);
+        when(apiClient.getInvoiceStatus(SESSION_TOK, ELEM_REF)).thenReturn(statusResp);
+
+        when(upoStorageService.storeUpo(eq(INVOICE_ID), eq(TENANT_ID), eq(KSEF_ID),
+                anyString(), any())).thenReturn("upo-doc-999");
+
+        when(apiProperties.getEnvironment()).thenReturn(KsefEnvironment.SANDBOX);
+
+        KsefInvoice result = invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP);
+
+        assertThat(result.getStatus()).isEqualTo(KsefInvoiceStatus.SENT);
+        assertThat(result.getKsefId()).isEqualTo(KSEF_ID);
+        assertThat(result.getUpoDocumentId()).isEqualTo("upo-doc-999");
+
+        verify(xmlValidatorService).validateStrict("<Faktura/>");
+        verify(upoStorageService).storeUpo(eq(INVOICE_ID), eq(TENANT_ID), eq(KSEF_ID),
+                anyString(), any());
+    }
+
+    // ── submitInvoice: guard checks ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("submitInvoice: throws when invoice not found")
+    void submitInvoice_notFound_throws() {
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not found");
+    }
+
+    @Test
+    @DisplayName("submitInvoice: throws when tenantId does not match invoice")
+    void submitInvoice_wrongTenant_throws() {
+        KsefInvoice draft = buildDraftInvoice();
+        draft.setId(INVOICE_ID);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(draft));
+
+        assertThatThrownBy(() -> invoiceService.submitInvoice("wrong-tenant", INVOICE_ID, NIP))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Access denied");
+    }
+
+    @Test
+    @DisplayName("submitInvoice: throws when invoice is not in DRAFT status")
+    void submitInvoice_notDraft_throws() {
+        KsefInvoice sent = buildDraftInvoice();
+        sent.setId(INVOICE_ID);
+        sent.setStatus(KsefInvoiceStatus.SENT);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(sent));
+
+        assertThatThrownBy(() -> invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DRAFT");
+    }
+
+    // ── submitInvoice: offline mode ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("submitInvoice: switches to OFFLINE_MODE when KSeF API is unreachable")
+    void submitInvoice_ksefUnreachable_switchesToOfflineMode() {
+        KsefInvoice draft = buildDraftInvoice();
+        draft.setId(INVOICE_ID);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        FA3XmlGeneratorService.FA3XmlResult xmlResult =
+                new FA3XmlGeneratorService.FA3XmlResult("<Faktura/>", "deadbeef");
+        when(xmlGeneratorService.generateXml(any())).thenReturn(xmlResult);
+        when(authService.openSession(TENANT_ID, NIP)).thenReturn(SESSION_TOK);
+        when(apiClient.sendInvoice(any(), any()))
+                .thenThrow(new KsefSubmissionException("KSeF API is unreachable — triggering offline mode"));
+        when(offlinePdfService.generateOfflinePdf(any())).thenReturn(new byte[0]);
+        when(offlinePdfService.verificationUrl(any())).thenReturn("https://ksef.mf.gov.pl/offline/verify?inv=FV/2026/05/0001&hash=deadbeef");
+        // apiProperties.getEnvironment() is NOT called in the offline path — no stub needed
+
+        KsefInvoice result = invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP);
+
+        assertThat(result.getStatus()).isEqualTo(KsefInvoiceStatus.OFFLINE_MODE);
+        assertThat(result.getLastErrorMessage()).contains("unreachable");
+        assertThat(result.getOfflineQrCode()).isNotNull();
+
+        // UPO must NOT be stored in offline mode
+        verify(upoStorageService, never()).storeUpo(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("submitInvoice: increments submissionAttempts on each call")
+    void submitInvoice_multipleAttempts_incrementsCounter() {
+        KsefInvoice draft = buildDraftInvoice();
+        draft.setId(INVOICE_ID);
+        draft.setSubmissionAttempts(2);
+
+        // Use AtomicInteger to capture the attempt count AT THE MOMENT the PENDING save fires.
+        // ArgumentCaptor captures object references — since KsefInvoice is mutable, by the time
+        // we verify, the object has been mutated to OFFLINE_MODE. Side-effect capture is correct here.
+        AtomicInteger capturedAttempts = new AtomicInteger(-1);
+
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(invMock -> {
+            KsefInvoice inv = invMock.getArgument(0);
+            if (inv.getStatus() == KsefInvoiceStatus.PENDING) {
+                capturedAttempts.set(inv.getSubmissionAttempts());
+            }
+            return inv;
+        });
+
+        FA3XmlGeneratorService.FA3XmlResult xmlResult =
+                new FA3XmlGeneratorService.FA3XmlResult("<Faktura/>", "abc");
+        when(xmlGeneratorService.generateXml(any())).thenReturn(xmlResult);
+        when(authService.openSession(TENANT_ID, NIP))
+                .thenThrow(new KsefSubmissionException("auth failed"));
+        when(offlinePdfService.generateOfflinePdf(any())).thenReturn(new byte[0]);
+        when(offlinePdfService.verificationUrl(any())).thenReturn("https://test");
+
+        invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP);
+
+        assertThat(capturedAttempts.get()).isEqualTo(3);
+    }
+
+    // ── getInvoice ─────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("getInvoice: returns invoice when tenantId matches")
+    void getInvoice_matchingTenant_returnsInvoice() {
+        KsefInvoice inv = buildDraftInvoice();
+        inv.setId(INVOICE_ID);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+
+        KsefInvoice result = invoiceService.getInvoice(TENANT_ID, INVOICE_ID);
+        assertThat(result.getTenantId()).isEqualTo(TENANT_ID);
+    }
+
+    @Test
+    @DisplayName("getInvoice: throws when invoice belongs to different tenant")
+    void getInvoice_differentTenant_throws() {
+        KsefInvoice inv = buildDraftInvoice();
+        inv.setId(INVOICE_ID);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+
+        assertThatThrownBy(() -> invoiceService.getInvoice("other-tenant", INVOICE_ID))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("getInvoice: throws when invoice is soft-deleted")
+    void getInvoice_softDeleted_throws() {
+        KsefInvoice inv = buildDraftInvoice();
+        inv.setId(INVOICE_ID);
+        inv.setSoftDeleted(true);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+
+        assertThatThrownBy(() -> invoiceService.getInvoice(TENANT_ID, INVOICE_ID))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ── Builder helpers ────────────────────────────────────────────────────────
+
+    private KsefInvoice buildDraftInvoice() {
+        KsefInvoice invoice = new KsefInvoice();
+        invoice.setTenantId(TENANT_ID);
+        invoice.setInvoiceNumber("FV/2026/05/0001");
+        invoice.setIssueDate(LocalDate.of(2026, 5, 26));
+        invoice.setDueDate(LocalDate.of(2026, 6, 26));
+        invoice.setCurrency(KsefCurrency.PLN);
+        invoice.setStatus(KsefInvoiceStatus.DRAFT);
+
+        invoice.setSellerName("DSV Corp Sp. z o.o.");
+        invoice.setSellerNip("1234567890");
+        invoice.setSellerAddress("ul. Testowa 1");
+        invoice.setSellerPostalCode("00-001");
+        invoice.setSellerCity("Warszawa");
+
+        invoice.setBuyerName("Klient ABC S.A.");
+        invoice.setBuyerNip("9876543210");
+        invoice.setBuyerAddress("ul. Kupiecka 5");
+        invoice.setBuyerPostalCode("30-001");
+        invoice.setBuyerCity("Kraków");
+
+        KsefInvoice.InvoiceItem item = new KsefInvoice.InvoiceItem();
+        item.setItemId("item-001");
+        item.setProductName("Consulting");
+        item.setUnit("godz.");
+        item.setQuantity(BigDecimal.TEN);
+        item.setUnitPrice(new BigDecimal("100.00"));
+        item.setVatRate(KsefVatRate.VAT_23);
+        item.setNetAmount(new BigDecimal("1000.00"));
+        item.setVatAmount(new BigDecimal("230.00"));
+        item.setGrossAmount(new BigDecimal("1230.00"));
+
+        invoice.setItems(List.of(item));
+        invoice.setTotalNet(new BigDecimal("1000.00"));
+        invoice.setTotalVat(new BigDecimal("230.00"));
+        invoice.setTotalGross(new BigDecimal("1230.00"));
+        invoice.setPaymentMethod(KsefPaymentMethod.TRANSFER);
+        invoice.setSubmissionAttempts(0);
+        invoice.setSoftDeleted(false);
+
+        return invoice;
+    }
+}

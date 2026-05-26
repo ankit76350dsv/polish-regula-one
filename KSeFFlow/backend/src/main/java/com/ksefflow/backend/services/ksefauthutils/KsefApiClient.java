@@ -3,6 +3,7 @@ package com.ksefflow.backend.services.ksefauthutils;
 import com.ksefflow.backend.config.KsefApiProperties;
 import com.ksefflow.backend.dto.ksefapi.*;
 import com.ksefflow.backend.exceptions.KsefAuthException;
+import com.ksefflow.backend.exceptions.KsefSubmissionException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
@@ -85,6 +86,71 @@ public class KsefApiClient {
         } catch (ResourceAccessException e) {
             throw new KsefAuthException(
                     "KSeF API is unreachable at " + url + " — check network or consider offline mode", e);
+        }
+    }
+
+    // POST /online/Invoice/Send — submits the FA(3) XML to KSeF for processing.
+    // Returns the elementReferenceNumber used to poll for the final KSeF ID.
+    // The XML must be UTF-8 encoded bytes; Content-Type must be application/octet-stream.
+    public KsefSendInvoiceResponse sendInvoice(String sessionToken, String xmlContent) {
+        String url = apiProperties.getActiveBaseUrl() + "/online/Invoice/Send";
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(SESSION_HEADER, sessionToken);
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+
+        byte[] xmlBytes = xmlContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        HttpEntity<byte[]> entity = new HttpEntity<>(xmlBytes, headers);
+
+        log.debug("Sending invoice XML ({} bytes) to {}", xmlBytes.length, url);
+
+        try {
+            ResponseEntity<KsefSendInvoiceResponse> response =
+                    ksefRestTemplate.postForEntity(url, entity, KsefSendInvoiceResponse.class);
+
+            if (response.getBody() == null || response.getBody().getElementReferenceNumber() == null) {
+                throw new KsefSubmissionException(
+                        "KSeF returned an empty invoice submission response from " + url);
+            }
+            log.info("Invoice submitted to KSeF — elementReferenceNumber: [{}]",
+                    response.getBody().getElementReferenceNumber());
+            return response.getBody();
+
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException(
+                    "KSeF invoice submission failed [" + e.getStatusCode() + "]: " +
+                    e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException(
+                    "KSeF API is unreachable at " + url + " — triggering offline mode", e);
+        }
+    }
+
+    // GET /online/Invoice/Status/{elementReferenceNumber} — polls for the final KSeF ID.
+    // Call after sendInvoice() until ksefReferenceNumber is non-null.
+    public KsefInvoiceStatusResponse getInvoiceStatus(String sessionToken, String elementReferenceNumber) {
+        String url = apiProperties.getActiveBaseUrl() +
+                     "/online/Invoice/Status/" + elementReferenceNumber;
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(SESSION_HEADER, sessionToken);
+
+        try {
+            ResponseEntity<KsefInvoiceStatusResponse> response =
+                    ksefRestTemplate.exchange(url, HttpMethod.GET,
+                            new HttpEntity<>(headers), KsefInvoiceStatusResponse.class);
+
+            if (response.getBody() == null) {
+                throw new KsefSubmissionException(
+                        "KSeF returned an empty status response for ref: " + elementReferenceNumber);
+            }
+            return response.getBody();
+
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException(
+                    "KSeF invoice status check failed [" + e.getStatusCode() + "]: " +
+                    e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException(
+                    "KSeF API is unreachable while polling status for ref: " + elementReferenceNumber, e);
         }
     }
 
