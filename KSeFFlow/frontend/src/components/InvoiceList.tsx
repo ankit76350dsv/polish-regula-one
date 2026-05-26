@@ -23,9 +23,10 @@ interface InvoiceListProps {
   role: UserRole;
   invoices: Invoice[];
   onAddNotification: (title: string, message: string, type: 'info' | 'success' | 'warn' | 'error') => void;
+  onViewInvoiceDetail: (invoice: Invoice) => void;
 }
 
-export default function InvoiceList({ tenant, role, invoices, onAddNotification }: InvoiceListProps) {
+export default function InvoiceList({ tenant, role, invoices, onAddNotification, onViewInvoiceDetail }: InvoiceListProps) {
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'SENT' | 'OFFLINE_MODE' | 'DRAFT'>('ALL');
@@ -172,22 +173,40 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification 
                     </td>
                     <td className="py-3.5 px-3">
                       {inv.status === 'SENT' ? (
-                        <div className="flex flex-col">
-                          <span className="inline-flex self-start items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700">
-                            ● KSeF SECURE
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex self-start items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            ● {inv.status}
                           </span>
-                          <span className="text-[9px] text-slate-400 font-mono truncate max-w-[120px] mt-0.5">{inv.ksefId}</span>
+                          <span className="text-[9px] text-slate-400 font-mono truncate max-w-[120px]">{inv.ksefId ?? '—'}</span>
                         </div>
                       ) : inv.status === 'OFFLINE_MODE' ? (
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-0.5">
                           <span className="inline-flex self-start items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-orange-50 text-orange-700 border border-orange-200">
-                            ● FALLBACK QUEUE
+                            ● {inv.status}
                           </span>
-                          <span className="text-[9px] text-slate-500 mt-0.5">Auto retry count: {inv.submissionAttempts}</span>
+                          <span className="text-[9px] text-slate-500">Attempts: {inv.submissionAttempts}</span>
                         </div>
+                      ) : inv.status === 'FAILED' ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex self-start items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-red-50 text-red-700 border border-red-200">
+                            ● {inv.status}
+                          </span>
+                          <span className="text-[9px] text-red-400 truncate max-w-[120px]">{inv.lastErrorMessage ?? 'Submission error'}</span>
+                        </div>
+                      ) : inv.status === 'RETRYING' ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex self-start items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            ● {inv.status}
+                          </span>
+                          <span className="text-[9px] text-slate-500">Attempt #{inv.submissionAttempts}</span>
+                        </div>
+                      ) : inv.status === 'PENDING' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          ● {inv.status}
+                        </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-slate-100 text-slate-500 border border-slate-205">
-                          ● DRAFT LOCAL
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                          ● {inv.status}
                         </span>
                       )}
                     </td>
@@ -223,7 +242,7 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification 
 
               {/* Status details card */}
               <div className="space-y-4 text-xs font-sans">
-                
+
                 {selectedInvoice.status === 'SENT' ? (
                   /* Official Polish Government UPO Receipt View */
                   <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3 shadow-xs">
@@ -231,30 +250,34 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification 
                       <span className="text-red-750 text-[10px] uppercase font-bold flex items-center gap-1">
                         <FileBadge size={14} /> Ministry of Finance UPO
                       </span>
-                      <span className="text-[10px] font-mono text-slate-400">Verified Stamp</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        ● {selectedInvoice.status}
+                      </span>
                     </div>
 
                     <div className="space-y-1.5 font-mono text-[10.5px] leading-relaxed text-slate-600">
                       <p>KSeF-ID (Official Token):</p>
-                      <p className="font-bold text-slate-900 bg-slate-100 p-1.5 rounded text-[10px] break-all border border-slate-200">{selectedInvoice.ksefId}</p>
-                      
+                      <p className="font-bold text-slate-900 bg-slate-100 p-1.5 rounded text-[10px] break-all border border-slate-200">
+                        {selectedInvoice.ksefId ?? <span className="text-slate-400 font-normal">Not yet assigned</span>}
+                      </p>
+
+                      <p className="mt-2">UPO Status:</p>
+                      <p className="font-bold text-slate-850">{selectedInvoice.upoStatus ?? '—'}</p>
+
                       <p className="mt-2">Reception Stamp Time:</p>
-                      <p className="font-bold text-slate-850">{selectedInvoice.upoTimestamp || "2026-05-20T09:20:50"}</p>
-                      
-                      <p className="mt-2">Digest Hash (SHA-256):</p>
-                      <p className="text-[8.5px] text-slate-400 break-all leading-normal">
-                        e1a3bc32def0928e46bc9fae15093cd0c8db42110c4902a9cf293418efd927c9
+                      <p className="font-bold text-slate-850">
+                        {selectedInvoice.upoTimestamp ?? <span className="text-slate-400 font-normal">—</span>}
                       </p>
                     </div>
 
                     <div className="flex gap-2 pt-2">
-                      <button 
+                      <button
                         onClick={() => triggerUpoDownload(selectedInvoice)}
                         className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold py-1.5 px-3 rounded-lg text-[10px] inline-flex items-center justify-center gap-1 transition"
                       >
                         <Download size={11} /> Download UPO
                       </button>
-                      <button 
+                      <button
                         onClick={() => triggerXmlDownload(selectedInvoice)}
                         className="flex-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold py-1.5 px-3 rounded-lg text-[10px] inline-flex items-center justify-center gap-1 transition"
                       >
@@ -269,26 +292,22 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification 
                       <span className="text-orange-950 text-[10px] uppercase font-bold flex items-center gap-1">
                         <QrCode size={14} className="text-orange-700" /> Offline QR Verification
                       </span>
-                      <span className="text-[10px] font-mono text-orange-700 font-semibold">Legal Emergency Fallback</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                        ● {selectedInvoice.status}
+                      </span>
                     </div>
 
                     <div className="flex flex-col items-center py-2 bg-white rounded-lg border border-orange-100">
-                      {/* Simple visual SVG mock placeholder of custom QR verification */}
                       <svg viewBox="0 0 100 100" className="w-24 h-24 text-slate-800">
-                        {/* Outer corners / typical QR squares */}
                         <rect x="10" y="10" width="25" height="25" fill="#E11D48" strokeWidth="1" />
                         <rect x="15" y="15" width="15" height="15" fill="#ffffff" />
                         <rect x="19" y="19" width="7" height="7" fill="#E11D48" />
-                        
                         <rect x="65" y="10" width="25" height="25" fill="#E11D48" strokeWidth="1" />
                         <rect x="70" y="15" width="15" height="15" fill="#ffffff" />
                         <rect x="74" y="19" width="7" height="7" fill="#E11D48" />
-
                         <rect x="10" y="65" width="25" height="25" fill="#E11D48" strokeWidth="1" />
                         <rect x="15" y="70" width="15" height="15" fill="#ffffff" />
                         <rect x="19" y="74" width="7" height="7" fill="#E11D48" />
-
-                        {/* Middle noise vectors representing signed hash */}
                         <rect x="45" y="45" width="10" height="10" fill="currentColor" />
                         <rect x="55" y="55" width="10" height="10" fill="currentColor" />
                         <rect x="40" y="20" width="5" height="15" fill="currentColor" opacity="0.8" />
@@ -300,18 +319,88 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification 
                       <span className="text-[10px] text-slate-400 mt-2 font-mono">Scan code under Art. 106fa</span>
                     </div>
 
+                    <div className="space-y-1 text-[10.5px] font-mono text-slate-600">
+                      <p>Submission Attempts: <strong className="text-slate-800">{selectedInvoice.submissionAttempts}</strong></p>
+                      {selectedInvoice.lastErrorMessage && (
+                        <p className="text-orange-700 break-words">{selectedInvoice.lastErrorMessage}</p>
+                      )}
+                    </div>
+
                     <p className="text-[11px] leading-relaxed text-amber-900">
                       Under statutory Polish tax provisions, this offline invoice is a legal instrument. Central registration will complete automatically through the queue retry system.
+                    </p>
+                  </div>
+                ) : selectedInvoice.status === 'FAILED' ? (
+                  <div className="bg-red-50 border border-red-200 p-4 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between border-b pb-2 border-red-200">
+                      <span className="text-red-800 text-[10px] uppercase font-bold flex items-center gap-1">
+                        <XCircle size={14} className="text-red-600" /> Submission Failed
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-red-100 text-red-700 border border-red-200">
+                        ● {selectedInvoice.status}
+                      </span>
+                    </div>
+                    <div className="space-y-1.5 font-mono text-[10.5px] text-slate-600">
+                      <p>Attempts made: <strong className="text-slate-800">{selectedInvoice.submissionAttempts}</strong></p>
+                      <p className="mt-1">Error detail:</p>
+                      <p className="text-red-700 bg-red-100 p-2 rounded border border-red-200 break-words leading-relaxed">
+                        {selectedInvoice.lastErrorMessage ?? 'No error details available.'}
+                      </p>
+                    </div>
+                  </div>
+                ) : selectedInvoice.status === 'RETRYING' ? (
+                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between border-b pb-2 border-amber-200">
+                      <span className="text-amber-900 text-[10px] uppercase font-bold flex items-center gap-1">
+                        <Clock size={14} className="text-amber-600" /> Retrying Submission
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-amber-100 text-amber-700 border border-amber-200">
+                        ● {selectedInvoice.status}
+                      </span>
+                    </div>
+                    <div className="space-y-1.5 font-mono text-[10.5px] text-slate-600">
+                      <p>Attempt #<strong className="text-slate-800">{selectedInvoice.submissionAttempts}</strong> in progress via exponential backoff queue.</p>
+                      {selectedInvoice.lastErrorMessage && (
+                        <>
+                          <p className="mt-1">Last error:</p>
+                          <p className="text-amber-800 bg-amber-100 p-2 rounded border border-amber-200 break-words">
+                            {selectedInvoice.lastErrorMessage}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : selectedInvoice.status === 'PENDING' ? (
+                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between border-b pb-2 border-blue-200">
+                      <span className="text-blue-900 text-[10px] uppercase font-bold flex items-center gap-1">
+                        <Clock size={14} className="text-blue-600" /> Pending KSeF Submission
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-blue-100 text-blue-700 border border-blue-200">
+                        ● {selectedInvoice.status}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-blue-800 leading-relaxed">
+                      Invoice is queued and awaiting dispatch to the KSeF government gateway.
                     </p>
                   </div>
                 ) : (
                   <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl text-center text-slate-500 py-6">
                     <Info size={20} className="mx-auto text-slate-400 mb-1.5" />
                     <p className="text-xs">
-                      This is a <strong>Local Draft invoice</strong> pending signature sealing. Complete KSeF registration to acquire a verified UPO réception stamp.
+                      This is a <strong>DRAFT</strong> invoice. Submit to KSeF to acquire a verified UPO receipt.
                     </p>
                   </div>
                 )}
+
+                {/* View full invoice details */}
+                <button
+                  onClick={() => onViewInvoiceDetail(selectedInvoice)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold transition"
+                >
+                  <ExternalLink size={13} />
+                  View Full Invoice Details
+                </button>
 
                 {/* Core transaction outline */}
                 <div className="space-y-2 border-t pt-3 border-slate-100 text-xs">

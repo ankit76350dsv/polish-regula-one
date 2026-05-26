@@ -94,6 +94,7 @@ export default function App() {
   const [govStatus, setGovStatus] = useState<'Connected' | 'Restricted' | 'Disconnected' | 'Downtime Sim'>('Connected');
   const [activePage, setActivePage] = useState<string>('dashboard');
   const [showNotifications, setShowNotifications] = useState(false);
+  const [selectedInvoiceForDetail, setSelectedInvoiceForDetail] = useState<Invoice | null>(null);
 
   // Appending Audit Trail Helper
   const logAuditAction = (action: string, detail: string, targetTenantId: string = activeTenant.id) => {
@@ -289,6 +290,7 @@ export default function App() {
     dashboard: ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
     create: ['Super Admin', 'Company Admin', 'Accountant'],
     invoices: ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
+    'invoice-detail': ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
     offline: ['Super Admin', 'Company Admin', 'Accountant'],
     integration: ['Super Admin', 'Company Admin'],
     certificates: ['Super Admin', 'Company Admin', 'Accountant'],
@@ -643,11 +645,27 @@ export default function App() {
               )}
 
               {activePage === 'invoices' && (
-                <InvoiceList 
+                <InvoiceList
                   tenant={activeTenant}
                   role={activeRole}
                   invoices={invoices}
                   onAddNotification={addNotification}
+                  onViewInvoiceDetail={(inv) => {
+                    setSelectedInvoiceForDetail(inv);
+                    setActivePage('invoice-detail');
+                  }}
+                />
+              )}
+
+              {activePage === 'invoice-detail' && selectedInvoiceForDetail && (
+                <InvoiceForm
+                  tenant={activeTenant}
+                  role={activeRole}
+                  onAddInvoice={addInvoice}
+                  onAddNotification={addNotification}
+                  onNavigate={setActivePage}
+                  govStatus={govStatus}
+                  existingInvoice={selectedInvoiceForDetail}
                 />
               )}
 

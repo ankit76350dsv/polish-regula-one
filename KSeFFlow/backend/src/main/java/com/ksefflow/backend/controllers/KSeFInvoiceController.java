@@ -41,9 +41,14 @@ public class KSeFInvoiceController {
     // ── Create ─────────────────────────────────────────────────────────────────
 
     /**
-     * POST /api/v1/invoices
-     * Creates a new invoice in DRAFT status. Does not submit to KSeF.
-     * Call POST /{id}/submit to start the submission pipeline.
+     * 
+     * Create a new invoice.
+     *
+     * This API creates an invoice with DRAFT status.
+     * The invoice is saved in the database but not sent to KSeF yet.
+     *
+     * To submit the invoice to KSeF,
+     * call the submit API later.
      */
     @PostMapping
     public ResponseEntity<KsefInvoice> createInvoice(
@@ -51,8 +56,7 @@ public class KSeFInvoiceController {
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @Valid @RequestBody CreateInvoiceRequest request) {
 
-        log.debug("Create invoice request: [{}] tenant [{}]",
-                request.getInvoiceNumber(), tenantId);
+        log.debug("Create invoice request: [{}] tenant [{}]", request.getInvoiceNumber(), tenantId);
 
         KsefInvoice invoice = invoiceService.createInvoice(
                 request.toEntity(tenantId, userId));
@@ -61,31 +65,39 @@ public class KSeFInvoiceController {
     }
 
     // ── Submit Pipeline ────────────────────────────────────────────────────────
-
     /**
-     * POST /api/v1/invoices/{invoiceId}/submit
-     * Runs the full KSeF submission pipeline:
-     *   generate XML → validate → auth → send → poll → store UPO → SENT
-     * On KSeF unavailability: → OFFLINE_MODE (PDF + QR + retry queue)
+     * 
+     * Submit an invoice to KSeF.
      *
-     * @param nip the company's 10-digit NIP (required for KSeF authentication)
+     * This API starts the complete invoice submission process:
+     * * Generate XML
+     * * Validate invoice data
+     * * Authenticate with KSeF
+     * * Send invoice
+     * * Save UPO(Urzędowe Poświadczenie Odbioru === Official Receipt Confirmation)
+     * response
+     *
+     * If KSeF is unavailable,
+     * the invoice will move to OFFLINE_MODE
+     * and will be retried later.
+     *
+     * @param nip Company 10-digit NIP number
      */
+
     @PostMapping("/{invoiceId}/submit")
     public ResponseEntity<SubmitInvoiceResponse> submitInvoice(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String invoiceId,
-            @RequestParam @NotBlank
-            @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits")
-            String nip) {
+            @RequestParam @NotBlank @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits") String nip) {
 
         log.info("Submit invoice [{}] tenant [{}] nip [{}]", invoiceId, tenantId, nip);
 
         KsefInvoice result = invoiceService.submitInvoice(tenantId, invoiceId, nip);
 
         String message = switch (result.getStatus()) {
-            case SENT        -> "Invoice successfully submitted to KSeF — reference: " + result.getKsefId();
+            case SENT -> "Invoice successfully submitted to KSeF — reference: " + result.getKsefId();
             case OFFLINE_MODE -> "KSeF unavailable — invoice queued for retry (offline mode)";
-            default          -> "Submission result: " + result.getStatus();
+            default -> "Submission result: " + result.getStatus();
         };
 
         SubmitInvoiceResponse response = SubmitInvoiceResponse.builder()
@@ -97,12 +109,14 @@ public class KSeFInvoiceController {
                 .offlineQrCode(result.getOfflineQrCode())
                 .message(message)
                 .submittedAt(result.getSubmittedToKsefAt() != null
-                        ? result.getSubmittedToKsefAt() : LocalDateTime.now())
+                        ? result.getSubmittedToKsefAt()
+                        : LocalDateTime.now())
                 .environment(result.getKsefEnvironment())
                 .build();
 
         HttpStatus httpStatus = result.getStatus() == KsefInvoiceStatus.SENT
-                ? HttpStatus.OK : HttpStatus.ACCEPTED;
+                ? HttpStatus.OK
+                : HttpStatus.ACCEPTED;
 
         return ResponseEntity.status(httpStatus).body(response);
     }
@@ -110,20 +124,37 @@ public class KSeFInvoiceController {
     // ── Read ───────────────────────────────────────────────────────────────────
 
     /**
-     * GET /api/v1/invoices/{invoiceId}
-     * Returns the invoice with current submission state.
+     * 
+     * Get invoice details.
+     * 
+     * 
+     * This API returns the invoice information
+     * along with its current submission status.
+     * 
+     * 
+     * Example statuses:
+     ** DRAFT
+     ** PENDING
+     ** SENT
+     ** FAILED
+     ** OFFLINE_MODE
      */
     @GetMapping("/{invoiceId}")
     public ResponseEntity<KsefInvoice> getInvoice(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @PathVariable String invoiceId) {
-
         return ResponseEntity.ok(invoiceService.getInvoice(tenantId, invoiceId));
     }
 
     /**
-     * GET /api/v1/invoices
-     * Paginated invoice list, optionally filtered by status.
+     * Get all invoices.
+     * 
+     * 
+     * This API returns a paginated list of invoices
+     * for the current tenant.
+     * 
+     * 
+     * You can also filter invoices by status.
      *
      * ?status=DRAFT|PENDING|SENT|FAILED|OFFLINE_MODE|RETRYING
      * ?page=0&size=20&sort=createdAt,desc
@@ -133,6 +164,12 @@ public class KSeFInvoiceController {
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestParam(required = false) KsefInvoiceStatus status,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
+
+        log.info("Fetching invoices for tenantId={}, status={}, page={}, size={}",
+                tenantId,
+                status,
+                pageable.getPageNumber(),
+                pageable.getPageSize());
 
         return ResponseEntity.ok(invoiceService.listInvoices(tenantId, status, pageable));
     }

@@ -6,11 +6,9 @@ import com.ksefflow.backend.dto.ksefapi.KsefSendInvoiceResponse;
 import com.ksefflow.backend.exceptions.KsefAuthException;
 import com.ksefflow.backend.exceptions.KsefSubmissionException;
 import com.ksefflow.backend.exceptions.KsefXmlGenerationException;
-import com.ksefflow.backend.models.KsefAuditLog;
 import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
 import com.ksefflow.backend.models.utils.KsefUpoStatus;
-import com.ksefflow.backend.repository.KsefAuditLogRepository;
 import com.ksefflow.backend.repository.KsefInvoiceRepository;
 import com.ksefflow.backend.services.ksefauthutils.KsefApiClient;
 import lombok.RequiredArgsConstructor;
@@ -48,8 +46,8 @@ import java.time.format.DateTimeParseException;
 @Slf4j
 public class KSeFInvoiceService {
 
-    private final KsefInvoiceRepository invoiceRepository;
-    private final KsefAuditLogRepository auditLogRepository;
+    private final KsefInvoiceRepository ksef_invoices_repository;
+
     private final FA3XmlGeneratorService xmlGeneratorService;
     private final FA3XmlValidatorService xmlValidatorService;
     private final KSeFAuthService authService;
@@ -66,7 +64,7 @@ public class KSeFInvoiceService {
      * Duplicate invoice numbers within the same tenant are rejected.
      */
     public KsefInvoice createInvoice(KsefInvoice invoice) {
-        if (invoiceRepository.existsByTenantIdAndInvoiceNumber(
+        if (ksef_invoices_repository.existsByTenantIdAndInvoiceNumber(
                 invoice.getTenantId(), invoice.getInvoiceNumber())) {
             throw new IllegalArgumentException(
                     "Invoice number [" + invoice.getInvoiceNumber() +
@@ -77,11 +75,12 @@ public class KSeFInvoiceService {
         invoice.setCreatedAt(LocalDateTime.now());
         invoice.setKsefEnvironment(apiProperties.getEnvironment());
 
-        KsefInvoice saved = invoiceRepository.save(invoice);
-        writeAuditLog(saved.getTenantId(), "INVOICE_CREATED", saved.getId(), null,
-                "invoiceNumber=" + saved.getInvoiceNumber());
-        log.info("Invoice [{}] created as DRAFT for tenant [{}]",
-                saved.getInvoiceNumber(), saved.getTenantId());
+        KsefInvoice saved = ksef_invoices_repository.save(invoice);
+
+        AuditLog.writeAuditLog(saved.getTenantId(), "INVOICE_CREATED", saved.getId(), null, "invoiceNumber=" + saved.getInvoiceNumber());
+        
+        log.info("Invoice [{}] created as DRAFT for tenant [{}]", saved.getInvoiceNumber(), saved.getTenantId());
+
         return saved;
     }
 
@@ -109,8 +108,8 @@ public class KSeFInvoiceService {
         invoice.setStatus(KsefInvoiceStatus.PENDING);
         invoice.setUpdatedAt(LocalDateTime.now());
         invoice.setSubmissionAttempts(invoice.getSubmissionAttempts() + 1);
-        invoiceRepository.save(invoice);
-        writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null,
+        ksef_invoices_repository.save(invoice);
+        AuditLog.writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null,
                 "attempt=" + invoice.getSubmissionAttempts());
 
         // Steps 3–4 — generate and strictly validate FA(3) XML
@@ -120,7 +119,7 @@ public class KSeFInvoiceService {
 
         // Persist hash immediately — needed for the offline QR even if submission fails
         invoice.setFa3XmlHash(xmlResult.sha256Hash());
-        invoiceRepository.save(invoice);
+        ksef_invoices_repository.save(invoice);
 
         // Steps 5–8 — KSeF network pipeline (triggers offline mode on failure)
         try {
@@ -135,7 +134,7 @@ public class KSeFInvoiceService {
     // ── Read ───────────────────────────────────────────────────────────────────
 
     public KsefInvoice getInvoice(String tenantId, String invoiceId) {
-        return invoiceRepository.findById(invoiceId)
+        return ksef_invoices_repository.findById(invoiceId)
                 .filter(inv -> tenantId.equals(inv.getTenantId()))
                 .filter(inv -> !inv.isSoftDeleted())
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -144,9 +143,9 @@ public class KSeFInvoiceService {
 
     public Page<KsefInvoice> listInvoices(String tenantId, KsefInvoiceStatus status, Pageable pageable) {
         if (status != null) {
-            return invoiceRepository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status, pageable);
+            return ksef_invoices_repository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status, pageable);
         }
-        return invoiceRepository.findByTenantIdOrderByCreatedAtDesc(tenantId, pageable);
+        return ksef_invoices_repository.findByTenantIdOrderByCreatedAtDesc(tenantId, pageable);
     }
 
     // ── Private: KSeF network pipeline ─────────────────────────────────────────
@@ -187,9 +186,9 @@ public class KSeFInvoiceService {
         invoice.setReceivedFromKsefAt(receivedAt);
         invoice.setLastErrorMessage(null);
         invoice.setUpdatedAt(LocalDateTime.now());
-        KsefInvoice saved = invoiceRepository.save(invoice);
+        KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
-        writeAuditLog(tenantId, "INVOICE_SENT_TO_KSEF", invoiceId, null,
+        AuditLog.writeAuditLog(tenantId, "INVOICE_SENT_TO_KSEF", invoiceId, null,
                 "ksefId=" + ksefId + " env=" + apiProperties.getEnvironment());
         log.info("Invoice [{}] successfully registered with KSeF — ksefId: [{}]",
                 invoice.getInvoiceNumber(), ksefId);
@@ -238,9 +237,9 @@ public class KSeFInvoiceService {
         invoice.setLastErrorMessage(errorMessage);
         invoice.setLastRetryAt(LocalDateTime.now());
         invoice.setUpdatedAt(LocalDateTime.now());
-        KsefInvoice saved = invoiceRepository.save(invoice);
+        KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
-        writeAuditLog(invoice.getTenantId(), "INVOICE_OFFLINE_MODE", invoice.getId(),
+        AuditLog.writeAuditLog(invoice.getTenantId(), "INVOICE_OFFLINE_MODE", invoice.getId(),
                 null, "reason=" + errorMessage);
         return saved;
     }
@@ -248,7 +247,7 @@ public class KSeFInvoiceService {
     // ── Private: helpers ───────────────────────────────────────────────────────
 
     private KsefInvoice loadAndGuardDraft(String tenantId, String invoiceId) {
-        KsefInvoice invoice = invoiceRepository.findById(invoiceId)
+        KsefInvoice invoice = ksef_invoices_repository.findById(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Invoice [" + invoiceId + "] not found"));
 
@@ -285,24 +284,7 @@ public class KSeFInvoiceService {
         }
     }
 
-    private void writeAuditLog(String tenantId, String action,
-                               String entityId, String oldValue, String newValue) {
-        try {
-            auditLogRepository.save(KsefAuditLog.builder()
-                    .tenantId(tenantId)
-                    .action(action)
-                    .targetEntityType("INVOICE")
-                    .targetEntityId(entityId)
-                    .oldValue(oldValue)
-                    .newValue(newValue)
-                    .complianceChecked(true)
-                    .timestamp(LocalDateTime.now())
-                    .build());
-        } catch (Exception e) {
-            log.error("Failed to write audit log [action={}] invoice [{}]: {}",
-                    action, entityId, e.getMessage());
-        }
-    }
+  
 
     private static void sleepQuietly(long millis) {
         try {

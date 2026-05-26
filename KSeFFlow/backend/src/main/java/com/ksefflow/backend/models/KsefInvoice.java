@@ -132,7 +132,7 @@ public class KsefInvoice {
 
     // QR verification URL embedded in the offline PDF fallback — allows buyers
     // to verify the invoice before KSeF confirmation is received.
-    private String offlineQrCode;
+    private String offlineQrCode; //! ????????
 
     // Total number of times this invoice has been submitted or retried.
     // Used by the retry scheduler to enforce exponential backoff limits.

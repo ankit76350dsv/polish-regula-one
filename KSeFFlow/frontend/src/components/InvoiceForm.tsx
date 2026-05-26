@@ -23,32 +23,37 @@ interface InvoiceFormProps {
   onAddNotification: (title: string, message: string, type: 'info' | 'success' | 'warn' | 'error') => void;
   onNavigate: (page: string) => void;
   govStatus: string;
+  existingInvoice?: Invoice;
 }
 
-export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotification, onNavigate, govStatus }: InvoiceFormProps) {
+export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotification, onNavigate, govStatus, existingInvoice }: InvoiceFormProps) {
   // Check if role is allowed to create invoices
   const canModify = role === 'Super Admin' || role === 'Company Admin' || role === 'Accountant' || role === 'Finance User';
 
+  // Whether this is a read-only view of an already-processed invoice
+  const isViewOnly = !!existingInvoice && existingInvoice.status !== 'DRAFT';
+
   // Buyer Info
-  const [buyerName, setBuyerName] = useState('Central Trade Poland Sp. z o.o.');
-  const [buyerNip, setBuyerNip] = useState('5229983144');
-  const [buyerAddress, setBuyerAddress] = useState('Al. Jerozolimskie 22, 00-345 Warszawa');
-  
+  const [buyerName, setBuyerName] = useState(existingInvoice?.buyerName ?? 'Central Trade Poland Sp. z o.o.');
+  const [buyerNip, setBuyerNip] = useState(existingInvoice?.buyerNIP ?? '5229983144');
+  const [buyerAddress, setBuyerAddress] = useState(existingInvoice?.buyerAddress ?? 'Al. Jerozolimskie 22, 00-345 Warszawa');
+
   // Invoice Details
-  const [invoiceNumber, setInvoiceNumber] = useState(`FV/2026/05/000${Math.floor(Math.random() * 90) + 10}`);
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [invoiceNumber, setInvoiceNumber] = useState(existingInvoice?.invoiceNumber ?? `FV/2026/05/000${Math.floor(Math.random() * 90) + 10}`);
+  const [issueDate, setIssueDate] = useState(existingInvoice?.issueDate ?? new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(() => {
+    if (existingInvoice?.dueDate) return existingInvoice.dueDate;
     const date = new Date();
     date.setDate(date.getDate() + 14);
     return date.toISOString().split('T')[0];
   });
-  const [currency, setCurrency] = useState<'PLN' | 'EUR' | 'USD'>('PLN');
-  const [paymentMethod, setPaymentMethod] = useState<'Transfer' | 'Card' | 'Split Payment' | 'Cash'>('Split Payment');
-  const [bankAccount, setBankAccount] = useState('PL 89 1020 1026 0000 9602 0231 4323');
-  const [notes, setNotes] = useState('Mandatory KSeF FA(3) Split payment scheme applied.');
+  const [currency, setCurrency] = useState<'PLN' | 'EUR' | 'USD'>(existingInvoice?.currency ?? 'PLN');
+  const [paymentMethod, setPaymentMethod] = useState<'Transfer' | 'Card' | 'Split Payment' | 'Cash'>(existingInvoice?.paymentMethod ?? 'Split Payment');
+  const [bankAccount, setBankAccount] = useState(existingInvoice?.bankAccount ?? 'PL 89 1020 1026 0000 9602 0231 4323');
+  const [notes, setNotes] = useState(existingInvoice?.notes ?? 'Mandatory KSeF FA(3) Split payment scheme applied.');
 
   // Invoice Items
-  const [items, setItems] = useState<InvoiceItem[]>([
+  const [items, setItems] = useState<InvoiceItem[]>(existingInvoice?.items ?? [
     {
       id: 'item-init-1',
       productName: 'Qualified Polish Compliance Consultation & Training',
@@ -64,7 +69,7 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
       productName: 'Certified VAT Compliance Manual (Handbook V2)',
       quantity: 5,
       unitPrice: 150.00,
-      vatRate: '8', // books VAT rate in Poland is often 8% or 5%
+      vatRate: '8',
       netAmount: 750.00,
       vatAmount: 60.00,
       grossAmount: 810.00
@@ -76,6 +81,7 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
   const [isAutosaving, setIsAutosaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
 
   // Auto VAT & total calculations
   const calculateTotals = (currentItems: InvoiceItem[]) => {
@@ -256,6 +262,63 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
     }
   };
 
+  // Save invoice as DRAFT only — calls POST /api/v1/invoices without submitting to KSeF.
+  const handleSaveDraft = async () => {
+    if (!canModify) {
+      onAddNotification('RBAC Permission Denied', 'Your active role does not permit creating invoices.', 'error');
+      return;
+    }
+
+    if (!buyerNip || !buyerName) {
+      onAddNotification('Validation Error', 'NIP and Buyer Name are mandatory.', 'error');
+      return;
+    }
+
+    setIsSavingDraft(true);
+    const userId = getSessionUserId();
+
+    try {
+      const draft = await createInvoice({
+        tenantId: tenant.id,
+        userId,
+        invoiceNumber,
+        issueDate,
+        dueDate,
+        sellerName: tenant.name,
+        sellerNip: tenant.nip,
+        sellerAddress: tenant.address,
+        sellerPostalCode: tenant.postalCode,
+        sellerCity: tenant.city,
+        buyerName,
+        buyerNip,
+        buyerAddress,
+        currency,
+        totalNet,
+        totalVat,
+        totalGross,
+        paymentMethod,
+        bankAccount,
+        notes,
+        items,
+      });
+
+      setSaveSuccess(true);
+      onAddInvoice(draft, 'INVOICE_DRAFT_SAVED');
+      onAddNotification(
+        'Draft Saved',
+        `Invoice ${invoiceNumber} saved as DRAFT. Submit to KSeF when ready.`,
+        'success'
+      );
+      setTimeout(() => setSaveSuccess(false), 3000);
+      onNavigate('invoices');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error while saving draft';
+      onAddNotification('Draft Save Failed', message, 'error');
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
+
   // Submit invoice through the real KSeF backend pipeline:
   //   POST /api/v1/invoices (create DRAFT)  →  POST /api/v1/invoices/{id}/submit
   // The backend decides SENT vs OFFLINE_MODE based on KSeF API availability.
@@ -378,6 +441,33 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
 
   return (
     <div className="space-y-6">
+
+      {/* Back banner — only shown when viewing an existing invoice */}
+      {existingInvoice && (
+        <div className="flex items-center justify-between bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-xs">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onNavigate('invoices')}
+              className="flex items-center gap-1.5 text-stone-500 hover:text-stone-900 font-semibold transition"
+            >
+              ← Back to Repository
+            </button>
+            <span className="text-stone-300">|</span>
+            <span className="font-mono font-bold text-stone-800">{existingInvoice.invoiceNumber}</span>
+          </div>
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold border ${
+            existingInvoice.status === 'SENT' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+            existingInvoice.status === 'OFFLINE_MODE' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+            existingInvoice.status === 'FAILED' ? 'bg-red-50 text-red-700 border-red-200' :
+            existingInvoice.status === 'RETRYING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+            existingInvoice.status === 'PENDING' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+            'bg-slate-100 text-slate-500 border-slate-200'
+          }`}>
+            ● {existingInvoice.status}
+          </span>
+        </div>
+      )}
+
       {/* Form Top Title */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b pb-4 border-stone-200">
         <div>
@@ -742,39 +832,105 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
               <h4 className="font-bold text-stone-800 text-xs uppercase tracking-wider mb-2">
                 05 Government Execution Deck
               </h4>
-              
-              <div className="space-y-2">
-                {/* Standard KSeF Submission */}
-                <button
-                  onClick={() => handleSubmit(false)}
-                  disabled={!canModify || isSubmitting}
-                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-xs ${
-                    isSubmitting
-                      ? 'bg-stone-400 text-white cursor-not-allowed'
-                      : 'bg-red-700 hover:bg-red-800 text-white'
-                  }`}
-                >
-                  <FileCheck2 size={15} />
-                  {isSubmitting ? 'Submitting to KSeF…' : 'Sign & Submit to Central KSeF'}
-                </button>
 
-                {/* Force Offline Failover (Triggering retry queue) */}
-                <button
-                  onClick={() => handleSubmit(true)}
-                  disabled={!canModify || isSubmitting}
-                  className="w-full border border-stone-300 hover:border-orange-200 hover:bg-orange-50/50 py-2.5 px-4 rounded-xl text-stone-700 text-xs font-medium flex items-center justify-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <AlertCircle size={15} className="text-orange-600" />
-                  Force Offline Fallback Mode
-                </button>
-
-                <div className="h-px bg-stone-100 my-2"></div>
-
-                <div className="text-[10px] text-stone-500 space-y-1 text-center bg-stone-50 p-2.5 rounded-lg border">
-                  <p>Qualified signature type: <strong>PFX KIR Certificate</strong></p>
-                  <p>Target endpoint: <span className="font-mono text-stone-900">{govStatus === 'Downtime Sim' ? 'Local Fallback State' : 'ksef-test.mf.gov.pl'}</span></p>
+              {isViewOnly ? (
+                /* Read-only status panel for already-processed invoices */
+                <div className="space-y-3">
+                  <div className={`p-3.5 rounded-xl border text-xs space-y-2 ${
+                    existingInvoice?.status === 'SENT' ? 'bg-emerald-50 border-emerald-200' :
+                    existingInvoice?.status === 'OFFLINE_MODE' ? 'bg-orange-50 border-orange-200' :
+                    existingInvoice?.status === 'FAILED' ? 'bg-red-50 border-red-200' :
+                    existingInvoice?.status === 'RETRYING' ? 'bg-amber-50 border-amber-200' :
+                    'bg-blue-50 border-blue-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-stone-700">KSeF Status</span>
+                      <span className={`font-mono font-bold text-[10px] ${
+                        existingInvoice?.status === 'SENT' ? 'text-emerald-700' :
+                        existingInvoice?.status === 'OFFLINE_MODE' ? 'text-orange-700' :
+                        existingInvoice?.status === 'FAILED' ? 'text-red-700' :
+                        existingInvoice?.status === 'RETRYING' ? 'text-amber-700' :
+                        'text-blue-700'
+                      }`}>● {existingInvoice?.status}</span>
+                    </div>
+                    {existingInvoice?.ksefId && (
+                      <div>
+                        <p className="text-[10px] text-stone-500">KSeF ID</p>
+                        <p className="font-mono font-bold text-stone-800 text-[10px] break-all bg-white/70 p-1.5 rounded border border-stone-200 mt-0.5">
+                          {existingInvoice.ksefId}
+                        </p>
+                      </div>
+                    )}
+                    {existingInvoice?.upoTimestamp && (
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-stone-500">UPO Timestamp</span>
+                        <span className="font-mono text-stone-700">{existingInvoice.upoTimestamp}</span>
+                      </div>
+                    )}
+                    {existingInvoice?.submissionAttempts != null && existingInvoice.submissionAttempts > 0 && (
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-stone-500">Submission Attempts</span>
+                        <span className="font-mono text-stone-700">{existingInvoice.submissionAttempts}</span>
+                      </div>
+                    )}
+                    {existingInvoice?.lastErrorMessage && (
+                      <p className="text-[10px] text-red-700 bg-red-100 p-1.5 rounded break-words">
+                        {existingInvoice.lastErrorMessage}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-stone-400 text-center">
+                    This invoice has already been processed. Switch to the XML or PDF tab to inspect the full document.
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-2">
+                  {/* Standard KSeF Submission */}
+                  <button
+                    onClick={() => handleSubmit(false)}
+                    disabled={!canModify || isSubmitting}
+                    className={`w-full py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-xs ${
+                      isSubmitting
+                        ? 'bg-stone-400 text-white cursor-not-allowed'
+                        : 'bg-red-700 hover:bg-red-800 text-white'
+                    }`}
+                  >
+                    <FileCheck2 size={15} />
+                    {isSubmitting ? 'Submitting to KSeF…' : 'Sign & Submit to Central KSeF'}
+                  </button>
+
+                  {/* Save as Draft — calls POST /api/v1/invoices only, no KSeF submission */}
+                  <button
+                    onClick={handleSaveDraft}
+                    disabled={!canModify || isSavingDraft || isSubmitting}
+                    className={`w-full border py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                      saveSuccess
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                        : 'border-stone-300 hover:border-stone-400 hover:bg-stone-50 text-stone-700'
+                    }`}
+                  >
+                    <Save size={15} className={saveSuccess ? 'text-emerald-600' : 'text-stone-500'} />
+                    {isSavingDraft ? 'Saving Draft…' : saveSuccess ? 'Draft Saved!' : 'Save as Draft'}
+                  </button>
+
+                  {/* Force Offline Failover (Triggering retry queue) */}
+                  <button
+                    onClick={() => handleSubmit(true)}
+                    disabled={!canModify || isSubmitting}
+                    className="w-full border border-stone-300 hover:border-orange-200 hover:bg-orange-50/50 py-2.5 px-4 rounded-xl text-stone-700 text-xs font-medium flex items-center justify-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <AlertCircle size={15} className="text-orange-600" />
+                    Force Offline Fallback Mode
+                  </button>
+
+                  <div className="h-px bg-stone-100 my-2"></div>
+
+                  <div className="text-[10px] text-stone-500 space-y-1 text-center bg-stone-50 p-2.5 rounded-lg border">
+                    <p>Qualified signature type: <strong>PFX KIR Certificate</strong></p>
+                    <p>Target endpoint: <span className="font-mono text-stone-900">{govStatus === 'Downtime Sim' ? 'Local Fallback State' : 'ksef-test.mf.gov.pl'}</span></p>
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>
