@@ -70,7 +70,7 @@ class KSeFInvoiceServiceTest {
                 .thenReturn(false);
         when(invoiceRepository.save(any(KsefInvoice.class))).thenReturn(saved);
 
-        KsefInvoice result = invoiceService.createInvoice(input);
+        KsefInvoice result = invoiceService.createInvoice(input, null, null);
 
         assertThat(result.getId()).isEqualTo(INVOICE_ID);
         verify(invoiceRepository).save(argThat(inv ->
@@ -84,7 +84,7 @@ class KSeFInvoiceServiceTest {
         when(invoiceRepository.existsByTenantIdAndInvoiceNumber(TENANT_ID, "FV/2026/05/0001"))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> invoiceService.createInvoice(buildDraftInvoice()))
+        assertThatThrownBy(() -> invoiceService.createInvoice(buildDraftInvoice(), null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("already exists");
 
@@ -133,7 +133,7 @@ class KSeFInvoiceServiceTest {
 
         when(apiProperties.getEnvironment()).thenReturn(KsefEnvironment.SANDBOX);
 
-        KsefInvoice result = invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP);
+        KsefInvoice result = invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP, null, null);
 
         assertThat(result.getStatus()).isEqualTo(KsefInvoiceStatus.SENT);
         assertThat(result.getKsefId()).isEqualTo(KSEF_ID);
@@ -151,7 +151,7 @@ class KSeFInvoiceServiceTest {
     void submitInvoice_notFound_throws() {
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP))
+        assertThatThrownBy(() -> invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("not found");
     }
@@ -163,7 +163,7 @@ class KSeFInvoiceServiceTest {
         draft.setId(INVOICE_ID);
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(draft));
 
-        assertThatThrownBy(() -> invoiceService.submitInvoice("wrong-tenant", INVOICE_ID, NIP))
+        assertThatThrownBy(() -> invoiceService.submitInvoice("wrong-tenant", INVOICE_ID, NIP, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Access denied");
     }
@@ -176,7 +176,7 @@ class KSeFInvoiceServiceTest {
         sent.setStatus(KsefInvoiceStatus.SENT);
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(sent));
 
-        assertThatThrownBy(() -> invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP))
+        assertThatThrownBy(() -> invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP, null, null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("DRAFT");
     }
@@ -201,7 +201,7 @@ class KSeFInvoiceServiceTest {
         when(offlinePdfService.verificationUrl(any())).thenReturn("https://ksef.mf.gov.pl/offline/verify?inv=FV/2026/05/0001&hash=deadbeef");
         // apiProperties.getEnvironment() is NOT called in the offline path — no stub needed
 
-        KsefInvoice result = invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP);
+        KsefInvoice result = invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP, null, null);
 
         assertThat(result.getStatus()).isEqualTo(KsefInvoiceStatus.OFFLINE_MODE);
         assertThat(result.getLastErrorMessage()).contains("unreachable");
@@ -240,7 +240,7 @@ class KSeFInvoiceServiceTest {
         when(offlinePdfService.generateOfflinePdf(any())).thenReturn(new byte[0]);
         when(offlinePdfService.verificationUrl(any())).thenReturn("https://test");
 
-        invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP);
+        invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP, null, null);
 
         assertThat(capturedAttempts.get()).isEqualTo(3);
     }
