@@ -311,3 +311,97 @@ export const listInvoices = async (
   const pageData = await checkResponse<BackendPage<BackendInvoice>>(res);
   return pageData.content.map(mapBackendInvoice);
 };
+
+// ── Audit Log API ─────────────────────────────────────────────────────────────
+
+interface BackendAuditLog {
+  id: string;
+  timestamp: string;
+  tenantId: string;
+  userId?: string;
+  userEmail?: string;
+  userRole?: string;
+  action: string;
+  targetEntityId?: string;
+  targetEntityType?: string;
+  oldValue?: string;
+  newValue?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  complianceChecked: boolean;
+  ksefCorrelationId?: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  tenantId: string;
+  userId: string;
+  userEmail: string;
+  userRole: string;
+  action: string;
+  targetEntityId?: string;
+  targetEntityType?: string;
+  oldValue?: string;
+  newValue?: string;
+  ipAddress: string;
+  complianceChecked: boolean;
+}
+
+export interface AuditLogPage {
+  content: AuditLogEntry[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
+
+export interface ListAuditLogsParams {
+  page?: number;
+  size?: number;
+  from?: string;
+  to?: string;
+  role?: string;
+  search?: string;
+}
+
+const mapBackendAuditLog = (b: BackendAuditLog): AuditLogEntry => ({
+  id: b.id,
+  timestamp: b.timestamp,
+  tenantId: b.tenantId,
+  userId: b.userId ?? '',
+  userEmail: b.userEmail ?? 'system',
+  userRole: b.userRole ?? '',
+  action: b.action,
+  targetEntityId: b.targetEntityId,
+  targetEntityType: b.targetEntityType,
+  oldValue: b.oldValue,
+  newValue: b.newValue,
+  ipAddress: b.ipAddress ?? '',
+  complianceChecked: b.complianceChecked,
+});
+
+export const listAuditLogs = async (
+  tenantId: string,
+  params: ListAuditLogsParams = {},
+): Promise<AuditLogPage> => {
+  const queryParams = new URLSearchParams();
+  queryParams.set('page', String(params.page ?? 0));
+  queryParams.set('size', String(params.size ?? 20));
+  if (params.from)  queryParams.set('from', params.from);
+  if (params.to)    queryParams.set('to', params.to);
+  if (params.role && params.role !== 'ALL') queryParams.set('role', params.role);
+  if (params.search) queryParams.set('search', params.search);
+
+  const res = await fetch(`${API_BASE}/api/v1/audit-logs?${queryParams}`, {
+    headers: buildHeaders(tenantId),
+  });
+  const pageData = await checkResponse<BackendPage<BackendAuditLog>>(res);
+  return {
+    content: pageData.content.map(mapBackendAuditLog),
+    totalElements: pageData.totalElements,
+    totalPages: pageData.totalPages,
+    size: pageData.size,
+    number: pageData.number,
+  };
+};

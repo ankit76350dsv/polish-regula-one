@@ -5,6 +5,7 @@ import com.ksefflow.backend.dto.invoice.SubmitInvoiceResponse;
 import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
 import com.ksefflow.backend.services.KSeFInvoiceService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -54,12 +55,16 @@ public class KSeFInvoiceController {
     public ResponseEntity<KsefInvoice> createInvoice(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @Valid @RequestBody CreateInvoiceRequest request) {
+            @RequestHeader(value = "X-User-Email", required = false) String userEmail,
+            @Valid @RequestBody CreateInvoiceRequest request,
+            HttpServletRequest httpRequest) {
 
         log.debug("Create invoice request: [{}] tenant [{}]", request.getInvoiceNumber(), tenantId);
 
         KsefInvoice invoice = invoiceService.createInvoice(
-                request.toEntity(tenantId, userId));
+                request.toEntity(tenantId, userId),
+                userEmail,
+                extractClientIp(httpRequest));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(invoice);
     }
@@ -87,12 +92,15 @@ public class KSeFInvoiceController {
     @PostMapping("/{invoiceId}/submit")
     public ResponseEntity<SubmitInvoiceResponse> submitInvoice(
             @RequestHeader("X-Tenant-Id") String tenantId,
+            @RequestHeader(value = "X-User-Email", required = false) String userEmail,
             @PathVariable String invoiceId,
-            @RequestParam @NotBlank @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits") String nip) {
+            @RequestParam @NotBlank @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits") String nip,
+            HttpServletRequest httpRequest) {
 
         log.info("Submit invoice [{}] tenant [{}] nip [{}]", invoiceId, tenantId, nip);
 
-        KsefInvoice result = invoiceService.submitInvoice(tenantId, invoiceId, nip);
+        KsefInvoice result = invoiceService.submitInvoice(tenantId, invoiceId, nip,
+                userEmail, extractClientIp(httpRequest));
 
         String message = switch (result.getStatus()) {
             case SENT -> "Invoice successfully submitted to KSeF — reference: " + result.getKsefId();
@@ -172,6 +180,18 @@ public class KSeFInvoiceController {
                 pageable.getPageSize());
 
         return ResponseEntity.ok(invoiceService.listInvoices(tenantId, status, pageable));
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    // Respects X-Forwarded-For set by load balancers / reverse proxies.
+    // Falls back to the direct TCP remote address when the header is absent.
+    private String extractClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     // ── Error handling ─────────────────────────────────────────────────────────

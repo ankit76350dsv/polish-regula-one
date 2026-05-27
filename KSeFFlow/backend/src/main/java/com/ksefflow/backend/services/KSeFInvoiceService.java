@@ -63,7 +63,7 @@ public class KSeFInvoiceService {
      * No XML is generated or validated at this stage — the user can still edit the invoice.
      * Duplicate invoice numbers within the same tenant are rejected.
      */
-    public KsefInvoice createInvoice(KsefInvoice invoice) {
+    public KsefInvoice createInvoice(KsefInvoice invoice, String userEmail, String ipAddress) {
         if (ksef_invoices_repository.existsByTenantIdAndInvoiceNumber(
                 invoice.getTenantId(), invoice.getInvoiceNumber())) {
             throw new IllegalArgumentException(
@@ -77,8 +77,9 @@ public class KSeFInvoiceService {
 
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
-        AuditLog.writeAuditLog(saved.getTenantId(), "INVOICE_CREATED", saved.getId(), null, "invoiceNumber=" + saved.getInvoiceNumber());
-        
+        AuditLog.writeAuditLog(saved.getTenantId(), "INVOICE_CREATED", saved.getId(),
+                null, "invoiceNumber=" + saved.getInvoiceNumber(), userEmail, ipAddress);
+
         log.info("Invoice [{}] created as DRAFT for tenant [{}]", saved.getInvoiceNumber(), saved.getTenantId());
 
         return saved;
@@ -100,7 +101,8 @@ public class KSeFInvoiceService {
      * @throws KsefXmlGenerationException if FA(3) XML cannot be built or validated
      * @throws KsefAuthException         if KSeF session cannot be opened (certificate problem)
      */
-    public KsefInvoice submitInvoice(String tenantId, String invoiceId, String nip) {
+    public KsefInvoice submitInvoice(String tenantId, String invoiceId, String nip,
+            String userEmail, String ipAddress) {
         // Step 1 — load and guard
         KsefInvoice invoice = loadAndGuardDraft(tenantId, invoiceId);
 
@@ -110,10 +112,9 @@ public class KSeFInvoiceService {
         invoice.setSubmissionAttempts(invoice.getSubmissionAttempts() + 1);
         ksef_invoices_repository.save(invoice);
         AuditLog.writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null,
-                "attempt=" + invoice.getSubmissionAttempts());
+                "attempt=" + invoice.getSubmissionAttempts(), userEmail, ipAddress);
 
         // Steps 3–4 — generate and strictly validate FA(3) XML
-        // These throw KsefXmlGenerationException (not caught here — caller sees the error)
         FA3XmlGeneratorService.FA3XmlResult xmlResult = xmlGeneratorService.generateXml(invoice);
         xmlValidatorService.validateStrict(xmlResult.xmlContent());
 
@@ -123,11 +124,11 @@ public class KSeFInvoiceService {
 
         // Steps 5–8 — KSeF network pipeline (triggers offline mode on failure)
         try {
-            return executeKsefSubmission(invoice, xmlResult.xmlContent(), nip);
+            return executeKsefSubmission(invoice, xmlResult.xmlContent(), nip, userEmail, ipAddress);
         } catch (KsefSubmissionException | KsefAuthException e) {
             log.warn("KSeF submission failed for invoice [{}]: {} — switching to OFFLINE_MODE",
                     invoice.getInvoiceNumber(), e.getMessage());
-            return handleOfflineMode(invoice, e.getMessage());
+            return handleOfflineMode(invoice, e.getMessage(), userEmail, ipAddress);
         }
     }
 
@@ -151,7 +152,8 @@ public class KSeFInvoiceService {
     // ── Private: KSeF network pipeline ─────────────────────────────────────────
 
     private KsefInvoice executeKsefSubmission(KsefInvoice invoice,
-                                               String xmlContent, String nip) {
+                                               String xmlContent, String nip,
+                                               String userEmail, String ipAddress) {
         String tenantId = invoice.getTenantId();
         String invoiceId = invoice.getId();
 
@@ -189,7 +191,7 @@ public class KSeFInvoiceService {
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
         AuditLog.writeAuditLog(tenantId, "INVOICE_SENT_TO_KSEF", invoiceId, null,
-                "ksefId=" + ksefId + " env=" + apiProperties.getEnvironment());
+                "ksefId=" + ksefId + " env=" + apiProperties.getEnvironment(), userEmail, ipAddress);
         log.info("Invoice [{}] successfully registered with KSeF — ksefId: [{}]",
                 invoice.getInvoiceNumber(), ksefId);
         return saved;
@@ -221,7 +223,8 @@ public class KSeFInvoiceService {
 
     // ── Private: offline fallback ──────────────────────────────────────────────
 
-    private KsefInvoice handleOfflineMode(KsefInvoice invoice, String errorMessage) {
+    private KsefInvoice handleOfflineMode(KsefInvoice invoice, String errorMessage,
+            String userEmail, String ipAddress) {
         try {
             // Generate offline PDF + QR (does not throw on failure — logged only)
             offlinePdfService.generateOfflinePdf(invoice);
@@ -240,7 +243,7 @@ public class KSeFInvoiceService {
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
         AuditLog.writeAuditLog(invoice.getTenantId(), "INVOICE_OFFLINE_MODE", invoice.getId(),
-                null, "reason=" + errorMessage);
+                null, "reason=" + errorMessage, userEmail, ipAddress);
         return saved;
     }
 

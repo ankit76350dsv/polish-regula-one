@@ -1,0 +1,63 @@
+package com.ksefflow.backend.controllers;
+
+import com.ksefflow.backend.models.KsefAuditLog;
+import com.ksefflow.backend.services.KSeFAuditLogService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+// Read-only audit log API used by the Enterprise Audit Center.
+//
+// Security contract:
+//   - tenantId comes exclusively from the X-Tenant-Id header (set by the
+//     load balancer / API gateway after JWT verification in Phase 5).
+//   - Search and date-range filtering is done server-side — clients never
+//     receive logs outside their own tenantId scope.
+//   - No write endpoints are exposed: audit logs are immutable by design.
+@RestController
+@RequestMapping("/api/v1/audit-logs")
+@RequiredArgsConstructor
+@Slf4j
+public class KSeFAuditLogController {
+
+    private final KSeFAuditLogService auditLogService;
+
+    /**
+     * Returns a paginated list of audit log entries for the requesting tenant.
+     *
+     * Query parameters (all optional except pagination defaults):
+     *   from    — ISO-8601 datetime lower bound   e.g. 2026-01-01T00:00:00
+     *   to      — ISO-8601 datetime upper bound   e.g. 2026-12-31T23:59:59
+     *   role    — exact role match                e.g. Accountant
+     *   search  — case-insensitive substring match across email, action, IP, detail
+     *   page    — zero-based page number          default 0
+     *   size    — entries per page                default 20
+     *   sort    — field,direction                 default timestamp,desc
+     */
+    @GetMapping
+    public ResponseEntity<Page<KsefAuditLog>> listAuditLogs(
+            @RequestHeader("X-Tenant-Id") String tenantId,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) String search,
+            @PageableDefault(size = 20) Pageable pageable) {
+
+        log.info("Audit log query: tenantId={} from={} to={} role={} search={}",
+                tenantId, from, to, role, search != null ? "[present]" : null);
+
+        Page<KsefAuditLog> page = auditLogService.listAuditLogs(
+                tenantId, from, to, role, search, pageable);
+
+        return ResponseEntity.ok(page);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<String> handleBadRequest(IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(e.getMessage());
+    }
+}

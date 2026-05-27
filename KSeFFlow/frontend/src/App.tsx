@@ -110,7 +110,7 @@ export default function App() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
   const [certificates, setCertificates] = useState<Certificate[]>(INITIAL_CERTIFICATES);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
+  const [, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
   const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
   const [govStatus, setGovStatus] = useState<'Connected' | 'Restricted' | 'Disconnected' | 'Downtime Sim'>('Connected');
   const [showNotifications, setShowNotifications] = useState(false);
@@ -631,7 +631,6 @@ export default function App() {
                 <AuditCenter
                   tenant={activeTenant}
                   role={activeRole}
-                  auditLogs={auditLogs}
                   onAddNotification={addNotification}
                 />
               )}
