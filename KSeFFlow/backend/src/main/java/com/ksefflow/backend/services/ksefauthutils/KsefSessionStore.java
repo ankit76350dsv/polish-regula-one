@@ -21,7 +21,7 @@ public class KsefSessionStore {
     // We track this locally so we do not attempt to use an expired token.
     private static final int SESSION_LIFETIME_HOURS = 24;
 
-    private final KsefGovernmentSessionRepository sessionRepository;
+    private final KsefGovernmentSessionRepository ksef_government_sessions_repo;
     private final KsefApiProperties apiProperties;
     private final CertificateCryptoUtils crypto;
 
@@ -31,7 +31,7 @@ public class KsefSessionStore {
     public void saveActiveSession(String tenantId, String plainSessionToken) {
         String encryptedToken = crypto.encryptPassword(plainSessionToken);
 
-        KsefGovernmentSession session = sessionRepository.findByTenantId(tenantId)
+        KsefGovernmentSession session = ksef_government_sessions_repo.findByTenantId(tenantId)
                 .orElse(KsefGovernmentSession.builder()
                         .tenantId(tenantId)
                         .createdAt(LocalDateTime.now())
@@ -46,7 +46,7 @@ public class KsefSessionStore {
         session.setLastSyncTime(LocalDateTime.now());
         session.setUpdatedAt(LocalDateTime.now());
 
-        sessionRepository.save(session);
+        ksef_government_sessions_repo.save(session);
     }
 
     // Marks the session as inactive and clears the encrypted token.
@@ -56,13 +56,13 @@ public class KsefSessionStore {
         session.setStatus(KsefGovernmentStatus.DISCONNECTED);
         session.setSessionToken(null);
         session.setUpdatedAt(LocalDateTime.now());
-        sessionRepository.save(session);
+        ksef_government_sessions_repo.save(session);
     }
 
     // Returns the decrypted session token if the session is active and not expired.
     // Returns an empty Optional if there is no session or it has expired.
     public java.util.Optional<String> getActiveToken(String tenantId) {
-        return sessionRepository.findByTenantId(tenantId)
+        return ksef_government_sessions_repo.findByTenantId(tenantId)
                 .filter(KsefGovernmentSession::isActive)
                 .filter(s -> s.getSessionExpiresAt() != null
                         && s.getSessionExpiresAt().isAfter(LocalDateTime.now()))

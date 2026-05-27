@@ -47,7 +47,7 @@ import java.util.Optional;
 public class KSeFAuthService {
 
     private final CertificateService certificateService;
-    private final KsefApiClient apiClient;
+    private final KsefApiClient ksefApiClient;
     private final KsefSessionStore sessionStore;
     private final KsefGovernmentSessionRepository sessionRepository;
     private final KsefAuditLogRepository auditLogRepository;
@@ -90,13 +90,14 @@ public class KSeFAuthService {
             log.debug("Reusing existing active session for tenant [{}]", tenantId);
             return existing.get();
         }
-//! yaha tak.....
+        //! yaha tak.....
         // Guard: validate the certificate before making any network calls
         certificateService.validateCertificateActive(tenantId);
 
         try {
+            //TODO: 1st thing with goverment 
             // Step 1 — request challenge from government
-            String challenge = apiClient.requestChallenge(nip);
+            String challenge = ksefApiClient.requestChallenge(nip);
             log.debug("Received challenge for tenant [{}]", tenantId);
 
             // Step 2 — sign the challenge and encode the public certificate
@@ -105,8 +106,9 @@ public class KSeFAuthService {
             String signedChallenge = KsefSigningUtils.signChallenge(challenge, privateKey);
             String certBase64 = KsefSigningUtils.encodeCertificate(publicCert);
 
+            //TODO: 2nd thing with goverment 
             // Step 3 — submit to government, receive session token
-            String sessionToken = apiClient.authorise(nip, signedChallenge, certBase64);
+            String sessionToken = ksefApiClient.authorise(nip, signedChallenge, certBase64);
             log.info("Session opened successfully for tenant [{}] in environment [{}]",
                     tenantId, apiProperties.getEnvironment());
 
@@ -160,7 +162,7 @@ public class KSeFAuthService {
                     String token = sessionStore.getActiveToken(tenantId).orElse(null);
                     if (token != null) {
                         try {
-                            apiClient.terminateSession(token);
+                            ksefApiClient.terminateSession(token);
                             log.info("Session terminated at KSeF API for tenant [{}]", tenantId);
                         } catch (Exception e) {
                             // Log but do not throw — local cleanup must still happen

@@ -27,7 +27,7 @@ import java.util.Optional;
 @Slf4j
 public class UPOStorageService {
 
-    private final KsefUpoReceiptRepository upoRepository;
+    private final KsefUpoReceiptRepository ksef_upo_receipts_repo;
     private final CertificateCryptoUtils cryptoUtils;
     private final KsefApiProperties apiProperties;
 
@@ -64,7 +64,7 @@ public class UPOStorageService {
                 .environment(apiProperties.getEnvironment())
                 .build();
 
-        KsefUpoReceipt saved = upoRepository.save(receipt);
+        KsefUpoReceipt saved = ksef_upo_receipts_repo.save(receipt);
         log.debug("UPO stored with id [{}] for invoice [{}]", saved.getId(), invoiceId);
         return saved.getId();
     }
@@ -75,7 +75,7 @@ public class UPOStorageService {
      * number and timestamp are needed.
      */
     public Optional<KsefUpoReceipt> findByInvoiceId(String tenantId, String invoiceId) {
-        return upoRepository.findByTenantIdAndInvoiceId(tenantId, invoiceId);
+        return ksef_upo_receipts_repo.findByTenantIdAndInvoiceId(tenantId, invoiceId);
     }
 
     /**
@@ -83,7 +83,7 @@ public class UPOStorageService {
      * Only call this when the full UPO document is required (e.g., auditor export).
      */
     public Optional<String> getUpoXml(String tenantId, String invoiceId) {
-        return upoRepository.findByTenantIdAndInvoiceId(tenantId, invoiceId)
+        return ksef_upo_receipts_repo.findByTenantIdAndInvoiceId(tenantId, invoiceId)
                 .map(receipt -> {
                     byte[] encryptedBytes = Base64.getDecoder().decode(receipt.getUpoXmlEncrypted());
                     byte[] plaintext = cryptoUtils.aesDecrypt(encryptedBytes);

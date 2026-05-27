@@ -47,7 +47,7 @@ import java.util.List;
 public class CertificateService {
 
     private final CertificateStorageProperties props;
-    private final KsefCertificateRepository certificateRepository;
+    private final KsefCertificateRepository ksef_certificates_repo;
     private final CertificateCryptoUtils crypto;
     private final CertificateStorageUtils storage;
 
@@ -88,11 +88,11 @@ public class CertificateService {
         X509Certificate x509 = KeyStoreUtils.extractX509Certificate(keyStore);
 
         // Deactivate existing active cert — only one active cert per tenant at any time
-        certificateRepository.findByTenantIdAndActiveTrue(tenantId)
+        ksef_certificates_repo.findByTenantIdAndActiveTrue(tenantId)
                 .ifPresent(existing -> {
                     existing.setActive(false);
                     existing.setUpdatedAt(LocalDateTime.now());
-                    certificateRepository.save(existing);
+                    ksef_certificates_repo.save(existing);
                     log.info("Deactivated previous certificate [id={}] for tenant [{}]",
                             existing.getId(), tenantId);
                 });
@@ -116,7 +116,7 @@ public class CertificateService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        KsefCertificate saved = certificateRepository.save(cert);
+        KsefCertificate saved = ksef_certificates_repo.save(cert);
         log.info("Stored certificate [id={}] for tenant [{}], validTo={}",
                 saved.getId(), tenantId, saved.getValidTo());
         return saved;
@@ -152,6 +152,7 @@ public class CertificateService {
         String password = crypto.decryptPassword(cert.getVaultPasswordReference());
 
         KeyStore keyStore = KeyStoreUtils.loadKeyStoreFromBytes(pfxBytes, password);
+        
         return KeyStoreUtils.extractPrivateKey(keyStore, password);
     }
 
@@ -243,7 +244,7 @@ public class CertificateService {
      * @return list of tenant certificates ordered by latest upload first
      */
     public List<KsefCertificate> listCertificates(String tenantId) {
-        return certificateRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        return ksef_certificates_repo.findByTenantIdOrderByCreatedAtDesc(tenantId);
     }
 
     /**
@@ -272,7 +273,7 @@ public class CertificateService {
      *                                  tenant
      */
     public void deactivateCertificate(String tenantId, String certId) {
-        KsefCertificate cert = certificateRepository.findById(certId)
+        KsefCertificate cert = ksef_certificates_repo.findById(certId)
                 .orElseThrow(() -> new KsefCertificateException(
                         "Certificate not found: " + certId));
 
@@ -283,7 +284,7 @@ public class CertificateService {
 
         cert.setActive(false);
         cert.setUpdatedAt(LocalDateTime.now());
-        certificateRepository.save(cert);
+        ksef_certificates_repo.save(cert);
         log.info("Manually deactivated certificate [id={}] for tenant [{}]", certId, tenantId);
     }
 
@@ -313,11 +314,11 @@ public class CertificateService {
      * Called by KSeFAuthService after a session is successfully opened.
      */
     public void recordAuthSuccess(String tenantId) {
-        certificateRepository.findByTenantIdAndActiveTrue(tenantId).ifPresent(cert -> {
+        ksef_certificates_repo.findByTenantIdAndActiveTrue(tenantId).ifPresent(cert -> {
             cert.setAuthSuccessCount(cert.getAuthSuccessCount() + 1);
             cert.setLastAuthTime(LocalDateTime.now());
             cert.setUpdatedAt(LocalDateTime.now());
-            certificateRepository.save(cert);
+            ksef_certificates_repo.save(cert);
         });
     }
 
@@ -345,10 +346,10 @@ public class CertificateService {
      * authFailureCount: 2 → 3
      */
     public void recordAuthFailure(String tenantId) {
-        certificateRepository.findByTenantIdAndActiveTrue(tenantId).ifPresent(cert -> {
+        ksef_certificates_repo.findByTenantIdAndActiveTrue(tenantId).ifPresent(cert -> {
             cert.setAuthFailureCount(cert.getAuthFailureCount() + 1);
             cert.setUpdatedAt(LocalDateTime.now());
-            certificateRepository.save(cert);
+            ksef_certificates_repo.save(cert);
         });
     }
 
@@ -374,7 +375,7 @@ public class CertificateService {
      * @throws KsefCertificateException if no active certificate is found
      */
     private KsefCertificate getActiveCertOrThrow(String tenantId) {
-        return certificateRepository.findByTenantIdAndActiveTrue(tenantId)
+        return ksef_certificates_repo.findByTenantIdAndActiveTrue(tenantId)
                 .orElseThrow(() -> new KsefCertificateException(
                         "No active certificate found for tenant: " + tenantId
                                 + ". Upload a .pfx certificate before sending invoices."));

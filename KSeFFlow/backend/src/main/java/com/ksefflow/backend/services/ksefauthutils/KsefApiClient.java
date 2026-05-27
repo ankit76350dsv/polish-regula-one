@@ -104,6 +104,7 @@ public class KsefApiClient {
         log.debug("Sending invoice XML ({} bytes) to {}", xmlBytes.length, url);
 
         try {
+            //! here making the sending certificate api call
             ResponseEntity<KsefSendInvoiceResponse> response =
                     ksefRestTemplate.postForEntity(url, entity, KsefSendInvoiceResponse.class);
 
@@ -111,8 +112,10 @@ public class KsefApiClient {
                 throw new KsefSubmissionException(
                         "KSeF returned an empty invoice submission response from " + url);
             }
+
             log.info("Invoice submitted to KSeF — elementReferenceNumber: [{}]",
                     response.getBody().getElementReferenceNumber());
+            
             return response.getBody();
 
         } catch (HttpStatusCodeException e) {
@@ -130,6 +133,7 @@ public class KsefApiClient {
     public KsefInvoiceStatusResponse getInvoiceStatus(String sessionToken, String elementReferenceNumber) {
         String url = apiProperties.getActiveBaseUrl() +
                      "/online/Invoice/Status/" + elementReferenceNumber;
+                     
         HttpHeaders headers = new HttpHeaders();
         headers.set(SESSION_HEADER, sessionToken);
 
@@ -151,6 +155,35 @@ public class KsefApiClient {
         } catch (ResourceAccessException e) {
             throw new KsefSubmissionException(
                     "KSeF API is unreachable while polling status for ref: " + elementReferenceNumber, e);
+        }
+    }
+
+    // GET /online/Invoice/UPO/{ksefReferenceNumber} — downloads the official UPO receipt XML.
+    // Returns empty if KSeF does not provide a UPO body (normal sandbox behaviour).
+    // Never throws — a missing UPO triggers the stub fallback in KSeFInvoiceService.
+    public java.util.Optional<String> fetchUpoXml(String sessionToken, String ksefReferenceNumber) {
+        String url = apiProperties.getActiveBaseUrl() + "/online/Invoice/UPO/" + ksefReferenceNumber;
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(SESSION_HEADER, sessionToken);
+
+        try {
+            ResponseEntity<String> response = ksefRestTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+            String body = response.getBody();
+            if (body != null && !body.isBlank()) {
+                log.info("Real UPO XML received from KSeF for ksefRef [{}]", ksefReferenceNumber);
+                return java.util.Optional.of(body);
+            }
+            return java.util.Optional.empty();
+        } catch (HttpStatusCodeException e) {
+            // 404 is normal in sandbox — KSeF does not issue signed UPO for test submissions
+            log.warn("KSeF UPO fetch returned [{}] for ref [{}] — falling back to stub UPO",
+                    e.getStatusCode(), ksefReferenceNumber);
+            return java.util.Optional.empty();
+        } catch (ResourceAccessException e) {
+            log.warn("KSeF UPO endpoint unreachable for ref [{}] — falling back to stub UPO",
+                    ksefReferenceNumber);
+            return java.util.Optional.empty();
         }
     }
 
