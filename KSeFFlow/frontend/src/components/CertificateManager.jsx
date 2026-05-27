@@ -1,38 +1,22 @@
 import React, { useState } from 'react';
-import { Tenant, UserRole, Certificate } from '../types';
-import { 
-  ShieldCheck, 
-  UploadCloud, 
-  Trash2, 
-  Clock, 
-  AlertTriangle, 
-  CheckCircle, 
-  Key, 
-  Eye, 
-  Calendar,
+import {
+  ShieldCheck,
+  UploadCloud,
+  Trash2,
+  AlertTriangle,
+  Key,
   Lock
 } from 'lucide-react';
 
-interface CertificateManagerProps {
-  tenant: Tenant;
-  role: UserRole;
-  certificates: Certificate[];
-  onAddCertificate: (cert: Certificate) => void;
-  onRemoveCertificate: (id: string) => void;
-  onAddNotification: (title: string, message: string, type: 'info' | 'success' | 'warn' | 'error') => void;
-}
-
-export default function CertificateManager({ tenant, role, certificates, onAddCertificate, onRemoveCertificate, onAddNotification }: CertificateManagerProps) {
+export default function CertificateManager({ tenant, role, certificates, onAddCertificate, onRemoveCertificate, onAddNotification }) {
   const canModify = role === 'Super Admin' || role === 'Company Admin' || role === 'Accountant';
   const [dragActive, setDragActive] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [keyPassword, setKeyPassword] = useState('');
 
-  // Settle active tenant certificates
   const tenantCerts = certificates.filter(c => c.tenantId === tenant.id);
 
-  // Drag and drop mock
-  const handleDrag = (e: React.DragEvent) => {
+  const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === "dragenter" || e.type === "dragover") {
@@ -42,18 +26,16 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       setSelectedFile(e.dataTransfer.files[0]);
     }
   };
 
-  // Upload actions simulation
-  const handleSimulatedUpload = (e: React.FormEvent) => {
+  const handleSimulatedUpload = (e) => {
     e.preventDefault();
     if (!canModify) {
       onAddNotification('RBAC Access Denied', 'Your role has read-only access to corporate workspace compliance credentials.', 'error');
@@ -64,7 +46,7 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
       return;
     }
 
-    const newCert: Certificate = {
+    const newCert = {
       id: `cert-gen-${Date.now()}`,
       tenantId: tenant.id,
       fileName: selectedFile ? selectedFile.name : 'uploaded_hsm_signature.pfx',
@@ -72,7 +54,7 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
       issuedTo: `${tenant.name} - Signed Payload Root`,
       issuer: 'Asseco Data Systems qualified QCA',
       validFrom: new Date().toISOString().split('T')[0],
-      validTo: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365 * 2).toISOString().split('T')[0], // 2 years from now
+      validTo: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365 * 2).toISOString().split('T')[0],
       verificationStatus: 'VERIFIED',
       lastAuthTime: new Date().toISOString()
     };
@@ -81,16 +63,14 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
     setSelectedFile(null);
     setKeyPassword('');
     onAddNotification(
-      'Qualified Certificate Loaded', 
-      `Certificate ${newCert.fileName} processed successfully. AES-256 secure hash generated and stored inside sandbox database.`, 
+      'Qualified Certificate Loaded',
+      `Certificate ${newCert.fileName} processed successfully. AES-256 secure hash generated and stored inside sandbox database.`,
       'success'
     );
   };
 
   return (
     <div className="space-y-6">
-      
-      {/* Title */}
       <div className="border-b border-slate-200 pb-5">
         <h2 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
           <ShieldCheck className="text-red-650" size={20} />
@@ -100,8 +80,6 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Verification Loader (5 cols) */}
         <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col justify-between">
           <div className="space-y-4">
             <div className="border-b pb-3 border-slate-100">
@@ -112,8 +90,7 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
             </div>
 
             <form onSubmit={handleSimulatedUpload} className="space-y-4 text-xs font-sans">
-              {/* Drag and Drop Box */}
-              <div 
+              <div
                 className={`border-2 border-dashed rounded-xl p-6 text-center transition ${
                   dragActive ? 'border-red-500 bg-red-50/50' : 'border-slate-200 hover:border-red-500'
                 }`}
@@ -134,16 +111,16 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
                       <p className="text-slate-400 mt-0.5">or click to browse local directory</p>
                     </>
                   )}
-                  <input 
-                    type="file" 
+                  <input
+                    type="file"
                     accept=".pfx,.pem,.p12"
                     onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])}
-                    className="hidden" 
+                    className="hidden"
                     id="file-selector-cert"
                     disabled={!canModify}
                   />
-                  <label 
-                    htmlFor="file-selector-cert" 
+                  <label
+                    htmlFor="file-selector-cert"
                     className="mt-3 text-[11px] bg-slate-900 border border-transparent hover:bg-slate-850 text-white font-bold py-1 px-3 rounded-lg cursor-pointer transition"
                   >
                     Select File
@@ -151,14 +128,13 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
                 </div>
               </div>
 
-              {/* Secure Password field */}
               <div className="space-y-1">
                 <label className="text-slate-500 font-medium block">Certificate Decryption Password</label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                     <Lock size={12} />
                   </span>
-                  <input 
+                  <input
                     type="password"
                     placeholder="Enter decryption password for PFX keystore..."
                     value={keyPassword}
@@ -170,7 +146,7 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
               </div>
 
               <div className="pt-2">
-                <button 
+                <button
                   type="submit"
                   disabled={!canModify}
                   className="w-full bg-slate-900 text-white hover:bg-slate-800 font-bold py-2.5 px-4 rounded-xl text-center transition tracking-tight"
@@ -189,7 +165,6 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
           </div>
         </div>
 
-        {/* Existing active signature list (7 cols) */}
         <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
           <div className="border-b pb-3 border-slate-100">
             <h3 className="font-semibold text-slate-700 text-sm">Active Workspace Authentication Keys</h3>
@@ -244,7 +219,7 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
                   <div className="bg-slate-50 text-[10px] text-slate-500 p-2 rounded-lg flex justify-between items-center">
                     <span>Last local authentication attempt: <strong className="font-mono text-slate-500">{cert.lastAuthTime || "Never"}</strong></span>
                     {tenantCerts.length > 1 && (
-                      <button 
+                      <button
                         onClick={() => {
                           if (canModify) {
                             onRemoveCertificate(cert.id);
@@ -272,9 +247,7 @@ export default function CertificateManager({ tenant, role, certificates, onAddCe
             )}
           </div>
         </div>
-
       </div>
-
     </div>
   );
 }

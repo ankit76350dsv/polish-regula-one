@@ -1,6 +1,4 @@
-import { Tenant, Invoice, Certificate, AuditLog, Notification } from '../types';
-
-export const INITIAL_TENANTS: Tenant[] = [
+export const INITIAL_TENANTS = [
   {
     id: 'tenant-1',
     name: 'Warszawa Logistics Group Sp. z o.o.',
@@ -47,7 +45,7 @@ export const INITIAL_TENANTS: Tenant[] = [
   },
 ];
 
-export const INITIAL_INVOICES: Invoice[] = [
+export const INITIAL_INVOICES = [
   {
     id: 'inv-101',
     invoiceNumber: 'FV/2026/05/0001',
@@ -126,7 +124,7 @@ export const INITIAL_INVOICES: Invoice[] = [
         productName: 'Palletized Storage handling fee (organic goods)',
         quantity: 50,
         unitPrice: 15.00,
-        vatRate: '8', // reduced food storage handling
+        vatRate: '8',
         netAmount: 750.00,
         vatAmount: 60.00,
         grossAmount: 810.00,
@@ -163,7 +161,7 @@ export const INITIAL_INVOICES: Invoice[] = [
         productName: 'International Road Freight Transport (Warsaw To Hamburg)',
         quantity: 1,
         unitPrice: 1250.00,
-        vatRate: '0', // zero-rated export logistics
+        vatRate: '0',
         netAmount: 1250.00,
         vatAmount: 0.00,
         grossAmount: 1250.00,
@@ -294,7 +292,7 @@ export const INITIAL_INVOICES: Invoice[] = [
   }
 ];
 
-export const INITIAL_CERTIFICATES: Certificate[] = [
+export const INITIAL_CERTIFICATES = [
   {
     id: 'cert-1',
     tenantId: 'tenant-1',
@@ -327,13 +325,13 @@ export const INITIAL_CERTIFICATES: Certificate[] = [
     issuedTo: 'Kraków Retail Systems S.A.',
     issuer: 'Certum Trusted QCA',
     validFrom: '2024-06-15',
-    validTo: '2026-06-15', // Expires soon!
+    validTo: '2026-06-15',
     verificationStatus: 'VERIFIED',
     lastAuthTime: '2026-05-15T09:55:00Z',
   },
 ];
 
-export const INITIAL_AUDIT_LOGS: AuditLog[] = [
+export const INITIAL_AUDIT_LOGS = [
   {
     id: 'log-1',
     timestamp: '2026-05-20T08:15:00Z',
@@ -384,7 +382,7 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
   }
 ];
 
-export const INITIAL_NOTIFICATIONS: Notification[] = [
+export const INITIAL_NOTIFICATIONS = [
   {
     id: 'notif-1',
     tenantId: 'tenant-1',

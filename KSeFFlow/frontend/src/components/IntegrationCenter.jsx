@@ -1,33 +1,19 @@
 import { useState } from 'react';
-import { Tenant, UserRole, ApiLog } from '../types';
-import { 
-  Network, 
-  HelpCircle, 
-  Terminal, 
-  CheckCircle2, 
-  AlertTriangle, 
-  RefreshCw, 
-  Cpu, 
-  Globe, 
-  Lock, 
-  Workflow 
+import {
+  Network,
+  Terminal,
+  CheckCircle2,
+  RefreshCw,
+  Cpu,
+  Workflow
 } from 'lucide-react';
 
-interface IntegrationCenterProps {
-  tenant: Tenant;
-  role: UserRole;
-  govStatus: 'Connected' | 'Restricted' | 'Disconnected' | 'Downtime Sim';
-  onSetGovStatus: (status: 'Connected' | 'Restricted' | 'Disconnected' | 'Downtime Sim') => void;
-  onAddNotification: (title: string, message: string, type: 'info' | 'success' | 'warn' | 'error') => void;
-}
-
-export default function IntegrationCenter({ tenant, role, govStatus, onSetGovStatus, onAddNotification }: IntegrationCenterProps) {
-  const [selectedEnv, setSelectedEnv] = useState<'SANDBOX' | 'PRODUCTION'>('SANDBOX');
+export default function IntegrationCenter({ tenant, role, govStatus, onSetGovStatus, onAddNotification }) {
+  const [selectedEnv, setSelectedEnv] = useState('SANDBOX');
   const [isTesting, setIsTesting] = useState(false);
-  const [pingSpeed, setPingSpeed] = useState<number | null>(342);
+  const [pingSpeed, setPingSpeed] = useState(342);
 
-  // Initial API Logs
-  const [apiLogs, setApiLogs] = useState<ApiLog[]>([
+  const [apiLogs, setApiLogs] = useState([
     {
       id: 'apilog-1',
       timestamp: '2026-05-20T09:12:44Z',
@@ -48,13 +34,12 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
     }
   ]);
 
-  // Test KSeF tunnel connectivity
   const triggerSelfTest = () => {
     setIsTesting(true);
     setTimeout(() => {
       setIsTesting(false);
       if (govStatus === 'Downtime Sim') {
-        const failLog: ApiLog = {
+        const failLog = {
           id: `apilog-fail-${Date.now()}`,
           timestamp: new Date().toISOString(),
           method: 'GET',
@@ -66,12 +51,12 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
         setApiLogs([failLog, ...apiLogs]);
         setPingSpeed(null);
         onAddNotification(
-          'Tunnel Diagnostics FAILED', 
-          'Government server returned HTTP 504. System automatically redirected all outbound payloads to the local RabbitMQ queue.', 
+          'Tunnel Diagnostics FAILED',
+          'Government server returned HTTP 504. System automatically redirected all outbound payloads to the local RabbitMQ queue.',
           'error'
         );
       } else {
-        const successLog: ApiLog = {
+        const successLog = {
           id: `apilog-success-${Date.now()}`,
           timestamp: new Date().toISOString(),
           method: 'GET',
@@ -83,8 +68,8 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
         setApiLogs([successLog, ...apiLogs]);
         setPingSpeed(Math.floor(Math.random() * 120) + 200);
         onAddNotification(
-          'API Gateway Status: Excellent', 
-          'Secure tunnel test completed successfully. Cryptographic session verified. Latency: 245ms', 
+          'API Gateway Status: Excellent',
+          'Secure tunnel test completed successfully. Cryptographic session verified. Latency: 245ms',
           'success'
         );
       }
@@ -98,8 +83,6 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
 
   return (
     <div className="space-y-6">
-      
-      {/* Page Header */}
       <div>
         <h2 className="text-xl font-bold text-stone-900 tracking-tight flex items-center gap-2">
           <Network className="text-red-700" size={20} />
@@ -108,10 +91,7 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
         <p className="text-zinc-500 text-xs mt-0.5">Control gateway parameters, verify REST API schema definitions, and configure emergency offline toggles.</p>
       </div>
 
-      {/* Target Environment Config Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Environment Control Pane (5 cols) */}
         <div className="lg:col-span-5 bg-white border border-stone-200/90 rounded-xl p-6 shadow-xs space-y-6">
           <div className="border-b pb-3 border-stone-100">
             <h3 className="font-semibold text-stone-850 text-sm">Active API Gateway Configuration</h3>
@@ -119,15 +99,14 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
           </div>
 
           <div className="space-y-4">
-            {/* Environment Toggle Switches */}
             <div className="space-y-2">
               <span className="text-xs text-stone-500 font-medium block">Target Gateway Endpoint URL</span>
               <div className="grid grid-cols-2 gap-3">
-                <button 
+                <button
                   onClick={() => setSelectedEnv('SANDBOX')}
                   className={`py-2 px-3.5 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1.5 transition ${
-                    selectedEnv === 'SANDBOX' 
-                      ? 'bg-red-50 border-red-300 text-red-950 shadow-xs' 
+                    selectedEnv === 'SANDBOX'
+                      ? 'bg-red-50 border-red-300 text-red-950 shadow-xs'
                       : 'bg-white border-stone-200 text-stone-605 hover:bg-stone-50'
                   }`}
                 >
@@ -135,14 +114,14 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
                   <span className="font-mono text-[11px]">ksef-test.mf.gov.pl</span>
                 </button>
 
-                <button 
+                <button
                   onClick={() => {
                     setSelectedEnv('PRODUCTION');
                     onAddNotification('PROD Endpoint Restriction', 'Connecting to Production KSeF requires verified Qualified Kir Signature.', 'warn');
                   }}
                   className={`py-2 px-3.5 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1.5 transition ${
-                    selectedEnv === 'PRODUCTION' 
-                      ? 'bg-stone-900 border-stone-850 text-stone-100 shadow-md' 
+                    selectedEnv === 'PRODUCTION'
+                      ? 'bg-stone-900 border-stone-850 text-stone-100 shadow-md'
                       : 'bg-white border-stone-200 text-stone-605 hover:bg-stone-50'
                   }`}
                 >
@@ -152,7 +131,6 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
               </div>
             </div>
 
-            {/* Diagnostic Controls */}
             <div className="space-y-3.5 bg-stone-50 border rounded-xl p-4 text-xs font-sans">
               <div className="flex justify-between items-center">
                 <span className="text-stone-600 font-medium">Gateway Health Indicator:</span>
@@ -172,11 +150,10 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
 
               <div className="h-px bg-stone-250 my-1"></div>
 
-              {/* Toggle government failure modes artificially to simulate robust SaaS action! */}
               <div className="space-y-2">
                 <span className="text-[10px] text-stone-400 uppercase font-semibold block">Simulate Network Failures</span>
                 <div className="grid grid-cols-2 gap-2">
-                  <button 
+                  <button
                     onClick={() => {
                       onSetGovStatus('Connected');
                       setPingSpeed(320);
@@ -189,7 +166,7 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
                     Set Online (200 OK)
                   </button>
 
-                  <button 
+                  <button
                     onClick={() => {
                       onSetGovStatus('Downtime Sim');
                       setPingSpeed(null);
@@ -205,9 +182,8 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
               </div>
             </div>
 
-            {/* Tunnel control Action deck */}
             <div className="pt-2">
-              <button 
+              <button
                 onClick={triggerSelfTest}
                 disabled={isTesting}
                 className="w-full bg-red-700 hover:bg-red-800 text-white font-semibold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition"
@@ -216,11 +192,9 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
                 {isTesting ? 'Validating SSL & API Certificates...' : 'Execute Loopback Connectivity Test'}
               </button>
             </div>
-
           </div>
         </div>
 
-        {/* Live Api Terminal XML/JSON response logs (7 cols) */}
         <div className="lg:col-span-7 bg-stone-950 border border-stone-900 rounded-xl p-5 shadow-lg flex flex-col justify-between text-stone-300 space-y-4">
           <div className="flex justify-between items-center border-b border-stone-850 pb-3">
             <h4 className="font-mono text-zinc-400 font-bold text-xs flex items-center gap-2">
@@ -231,7 +205,7 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
               <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
                 <CheckCircle2 size={11} /> TLS V1.3 Secure
               </span>
-              <button 
+              <button
                 onClick={clearLogs}
                 className="text-stone-400 hover:text-stone-100 text-[10px] bg-stone-900 border border-stone-800 px-2 py-0.5 rounded transition"
               >
@@ -240,7 +214,6 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
             </div>
           </div>
 
-          {/* Logs scroll terminal wrapper */}
           <div className="flex-1 min-h-[300px] max-h-[380px] overflow-y-auto space-y-5 pr-2 font-mono text-[11px] leading-relaxed select-text">
             {apiLogs.map((log) => (
               <div key={log.id} className="border-b last:border-b-0 border-stone-900 pb-3 space-y-2">
@@ -254,9 +227,9 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
                 </div>
 
                 <div className="space-y-1 bg-stone-900/50 p-2.5 rounded-lg border border-stone-900">
-                  <div className="text-zinc-500 text-[9.5px]">REUEST PAYLOAD:</div>
+                  <div className="text-zinc-500 text-[9.5px]">REQUEST PAYLOAD:</div>
                   <pre className="text-stone-400 truncate text-[10px] max-w-full overflow-x-auto">{log.requestPayload}</pre>
-                  
+
                   <div className="text-zinc-500 text-[9.5px] mt-2">GOVERNMENT RESPONSE HEADERS & JSON:</div>
                   <pre className="text-amber-100 text-[10px] overflow-x-auto w-full max-w-full whitespace-pre-wrap leading-normal font-mono break-all">{log.responsePayload}</pre>
                 </div>
@@ -273,11 +246,8 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
             <span>Cert Authentication Algorithm: **SHA-256 with RSA 4096**</span>
             <span>RegulaOne API Server v3.4.1</span>
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }

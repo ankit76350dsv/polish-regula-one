@@ -1,14 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Tenant, UserRole } from '../types';
-import { listAuditLogs, AuditLogEntry } from '../api/ksefApi';
+import { listAuditLogs } from '../api/ksefApi';
 import {
-  History,
+  BookOpen,
   Search,
   ShieldCheck,
   Download,
   FileLock,
-  BookOpen,
   Filter,
   ChevronLeft,
   ChevronRight,
@@ -17,34 +15,25 @@ import {
   Calendar,
 } from 'lucide-react';
 
-interface AuditCenterProps {
-  tenant: Tenant;
-  role: UserRole;
-  onAddNotification: (title: string, message: string, type: 'info' | 'success' | 'warn' | 'error') => void;
-}
-
 const PAGE_SIZE = 20;
 
-export default function AuditCenter({ tenant, role, onAddNotification }: AuditCenterProps) {
+export default function AuditCenter({ tenant, role, onAddNotification }) {
   const { pathname } = useLocation();
   const tenantIdFromUrl = pathname.split('/').filter(Boolean)[1] ?? tenant.id;
 
-  // ── Filter state ──────────────────────────────────────────────────────────
-  const [searchInput, setSearchInput]   = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [roleFilter, setRoleFilter]     = useState('ALL');
-  const [fromDate, setFromDate]         = useState('');
-  const [toDate, setToDate]             = useState('');
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
-  // ── Pagination + data state ───────────────────────────────────────────────
-  const [currentPage, setCurrentPage]   = useState(0);
-  const [logs, setLogs]                 = useState<AuditLogEntry[]>([]);
-  const [totalPages, setTotalPages]     = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [logs, setLogs] = useState([]);
+  const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
-  const [loading, setLoading]           = useState(false);
-  const [error, setError]               = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // ── Debounce search input 300 ms ──────────────────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchInput);
@@ -53,10 +42,8 @@ export default function AuditCenter({ tenant, role, onAddNotification }: AuditCe
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Reset to page 0 when any filter changes
   useEffect(() => { setCurrentPage(0); }, [roleFilter, fromDate, toDate]);
 
-  // ── Fetch from backend ────────────────────────────────────────────────────
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -72,7 +59,7 @@ export default function AuditCenter({ tenant, role, onAddNotification }: AuditCe
       setLogs(result.content);
       setTotalPages(result.totalPages);
       setTotalElements(result.totalElements);
-    } catch (err: any) {
+    } catch (err) {
       setError(err?.message ?? 'Failed to load audit logs');
     } finally {
       setLoading(false);
@@ -81,7 +68,6 @@ export default function AuditCenter({ tenant, role, onAddNotification }: AuditCe
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
-  // ── CSV export ────────────────────────────────────────────────────────────
   const triggerLogExport = () => {
     onAddNotification(
       'Audit Logs Exported',
@@ -90,19 +76,16 @@ export default function AuditCenter({ tenant, role, onAddNotification }: AuditCe
     );
   };
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  const formatTimestamp = (iso: string) => {
+  const formatTimestamp = (iso) => {
     try { return new Date(iso).toLocaleString('pl-PL'); }
     catch { return iso; }
   };
 
   const startEntry = currentPage * PAGE_SIZE + 1;
-  const endEntry   = Math.min((currentPage + 1) * PAGE_SIZE, totalElements);
+  const endEntry = Math.min((currentPage + 1) * PAGE_SIZE, totalElements);
 
   return (
     <div className="space-y-6">
-
-      {/* Title */}
       <div>
         <h2 className="text-xl font-bold text-stone-900 tracking-tight flex items-center gap-2">
           <BookOpen className="text-red-700" size={20} />
@@ -114,11 +97,7 @@ export default function AuditCenter({ tenant, role, onAddNotification }: AuditCe
       </div>
 
       <div className="bg-white border border-stone-200/90 rounded-xl p-5 shadow-xs space-y-4">
-
-        {/* ── Filter bar ─────────────────────────────────────────────────── */}
         <div className="space-y-3 border-b pb-4 border-stone-100">
-
-          {/* Row 1 — search + role + export */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="relative w-full sm:max-w-xs">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-stone-400">
@@ -166,7 +145,6 @@ export default function AuditCenter({ tenant, role, onAddNotification }: AuditCe
             </div>
           </div>
 
-          {/* Row 2 — date range */}
           <div className="flex flex-wrap items-center gap-3">
             <Calendar size={13} className="text-stone-400 shrink-0" />
             <label className="flex items-center gap-2 text-xs text-stone-600">
@@ -198,7 +176,6 @@ export default function AuditCenter({ tenant, role, onAddNotification }: AuditCe
           </div>
         </div>
 
-        {/* ── Error banner ──────────────────────────────────────────────── */}
         {error && (
           <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-xs text-red-800">
             <AlertCircle size={14} className="shrink-0" />
@@ -207,7 +184,6 @@ export default function AuditCenter({ tenant, role, onAddNotification }: AuditCe
           </div>
         )}
 
-        {/* ── Table ─────────────────────────────────────────────────────── */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs align-middle font-sans">
             <thead>
@@ -272,7 +248,6 @@ export default function AuditCenter({ tenant, role, onAddNotification }: AuditCe
           </table>
         </div>
 
-        {/* ── Pagination ─────────────────────────────────────────────────── */}
         {!loading && totalElements > 0 && (
           <div className="pt-3 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500 font-sans">
             <span>
@@ -319,7 +294,6 @@ export default function AuditCenter({ tenant, role, onAddNotification }: AuditCe
           </div>
         )}
 
-        {/* ── Footer ─────────────────────────────────────────────────────── */}
         <div className="pt-3 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500 font-sans leading-normal">
           <div className="flex items-center gap-1.5">
             <FileLock size={13} className="text-stone-400" />
@@ -327,7 +301,6 @@ export default function AuditCenter({ tenant, role, onAddNotification }: AuditCe
           </div>
           <span>GDPR / RODO Compliant</span>
         </div>
-
       </div>
     </div>
   );

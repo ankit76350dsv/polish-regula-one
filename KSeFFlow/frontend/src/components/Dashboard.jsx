@@ -1,36 +1,24 @@
-import { Invoice, Certificate, Tenant, UserRole } from '../types';
-import { 
-  Building2, 
-  FileCheck2, 
-  AlertTriangle, 
-  Clock, 
-  ShieldCheck, 
-  TrendingUp, 
-  Activity, 
-  RefreshCw, 
+import {
+  Building2,
+  FileCheck2,
+  AlertTriangle,
+  Clock,
+  ShieldCheck,
+  TrendingUp,
+  Activity,
+  RefreshCw,
   Database,
   ArrowUpRight,
   ExternalLink
 } from 'lucide-react';
 
-interface DashboardProps {
-  tenant: Tenant;
-  invoices: Invoice[];
-  certificates: Certificate[];
-  onNavigate: (page: string) => void;
-  govStatus: 'Connected' | 'Restricted' | 'Disconnected' | 'Downtime Sim';
-  role: UserRole;
-}
-
-export default function Dashboard({ tenant, invoices, certificates, onNavigate, govStatus, role }: DashboardProps) {
-  // Filter invoices for active tenant
+export default function Dashboard({ tenant, invoices, certificates, onNavigate, govStatus, role }) {
   const tenantInvoices = invoices.filter(inv => inv.tenantId === tenant.id);
   const totalInvoices = tenantInvoices.length;
   const sentInvoices = tenantInvoices.filter(inv => inv.status === 'SENT').length;
   const offlineInvoices = tenantInvoices.filter(inv => inv.status === 'OFFLINE_MODE').length;
   const draftInvoices = tenantInvoices.filter(inv => inv.status === 'DRAFT').length;
 
-  // Totals calculations (converting EUR to approx PLN 4.3 for dashboard visual aggregation if mixed)
   const totalNetPLN = tenantInvoices.reduce((acc, inv) => {
     if (inv.status === 'DRAFT') return acc;
     const rate = inv.currency === 'EUR' ? 4.3 : 1;
@@ -45,19 +33,16 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
 
   const totalGrossPLN = totalNetPLN + totalVatPLN;
 
-  // Active qualified certs
   const activeCerts = certificates.filter(
     c => c.tenantId === tenant.id && c.verificationStatus === 'VERIFIED'
   );
 
-  // Status computation
   const successRate = totalInvoices - draftInvoices > 0
     ? Math.round((sentInvoices / (totalInvoices - draftInvoices)) * 100)
     : 100;
 
   return (
     <div className="space-y-6">
-      {/* Top Welcome Title Banner in Clean Minimalism */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
           <span className="text-xs font-bold uppercase tracking-widest text-slate-400 block mb-1">
@@ -83,9 +68,7 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
         </div>
       </div>
 
-      {/* Main SaaS Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1 */}
         <div className="bg-white border border-slate-201 rounded-xl p-5 hover:border-slate-300 transition-all shadow-xs flex items-start justify-between">
           <div className="space-y-2">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">Total Financial Volume</span>
@@ -103,7 +86,6 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
           </div>
         </div>
 
-        {/* Metric 2 */}
         <div className="bg-white border border-slate-201 rounded-xl p-5 hover:border-slate-300 transition-all shadow-xs flex items-start justify-between">
           <div className="space-y-2">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">KSeF Sent / Drafts</span>
@@ -120,7 +102,6 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
           </div>
         </div>
 
-        {/* Metric 3 */}
         <div className="bg-white border border-slate-201 rounded-xl p-5 hover:border-slate-300 transition-all shadow-xs flex items-start justify-between">
           <div className="space-y-2">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">Government Success Rate</span>
@@ -137,7 +118,6 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
           </div>
         </div>
 
-        {/* Metric 4 */}
         <div className="bg-white border border-slate-201 rounded-xl p-5 hover:border-slate-300 transition-all shadow-xs flex items-start justify-between">
           <div className="space-y-2">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">Offline Fallback Queue</span>
@@ -161,10 +141,7 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
         </div>
       </div>
 
-      {/* Main Center Layout: Live Charts, Gov Integration Status Center */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Compliance and Integration Center Module (8 cols) */}
         <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col justify-between">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -172,7 +149,7 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
                 <h3 className="font-semibold text-lg text-slate-800 tracking-tight">Government Integration Center</h3>
                 <p className="text-slate-400 text-xs">Direct encrypted tunnel with Ministry of Finance (Krajowy System e-Faktur)</p>
               </div>
-              <button 
+              <button
                 onClick={() => onNavigate('integration')}
                 className="text-red-600 font-semibold text-xs hover:text-red-700 flex items-center gap-1 bg-red-50/55 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 transition"
               >
@@ -180,7 +157,6 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
               </button>
             </div>
 
-            {/* Gov API Health diagnostics */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 border border-slate-150 p-4 rounded-xl">
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Government System</span>
@@ -204,47 +180,29 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
               </div>
             </div>
 
-            {/* Custom SVG Bar Chart as fully responsive high-contrast graph */}
             <div className="space-y-1">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">Submission Volume & SLA Latency</span>
                 <span className="text-slate-400 font-mono text-[11px]">Daily Average (PLN Thousands)</span>
               </div>
               <div className="w-full bg-slate-50 border border-slate-150 rounded-xl p-4">
-                {/* Simulated Chart with dynamic SVG */}
                 <svg viewBox="0 0 500 120" className="w-full h-28">
-                  {/* Grid Lines */}
                   <line x1="0" y1="20" x2="500" y2="20" stroke="#f1f5f9" strokeWidth="1" />
                   <line x1="0" y1="60" x2="500" y2="60" stroke="#f1f5f9" strokeWidth="1" />
                   <line x1="0" y1="100" x2="500" y2="100" stroke="#e2e8f0" strokeWidth="1" />
-                  
-                  {/* Bars representing real Polish tax days */}
-                  {/* Day 1: May 14 */}
                   <rect x="40" y="40" width="30" height="60" rx="4" fill="#DC2626" opacity="0.8" />
                   <text x="55" y="115" fontSize="8" fontFamily="sans-serif" textAnchor="middle" fill="#94a3b8">14/05</text>
-                  
-                  {/* Day 2: May 15 */}
                   <rect x="110" y="30" width="30" height="70" rx="4" fill="#DC2626" opacity="0.8" />
                   <text x="125" y="115" fontSize="8" fontFamily="sans-serif" textAnchor="middle" fill="#94a3b8">15/05</text>
-                  
-                  {/* Day 3: May 16 */}
                   <rect x="180" y="80" width="30" height="20" rx="4" fill="#DC2626" opacity="0.8" />
                   <text x="195" y="115" fontSize="8" fontFamily="sans-serif" textAnchor="middle" fill="#94a3b8">16/05</text>
- 
-                  {/* Day 4: May 17 */}
                   <rect x="250" y="85" width="30" height="15" rx="4" fill="#DC2626" opacity="0.8" />
                   <text x="265" y="115" fontSize="8" fontFamily="sans-serif" textAnchor="middle" fill="#94a3b8">17/05</text>
- 
-                  {/* Day 5: May 18 */}
                   <rect x="320" y="20" width="30" height="80" rx="4" fill="#DC2626" opacity="0.8" />
                   <text x="335" y="115" fontSize="8" fontFamily="sans-serif" textAnchor="middle" fill="#94a3b8">18/05</text>
- 
-                  {/* Day 6: May 19 */}
-                  <rect x="390" y="55" width="30" height="45" rx="4" fill="#E11D48" opacity="0.8" /> {/* active offline day */}
-                  <rect x="390" y="85" width="30" height="15" rx="4" fill="#cbd5e1" /> {/* Failed chunk */}
+                  <rect x="390" y="55" width="30" height="45" rx="4" fill="#E11D48" opacity="0.8" />
+                  <rect x="390" y="85" width="30" height="15" rx="4" fill="#cbd5e1" />
                   <text x="405" y="115" fontSize="8" fontFamily="sans-serif" textAnchor="middle" fill="#94a3b8">19/05</text>
- 
-                  {/* Day 7: May 20 */}
                   <rect x="460" y="65" width="30" height="35" rx="4" fill="#DC2626" opacity="0.9" />
                   <text x="475" y="115" fontSize="8" fontFamily="sans-serif" textAnchor="middle" fill="#94a3b8">Today</text>
                 </svg>
@@ -267,9 +225,7 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
           </div>
         </div>
 
-        {/* Sidebar Mini panels (4 cols) */}
         <div className="lg:col-span-4 space-y-6">
-          {/* Certificate Validity Alert Card */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
             <h4 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2 border-b pb-2.5 border-slate-100">
               <ShieldCheck size={16} className="text-red-600" />
@@ -278,7 +234,7 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
             <div className="space-y-4">
               {activeCerts.map((cert) => {
                 const expiresDate = new Date(cert.validTo);
-                const isNearExpiry = expiresDate.getTime() - new Date().getTime() < 1000 * 60 * 60 * 24 * 30; // 30 days
+                const isNearExpiry = expiresDate.getTime() - new Date().getTime() < 1000 * 60 * 60 * 24 * 30;
                 return (
                   <div key={cert.id} className="border-b last:border-b-0 pb-3 last:pb-0 border-slate-100 space-y-1">
                     <div className="flex items-center justify-between text-xs">
@@ -304,7 +260,6 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
             </div>
           </div>
 
-          {/* Connected Compliance Integrations */}
           <div className="bg-slate-900 text-slate-100 rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -346,14 +301,12 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
             </div>
           </div>
         </div>
-
       </div>
 
-      {/* Quick Launch / Action deck */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
         <h4 className="font-semibold text-slate-800 text-sm mb-4">Enterprise Daily Compliance Checklist</h4>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div 
+          <div
             onClick={() => onNavigate('create')}
             className="border border-slate-200 p-4 rounded-xl cursor-pointer hover:border-red-400 hover:bg-slate-50 hover:shadow-xs transition text-slate-800 flex items-center gap-3"
           >
@@ -364,7 +317,7 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
             </div>
           </div>
 
-          <div 
+          <div
             onClick={() => onNavigate('invoices')}
             className="border border-slate-200 p-4 rounded-xl cursor-pointer hover:border-red-400 hover:bg-slate-50 hover:shadow-xs transition text-slate-800 flex items-center gap-3"
           >
@@ -375,7 +328,7 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
             </div>
           </div>
 
-          <div 
+          <div
             onClick={() => onNavigate('certificates')}
             className="border border-slate-200 p-4 rounded-xl cursor-pointer hover:border-red-400 hover:bg-slate-50 hover:shadow-xs transition text-slate-800 flex items-center gap-3"
           >

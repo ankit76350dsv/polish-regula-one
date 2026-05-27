@@ -1,73 +1,57 @@
 import { useState } from 'react';
-import { Invoice, Tenant, UserRole } from '../types';
-import { 
-  Search, 
-  Filter, 
-  QrCode, 
-  Download, 
-  FileText, 
+import {
+  Search,
+  Filter,
+  QrCode,
+  Download,
+  FileText,
   ExternalLink,
   CheckCircle,
   FileBadge,
   Clock,
   XCircle,
-  TrendingDown,
   Info,
-  Calendar,
   Layers,
   ArrowRight
 } from 'lucide-react';
 
-interface InvoiceListProps {
-  tenant: Tenant;
-  role: UserRole;
-  invoices: Invoice[];
-  onAddNotification: (title: string, message: string, type: 'info' | 'success' | 'warn' | 'error') => void;
-  onViewInvoiceDetail: (invoice: Invoice) => void;
-}
-
-export default function InvoiceList({ tenant, role, invoices, onAddNotification, onViewInvoiceDetail }: InvoiceListProps) {
-  // Filters
+export default function InvoiceList({ tenant, role, invoices, onAddNotification, onViewInvoiceDetail }) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'SENT' | 'OFFLINE_MODE' | 'DRAFT'>('ALL');
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
 
-  // Filter actual invoices for current tenant
   const tenantInvoices = invoices.filter(inv => inv.tenantId === tenant.id);
 
   const filteredInvoices = tenantInvoices.filter(inv => {
-    const matchesSearch = 
+    const matchesSearch =
       inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       inv.buyerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       inv.buyerNIP.includes(searchTerm);
-    
+
     if (statusFilter === 'ALL') return matchesSearch;
     return inv.status === statusFilter && matchesSearch;
   });
 
-  // Calculate stats for top of repository page
-  const totalNetSum = filteredInvoices.reduce((sum, inv) => sum + inv.totalNet, 0);
   const totalGrossSum = filteredInvoices.reduce((sum, inv) => sum + inv.totalGross, 0);
 
-  // Download logic mock
-  const triggerUpoDownload = (invoice: Invoice) => {
+  const triggerUpoDownload = (invoice) => {
     onAddNotification(
-      'UPO Download Initiated', 
-      `Generating cryptographically signed Urzędowe Poświadczenie Odbioru (UPO) for invoice ${invoice.invoiceNumber}. XML hash attached.`, 
+      'UPO Download Initiated',
+      `Generating cryptographically signed Urzędowe Poświadczenie Odbioru (UPO) for invoice ${invoice.invoiceNumber}. XML hash attached.`,
       'success'
     );
   };
 
-  const triggerXmlDownload = (invoice: Invoice) => {
+  const triggerXmlDownload = (invoice) => {
     onAddNotification(
-      'XML Exported', 
-      `Invoice ${invoice.invoiceNumber} exported successfully as Polish government-compliant FA(3) structural format.`, 
+      'XML Exported',
+      `Invoice ${invoice.invoiceNumber} exported successfully as Polish government-compliant FA(3) structural format.`,
       'info'
     );
-  };  return (
+  };
+
+  return (
     <div className="space-y-6">
-      
-      {/* Title */}
       <div className="border-b border-slate-200 pb-5">
         <h2 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
           <Layers className="text-red-650" size={20} />
@@ -76,7 +60,6 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
         <p className="text-slate-400 text-xs mt-1">Explore historic records, verify audit stamps, and pull governmental UPO declarations.</p>
       </div>
 
-      {/* Stats micro row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 border border-slate-200 p-4 rounded-xl text-xs font-sans">
         <div>
           <span className="text-slate-400 block pb-0.5 font-semibold uppercase tracking-wider text-[10px]">Active Repository Size</span>
@@ -102,18 +85,14 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
         </div>
       </div>
 
-      {/* Main Search and grid section */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Table list column (8 cols) */}
         <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b pb-4 border-slate-100">
-            {/* Search Input */}
             <div className="relative w-full sm:max-w-xs">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
                 <Search size={14} />
               </span>
-              <input 
+              <input
                 type="text"
                 placeholder="Search Invoice #, NIP, Buyer..."
                 value={searchTerm}
@@ -122,12 +101,11 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
               />
             </div>
 
-            {/* Filter Status Selector */}
             <div className="flex items-center gap-2 self-end sm:self-auto text-xs text-slate-500">
               <Filter size={13} className="text-slate-400" />
-              <select 
+              <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
+                onChange={(e) => setStatusFilter(e.target.value)}
                 className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 text-xs"
               >
                 <option value="ALL">All Statuses</option>
@@ -138,7 +116,6 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
             </div>
           </div>
 
-          {/* Table display */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs align-middle">
               <thead>
@@ -153,8 +130,8 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {filteredInvoices.map((inv) => (
-                  <tr 
-                    key={inv.id} 
+                  <tr
+                    key={inv.id}
                     onClick={() => setSelectedInvoice(inv)}
                     className={`hover:bg-slate-50/70 transition cursor-pointer ${selectedInvoice?.id === inv.id ? 'bg-slate-100/50' : ''}`}
                   >
@@ -229,22 +206,16 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
           </div>
         </div>
 
-        {/* Audit Details Panel context (4 cols) */}
         <div className="lg:col-span-4 space-y-6">
           {selectedInvoice ? (
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-5">
-              
-              {/* Heading */}
               <div className="border-b pb-3 border-slate-100">
                 <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Metadata Compliance Inspector</div>
                 <h4 className="text-sm font-bold text-slate-800 font-mono mt-1">{selectedInvoice.invoiceNumber}</h4>
               </div>
 
-              {/* Status details card */}
               <div className="space-y-4 text-xs font-sans">
-
                 {selectedInvoice.status === 'SENT' ? (
-                  /* Official Polish Government UPO Receipt View */
                   <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3 shadow-xs">
                     <div className="flex items-center justify-between border-b pb-2 border-slate-200">
                       <span className="text-red-750 text-[10px] uppercase font-bold flex items-center gap-1">
@@ -260,10 +231,8 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
                       <p className="font-bold text-slate-900 bg-slate-100 p-1.5 rounded text-[10px] break-all border border-slate-200">
                         {selectedInvoice.ksefId ?? <span className="text-slate-400 font-normal">Not yet assigned</span>}
                       </p>
-
                       <p className="mt-2">UPO Status:</p>
                       <p className="font-bold text-slate-850">{selectedInvoice.upoStatus ?? '—'}</p>
-
                       <p className="mt-2">Reception Stamp Time:</p>
                       <p className="font-bold text-slate-850">
                         {selectedInvoice.upoTimestamp ?? <span className="text-slate-400 font-normal">—</span>}
@@ -286,7 +255,6 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
                     </div>
                   </div>
                 ) : selectedInvoice.status === 'OFFLINE_MODE' ? (
-                  /* Offline fallback QR stamp */
                   <div className="bg-orange-50/50 border border-orange-200 p-4 rounded-xl space-y-3">
                     <div className="flex items-center justify-between border-b pb-2 border-orange-200">
                       <span className="text-orange-950 text-[10px] uppercase font-bold flex items-center gap-1">
@@ -299,22 +267,17 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
 
                     <div className="flex flex-col items-center py-2 bg-white rounded-lg border border-orange-100">
                       <svg viewBox="0 0 100 100" className="w-24 h-24 text-slate-800">
-                        <rect x="10" y="10" width="25" height="25" fill="#E11D48" strokeWidth="1" />
+                        <rect x="10" y="10" width="25" height="25" fill="#E11D48" />
                         <rect x="15" y="15" width="15" height="15" fill="#ffffff" />
                         <rect x="19" y="19" width="7" height="7" fill="#E11D48" />
-                        <rect x="65" y="10" width="25" height="25" fill="#E11D48" strokeWidth="1" />
+                        <rect x="65" y="10" width="25" height="25" fill="#E11D48" />
                         <rect x="70" y="15" width="15" height="15" fill="#ffffff" />
                         <rect x="74" y="19" width="7" height="7" fill="#E11D48" />
-                        <rect x="10" y="65" width="25" height="25" fill="#E11D48" strokeWidth="1" />
+                        <rect x="10" y="65" width="25" height="25" fill="#E11D48" />
                         <rect x="15" y="70" width="15" height="15" fill="#ffffff" />
                         <rect x="19" y="74" width="7" height="7" fill="#E11D48" />
                         <rect x="45" y="45" width="10" height="10" fill="currentColor" />
                         <rect x="55" y="55" width="10" height="10" fill="currentColor" />
-                        <rect x="40" y="20" width="5" height="15" fill="currentColor" opacity="0.8" />
-                        <rect x="25" y="40" width="15" height="5" fill="currentColor" opacity="0.8" />
-                        <rect x="65" y="65" width="15" height="10" fill="currentColor" />
-                        <rect x="80" y="80" width="10" height="10" fill="currentColor" />
-                        <rect x="45" y="80" width="12" height="6" fill="#E11D48" />
                       </svg>
                       <span className="text-[10px] text-slate-400 mt-2 font-mono">Scan code under Art. 106fa</span>
                     </div>
@@ -336,13 +299,9 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
                       <span className="text-red-800 text-[10px] uppercase font-bold flex items-center gap-1">
                         <XCircle size={14} className="text-red-600" /> Submission Failed
                       </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-red-100 text-red-700 border border-red-200">
-                        ● {selectedInvoice.status}
-                      </span>
                     </div>
                     <div className="space-y-1.5 font-mono text-[10.5px] text-slate-600">
                       <p>Attempts made: <strong className="text-slate-800">{selectedInvoice.submissionAttempts}</strong></p>
-                      <p className="mt-1">Error detail:</p>
                       <p className="text-red-700 bg-red-100 p-2 rounded border border-red-200 break-words leading-relaxed">
                         {selectedInvoice.lastErrorMessage ?? 'No error details available.'}
                       </p>
@@ -354,20 +313,9 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
                       <span className="text-amber-900 text-[10px] uppercase font-bold flex items-center gap-1">
                         <Clock size={14} className="text-amber-600" /> Retrying Submission
                       </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-amber-100 text-amber-700 border border-amber-200">
-                        ● {selectedInvoice.status}
-                      </span>
                     </div>
                     <div className="space-y-1.5 font-mono text-[10.5px] text-slate-600">
                       <p>Attempt #<strong className="text-slate-800">{selectedInvoice.submissionAttempts}</strong> in progress via exponential backoff queue.</p>
-                      {selectedInvoice.lastErrorMessage && (
-                        <>
-                          <p className="mt-1">Last error:</p>
-                          <p className="text-amber-800 bg-amber-100 p-2 rounded border border-amber-200 break-words">
-                            {selectedInvoice.lastErrorMessage}
-                          </p>
-                        </>
-                      )}
                     </div>
                   </div>
                 ) : selectedInvoice.status === 'PENDING' ? (
@@ -375,9 +323,6 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
                     <div className="flex items-center justify-between border-b pb-2 border-blue-200">
                       <span className="text-blue-900 text-[10px] uppercase font-bold flex items-center gap-1">
                         <Clock size={14} className="text-blue-600" /> Pending KSeF Submission
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-blue-100 text-blue-700 border border-blue-200">
-                        ● {selectedInvoice.status}
                       </span>
                     </div>
                     <p className="text-[11px] text-blue-800 leading-relaxed">
@@ -393,7 +338,6 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
                   </div>
                 )}
 
-                {/* View full invoice details */}
                 <button
                   onClick={() => onViewInvoiceDetail(selectedInvoice)}
                   className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold transition"
@@ -402,7 +346,6 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
                   View Full Invoice Details
                 </button>
 
-                {/* Core transaction outline */}
                 <div className="space-y-2 border-t pt-3 border-slate-100 text-xs">
                   <div className="flex justify-between">
                     <span className="text-slate-400 font-medium">Buyer:</span>
@@ -426,7 +369,6 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
                   </div>
                 </div>
 
-                {/* List item details summary */}
                 <div className="bg-slate-50 p-3 rounded-lg text-[11px] border border-slate-150">
                   <p className="font-bold text-slate-500 mb-1">Product lines included:</p>
                   <ul className="list-disc pl-4 space-y-0.5 text-slate-500">
@@ -437,9 +379,7 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
                     ))}
                   </ul>
                 </div>
-
               </div>
-
             </div>
           ) : (
             <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-8 text-center text-slate-400 text-xs flex flex-col justify-center items-center h-48">
@@ -448,9 +388,7 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
             </div>
           )}
         </div>
-
       </div>
-
     </div>
   );
 }

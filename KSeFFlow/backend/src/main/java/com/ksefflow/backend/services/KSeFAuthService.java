@@ -24,21 +24,22 @@ import java.util.Optional;
  * The 3-step flow to open a government session:
  *
  * Step 1 — POST /online/Session/AuthorisationChallenge
- *           Send the company NIP → receive a random challenge string.
+ * Send the company NIP → receive a random challenge string.
  *
  * Step 2 — Sign the challenge locally
- *           Load the tenant's active .pfx certificate (via CertificateService).
- *           Sign the challenge bytes with SHA256withRSA using the private key.
- *           DER-encode and Base64-encode the public certificate.
+ * Load the tenant's active .pfx certificate (via CertificateService).
+ * Sign the challenge bytes with SHA256withRSA using the private key.
+ * DER-encode and Base64-encode the public certificate.
  *
  * Step 3 — POST /online/Session/Authorisation
- *           Send NIP + signed challenge + public certificate.
- *           The government verifies the signature and returns a session token.
+ * Send NIP + signed challenge + public certificate.
+ * The government verifies the signature and returns a session token.
  *
  * Helper responsibilities:
- * - KsefApiClient     — all HTTP calls to the KSeF government REST API
- * - KsefSigningUtils  — RSA-SHA256 challenge signing + DER certificate encoding (static)
- * - KsefSessionStore  — session token encrypt/save/deactivate in MongoDB
+ * - KsefApiClient — all HTTP calls to the KSeF government REST API
+ * - KsefSigningUtils — RSA-SHA256 challenge signing + DER certificate encoding
+ * (static)
+ * - KsefSessionStore — session token encrypt/save/deactivate in MongoDB
  */
 @Service
 @RequiredArgsConstructor
@@ -55,30 +56,41 @@ public class KSeFAuthService {
     // ── Public API ─────────────────────────────────────────────────────────────
 
     /**
-     * Opens a KSeF government session for the tenant.
+     * Opens a secure session with the KSeF government system for a company.
      *
-     * What this method does:
-     * 1. If a valid unexpired session already exists — returns the existing token (no re-auth)
-     * 2. Validates the tenant's active certificate is not expired or revoked
-     * 3. Requests a random challenge from the government (KsefApiClient)
-     * 4. Signs the challenge with the tenant's private key (KsefSigningUtils)
-     * 5. Submits the signed challenge + public certificate to the government (KsefApiClient)
-     * 6. Receives a session token, encrypts it, saves it to MongoDB (KsefSessionStore)
-     * 7. Records the result in the audit log
+     * What happens in this method:
+     * 1. Checks if the company already has an active session
+     * → if yes, returns the existing session token
      *
-     * @param tenantId the tenant making the request
-     * @param nip      the company's 10-digit Polish tax ID
-     * @return the decrypted session token — ready to use as "SessionToken" HTTP header
-     * @throws KsefAuthException if any step of the auth flow fails
+     * 2. Checks if the company certificate is valid
+     * → makes sure it is not expired or revoked
+     *
+     * 3. Requests a challenge code from the KSeF government API
+     *
+     * 4. Signs the challenge using the company’s private certificate key
+     *
+     * 5. Sends the signed challenge and public certificate to KSeF
+     *
+     * 6. Receives a session token from KSeF
+     * → encrypts and stores it safely in MongoDB
+     *
+     * 7. Saves audit logs for tracking and compliance
+     *
+     * @param tenantId company/tenant identifier
+     * @param nip      company's 10-digit Polish tax number
+     * @return active KSeF session token used in the "SessionToken" HTTP header
+     * @throws KsefAuthException if authentication fails at any step
      */
+    //KSeF uses Public Key Infrastructure certificate-based authentication (not username/password). 
     public String openSession(String tenantId, String nip) {
         // Return existing session if still valid — avoid unnecessary re-authentication
         Optional<String> existing = sessionStore.getActiveToken(tenantId);
+
         if (existing.isPresent()) {
             log.debug("Reusing existing active session for tenant [{}]", tenantId);
             return existing.get();
         }
-
+//! yaha tak.....
         // Guard: validate the certificate before making any network calls
         certificateService.validateCertificateActive(tenantId);
 
@@ -115,8 +127,10 @@ public class KSeFAuthService {
     }
 
     /**
-     * Returns the active session token for a tenant if one exists and has not expired.
-     * The returned token is decrypted — ready to use as the "SessionToken" HTTP header.
+     * Returns the active session token for a tenant if one exists and has not
+     * expired.
+     * The returned token is decrypted — ready to use as the "SessionToken" HTTP
+     * header.
      * Returns Optional.empty() if there is no session or it has expired.
      */
     public Optional<String> getActiveSessionToken(String tenantId) {
@@ -160,10 +174,11 @@ public class KSeFAuthService {
                 });
     }
 
-    // ── Domain-level audit log (stays in service — it writes to compliance records) ──
+    // ── Domain-level audit log (stays in service — it writes to compliance
+    // records) ──
 
     private void writeAuditLog(String tenantId, String action,
-                               String entityType, String entityId, String newValue) {
+            String entityType, String entityId, String newValue) {
         try {
             auditLogRepository.save(KsefAuditLog.builder()
                     .tenantId(tenantId)
