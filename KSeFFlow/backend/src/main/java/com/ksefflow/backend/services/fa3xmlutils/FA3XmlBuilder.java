@@ -42,43 +42,62 @@ import java.util.Map;
 public final class FA3XmlBuilder {
 
     public static final String FA3_NAMESPACE = "http://crd.gov.pl/wzor/2023/06/29/12648/";
-    private static final String SCHEMA_CODE  = "FA (3)";
-    private static final String SCHEMA_VER   = "1-0E";
-    private static final String SYSTEM_INFO  = "KSeFFlow v1.0 | RegulaOne";
+    private static final String SCHEMA_CODE = "FA (3)";
+    private static final String SCHEMA_VER = "1-0E";
+    private static final String SYSTEM_INFO = "KSeFFlow v1.0 | RegulaOne";
 
-    private static final DateTimeFormatter DT_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    private static final DateTimeFormatter DT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
-    private FA3XmlBuilder() {}
+    private FA3XmlBuilder() {
+    }
 
     // ── Entry point ────────────────────────────────────────────────────────────
 
     public static Document build(KsefInvoice invoice) {
         validate(invoice);
+
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(true);
+
             DocumentBuilder builder = factory.newDocumentBuilder();
             Document doc = builder.newDocument();
 
+            // Root FA(3) invoice element
             Element root = doc.createElementNS(FA3_NAMESPACE, "Faktura");
             doc.appendChild(root);
 
+            // 1. Invoice header metadata
+            // Contains schema version, invoice type,
+            // issue date, currency, and system information.
             root.appendChild(buildNaglowek(doc, invoice));
+
+            // 2. Seller information (Podmiot1)
+            // Includes seller company details such as
+            // NIP, name, and registered address.
             root.appendChild(buildPodmiot1(doc, invoice));
+
+            // 3. Buyer information (Podmiot2)
+            // Includes buyer/customer identification
+            // and address information.
             root.appendChild(buildPodmiot2(doc, invoice));
+
+            // 4. Main invoice section (Fa)
+            // Contains invoice items, VAT details,
+            // totals, payment data, and summary values.
             root.appendChild(buildFa(doc, invoice));
 
             return doc;
+
         } catch (KsefXmlGenerationException kxge) {
             throw kxge;
+
         } catch (Exception e) {
-            throw new KsefXmlGenerationException(
-                    "Failed to build FA(3) XML DOM for invoice [" + invoice.getInvoiceNumber() + "]: " + e.getMessage(), e);
+            throw new KsefXmlGenerationException("Failed to build FA(3) XML DOM for invoice [" + invoice.getInvoiceNumber() + "]: " + e.getMessage(), e);
         }
     }
 
-    // ── Naglowek (Header) ──────────────────────────────────────────────────────
+    // ── Naglowek (HEADER METADATA) ──────────────────────────────────────────────────────
 
     private static Element buildNaglowek(Document doc, KsefInvoice invoice) {
         Element naglowek = el(doc, "Naglowek");
@@ -96,7 +115,7 @@ public final class FA3XmlBuilder {
         return naglowek;
     }
 
-    // ── Podmiot1 (Seller) ──────────────────────────────────────────────────────
+    // ── Podmiot1 (SELLER DATA) ──────────────────────────────────────────────────────
 
     private static Element buildPodmiot1(Document doc, KsefInvoice invoice) {
         Element podmiot1 = el(doc, "Podmiot1");
@@ -108,7 +127,7 @@ public final class FA3XmlBuilder {
         return podmiot1;
     }
 
-    // ── Podmiot2 (Buyer) ───────────────────────────────────────────────────────
+    // ── Podmiot2 (BUYER DATA) ───────────────────────────────────────────────────────
 
     private static Element buildPodmiot2(Document doc, KsefInvoice invoice) {
         Element podmiot2 = el(doc, "Podmiot2");
@@ -120,7 +139,7 @@ public final class FA3XmlBuilder {
         return podmiot2;
     }
 
-    // ── Fa (Invoice body) ──────────────────────────────────────────────────────
+    // ── Fa (INVOICE BODY (Items, Prices, Totals)) ───────────────────────────────────────────────────────
 
     private static Element buildFa(Document doc, KsefInvoice invoice) {
         Element fa = el(doc, "Fa");
@@ -166,7 +185,8 @@ public final class FA3XmlBuilder {
         // P_17: samofakturowanie (self-billing) — always "2" (no) here
         ann.appendChild(el(doc, "P_17", "2"));
 
-        // P_18: odwrotne obciążenie (reverse charge) — "1" if any item uses REVERSE_CHARGE
+        // P_18: odwrotne obciążenie (reverse charge) — "1" if any item uses
+        // REVERSE_CHARGE
         boolean hasReverseCharge = invoice.getItems().stream()
                 .anyMatch(i -> i.getVatRate() == KsefVatRate.REVERSE_CHARGE);
         ann.appendChild(el(doc, "P_18", hasReverseCharge ? "1" : "2"));
@@ -218,11 +238,11 @@ public final class FA3XmlBuilder {
         Element podatekNalezny = el(doc, "PodatekNalezny");
 
         // Emit P_13_X (net) and P_14_X (VAT) only for rates that actually appear
-        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_23,         "1");
-        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_8,          "2");
-        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_5,          "3");
-        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_0,          "4");
-        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.EXEMPT,         "5");
+        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_23, "1");
+        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_8, "2");
+        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_5, "3");
+        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_0, "4");
+        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.EXEMPT, "5");
         emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.REVERSE_CHARGE, "6");
 
         podsumowanie.appendChild(podatekNalezny);
@@ -232,10 +252,11 @@ public final class FA3XmlBuilder {
     }
 
     private static void emitVatGroup(Document doc, Element parent,
-                                     Map<KsefVatRate, BigDecimal[]> grouped,
-                                     KsefVatRate rate, String suffix) {
+            Map<KsefVatRate, BigDecimal[]> grouped,
+            KsefVatRate rate, String suffix) {
         BigDecimal[] pair = grouped.get(rate);
-        if (pair == null) return;
+        if (pair == null)
+            return;
         parent.appendChild(el(doc, "P_13_" + suffix, amount(pair[0]))); // net
         parent.appendChild(el(doc, "P_14_" + suffix, amount(pair[1]))); // VAT
     }
@@ -247,8 +268,8 @@ public final class FA3XmlBuilder {
             KsefVatRate rate = item.getVatRate() != null ? item.getVatRate() : KsefVatRate.VAT_23;
             BigDecimal net = item.getNetAmount() != null ? item.getNetAmount() : BigDecimal.ZERO;
             BigDecimal vat = item.getVatAmount() != null ? item.getVatAmount() : BigDecimal.ZERO;
-            map.merge(rate, new BigDecimal[]{net, vat},
-                    (existing, incoming) -> new BigDecimal[]{
+            map.merge(rate, new BigDecimal[] { net, vat },
+                    (existing, incoming) -> new BigDecimal[] {
                             existing[0].add(incoming[0]),
                             existing[1].add(incoming[1])
                     });
@@ -294,7 +315,7 @@ public final class FA3XmlBuilder {
     }
 
     private static Element buildAdres(Document doc,
-                                      String adresL1, String postalCode, String city) {
+            String adresL1, String postalCode, String city) {
         Element adres = el(doc, "Adres");
         adres.appendChild(el(doc, "KodKraju", "PL"));
         adres.appendChild(el(doc, "AdresL1", adresL1));
@@ -304,28 +325,32 @@ public final class FA3XmlBuilder {
 
     // ── Encoding helpers ───────────────────────────────────────────────────────
 
-    // Formats monetary amounts: always 2 decimal places, period separator, no grouping.
+    // Formats monetary amounts: always 2 decimal places, period separator, no
+    // grouping.
     // Polish accounting law requires exact 2-decimal precision for all VAT amounts.
     public static String amount(BigDecimal value) {
-        if (value == null) return "0.00";
+        if (value == null)
+            return "0.00";
         return value.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
     // Quantities: 2 decimal places (supports fractional units e.g. 1.50 hours)
     public static String qty(BigDecimal value) {
-        if (value == null) return "1.00";
+        if (value == null)
+            return "1.00";
         return value.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
     // Maps KsefVatRate enum → FA(3) XML rate code
     public static String vatRateCode(KsefVatRate rate) {
-        if (rate == null) return "23";
+        if (rate == null)
+            return "23";
         return switch (rate) {
-            case VAT_23        -> "23";
-            case VAT_8         -> "8";
-            case VAT_5         -> "5";
-            case VAT_0         -> "0";
-            case EXEMPT        -> "zw";
+            case VAT_23 -> "23";
+            case VAT_8 -> "8";
+            case VAT_5 -> "5";
+            case VAT_0 -> "0";
+            case EXEMPT -> "zw";
             case REVERSE_CHARGE -> "np";
         };
     }
@@ -333,12 +358,14 @@ public final class FA3XmlBuilder {
     // Maps KsefPaymentMethod → FA(3) FormaPlatnosci code
     // 1 = gotówka (cash), 3 = karta (card), 6 = przelew (transfer/MPP)
     public static String paymentMethodCode(KsefPaymentMethod method) {
-        if (method == null) return "6";
+        if (method == null)
+            return "6";
         return switch (method) {
-            case CASH          -> "1";
-            case CARD          -> "3";
+            case CASH -> "1";
+            case CARD -> "3";
             case TRANSFER,
-                 SPLIT_PAYMENT -> "6";
+                    SPLIT_PAYMENT ->
+                "6";
         };
     }
 

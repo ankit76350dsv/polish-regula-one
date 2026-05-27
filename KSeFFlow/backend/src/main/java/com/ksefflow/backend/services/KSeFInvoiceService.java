@@ -101,6 +101,7 @@ public class KSeFInvoiceService {
      * @throws KsefXmlGenerationException if FA(3) XML cannot be built or validated
      * @throws KsefAuthException         if KSeF session cannot be opened (certificate problem)
      */
+
     public KsefInvoice submitInvoice(String tenantId, String invoiceId, String nip,
             String userEmail, String ipAddress) {
         // Step 1 — load and guard
@@ -111,6 +112,7 @@ public class KSeFInvoiceService {
         invoice.setUpdatedAt(LocalDateTime.now());
         invoice.setSubmissionAttempts(invoice.getSubmissionAttempts() + 1);
         ksef_invoices_repository.save(invoice);
+
         AuditLog.writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null,
                 "attempt=" + invoice.getSubmissionAttempts(), userEmail, ipAddress);
 

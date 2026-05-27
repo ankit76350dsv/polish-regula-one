@@ -1,8 +1,9 @@
 package com.ksefflow.backend.services.fa3xmlutils;
 
 import com.ksefflow.backend.exceptions.KsefXmlGenerationException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import lombok.extern.slf4j.Slf4j;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
@@ -33,9 +34,9 @@ import java.nio.charset.StandardCharsets;
 //   consistency (net + VAT == gross within 0.01 PLN rounding tolerance).
 //
 // All pure static — no Spring context.
+@Slf4j
 public final class FA3XmlValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(FA3XmlValidator.class);
 
     private static final String XSD_CLASSPATH = "/xsd/FA3_schema.xsd";
     private static final String FA3_NS        = FA3XmlBuilder.FA3_NAMESPACE;
@@ -49,19 +50,23 @@ public final class FA3XmlValidator {
     // ── Public API ─────────────────────────────────────────────────────────────
 
     // Validates the XML string.  If strict=true and the XSD is missing, throws.
+    //Todo: 2nd
     public static void validate(String xml, boolean strict) {
         Document doc = parseXml(xml);
+        //Todo: 3rd
         validateXsd(xml, strict);
         validateBusinessRules(doc);
     }
 
     // Convenience overload for dev (non-strict — XSD missing just logs warning)
+    //Todo: 1st
     public static void validate(String xml) {
         validate(xml, false);
     }
 
     // ── Phase A: XSD structural validation ────────────────────────────────────
 
+    //Todo: 3rd
     private static void validateXsd(String xml, boolean strict) {
         InputStream xsdStream = FA3XmlValidator.class.getResourceAsStream(XSD_CLASSPATH);
         if (xsdStream == null) {
