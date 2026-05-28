@@ -21,7 +21,6 @@ import Login from './components/Login';
 import {
   Building2,
   UserSquare,
-  Home,
   FileEdit,
   FolderSearch,
   AlertTriangle,
@@ -31,14 +30,7 @@ import {
   FileClock,
   Bell,
   LogOut,
-  CornerDownRight,
   LayoutDashboard,
-  CheckCircle,
-  TrendingUp,
-  Download,
-  Info,
-  Calendar,
-  Layers,
   Lock,
   UserCheck
 } from 'lucide-react';

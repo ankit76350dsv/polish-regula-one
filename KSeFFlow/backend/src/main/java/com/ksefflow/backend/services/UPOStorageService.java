@@ -50,9 +50,11 @@ public class UPOStorageService {
         log.info("Storing UPO for invoice [{}] tenant [{}] ksefRef [{}]",
                 invoiceId, tenantId, ksefReferenceNumber);
 
-        String hash = sha256Hex(upoXml);
-        byte[] encryptedBytes = cryptoUtils.aesEncrypt(upoXml.getBytes(StandardCharsets.UTF_8));
-        String encrypted = Base64.getEncoder().encodeToString(encryptedBytes);
+        String hash = sha256Hex(upoXml); //! a91ff82bb3918827c1d1aa || cannot be reversed : : always same input → same output
+        // AES encryption works ONLY with bytes.
+        byte[] encryptedBytes = cryptoUtils.aesEncrypt(upoXml.getBytes(StandardCharsets.UTF_8)); // pass this :: [72, 69, 76, 76, 79]
+       // encryptedBytes == [ IV ] + [ Encrypted Data ] + [ Authentication Tag ]
+        String encrypted = Base64.getEncoder().encodeToString(encryptedBytes); // Base64 converts binary data into safe text. : [17, 88, 200, 4] ==> "EVjIBA=="
 
         KsefUpoReceipt receipt = KsefUpoReceipt.builder()
                 .tenantId(tenantId)
@@ -95,10 +97,12 @@ public class UPOStorageService {
 
     private static String sha256Hex(String input) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            MessageDigest digest = MessageDigest.getInstance("SHA-256"); //! CREATE SHA-256 ENGINE
+            //! input.getBytes(StandardCharsets.UTF_8):  STRING ("HELLO") → BYTES ("[72, 69, 76, 76, 79]")
+            byte[] bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));  //output like this:  [-24, 95, -115, -77, ...]
             StringBuilder sb = new StringBuilder(bytes.length * 2);
             for (byte b : bytes) sb.append(String.format("%02x", b));
+           // bytes = [10, 255, 100] : 0aff64
             return sb.toString();
         } catch (Exception e) {
             // SHA-256 is guaranteed by the Java spec

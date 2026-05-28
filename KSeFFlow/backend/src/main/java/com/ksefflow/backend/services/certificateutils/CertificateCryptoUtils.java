@@ -31,19 +31,28 @@ public class CertificateCryptoUtils {
     private final CertificateStorageProperties props;
 
     // Encrypts raw bytes with AES-256-GCM. Each call generates a fresh random IV.
-    public byte[] aesEncrypt(byte[] plaintext) {
+    public byte[] aesEncrypt(byte[] plaintext) { //! [72, 69, 76, 76, 79]
         try {
-            byte[] iv = new byte[GCM_IV_LENGTH];
-            new SecureRandom().nextBytes(iv);
+            byte[] iv = new byte[GCM_IV_LENGTH]; //! [23, -88, 91, 4, 99, ...]
+            new SecureRandom().nextBytes(iv); //! 17A85B0463...
 
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            
+            //!
             cipher.init(Cipher.ENCRYPT_MODE, getMasterKey(), new GCMParameterSpec(GCM_TAG_BITS, iv));
-            byte[] ciphertext = cipher.doFinal(plaintext);
+            
+            byte[] ciphertext = cipher.doFinal(plaintext); //! [ encrypted data ] + [ authentication tag ] == [AA BB CC DD EE FF ...]
 
-            byte[] result = new byte[GCM_IV_LENGTH + ciphertext.length];
+            byte[] result = new byte[GCM_IV_LENGTH + ciphertext.length]; //! Creates a NEW byte array large enough to hold BOTH:
+                                                                        // IV ==> Because decryption later needs SAME IV.
+                                                                        // ciphertext
+            
+            //! in the result both the item is retunr [iv + ciphertext]                                                            
             System.arraycopy(iv, 0, result, 0, GCM_IV_LENGTH);
             System.arraycopy(ciphertext, 0, result, GCM_IV_LENGTH, ciphertext.length);
-            return result;
+            
+            // return array store of the iv and the ciphertext
+            return result; // ! return : [ IV ][ ciphertext ][ auth tag ]
         } catch (Exception e) {
             throw new KsefCertificateException(
                     "AES-256-GCM encryption failed: " + e.getMessage(), e);
@@ -60,6 +69,7 @@ public class CertificateCryptoUtils {
             System.arraycopy(encryptedData, GCM_IV_LENGTH, ciphertext, 0, ciphertext.length);
 
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+             // getMasterKey(),  coming from the application.properties if this chnagethe dcrption is not possible...
             cipher.init(Cipher.DECRYPT_MODE, getMasterKey(), new GCMParameterSpec(GCM_TAG_BITS, iv));
             return cipher.doFinal(ciphertext);
         } catch (Exception e) {
@@ -102,12 +112,14 @@ public class CertificateCryptoUtils {
     }
 
     private static byte[] hexToBytes(String hex) {
+        // hex : "1234abcd" ==>  [18, 52, 171, 205] 
         int len = hex.length();
-        byte[] data = new byte[len / 2];
+        byte[] data = new byte[len / 2]; //! 2 hex chars = 1 byte
         for (int i = 0; i < len; i += 2) {
             data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
                     + Character.digit(hex.charAt(i + 1), 16));
         }
-        return data;
+        
+        return data; // [18, 52, 171, 205] <=== 12, 34, ab, cd
     }
 }
