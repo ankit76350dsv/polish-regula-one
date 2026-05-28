@@ -1,64 +1,122 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 
-// User model for SafeWork platform authentication.
-// Supports multi-tenancy via tenantId field — mandatory per platform architecture.
-// Passwords are hashed pre-save; never stored in plaintext.
-const userSchema = new mongoose.Schema(
+const { Schema } = mongoose;
+
+/**
+ * Role enum equivalent of Java Role enum.
+ * Add/remove roles based on your backend role definitions.
+ */
+const USER_ROLES = {
+  ROLE_ADMIN: 'ROLE_ADMIN',
+  ROLE_USER: 'ROLE_USER',
+  ROLE_SUPER_ADMIN: 'ROLE_SUPER_ADMIN',
+};
+
+const TENANT_MODULES = {
+  KSEFFLOW: 'KSEFFLOW',
+  WORKPULSE: 'WORKPULSE',
+  SAFEWORK: 'SAFEWORK',
+  SAFEVOICE: 'SAFEVOICE',
+  WASTESYNC: 'WASTESYNC',
+  PRIVACYPILOT: 'PRIVACYPILOT'
+};
+
+const userSchema = new Schema(
   {
-    // Tenant isolation — every document must be scoped to an organisation.
-    tenantId: {
+    cognitoSub: {
       type: String,
       required: true,
+      unique: true,
       index: true,
+      trim: true
+    },
+
+    name: {
+      type: String,
+      trim: true
     },
 
     email: {
       type: String,
       required: true,
       unique: true,
+      index: true,
       lowercase: true,
-      trim: true,
+      trim: true
     },
 
     password: {
       type: String,
-      required: true,
-      select: false, // Never returned in queries by default
+      select: false
     },
 
-    firstName: { type: String, required: true, trim: true },
-    lastName: { type: String, required: true, trim: true },
-
-    // RBAC roles aligned with platform-wide role taxonomy
     role: {
       type: String,
-      enum: ['SUPER_ADMIN', 'COMPANY_ADMIN', 'HR_MANAGER', 'EMPLOYEE', 'AUDITOR', 'COMPLIANCE_OFFICER'],
-      default: 'EMPLOYEE',
+      enum: Object.values(USER_ROLES),
+      default: USER_ROLES.ROLE_USER
     },
 
-    isActive: { type: Boolean, default: true },
+    enabled: {
+      type: Boolean,
+      default: true
+    },
 
-    // Audit metadata — required on all entities per architecture rules
-    createdBy: { type: String },
-    updatedBy: { type: String },
+    /**
+     * Reference to Tenant organisation.
+     *
+     * Java equivalent:
+     * @DBRef
+     * private Tenant tenant;
+     */
+    tenant: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      default: null
+    },
+
+
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+
+    updatedAt: {
+      type: Date,
+      default: null
+    },
+
+    /**
+     * List of compliance modules this user is allowed to access.
+     *
+     * Java equivalent:
+     * private List<TenantModule> moduleIds = new ArrayList<>();
+     *
+     * If TenantModule is a separate MongoDB collection,
+     * keep this as ObjectId ref array.
+     */
+    moduleIds: {
+      type: [
+        {
+          type: String,
+          enum: Object.values(TENANT_MODULES),
+          trim: true
+        }
+      ],
+      default: []
+    }
   },
   {
-    timestamps: true, // Adds createdAt and updatedAt automatically
+    collection: 'users',
   }
+  
 );
 
-// Hash password before save if it was modified
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
-  const salt = await bcrypt.genSalt(12);
-  this.password = await bcrypt.hash(this.password, salt);
-  next();
-});
 
-// Instance method to compare plaintext password against stored hash
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+// Guard against OverwriteModelError on nodemon hot-reload
+const User = mongoose.models.User || mongoose.model('User', userSchema);
+
+module.exports = {
+  User,
+  USER_ROLES,
+  TENANT_MODULES,
 };
-
-module.exports = mongoose.model('User', userSchema);

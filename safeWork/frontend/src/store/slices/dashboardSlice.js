@@ -1,16 +1,33 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
-// Fetches the full compliance dashboard data from the SafeWork backend.
-// Backend is expected on port 5000; error message in the UI references this.
+// SafeWork backend runs on 3001; RegulaOne (auth) runs on 8080
+const SAFEWORK_API = "http://localhost:3001/api";
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("accessToken");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+// Fetches compliance dashboard data from the SafeWork backend.
 export const fetchDashboard = createAsyncThunk(
   "dashboard/fetch",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch("http://localhost:5000/api/dashboard");
+      const response = await fetch(`${SAFEWORK_API}/dashboard`, {
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+      });
+
       if (!response.ok) {
-        return rejectWithValue(`Server error: ${response.status}`);
+        const err = await response.json().catch(() => ({}));
+        return rejectWithValue(err?.message || `Server error: ${response.status}`);
       }
-      return await response.json();
+
+      const json = await response.json();
+      return json?.data ?? json;
     } catch (err) {
       return rejectWithValue(err.message || "Network error");
     }

@@ -1,7 +1,8 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:8080/api";
+// SafeWork backend runs on 3001; RegulaOne (auth) runs on 8080
+const API_BASE_URL = "http://localhost:3001/api";
 
 const authHeaders = () => {
   const token = localStorage.getItem("accessToken");
@@ -15,6 +16,7 @@ export const fetchEmployees = createAsyncThunk(
   async (_, { getState, rejectWithValue }) => {
     try {
       const tenantId = getState().auth.user?.tenantId;
+      
       if (!tenantId) return rejectWithValue("No tenantId found in auth state");
 
       const response = await axios.get(`${API_BASE_URL}/admin/users/${tenantId}`, {
@@ -22,8 +24,8 @@ export const fetchEmployees = createAsyncThunk(
         headers: authHeaders(),
       });
 
-      // Backend wraps in { success, data, message } — unwrap
-      return response.data?.data ?? response.data;
+      // Backend wraps in { success, message, data: { count, employees: [...] } } — unwrap to array
+      return response.data?.data?.employees ?? response.data?.data ?? response.data;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || "Failed to fetch employees");
     }
@@ -91,11 +93,11 @@ const employeeSlice = createSlice({
       })
       .addCase(upsertProfile.fulfilled, (state, action) => {
         state.submitting = false;
-        // Patch the matching employee in the list so the list stays fresh
-        const profile = action.payload;
-        const idx = state.list.findIndex((e) => e._id === profile.employeeId);
+        // Merge updated compliance fields back into the list entry (keep user identity)
+        const updated = action.payload;
+        const idx = state.list.findIndex((e) => e._id === updated._id || e.userId?.toString() === updated.userId?.toString());
         if (idx !== -1) {
-          state.list[idx] = { ...state.list[idx], profile, profileMissing: false };
+          state.list[idx] = { ...state.list[idx], ...updated };
         }
       })
       .addCase(upsertProfile.rejected, (state, action) => {

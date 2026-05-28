@@ -1,18 +1,18 @@
 const express = require('express');
 const { body } = require('express-validator');
 const employeeController = require('../controllers/employeeController');
-const { authenticate, authorize } = require('../middleware/authMiddleware');
+const { isAuthenticatedUser, authorizeRoles } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-router.use(authenticate);
+router.use(isAuthenticatedUser);
 
 // GET /api/admin/users/:tenantId
 // Returns all RegulaOne users for the tenant merged with their EmployeeProfile data.
 // Users with no profile are flagged as profileMissing: true.
 router.get(
   '/users/:tenantId',
-  authorize('SUPER_ADMIN', 'COMPANY_ADMIN', 'HR_MANAGER', 'COMPLIANCE_OFFICER'),
+  authorizeRoles('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_USER', 'COMPLIANCE_OFFICER'),
   employeeController.getEmployees
 );
 
@@ -22,7 +22,7 @@ router.get(
 // Identity fields (name, email) must NOT be sent — they are read from RegulaOne.
 router.put(
   '/employees/:employeeId',
-  authorize('COMPANY_ADMIN', 'HR_MANAGER'),
+  authorizeRoles('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_USER'),
   [
     body('department').optional().isString(),
     body('position').optional().isString(),
@@ -38,7 +38,7 @@ router.put(
 // without needing full profile edit permissions.
 router.patch(
   '/employees/:employeeId/compliance',
-  authorize('COMPANY_ADMIN', 'HR_MANAGER', 'COMPLIANCE_OFFICER'),
+  authorizeRoles('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_USER'),
   employeeController.updateEmployeeCompliance
 );
 

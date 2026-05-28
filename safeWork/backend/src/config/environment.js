@@ -15,6 +15,12 @@ const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
 
+  cognito: {
+    userPoolId: process.env.AWS_COGNITO_USER_POOL_ID,
+    clientId: process.env.AWS_COGNITO_CLIENT_ID,
+    tokenUse: process.env.AWS_COGNITO_TOKEN_USE || 'id'
+  },
+
   cors: {
     // Accept comma-separated origins for multi-frontend support
     origins: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(','),

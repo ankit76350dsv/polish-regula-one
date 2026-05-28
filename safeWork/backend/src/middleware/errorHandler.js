@@ -5,6 +5,11 @@ const { sendError } = require('../utils/responseHelper');
 const errorHandler = (err, req, res, next) => {
   console.error('[ERROR]', err.message, err.stack);
 
+  // ErrorHandler instances already carry the right statusCode — use it directly
+  if (err.statusCode) {
+    return sendError(res, err.message, err.statusCode);
+  }
+
   // Mongoose validation errors
   if (err.name === 'ValidationError') {
     const errors = Object.values(err.errors).map((e) => e.message);

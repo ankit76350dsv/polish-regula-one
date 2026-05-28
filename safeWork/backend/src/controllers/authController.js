@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const authService = require('../services/authService');
 const { sendSuccess, sendError } = require('../utils/responseHelper');
 
+
 // Thin controller — only parses request, delegates to service, formats response.
 // Business logic lives in authService.
 
@@ -28,8 +29,8 @@ const login = async (req, res, next) => {
 };
 
 const getMe = async (req, res, next) => {
+  console.log('AuthController.getMe called with user:', req.user);
   try {
-    // req.user is attached by authMiddleware after token validation
     const user = await authService.getMe(req.user._id);
     return sendSuccess(res, { user }, 'User profile retrieved');
   } catch (err) {

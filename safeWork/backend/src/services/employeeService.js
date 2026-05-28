@@ -1,71 +1,89 @@
-const EmployeeProfile = require('../models/Employee');
+// const EmployeeProfile = require('../models/Employee');
 const { logAudit } = require('../middleware/auditLogger');
+const SafeWorkEmployee = require('../models/employee');
+const mongoose = require('mongoose');
 
-// Base URL of the RegulaOne auth/user service.
-// EmployeeProfile stores only compliance data; identity data lives in RegulaOne.
-const REGULA_ONE_BASE_URL = process.env.REGULA_ONE_API_URL || 'http://localhost:8080';
 
-// Calls the RegulaOne user API to retrieve all users for a tenant.
-// The caller's JWT is forwarded so the RegulaOne service can authorise the request.
-const fetchUsersFromRegulaOne = async (tenantId, authToken) => {
-  const res = await fetch(`${REGULA_ONE_BASE_URL}/api/admin/users/${tenantId}`, {
-    headers: { Authorization: `Bearer ${authToken}` },
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
+const getEmployeesByTenant = async (tenantId) => {
+  if (!tenantId || !mongoose.Types.ObjectId.isValid(tenantId)) {
     throw {
-      status: res.status,
-      message: `RegulaOne API error (${res.status}): ${text}`,
+      status: 400,
+      message: 'Valid tenantId is required',
     };
   }
 
-  const json = await res.json();
-  // RegulaOne wraps responses in { success, data } — unwrap if present
-  return Array.isArray(json) ? json : json.data ?? [];
-};
+  const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
 
-// Returns all users for a tenant merged with their EmployeeProfile compliance data.
-//
-// Merge logic:
-//   - For every user returned by RegulaOne, find the matching EmployeeProfile
-//     where employeeId === user._id (or user.id).
-//   - Users with no profile are returned with profileMissing: true so the
-//     frontend can prompt the HR manager to complete their compliance setup.
-//   - Users who already have a profile get the full profile embedded.
-const getEmployeesByTenant = async (tenantId, authToken) => {
-  // Run both fetches in parallel for performance
-  const [users, profiles] = await Promise.all([
-    fetchUsersFromRegulaOne(tenantId, authToken),
-    EmployeeProfile.find({ tenantId, isActive: true }).lean(),
+  const employees = await SafeWorkEmployee.aggregate([
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'userId',
+        foreignField: '_id',
+        as: 'user',
+      },
+    },
+    {
+      $unwind: {
+        path: '$user',
+        preserveNullAndEmptyArrays: false,
+      },
+    },
+    {
+      $match: {
+        'user.tenant.$id': tenantObjectId,
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        userId: 1,
+        employeeId: 1,
+        dateOfBirth: 1,
+        Name: 1,
+        name: 1,
+        email: 1,
+        phone: 1,
+        pesel: 1,
+        department: 1,
+        position: 1,
+        site: 1,
+        contractType: 1,
+        startDate: 1,
+        medicalCertificate: 1,
+        bhpTraining: 1,
+        complianceStatus: 1,
+        isBlocked: 1,
+        blockReason: 1,
+        riskLevel: 1,
+        isActive: 1,
+        createdBy: 1,
+        updatedBy: 1,
+        createdAt: 1,
+        updatedAt: 1,
+
+        user: {
+          _id: '$user._id',
+          cognitoSub: '$user.cognitoSub',
+          name: '$user.name',
+          email: '$user.email',
+          role: '$user.role',
+          enabled: '$user.enabled',
+          tenant: '$user.tenant',
+          moduleIds: '$user.moduleIds',
+          createdAt: '$user.createdAt',
+          updatedAt: '$user.updatedAt',
+        },
+      },
+    },
+    {
+      $sort: {
+        createdAt: -1,
+      },
+    },
   ]);
 
-  // Build a lookup map: employeeId → profile document
-  const profileByEmployeeId = {};
-  for (const profile of profiles) {
-    profileByEmployeeId[profile.employeeId] = profile;
-  }
-
-  // Merge each user with their profile (or mark as missing)
-  const merged = users.map((user) => {
-    const userId = user._id ?? user.id;
-    const profile = profileByEmployeeId[userId] ?? null;
-    return {
-      // Identity fields from RegulaOne (source of truth — not duplicated in profile)
-      _id: userId,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      isActive: user.isActive,
-
-      // Compliance profile — null when HR has not set it up yet
-      profile,
-      profileMissing: profile === null,
-    };
-  });
-
-  return merged;
+  return employees;
 };
 
 // Upserts the compliance profile for a given RegulaOne user.
@@ -77,7 +95,7 @@ const upsertEmployeeProfile = async (employeeId, data, actor) => {
   // Fields the caller is not allowed to push through (identity lives in RegulaOne)
   const { email, firstName, lastName, role, ...complianceData } = data;
 
-  const existing = await EmployeeProfile.findOne({
+  const existing = await SafeWorkEmployee.findOne({
     employeeId,
     tenantId: actor.tenantId,
   });
@@ -112,7 +130,7 @@ const upsertEmployeeProfile = async (employeeId, data, actor) => {
     });
   } else {
     // CREATE path — first time this user gets a compliance profile
-    profile = await EmployeeProfile.create({
+    profile = await SafeWorkEmployee.create({
       ...complianceData,
       employeeId,
       tenantId: actor.tenantId,
@@ -142,7 +160,7 @@ const upsertEmployeeProfile = async (employeeId, data, actor) => {
 // Kept separate from upsert so compliance officers can update status
 // without having access to the full profile form.
 const updateEmployeeCompliance = async (employeeId, tenantId, updates, actor) => {
-  const profile = await EmployeeProfile.findOne({ employeeId, tenantId });
+  const profile = await SafeWorkEmployee.findOne({ employeeId, tenantId });
   if (!profile) throw { status: 404, message: 'Employee profile not found' };
 
   const oldValue = {

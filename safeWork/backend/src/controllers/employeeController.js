@@ -5,20 +5,24 @@ const { sendSuccess, sendError } = require('../utils/responseHelper');
 // Returns all tenant users merged with their EmployeeProfile compliance data.
 // Guards against cross-tenant access before delegating to the service.
 const getEmployees = async (req, res, next) => {
-  try {
-    const { tenantId } = req.params;
+ try {
+    const tenantId = req.params.tenantId || req.user?.tenant;
 
-    if (req.user.role !== 'SUPER_ADMIN' && req.user.tenantId !== tenantId) {
-      return sendError(res, 'Access denied: tenant mismatch', 403);
+    const employees = await employeeService.getEmployeesByTenant(tenantId);
+
+    return sendSuccess(
+      res,
+      {
+        count: employees.length,
+        employees,
+      },
+      'Employees fetched successfully'
+    );
+  } catch (err) {
+    if (err.status) {
+      return sendError(res, err.message, err.status);
     }
 
-    // Forward the caller's JWT so the service can call the RegulaOne user API
-    const authToken = req.headers.authorization.split(' ')[1];
-
-    const employees = await employeeService.getEmployeesByTenant(tenantId, authToken);
-    return sendSuccess(res, employees, 'Employees retrieved');
-  } catch (err) {
-    if (err.status) return sendError(res, err.message, err.status);
     next(err);
   }
 };

@@ -4,7 +4,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchEmployees } from "../store/slices/employeeSlice";
 
 // ─── Status config ─────────────────────────────────────────────────────────────
-// Keys are normalised lowercase strings returned by the helper functions below.
 const statusConfig = {
   valid:     { label: "Valid",           className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
   compliant: { label: "Compliant",       className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
@@ -14,7 +13,6 @@ const statusConfig = {
   expired:   { label: "Expired",         className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
   missing:   { label: "Missing",         className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
   blocked:   { label: "Blocked",         className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
-  setup:     { label: "Setup Required",  className: "bg-violet-50 text-violet-700 ring-violet-200",    dot: "bg-violet-500"  },
 };
 
 function StatusBadge({ status }) {
@@ -33,46 +31,44 @@ function formatDate(dateValue) {
 }
 
 // ─── Data-shape helpers ────────────────────────────────────────────────────────
-// The API returns merged objects: { _id, firstName, lastName, email, role, profile, profileMissing }
-// All helpers normalise backend UPPERCASE enums to the lowercase statusConfig keys.
+// API shape (flat): { _id, userId, user: { name, email, role, ... },
+//   department, position, site, contractType,
+//   medicalCertificate: { status, expiryDate }, bhpTraining: { status, expiryDate },
+//   complianceStatus, isBlocked, blockReason, ... }
 
 function displayName(e) {
-  return `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim() || e.email;
+  return e.user?.name || e.user?.email || "Unknown";
 }
 
+// Normalise backend UPPERCASE enum → lowercase statusConfig key
 function medicalStatus(e) {
-  if (e.profileMissing || !e.profile) return "setup";
-  return e.profile.medicalCertificate?.status?.toLowerCase() ?? "missing";
+  return e.medicalCertificate?.status?.toLowerCase() ?? "missing";
 }
 
 function bhpStatus(e) {
-  if (e.profileMissing || !e.profile) return "setup";
-  return e.profile.bhpTraining?.status?.toLowerCase() ?? "missing";
+  return e.bhpTraining?.status?.toLowerCase() ?? "missing";
 }
 
-// Maps backend COMPLIANT/EXPIRING/NON_COMPLIANT/BLOCKED → statusConfig keys
 function overallStatus(e) {
-  if (e.profileMissing || !e.profile) return "setup";
-  const s = e.profile.complianceStatus;
-  if (s === "COMPLIANT")    return "compliant";
-  if (s === "EXPIRING")     return "expiring";
-  if (s === "BLOCKED")      return "blocked";
-  return "warning"; // NON_COMPLIANT
+  const s = e.complianceStatus;
+  if (s === "COMPLIANT") return "compliant";
+  if (s === "EXPIRING")  return "expiring";
+  if (s === "BLOCKED")   return "blocked";
+  return "warning"; // NON_COMPLIANT or unknown
 }
 
 function clockInStatus(e) {
-  if (e.profileMissing || !e.profile) return "setup";
-  return e.profile.isBlocked ? "blocked" : "allowed";
+  return e.isBlocked ? "blocked" : "allowed";
 }
 
-function blockReason(e) {
-  const med = e.profile?.medicalCertificate;
-  const bhp = e.profile?.bhpTraining;
+function resolveBlockReason(e) {
+  const med = e.medicalCertificate;
+  const bhp = e.bhpTraining;
   if (med?.status === "EXPIRED") return `Medical expired on ${formatDate(med.expiryDate)}`;
   if (med?.status === "MISSING") return "Medical certificate is missing";
   if (bhp?.status === "EXPIRED") return `BHP training expired on ${formatDate(bhp.expiryDate)}`;
   if (bhp?.status === "MISSING") return "BHP training certificate is missing";
-  return "Compliance block active";
+  return e.blockReason || "Compliance block active";
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
@@ -90,30 +86,33 @@ function EmployeeList() {
     dispatch(fetchEmployees());
   }, [dispatch]);
 
+  // Ensure employees is always an array (guard against bad state shape)
+  const safeList = Array.isArray(employees) ? employees : [];
+
   const departments = useMemo(
-    () => ["All", ...new Set(employees.map((e) => e.profile?.department).filter(Boolean))],
-    [employees]
+    () => ["All", ...new Set(safeList.map((e) => e.department).filter(Boolean))],
+    [safeList]
   );
   const sites = useMemo(
-    () => ["All", ...new Set(employees.map((e) => e.profile?.site).filter(Boolean))],
-    [employees]
+    () => ["All", ...new Set(safeList.map((e) => e.site).filter(Boolean))],
+    [safeList]
   );
 
   const filteredEmployees = useMemo(() => {
-    return employees.filter((e) => {
-      const text = `${displayName(e)} ${e.email} ${e.profile?.department ?? ""} ${e.profile?.position ?? ""} ${e.profile?.site ?? ""}`.toLowerCase();
-      const matchSearch     = !searchTerm || text.includes(searchTerm.toLowerCase());
-      const matchDept       = selectedDepartment === "All" || e.profile?.department === selectedDepartment;
-      const matchSite       = selectedSite === "All" || e.profile?.site === selectedSite;
-      const matchStatus     = selectedStatus === "All" || overallStatus(e) === selectedStatus;
+    return safeList.filter((e) => {
+      const text = `${displayName(e)} ${e.user?.email ?? ""} ${e.department ?? ""} ${e.position ?? ""} ${e.site ?? ""}`.toLowerCase();
+      const matchSearch = !searchTerm || text.includes(searchTerm.toLowerCase());
+      const matchDept   = selectedDepartment === "All" || e.department === selectedDepartment;
+      const matchSite   = selectedSite === "All" || e.site === selectedSite;
+      const matchStatus = selectedStatus === "All" || overallStatus(e) === selectedStatus;
       return matchSearch && matchDept && matchSite && matchStatus;
     });
-  }, [employees, searchTerm, selectedDepartment, selectedSite, selectedStatus]);
+  }, [safeList, searchTerm, selectedDepartment, selectedSite, selectedStatus]);
 
-  const totalCount     = employees.length;
-  const compliantCount = employees.filter((e) => e.profile?.complianceStatus === "COMPLIANT").length;
-  const expiringCount  = employees.filter((e) => e.profile?.complianceStatus === "EXPIRING").length;
-  const blockedCount   = employees.filter((e) => e.profile?.isBlocked === true).length;
+  const totalCount     = safeList.length;
+  const compliantCount = safeList.filter((e) => e.complianceStatus === "COMPLIANT").length;
+  const expiringCount  = safeList.filter((e) => e.complianceStatus === "EXPIRING").length;
+  const blockedCount   = safeList.filter((e) => e.isBlocked === true).length;
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 sm:p-6 lg:p-8">
@@ -176,7 +175,7 @@ function EmployeeList() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <input
               type="text"
-              placeholder="Search name, email, role, site…"
+              placeholder="Search name, email, position, site…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -209,7 +208,6 @@ function EmployeeList() {
               <option value="expiring">Expiring Soon</option>
               <option value="warning">Non-Compliant</option>
               <option value="blocked">Blocked</option>
-              <option value="setup">Setup Required</option>
             </select>
           </div>
         </div>
@@ -253,92 +251,68 @@ function EmployeeList() {
                   {filteredEmployees.map((employee) => (
                     <tr
                       key={employee._id}
-                      className={`text-sm transition ${employee.profileMissing ? "bg-violet-50/40" : "cursor-pointer bg-slate-50 hover:bg-blue-50"}`}
-                      onClick={() => !employee.profileMissing && navigate(`/employees/${employee._id}`)}
+                      className="cursor-pointer bg-slate-50 text-sm transition hover:bg-blue-50"
+                      onClick={() => navigate(`/employees/${employee._id}`)}
                     >
-                      {/* Employee identity — always from RegulaOne */}
+                      {/* Identity — sourced from e.user (RegulaOne) */}
                       <td className="rounded-l-xl px-3 py-4">
                         <div>
                           <p className="font-bold text-slate-900">{displayName(employee)}</p>
-                          <p className="text-xs text-slate-400">{employee.email}</p>
-                          <p className="text-xs font-medium text-slate-500 capitalize">{employee.role?.toLowerCase().replace("_", " ")}</p>
+                          <p className="text-xs text-slate-400">{employee.user?.email}</p>
+                          <p className="text-xs font-medium text-slate-500 capitalize">
+                            {employee.user?.role?.toLowerCase().replace(/_/g, " ")}
+                          </p>
                         </div>
                       </td>
 
-                      {/* Compliance profile fields — null when no profile yet */}
+                      {/* Department / contract — from SafeWork profile (top-level) */}
                       <td className="px-3 py-4">
-                        {employee.profileMissing ? (
-                          <span className="text-xs text-slate-400 italic">Not set up</span>
-                        ) : (
-                          <>
-                            <p className="font-medium text-slate-700">{employee.profile?.department ?? "—"}</p>
-                            <p className="text-xs text-slate-400">{employee.profile?.contractType ?? "—"}</p>
-                          </>
-                        )}
+                        <p className="font-medium text-slate-700">{employee.department || "—"}</p>
+                        <p className="text-xs text-slate-400">{employee.contractType || "—"}</p>
                       </td>
+
+                      {/* Position / site */}
                       <td className="px-3 py-4">
-                        {employee.profileMissing ? (
-                          <span className="text-xs text-slate-400 italic">Not set up</span>
-                        ) : (
-                          <>
-                            <p className="font-medium text-slate-700">{employee.profile?.position ?? "—"}</p>
-                            <p className="text-xs text-slate-400">{employee.profile?.site ?? "—"}</p>
-                          </>
-                        )}
+                        <p className="font-medium text-slate-700">{employee.position || "—"}</p>
+                        <p className="text-xs text-slate-400">{employee.site || "—"}</p>
                       </td>
 
                       <td className="px-3 py-4"><StatusBadge status={medicalStatus(employee)} /></td>
                       <td className="px-3 py-4"><StatusBadge status={bhpStatus(employee)} /></td>
                       <td className="px-3 py-4"><StatusBadge status={overallStatus(employee)} /></td>
 
+                      {/* Clock-in status + block reason */}
                       <td className="px-3 py-4">
                         <div className="space-y-1">
                           <StatusBadge status={clockInStatus(employee)} />
-                          {employee.profile?.isBlocked && (
+                          {employee.isBlocked && (
                             <p className="max-w-[230px] text-xs font-medium text-red-600">
-                              {blockReason(employee)}
+                              {resolveBlockReason(employee)}
                             </p>
                           )}
                         </div>
                       </td>
 
+                      {/* Expiry dates */}
                       <td className="px-3 py-4 text-xs text-slate-500">
-                        {employee.profileMissing ? (
-                          <span className="italic text-slate-400">—</span>
-                        ) : (
-                          <>
-                            <p>Medical: {formatDate(employee.profile?.medicalCertificate?.expiryDate)}</p>
-                            <p>BHP: {formatDate(employee.profile?.bhpTraining?.expiryDate)}</p>
-                          </>
-                        )}
+                        <p>Medical: {formatDate(employee.medicalCertificate?.expiryDate)}</p>
+                        <p>BHP: {formatDate(employee.bhpTraining?.expiryDate)}</p>
                       </td>
 
                       <td className="rounded-r-xl px-3 py-4 text-right">
-                        <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                          {employee.profileMissing ? (
-                            // User exists in RegulaOne but has no compliance profile yet
-                            <button
-                              onClick={() => navigate("/employees/add", { state: { preselectedUser: employee } })}
-                              className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700"
-                            >
-                              Setup Profile
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => navigate(`/employees/${employee._id}`)}
-                                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                              >
-                                View
-                              </button>
-                              <button className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
-                                Upload
-                              </button>
-                              <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700">
-                                Alert
-                              </button>
-                            </>
-                          )}
+                        <div className="flex justify-end gap-2" onClick={(ev) => ev.stopPropagation()}>
+                          <button
+                            onClick={() => navigate(`/employees/${employee._id}`)}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            View
+                          </button>
+                          <button className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+                            Upload
+                          </button>
+                          <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700">
+                            Alert
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -346,17 +320,17 @@ function EmployeeList() {
                 </tbody>
               </table>
 
-              {!loading && filteredEmployees.length === 0 && (
+              {filteredEmployees.length === 0 && (
                 <div className="py-12 text-center">
                   <p className="font-semibold text-slate-700">
-                    {employees.length === 0 ? "No employees in the system" : "No employees match your filters"}
+                    {safeList.length === 0 ? "No employees in the system" : "No employees match your filters"}
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    {employees.length === 0
+                    {safeList.length === 0
                       ? "Add your first employee to get started."
                       : "Try changing your filters or search keyword."}
                   </p>
-                  {employees.length === 0 && (
+                  {safeList.length === 0 && (
                     <button
                       onClick={() => navigate("/employees/add")}
                       className="mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"
