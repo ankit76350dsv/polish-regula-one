@@ -1,5 +1,5 @@
 import { useEffect }                                              from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation }    from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuthStore }                                           from './store/authStore';
 
 // Auth pages
@@ -29,6 +29,28 @@ import WorkPulse         from './pages/Modules/WorkPulse';
 import ModulePlaceholder from './pages/Modules/ModulePlaceholder';
 
 import DashboardLayout from './components/layout/DashboardLayout';
+
+/**
+ * Handles the /login route for users who already have a valid session.
+ * - No session  → show LoginPage normally.
+ * - Session + redirect_uri in URL → forward to that URI (cross-app SSO).
+ * - Session, no redirect_uri → go to dashboard.
+ * Must live inside <BrowserRouter> so useSearchParams() works.
+ */
+function LoginRoute() {
+  const { user } = useAuthStore();
+  const [searchParams] = useSearchParams();
+
+  if (!user) return <LoginPage />;
+
+  const redirectUri = searchParams.get('redirect_uri');
+  if (redirectUri) {
+    window.location.href = redirectUri;
+    return null;
+  }
+
+  return <Navigate to="/" replace />;
+}
 
 /**
  * Wraps all protected routes. When the user is not authenticated, redirects
@@ -74,7 +96,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         {/* ── Public auth routes ── */}
-        <Route path="/login"          element={!user ? <LoginPage />         : <Navigate to="/" />} />
+        <Route path="/login"          element={<LoginRoute />} />
         <Route path="/register"       element={!user ? <SignupPage />         : <Navigate to="/" />} />
         <Route path="/auth/signup"    element={!user ? <SignupPage />         : <Navigate to="/" />} />
         <Route path="/auth/confirm"   element={!user ? <ConfirmSignupPage />  : <Navigate to="/" />} />

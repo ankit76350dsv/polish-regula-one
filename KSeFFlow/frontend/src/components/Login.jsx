@@ -19,7 +19,6 @@ export default function Login() {
   useEffect(() => {
     const returnTo = encodeURIComponent(SSO_CALLBACK_URL);
     window.location.href = `${CENTRAL_LOGIN}?redirect_uri=${returnTo}`;
-    console.log("Hii")
   }, []);
 
   return (

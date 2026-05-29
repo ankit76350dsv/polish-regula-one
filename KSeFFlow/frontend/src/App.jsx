@@ -6,6 +6,7 @@ import {
   INITIAL_NOTIFICATIONS
 } from './data/mockData';
 import { listInvoices } from './api/ksefApi';
+import { SSO_CALLBACK_URL } from './lib/api';
 
 const API_URL       = import.meta.env.VITE_API_URL          ?? 'http://localhost:8080';
 const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
@@ -164,7 +165,9 @@ export default function App() {
     // POST /api/sso/logout clears all auth cookies and returns { logoutUrl }.
     fetch(`${API_URL}/api/sso/logout`, { method: 'POST', credentials: 'include' })
       .then(res => res.ok ? res.json() : Promise.reject())
-      .then(({ logoutUrl }) => { window.location.href = logoutUrl; })
+      .then(({ logoutUrl }) => {
+        window.location.href = `${logoutUrl}?redirect_uri=${encodeURIComponent(SSO_CALLBACK_URL)}`;
+      })
       .catch(() => { window.location.href = CENTRAL_LOGIN; });
   };
 
