@@ -30,11 +30,16 @@ import ModulePlaceholder from './pages/Modules/ModulePlaceholder';
 
 import DashboardLayout from './components/layout/DashboardLayout';
 
+/** Returns the dashboard path for a user — used after login / challenge / already-authed. */
+function dashboardPath(tenantId) {
+  return `/company/${tenantId ?? 'platform'}/overview`;
+}
+
 /**
  * Handles the /login route for users who already have a valid session.
  * - No session  → show LoginPage normally.
  * - Session + redirect_uri in URL → forward to that URI (cross-app SSO).
- * - Session, no redirect_uri → go to dashboard.
+ * - Session, no redirect_uri → go to company dashboard.
  * Must live inside <BrowserRouter> so useSearchParams() works.
  */
 function LoginRoute() {
@@ -49,7 +54,7 @@ function LoginRoute() {
     return null;
   }
 
-  return <Navigate to="/" replace />;
+  return <Navigate to={dashboardPath(user.tenantId)} replace />;
 }
 
 /**
@@ -106,35 +111,35 @@ export default function App() {
 
         {/* ── Protected routes — RequireAuth redirects to /login?redirect_uri=<path> ── */}
         <Route element={<RequireAuth />}>
-          <Route path="/"               element={<Overview />} />
-          <Route path="/profile"        element={<ProfilePage />} />
-          <Route path="/change-password" element={<ChangePasswordPage />} />
+          <Route path="/company/:tenantId/overview"        element={<Overview />} />
+          <Route path="/company/:tenantId/profile"         element={<ProfilePage />} />
+          <Route path="/company/:tenantId/change-password" element={<ChangePasswordPage />} />
 
           {user?.role === 'ROLE_SUPER_ADMIN' && (
             <>
-              <Route path="/tenants"        element={<TenantManagement />} />
-              <Route path="/tenants/:id"    element={<TenantDetailPage />} />
-              <Route path="/users"          element={<UserManagement />} />
-              <Route path="/package-tiers"  element={<PackageTiers />} />
+              <Route path="/company/:tenantId/tenants"       element={<TenantManagement />} />
+              <Route path="/company/:tenantId/tenants/:id"   element={<TenantDetailPage />} />
+              <Route path="/company/:tenantId/users"         element={<UserManagement />} />
+              <Route path="/company/:tenantId/package-tiers" element={<PackageTiers />} />
             </>
           )}
 
           {user?.role === 'ROLE_ADMIN' && (
             <>
-              <Route path="/team"    element={<AdminTeam />} />
-              <Route path="/my-plan" element={<AdminPlan />} />
+              <Route path="/company/:tenantId/team"    element={<AdminTeam />} />
+              <Route path="/company/:tenantId/my-plan" element={<AdminPlan />} />
             </>
           )}
 
-          <Route path="/modules/ksef"          element={<KSeFFlow />} />
-          <Route path="/modules/workpulse"     element={<WorkPulse />} />
-          <Route path="/modules/safework"      element={<ModulePlaceholder />} />
-          <Route path="/modules/safevoice"     element={<ModulePlaceholder />} />
-          <Route path="/modules/wastesync"     element={<ModulePlaceholder />} />
-          <Route path="/modules/privacypilot"  element={<ModulePlaceholder />} />
+          <Route path="/company/:tenantId/modules/ksef"          element={<KSeFFlow />} />
+          <Route path="/company/:tenantId/modules/workpulse"     element={<WorkPulse />} />
+          <Route path="/company/:tenantId/modules/safework"      element={<ModulePlaceholder />} />
+          <Route path="/company/:tenantId/modules/safevoice"     element={<ModulePlaceholder />} />
+          <Route path="/company/:tenantId/modules/wastesync"     element={<ModulePlaceholder />} />
+          <Route path="/company/:tenantId/modules/privacypilot"  element={<ModulePlaceholder />} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route path="*" element={<Navigate to={user ? dashboardPath(user.tenantId) : '/login'} replace />} />
       </Routes>
     </BrowserRouter>
   );

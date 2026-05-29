@@ -61,7 +61,7 @@ export function useLogin() {
         if (redirectUri) {
           window.location.href = redirectUri;
         } else {
-          navigate('/');
+          navigate(`/company/${me.tenantId ?? 'platform'}/overview`);
         }
       } catch {
         toast.error('Login succeeded but could not load your profile. Please try again.');
@@ -151,7 +151,7 @@ export function useRespondChallenge() {
         if (redirectUri) {
           window.location.href = redirectUri;
         } else {
-          navigate('/');
+          navigate(`/company/${me.tenantId ?? 'platform'}/overview`);
         }
       } catch {
         toast.error('Password set but could not load your profile. Please log in.');

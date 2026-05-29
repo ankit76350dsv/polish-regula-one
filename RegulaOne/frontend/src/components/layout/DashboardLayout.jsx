@@ -57,9 +57,11 @@ export default function DashboardLayout() {
     return <OrgBlockedModal />;
   }
 
+  const tid = user?.tenantId ?? 'platform';
+
   // 4. Plan expiry — block access to everything except /my-plan so the admin can
   //    still navigate to the plan page to renew. ROLE_SUPER_ADMIN has no tenant plan.
-  if (user?.planExpired && user?.role !== 'ROLE_SUPER_ADMIN' && location.pathname !== '/my-plan') {
+  if (user?.planExpired && user?.role !== 'ROLE_SUPER_ADMIN' && !location.pathname.endsWith('/my-plan')) {
     return <PlanExpiredModal />;
   }
 
@@ -69,24 +71,24 @@ export default function DashboardLayout() {
     : user?.tenantName ?? 'My Organisation';
 
   const navItems = [
-    { title: 'Overview',       icon: LayoutDashboard, path: '/',              roles: ['ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_USER'] },
-    { title: 'Tenants',        icon: Building2,        path: '/tenants',       roles: ['ROLE_SUPER_ADMIN'] },
-    { title: 'Users',          icon: Users,            path: '/users',         roles: ['ROLE_SUPER_ADMIN'] },
-    { title: 'License Tiers',  icon: Package,          path: '/package-tiers', roles: ['ROLE_SUPER_ADMIN'] },
-    { title: 'Team',           icon: Users,            path: '/team',          roles: ['ROLE_ADMIN'] },
-    { title: 'My Plan',        icon: Package,          path: '/my-plan',       roles: ['ROLE_ADMIN'] },
+    { title: 'Overview',       icon: LayoutDashboard, path: `/company/${tid}/overview`,       roles: ['ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_USER'] },
+    { title: 'Tenants',        icon: Building2,        path: `/company/${tid}/tenants`,        roles: ['ROLE_SUPER_ADMIN'] },
+    { title: 'Users',          icon: Users,            path: `/company/${tid}/users`,          roles: ['ROLE_SUPER_ADMIN'] },
+    { title: 'License Tiers',  icon: Package,          path: `/company/${tid}/package-tiers`,  roles: ['ROLE_SUPER_ADMIN'] },
+    { title: 'Team',           icon: Users,            path: `/company/${tid}/team`,           roles: ['ROLE_ADMIN'] },
+    { title: 'My Plan',        icon: Package,          path: `/company/${tid}/my-plan`,        roles: ['ROLE_ADMIN'] },
   ];
 
   // All compliance modules with their backend enum key for access control.
   // ROLE_SUPER_ADMIN sees every module regardless of moduleIds.
   // ROLE_ADMIN and ROLE_USER only see the modules listed in user.moduleIds.
   const ALL_MODULES = [
-    { title: 'KSeFFlow',    icon: ReceiptText,   path: '/modules/ksef',         moduleKey: 'KSEFFLOW',     dotColor: 'bg-blue-300' },
-    { title: 'WorkPulse',   icon: Clock,         path: '/modules/workpulse',    moduleKey: 'WORKPULSE',    dotColor: 'bg-green-300' },
-    { title: 'SafeWork',    icon: ShieldCheck,   path: '/modules/safework',     moduleKey: 'SAFEWORK',     dotColor: 'bg-amber-300' },
-    { title: 'SafeVoice',   icon: MessageSquare, path: '/modules/safevoice',    moduleKey: 'SAFEVOICE',    dotColor: 'bg-orange-300' },
-    { title: 'WasteSync',   icon: Trash2,        path: '/modules/wastesync',    moduleKey: 'WASTESYNC',    dotColor: 'bg-red-300' },
-    { title: 'PrivacyPilot',icon: ShieldAlert,   path: '/modules/privacypilot', moduleKey: 'PRIVACYPILOT', dotColor: 'bg-emerald-300' },
+    { title: 'KSeFFlow',    icon: ReceiptText,   path: `/company/${tid}/modules/ksef`,         moduleKey: 'KSEFFLOW',     dotColor: 'bg-blue-300' },
+    { title: 'WorkPulse',   icon: Clock,         path: `/company/${tid}/modules/workpulse`,    moduleKey: 'WORKPULSE',    dotColor: 'bg-green-300' },
+    { title: 'SafeWork',    icon: ShieldCheck,   path: `/company/${tid}/modules/safework`,     moduleKey: 'SAFEWORK',     dotColor: 'bg-amber-300' },
+    { title: 'SafeVoice',   icon: MessageSquare, path: `/company/${tid}/modules/safevoice`,    moduleKey: 'SAFEVOICE',    dotColor: 'bg-orange-300' },
+    { title: 'WasteSync',   icon: Trash2,        path: `/company/${tid}/modules/wastesync`,    moduleKey: 'WASTESYNC',    dotColor: 'bg-red-300' },
+    { title: 'PrivacyPilot',icon: ShieldAlert,   path: `/company/${tid}/modules/privacypilot`, moduleKey: 'PRIVACYPILOT', dotColor: 'bg-emerald-300' },
   ];
 
   const visibleModules = user?.role === 'ROLE_SUPER_ADMIN'
@@ -162,7 +164,7 @@ export default function DashboardLayout() {
 
           <SidebarFooter className="p-3 border-t border-red-600">
             <div className="flex items-center gap-2 px-1">
-              <Link to="/profile" className="flex items-center gap-2 min-w-0 flex-1 group">
+              <Link to={`/company/${tid}/profile`} className="flex items-center gap-2 min-w-0 flex-1 group">
                 <Avatar className="h-8 w-8 border border-red-500 bg-red-800 flex-shrink-0">
                   <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`} />
                   <AvatarFallback className="bg-red-800 text-red-200">{user?.email?.[0].toUpperCase()}</AvatarFallback>
