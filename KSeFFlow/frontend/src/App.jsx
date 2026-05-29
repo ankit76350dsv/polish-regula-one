@@ -85,24 +85,45 @@ export default function App() {
         if (!res.ok) throw new Error('not authenticated');
         return res.json();
       })
-      .then(user => {
+      .then(json => {
+        // /api/auth/me returns AppResponse<UserResponse> — unwrap the envelope.
+        // Raw fetch does not go through apiFetch, so we do it manually here.
+        const user = json?.data ?? json;
+
         const mappedRole = mapRole(user.role);
-        setCurrentUser({ name: user.name, email: user.email, role: mappedRole, tenantId: user.tenantId });
+        const tenantId   = user.tenantId ?? '';
+
+        setCurrentUser({ name: user.name, email: user.email, role: mappedRole, tenantId });
         setActiveRole(mappedRole);
         setActiveTenant({
-          id:               user.tenantId  ?? '',
+          id:               tenantId,
           name:             user.tenantName ?? 'My Organisation',
-          nip:              '',            // Available in Tenant model; not in /me response
+          nip:              '',
           subscriptionPlan: 'Active',
         });
         setIsAuthenticated(true);
 
-        // If landing on /auth/sso-callback or root, navigate to dashboard
-        if (location.pathname === '/auth/sso-callback' ||
-            location.pathname === '/' ||
-            location.pathname === '/login') {
-          const tid = user.tenantId ?? 'default';
-          navigate(`/company/${tid}/dashboard`, { replace: true });
+        // ── URL tenant-ID correction ──────────────────────────────────────────
+        // Three cases:
+        //   1. Landing on a non-company path (sso-callback, /, /login) → go to dashboard
+        //   2. URL has a stale / wrong tenant ID → rewrite the path in place
+        //   3. URL already has the correct tenant ID → do nothing
+
+        const isEntryPath =
+          location.pathname === '/auth/sso-callback' ||
+          location.pathname === '/'                  ||
+          location.pathname === '/login';
+
+        if (isEntryPath) {
+          navigate(`/company/${tenantId}/dashboard`, { replace: true });
+        } else if (urlTenantId && urlTenantId !== tenantId) {
+          // The URL was built for a different tenant (stale bookmark, previous session,
+          // or the "default" fallback). Swap the segment without losing the page.
+          const correctedPath = location.pathname.replace(
+            `/company/${urlTenantId}/`,
+            `/company/${tenantId}/`,
+          );
+          navigate(correctedPath, { replace: true });
         }
       })
       .catch(() => {
@@ -113,7 +134,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated && (location.pathname === '/' || location.pathname === '/login')) {
+    if (isAuthenticated && activeTenant.id && (location.pathname === '/' || location.pathname === '/login')) {
       navigate(`/company/${activeTenant.id}/dashboard`, { replace: true });
     }
   }, [isAuthenticated, location.pathname]);
