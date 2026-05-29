@@ -162,10 +162,13 @@ export default function App() {
 
   const handleLogout = () => {
     logAuditAction('USER_SESSION_TERMINATED', 'SSO session cleared. Shared-domain cookies invalidated.');
-    // POST /api/sso/logout clears all auth cookies and returns { logoutUrl }.
+    // POST /api/sso/logout clears all auth cookies.
+    // Response is AppResponse<{ logoutUrl }> — unwrap .data before reading logoutUrl.
     fetch(`${API_URL}/api/sso/logout`, { method: 'POST', credentials: 'include' })
       .then(res => res.ok ? res.json() : Promise.reject())
-      .then(({ logoutUrl }) => {
+      .then((json) => {
+        const data = json?.data ?? json;
+        const logoutUrl = data?.logoutUrl ?? CENTRAL_LOGIN;
         window.location.href = `${logoutUrl}?redirect_uri=${encodeURIComponent(SSO_CALLBACK_URL)}`;
       })
       .catch(() => { window.location.href = CENTRAL_LOGIN; });

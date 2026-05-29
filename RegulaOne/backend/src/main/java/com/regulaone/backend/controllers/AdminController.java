@@ -1,6 +1,6 @@
 package com.regulaone.backend.controllers;
 
-import com.regulaone.backend.dto.*;
+import com.regulaone.backend.dto.AppResponse;
 import com.regulaone.backend.dto.Admin.AdminPackageResponse;
 import com.regulaone.backend.dto.Admin.InvoiceResponse;
 import com.regulaone.backend.dto.Auth.InviteUserRequest;
@@ -30,103 +30,97 @@ import java.util.List;
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
 public class AdminController {
 
-    private final UserService userService;
+    private final UserService    userService;
     private final BillingService billingService;
 
-    // Added: first-login org setup for ROLE_ADMIN.
-    // On first login the admin has no tenant linked (tenantId == null in /me
-    // response).
-    // The frontend shows a "Setup your organisation" modal; on submit it calls this
-    // endpoint.
-    // After success, /me returns tenantStatus == "ACTIVE" and the dashboard is
-    // unlocked.
     @PostMapping("/org/setup")
-    public ResponseEntity<UserResponse> setupOrganisation(
+    public ResponseEntity<AppResponse<UserResponse>> setupOrganisation(
             @Valid @RequestBody TenantRequest request,
             @AuthenticationPrincipal Jwt jwt) {
-        return ResponseEntity.ok(userService.setupOrganisation(jwt.getSubject(), request));
+        return ResponseEntity.ok(AppResponse.success(
+                "Organisation created successfully",
+                userService.setupOrganisation(jwt.getSubject(), request)));
     }
 
-    /**
-     * Invite a user — Cognito creates the account and emails a temporary password.
-     * {username} in other endpoints = the invited user's email (Cognito username).
-     */
     @PostMapping("/users/invite")
-    public ResponseEntity<UserResponse> inviteUser(@Valid @RequestBody InviteUserRequest request) {
-        return ResponseEntity.ok(userService.inviteUser(request));
+    public ResponseEntity<AppResponse<UserResponse>> inviteUser(
+            @Valid @RequestBody InviteUserRequest request) {
+        return ResponseEntity.ok(AppResponse.success(
+                "User invited successfully. A temporary password has been sent to their email.",
+                userService.inviteUser(request)));
     }
 
     @GetMapping("/users/{tenantId}")
-    public ResponseEntity<List<UserResponse>> getAllUsers(
+    public ResponseEntity<AppResponse<List<UserResponse>>> getAllUsers(
             @PathVariable String tenantId) {
-        return ResponseEntity.ok(userService.getAllUsers(tenantId));
+        return ResponseEntity.ok(AppResponse.success(
+                "Users loaded",
+                userService.getAllUsers(tenantId)));
     }
 
     @GetMapping("/team-management/{tenantId}")
-    public ResponseEntity<TeamManagementStatsResponse> getTeamManagementStats(
+    public ResponseEntity<AppResponse<TeamManagementStatsResponse>> getTeamManagementStats(
             @PathVariable String tenantId) {
-        return ResponseEntity.ok(
-                userService.getTeamManagementStats(tenantId));
+        return ResponseEntity.ok(AppResponse.success(
+                "Team stats loaded",
+                userService.getTeamManagementStats(tenantId)));
     }
 
-    // Replaces the module access list for a user — admin picks which modules
-    // the user can see in the sidebar. Uses MongoDB document id (same as updateUserStatus).
     @PatchMapping("/users/{userId}/modules")
-    public ResponseEntity<UserResponse> updateUserModules(
+    public ResponseEntity<AppResponse<UserResponse>> updateUserModules(
             @PathVariable String userId,
             @RequestBody UpdateModulesRequest request) {
-        return ResponseEntity.ok(userService.updateUserModules(userId, request));
+        return ResponseEntity.ok(AppResponse.success(
+                "Module access updated successfully",
+                userService.updateUserModules(userId, request)));
     }
 
     @PatchMapping("/users/{userId}/status")
-    public ResponseEntity<UserResponse> updateUserStatus(
+    public ResponseEntity<AppResponse<UserResponse>> updateUserStatus(
             @PathVariable String userId,
             @RequestBody UpdateUserStatusRequest request) {
-        return ResponseEntity.ok(
-                userService.updateUserStatus(userId, request));
+        return ResponseEntity.ok(AppResponse.success(
+                "User status updated successfully",
+                userService.updateUserStatus(userId, request)));
     }
 
-
-    // Returns all ACTIVE packages sorted by price so ROLE_ADMIN can compare tiers
-    // on the My Plan page. The admin's current plan is identified on the frontend
-    // by matching packageId from /me against pkg.id in this list.
     @GetMapping("/packages")
-    public ResponseEntity<List<AdminPackageResponse>> getActivePackages() {
-        return ResponseEntity.ok(userService.getActivePackages());
+    public ResponseEntity<AppResponse<List<AdminPackageResponse>>> getActivePackages() {
+        return ResponseEntity.ok(AppResponse.success(
+                "Available packages loaded",
+                userService.getActivePackages()));
     }
 
-    // Returns all invoices for the authenticated admin's tenant, newest first.
-    // Resolves the tenantId from the JWT subject via getCurrentUser so the admin
-    // can only ever see their own billing history — no tenantId path param to spoof.
     @GetMapping("/billing")
-    public ResponseEntity<List<InvoiceResponse>> getBillingHistory(
+    public ResponseEntity<AppResponse<List<InvoiceResponse>>> getBillingHistory(
             @AuthenticationPrincipal Jwt jwt) {
         String tenantId = userService.getCurrentUser(jwt.getSubject()).getTenantId();
-        return ResponseEntity.ok(billingService.getTenantInvoices(tenantId));
+        return ResponseEntity.ok(AppResponse.success(
+                "Billing history loaded",
+                billingService.getTenantInvoices(tenantId)));
     }
 
-    // Added: lets ROLE_ADMIN update their own organisation's contact/address details.
-    // Excludes nip, regon, and status — those require superadmin action.
-    // The admin's tenantId is resolved inside the service from the JWT subject.
     @PutMapping("/org")
-    public ResponseEntity<TenantResponse> updateMyOrg(
+    public ResponseEntity<AppResponse<TenantResponse>> updateMyOrg(
             @Valid @RequestBody UpdateOrgRequest request,
             @AuthenticationPrincipal Jwt jwt) {
-        return ResponseEntity.ok(userService.updateMyOrg(jwt.getSubject(), request));
+        return ResponseEntity.ok(AppResponse.success(
+                "Organisation details updated successfully",
+                userService.updateMyOrg(jwt.getSubject(), request)));
     }
 
-    /** Update name, email, and/or role of an existing Cognito user. */
     @PutMapping("/users/{subId}")
-    public ResponseEntity<UserResponse> updateUser(
+    public ResponseEntity<AppResponse<UserResponse>> updateUser(
             @PathVariable String subId,
             @RequestBody UpdateUserRequest request) {
-
-        return ResponseEntity.ok(userService.updateUser(subId, request));
+        return ResponseEntity.ok(AppResponse.success(
+                "User updated successfully",
+                userService.updateUser(subId, request)));
     }
 
     @DeleteMapping("/users/{username}")
-    public ResponseEntity<MessageResponse> deleteUser(@PathVariable String username) {
+    public ResponseEntity<AppResponse<Void>> deleteUser(@PathVariable String username) {
         userService.deleteUser(username);
-        return ResponseEntity.ok(new MessageResponse("User deleted successfully"));
+        return ResponseEntity.ok(AppResponse.success("User deleted successfully."));
     }
 }

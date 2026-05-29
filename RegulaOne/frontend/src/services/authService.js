@@ -49,6 +49,7 @@ export const authService = {
 
   // POST /api/sso/logout  — uses raw fetch (not api.post) so a 401 (token already
   // expired) is returned as a normal error; the useLogout onError still clears state.
+  // Unwraps the AppResponse envelope so callers get { logoutUrl } directly.
   ssoLogout: async () => {
     const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
     const res = await fetch(`${baseUrl}/api/sso/logout`, {
@@ -56,6 +57,8 @@ export const authService = {
       credentials: 'include',
     });
     if (!res.ok) throw new Error('Logout failed');
-    return res.json();
+    const json = await res.json();
+    // Unwrap AppResponse — data contains { logoutUrl }
+    return json?.data ?? json;
   },
 };
