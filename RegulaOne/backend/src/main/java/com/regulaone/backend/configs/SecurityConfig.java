@@ -1,9 +1,11 @@
 package com.regulaone.backend.configs;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -13,10 +15,12 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -39,6 +43,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        log.info("[SecurityConfig] Building security filter chain — stateless JWT mode");
         http
                 .csrf(csrf -> csrf.disable())
                 // Added: apply the CORS configuration bean so preflight OPTIONS requests are handled
@@ -48,20 +53,27 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health/**").permitAll()
+                        // Spring's error handler redirects to /error — must be public or
+                        // the redirect itself gets a 401 and hides the real error response.
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
 
-                        // Added: allow Swagger UI and OpenAPI spec without authentication
-                        // so developers can explore the API docs without logging in
+                        // SSO endpoints that must be public — no token exists at this point.
+                        // GET  /api/sso/login           — redirect to central login page
+                        // POST /api/sso/login           — authenticate with credentials
+                        // POST /api/sso/respond-challenge — complete NEW_PASSWORD_REQUIRED challenge
+                        // POST /api/sso/refresh         — silent token refresh (idToken expired)
+                        .requestMatchers("/api/sso/login").permitAll()
+                        .requestMatchers("/api/sso/respond-challenge").permitAll()
+                        .requestMatchers("/api/sso/refresh").permitAll()
+
+                        // Allow Swagger UI and OpenAPI spec without authentication
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**").permitAll()
 
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
-
-                        // Added: ROLE_SUPER_ADMIN is required for tenant management operations.
-                        // /api/superadmin/** is a separate route namespace so it is clearly
-                        // distinct from regular admin operations and can have its own audit trail.
                         .requestMatchers("/api/superadmin/**").hasAuthority("ROLE_SUPER_ADMIN")
 
                         .anyRequest().authenticated())
@@ -103,7 +115,9 @@ public class SecurityConfig {
 
         // Split the comma-separated list from application*.properties
         for (String origin : allowedOrigins.split(",")) {
-            config.addAllowedOrigin(origin.trim());
+            String trimmed = origin.trim();
+            config.addAllowedOrigin(trimmed);
+            log.info("[SecurityConfig] CORS allowed origin registered: {}", trimmed);
         }
 
         config.setAllowCredentials(true);
@@ -120,6 +134,8 @@ public class SecurityConfig {
     @Bean
     public AuthenticationEntryPoint authenticationEntryPoint() {
         return (request, response, authException) -> {
+            log.warn("[SecurityConfig] 401 Unauthorized — method={} uri={} error={}",
+                    request.getMethod(), request.getRequestURI(), authException.getMessage());
             response.setStatus(401);
             response.setContentType("application/json");
             response.setCharacterEncoding("UTF-8");
@@ -132,6 +148,10 @@ public class SecurityConfig {
     @Bean
     public AccessDeniedHandler accessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
+            log.warn("[SecurityConfig] 403 Access Denied — method={} uri={} principal={} error={}",
+                    request.getMethod(), request.getRequestURI(),
+                    request.getUserPrincipal() != null ? request.getUserPrincipal().getName() : "unknown",
+                    accessDeniedException.getMessage());
             response.setStatus(403);
             response.setContentType("application/json");
             response.setCharacterEncoding("UTF-8");
@@ -140,12 +160,24 @@ public class SecurityConfig {
         };
     }
 
-    // ! this will validate that token iuuse from the AWS
+    // Validates JWT tokens issued by AWS Cognito.
+    // Uses a RestTemplate with a 30-second connect/read timeout instead of the
+    // default (which is very short). Without this, a slow or cold-start Cognito
+    // JWKS endpoint causes a SocketTimeoutException → 401 on the first request
+    // after the JWKS cache expires, forcing a silent refresh for every cold start.
     @Bean
     public JwtDecoder jwtDecoder() {
         String jwksUri = String.format(
                 "https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json",
                 region, userPoolId);
-        return NimbusJwtDecoder.withJwkSetUri(jwksUri).build();
+        log.info("[SecurityConfig] JwtDecoder configured — JWKS URI: {}", jwksUri);
+
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(30_000);
+        factory.setReadTimeout(30_000);
+
+        return NimbusJwtDecoder.withJwkSetUri(jwksUri)
+                .restOperations(new RestTemplate(factory))
+                .build();
     }
 }

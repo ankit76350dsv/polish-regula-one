@@ -8,6 +8,21 @@ import { toast } from 'sonner';
 import { authService } from '../services/authService';
 import { useAuthStore, mapApiUserToProfile } from '../store/authStore';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Reads ?redirect_uri from the current URL and returns it if present.
+ * Used by useLogin and useRespondChallenge to complete the SSO round-trip:
+ * after a successful login on the central app, the user is sent back to the
+ * originating module app via a full-page redirect (window.location.href)
+ * rather than a React Router navigate() call, because the destination is
+ * a completely different origin (e.g. ksefflow.regulaone.eu).
+ */
+function getSSORedirectUri() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('redirect_uri') || null;
+}
+
 // ── Login ─────────────────────────────────────────────────────────────────────
 
 export function useLogin() {
@@ -20,13 +35,17 @@ export function useLogin() {
     onSuccess: async (res) => {
       if (res.status === 'CHALLENGE') {
         // Cognito requires a follow-up action (e.g. invited user must set a permanent password).
-        // Store the challenge context so RespondChallengePage can read it.
+        // Preserve ?redirect_uri through the challenge so the round-trip still completes.
         setChallengeState({
           challengeName: res.challengeName,
           session:       res.session,
           username:      res.username,
         });
-        navigate('/auth/challenge');
+        const redirectUri = getSSORedirectUri();
+        const challengePath = redirectUri
+          ? `/auth/challenge?redirect_uri=${encodeURIComponent(redirectUri)}`
+          : '/auth/challenge';
+        navigate(challengePath);
         return;
       }
 
@@ -34,14 +53,22 @@ export function useLogin() {
       try {
         const me = await authService.getMe();
         setUser(mapApiUserToProfile(me));
-        navigate('/');
+
+        // SSO cross-app redirect: if this login was initiated by a module app,
+        // send the browser to that app's /auth/sso-callback so it can pick up
+        // the shared-domain cookies and complete its own session restoration.
+        const redirectUri = getSSORedirectUri();
+        if (redirectUri) {
+          window.location.href = redirectUri;
+        } else {
+          navigate('/');
+        }
       } catch {
         toast.error('Login succeeded but could not load your profile. Please try again.');
       }
     },
 
     onError: (err) => {
-      // Error message comes from the 400 response body { message: "..." }
       toast.error(err.message || 'Login failed. Check your credentials.');
     },
   });
@@ -118,7 +145,14 @@ export function useRespondChallenge() {
         setUser(mapApiUserToProfile(me));
         setChallengeState(null);
         toast.success('Password set successfully. Welcome!');
-        navigate('/');
+
+        // Honour SSO redirect_uri if the challenge was part of a cross-app login
+        const redirectUri = getSSORedirectUri();
+        if (redirectUri) {
+          window.location.href = redirectUri;
+        } else {
+          navigate('/');
+        }
       } catch {
         toast.error('Password set but could not load your profile. Please log in.');
         navigate('/login');
@@ -150,22 +184,20 @@ export function useChangePassword() {
 // ── Logout ────────────────────────────────────────────────────────────────────
 
 export function useLogout() {
-  const navigate  = useNavigate();
-  const { setUser } = useAuthStore();
+  const { ssoLogout } = useAuthStore();
 
   return useMutation({
-    mutationFn: () => authService.logout(),
+    // ssoLogout calls POST /api/sso/logout which clears Domain=.regulaone.eu cookies,
+    // logging the user out of ALL apps at once, then redirects to the central login.
+    mutationFn: () => authService.ssoLogout(),
 
-    onSuccess: () => {
-      setUser(null);
-      navigate('/login');
+    onSuccess: (data) => {
+      ssoLogout(data?.logoutUrl);
     },
 
     onError: () => {
-      // Even if the API call fails, clear local state and redirect —
-      // the cookies may have already expired, keeping the user stuck.
-      setUser(null);
-      navigate('/login');
+      // API call failed (token already expired) — still clear local state
+      ssoLogout();
     },
   });
 }

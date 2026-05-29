@@ -4,57 +4,58 @@
 import { api } from '../lib/api';
 
 export const authService = {
-  // POST /api/auth/login
-  // Returns LoginApiResponse with status="SUCCESS"|"CHALLENGE"|"ERROR".
-  // On SUCCESS, idToken/accessToken/refreshToken are stored in HTTP-only cookies by the backend.
-  login: (data) =>
-    api.post('/api/auth/login', data),
+
+  // ── Registration ────────────────────────────────────────────────────────────
 
   // POST /api/auth/signup
-  // Creates a new Cognito user — user must then confirm via email code.
   signup: (data) =>
     api.post('/api/auth/signup', data),
 
   // POST /api/auth/confirm
-  // Confirms the email verification code sent after signup.
   confirmSignup: (data) =>
     api.post('/api/auth/confirm', data),
 
   // POST /api/auth/resend-code?email=...
-  // Re-sends the verification code to the given email address.
   resendCode: (email) =>
     api.post(`/api/auth/resend-code?email=${encodeURIComponent(email)}`),
 
-  // POST /api/auth/respond-challenge
-  // Completes the NEW_PASSWORD_REQUIRED challenge for invited/temp-password users.
-  // On success the backend stores tokens in HTTP-only cookies (same as login success).
-  respondChallenge: (data) =>
-    api.post('/api/auth/respond-challenge', data),
+  // ── Profile ─────────────────────────────────────────────────────────────────
 
-  // GET /api/auth/me  [requires valid idToken cookie]
-  // Returns the authenticated user's profile from Cognito.
+  // GET /api/auth/me
   getMe: () =>
     api.get('/api/auth/me'),
 
   // PATCH /api/auth/me
-  // Lets any authenticated user update their own name.
-  // Email and role are excluded — email is the Cognito identity key, role is admin-only.
   updateMe: (data) =>
     api.patch('/api/auth/me', data),
 
-  // PUT /api/auth/change-password  [requires valid accessToken cookie]
-  // Changes the current user's password via Cognito.
+  // PUT /api/auth/change-password
   changePassword: (data) =>
     api.put('/api/auth/change-password', data),
 
-  // POST /api/auth/refresh  [no auth required — called when idToken/accessToken have expired]
-  // Backend reads the refreshToken + username HTTP-only cookies and issues new short-lived tokens.
-  // You rarely call this directly — api.js intercepts 401s and calls it automatically.
-  refresh: () =>
-    api.post('/api/auth/refresh'),
+  // ── Cookie-based auth flows (live in SSOController at /api/sso/*) ──────────
 
-  // POST /api/auth/logout  [requires valid session]
-  // Clears idToken/accessToken/refreshToken/username HTTP-only cookies.
-  logout: () =>
-    api.post('/api/auth/logout'),
+  // POST /api/sso/login
+  login: (data) =>
+    api.post('/api/sso/login', data),
+
+  // POST /api/sso/respond-challenge
+  respondChallenge: (data) =>
+    api.post('/api/sso/respond-challenge', data),
+
+  // POST /api/sso/refresh
+  refresh: () =>
+    api.post('/api/sso/refresh'),
+
+  // POST /api/sso/logout  — uses raw fetch (not api.post) so a 401 (token already
+  // expired) is returned as a normal error; the useLogout onError still clears state.
+  ssoLogout: async () => {
+    const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+    const res = await fetch(`${baseUrl}/api/sso/logout`, {
+      method:      'POST',
+      credentials: 'include',
+    });
+    if (!res.ok) throw new Error('Logout failed');
+    return res.json();
+  },
 };

@@ -1,224 +1,164 @@
-const API_BASE = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8081';
+/**
+ * KSeFFlow API client — talks to the RegulaOne Spring Boot backend
+ * at localhost:8080 (configured via VITE_API_URL in .env).
+ *
+ * Authentication: HTTP-only cookie (idToken) set by the RegulaOne auth service.
+ * All requests use credentials: 'include' so the browser forwards the cookie
+ * automatically. On 401, the user is redirected to the central login page.
+ *
+ * Endpoints used:
+ *   GET  /api/ksef/invoices           — list all invoices for current tenant
+ *   POST /api/ksef/invoices           — create a draft invoice
+ *   GET  /api/ksef/invoices/:id       — get single invoice
+ *   POST /api/ksef/invoices/:id/submit — submit draft to KSeF
+ *   GET  /api/ksef/stats              — dashboard stats
+ */
 
-const vatRateToBackend = (rate) => {
-  const map = {
-    '23': 'VAT_23',
-    '8': 'VAT_8',
-    '5': 'VAT_5',
-    '0': 'VAT_0',
-    'exempt': 'EXEMPT',
-    'reverse_charge': 'REVERSE_CHARGE',
-  };
-  return map[rate] ?? 'VAT_23';
-};
+import { apiFetch } from '../lib/api';
 
-const vatRateFromBackend = (rate) => {
-  const map = {
-    'VAT_23': '23',
-    'VAT_8': '8',
-    'VAT_5': '5',
-    'VAT_0': '0',
-    'EXEMPT': 'exempt',
-    'REVERSE_CHARGE': 'reverse_charge',
-  };
-  return map[rate] ?? '23';
-};
-
-const paymentMethodToBackend = (method) => {
-  const map = {
-    'Transfer': 'TRANSFER',
-    'Card': 'CARD',
-    'Split Payment': 'SPLIT_PAYMENT',
-    'Cash': 'CASH',
-  };
-  return map[method] ?? 'TRANSFER';
-};
-
-const paymentMethodFromBackend = (method) => {
-  const map = {
-    'TRANSFER': 'Transfer',
-    'CARD': 'Card',
-    'SPLIT_PAYMENT': 'Split Payment',
-    'CASH': 'Cash',
-  };
-  return map[method] ?? 'Transfer';
-};
-
-// Parse combined buyer address into separate fields required by the backend DTO.
-const parseBuyerAddress = (combined) => {
-  const postalMatch = combined.match(/(\d{2}-\d{3})\s+(.+?)(?:,\s*.*)?$/);
-  if (postalMatch) {
-    const postalCode = postalMatch[1];
-    const city = postalMatch[2].trim();
-    const street = combined.slice(0, combined.lastIndexOf(postalMatch[0])).replace(/,\s*$/, '').trim();
-    return { street: street || combined, postalCode, city };
-  }
-  return { street: combined, postalCode: '00-001', city: 'Warszawa' };
-};
+// ── Response mapper ────────────────────────────────────────────────────────────
+// Maps the backend KSeFInvoiceResponse shape to what this frontend expects.
 
 export const mapBackendInvoice = (b) => ({
-  id: b.id,
+  id:            b.id,
   invoiceNumber: b.invoiceNumber,
-  issueDate: b.issueDate,
-  dueDate: b.dueDate ?? '',
-  tenantId: b.tenantId,
-  sellerName: b.sellerName,
-  sellerNIP: b.sellerNip,
-  sellerAddress: [b.sellerAddress, b.sellerPostalCode, b.sellerCity].filter(Boolean).join(', '),
-  buyerName: b.buyerName,
-  buyerNIP: b.buyerNip,
-  buyerAddress: [b.buyerAddress, b.buyerPostalCode, b.buyerCity].filter(Boolean).join(', '),
-  currency: b.currency,
+  issueDate:     b.issueDate   ?? '',
+  dueDate:       b.dueDate     ?? '',
+  tenantId:      b.tenantId    ?? '',
+  sellerName:    b.sellerName  ?? '',
+  sellerNIP:     b.sellerNip   ?? '',
+  sellerAddress: '',
+  buyerName:     b.buyerName   ?? '',
+  buyerNIP:      b.buyerNip    ?? '',
+  buyerAddress:  b.buyerAddress ?? '',
+  currency:      b.currency    ?? 'PLN',
   items: (b.items ?? []).map(i => ({
-    id: i.itemId,
-    productName: i.productName,
-    quantity: Number(i.quantity),
-    unitPrice: Number(i.unitPrice),
-    vatRate: vatRateFromBackend(i.vatRate),
-    netAmount: Number(i.netAmount),
-    vatAmount: Number(i.vatAmount),
-    grossAmount: Number(i.grossAmount),
+    id:          i.description,            // no separate itemId in new schema
+    productName: i.description,
+    quantity:    parseFloat(i.quantity)    || 0,
+    unitPrice:   parseFloat(i.unitPriceNet)|| 0,
+    vatRate:     i.vatRate,
+    netAmount:   parseFloat(i.netAmount)   || 0,
+    vatAmount:   parseFloat(i.vatAmount)   || 0,
+    grossAmount: parseFloat(i.grossAmount) || 0,
   })),
-  totalNet: Number(b.totalNet),
-  totalVat: Number(b.totalVat),
-  totalGross: Number(b.totalGross),
-  paymentMethod: paymentMethodFromBackend(b.paymentMethod),
-  bankAccount: b.bankAccount ?? '',
-  paymentStatus: b.paymentStatus === 'PAID' ? 'PAID' : 'UNPAID',
-  notes: b.notes,
-  status: b.status,
-  ksefId: b.ksefId,
-  upoStatus: b.upoStatus ?? 'NONE',
-  upoTimestamp: b.upoTimestamp,
-  offlineQrCode: b.offlineQrCode,
-  submissionAttempts: b.submissionAttempts ?? 0,
-  lastErrorMessage: b.lastErrorMessage,
-  createdAt: b.createdAt,
+  totalNet:          parseFloat(b.totalNet)   || 0,
+  totalVat:          parseFloat(b.totalVat)   || 0,
+  totalGross:        parseFloat(b.totalGross) || 0,
+  paymentMethod:     'Transfer',
+  bankAccount:       '',
+  paymentStatus:     'UNPAID',
+  notes:             '',
+  status:            b.status             ?? 'DRAFT',
+  ksefId:            b.ksefId             ?? null,
+  upoStatus:         b.hasUpo ? 'RECEIVED' : 'NONE',
+  upoTimestamp:      b.hasUpo ? b.updatedAt : null,
+  offlineQrCode:     null,
+  submissionAttempts: 0,
+  lastErrorMessage:  b.rejectionReason    ?? null,
+  createdAt:         b.createdAt          ?? null,
+  // Extra fields used by this app's UI
+  canSubmit:         b.canSubmit,
+  hasXml:            b.hasXml,
 });
 
-const buildHeaders = (tenantId, userId) => ({
-  'Content-Type': 'application/json',
-  'X-Tenant-Id': tenantId,
-  ...(userId ? { 'X-User-Id': userId } : {}),
-});
+// ── API functions ──────────────────────────────────────────────────────────────
 
-const checkResponse = async (res) => {
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
-  }
-  return res.json();
+/**
+ * List all invoices for the authenticated user's tenant.
+ * tenantId param is kept for call-site compatibility but is ignored —
+ * the backend extracts tenantId from the JWT cookie automatically.
+ */
+export const listInvoices = async (_tenantId = '') => {
+  const data = await apiFetch('/api/ksef/invoices');
+  return Array.isArray(data) ? data.map(mapBackendInvoice) : [];
 };
 
-export const createInvoice = async (payload) => {
-  const { street, postalCode, city } = parseBuyerAddress(payload.buyerAddress);
+export const getInvoice = async (_tenantId, invoiceId) => {
+  const data = await apiFetch(`/api/ksef/invoices/${invoiceId}`);
+  return mapBackendInvoice(data);
+};
 
+/**
+ * Create a new draft invoice.
+ * Maps from the KSeFFlow frontend invoice shape to the KSeFInvoiceRequest DTO.
+ */
+export const createInvoice = async (payload) => {
   const body = {
-    invoiceNumber: payload.invoiceNumber,
-    issueDate: payload.issueDate,
-    dueDate: payload.dueDate || undefined,
-    sellerName: payload.sellerName,
-    sellerNip: payload.sellerNip,
-    sellerAddress: payload.sellerAddress,
-    sellerPostalCode: payload.sellerPostalCode,
-    sellerCity: payload.sellerCity,
-    buyerName: payload.buyerName,
-    buyerNip: payload.buyerNip,
-    buyerAddress: street,
-    buyerPostalCode: postalCode,
-    buyerCity: city,
-    currency: payload.currency,
-    totalNet: payload.totalNet,
-    totalVat: payload.totalVat,
-    totalGross: payload.totalGross,
-    paymentMethod: paymentMethodToBackend(payload.paymentMethod),
-    bankAccount: payload.bankAccount,
-    notes: payload.notes,
-    items: payload.items.map(i => ({
-      itemId: i.id,
-      productName: i.productName,
-      unit: 'szt.',
-      quantity: i.quantity,
-      unitPrice: i.unitPrice,
-      vatRate: vatRateToBackend(i.vatRate),
-      netAmount: i.netAmount,
-      vatAmount: i.vatAmount,
-      grossAmount: i.grossAmount,
+    buyerName:    payload.buyerName,
+    buyerNip:     payload.buyerNip     || undefined,
+    buyerEmail:   payload.buyerEmail   || undefined,
+    buyerAddress: payload.buyerAddress || undefined,
+    issueDate:    payload.issueDate,
+    dueDate:      payload.dueDate      || undefined,
+    currency:     payload.currency     ?? 'PLN',
+    referenceNumber: payload.invoiceNumber || undefined,
+    items: (payload.items ?? []).map(i => ({
+      description:  i.productName,
+      quantity:     i.quantity,
+      unit:         i.unit ?? 'szt.',
+      unitPriceNet: i.unitPrice,
+      vatRate:      normalizeVatRate(i.vatRate),
     })),
   };
 
-  const res = await fetch(`${API_BASE}/api/v1/invoices`, {
+  const data = await apiFetch('/api/ksef/invoices', {
     method: 'POST',
-    headers: buildHeaders(payload.tenantId, payload.userId),
-    body: JSON.stringify(body),
+    body:   JSON.stringify(body),
   });
-
-  return mapBackendInvoice(await checkResponse(res));
+  return mapBackendInvoice(data);
 };
 
-export const submitInvoice = async (tenantId, invoiceId, nip, userId) => {
-  const res = await fetch(
-    `${API_BASE}/api/v1/invoices/${invoiceId}/submit?nip=${encodeURIComponent(nip)}`,
-    {
-      method: 'POST',
-      headers: buildHeaders(tenantId, userId),
-    },
-  );
-  return checkResponse(res);
-};
-
-export const getInvoice = async (tenantId, invoiceId) => {
-  const res = await fetch(`${API_BASE}/api/v1/invoices/${invoiceId}`, {
-    headers: buildHeaders(tenantId),
+/**
+ * Submit a DRAFT invoice to the KSeF gateway.
+ * nip param is kept for compatibility but the backend gets it from the
+ * authenticated user's tenant record.
+ */
+export const submitInvoice = async (_tenantId, invoiceId) => {
+  const data = await apiFetch(`/api/ksef/invoices/${invoiceId}/submit`, {
+    method: 'POST',
   });
-  return mapBackendInvoice(await checkResponse(res));
+  return mapBackendInvoice(data);
 };
 
-export const listInvoices = async (tenantId, status, page = 0, size = 100) => {
-  const params = new URLSearchParams({ page: String(page), size: String(size) });
-  if (status && status !== 'ALL') params.set('status', status);
+/**
+ * Get dashboard stats (gateway status, queue length, UPO count etc).
+ */
+export const getStats = async () => {
+  return apiFetch('/api/ksef/stats');
+};
 
-  const res = await fetch(`${API_BASE}/api/v1/invoices?${params}`, {
-    headers: buildHeaders(tenantId),
+/**
+ * Download the raw FA(3) XML for an accepted invoice.
+ */
+export const downloadInvoiceXml = async (invoiceId) => {
+  const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+  const res = await fetch(`${API_URL}/api/ksef/invoices/${invoiceId}/xml`, {
+    credentials: 'include',
   });
-  const pageData = await checkResponse(res);
-  return pageData.content.map(mapBackendInvoice);
+  if (!res.ok) throw new Error('Failed to download XML');
+  return res.text();
 };
 
-const mapBackendAuditLog = (b) => ({
-  id: b.id,
-  timestamp: b.timestamp,
-  tenantId: b.tenantId,
-  userId: b.userId ?? '',
-  userEmail: b.userEmail ?? 'system',
-  userRole: b.userRole ?? '',
-  action: b.action,
-  targetEntityId: b.targetEntityId,
-  targetEntityType: b.targetEntityType,
-  oldValue: b.oldValue,
-  newValue: b.newValue,
-  ipAddress: b.ipAddress ?? '',
-  complianceChecked: b.complianceChecked,
+/**
+ * Audit logs — the KSeFFlow backend endpoint is not yet implemented in
+ * RegulaOne. Returns an empty page so the Audit Center renders without errors.
+ */
+export const listAuditLogs = async () => ({
+  content:       [],
+  totalElements: 0,
+  totalPages:    0,
+  size:          20,
+  number:        0,
 });
 
-export const listAuditLogs = async (tenantId, params = {}) => {
-  const queryParams = new URLSearchParams();
-  queryParams.set('page', String(params.page ?? 0));
-  queryParams.set('size', String(params.size ?? 20));
-  if (params.from)  queryParams.set('from', params.from);
-  if (params.to)    queryParams.set('to', params.to);
-  if (params.role && params.role !== 'ALL') queryParams.set('role', params.role);
-  if (params.search) queryParams.set('search', params.search);
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-  const res = await fetch(`${API_BASE}/api/v1/audit-logs?${queryParams}`, {
-    headers: buildHeaders(tenantId),
-  });
-  const pageData = await checkResponse(res);
-  return {
-    content: pageData.content.map(mapBackendAuditLog),
-    totalElements: pageData.totalElements,
-    totalPages: pageData.totalPages,
-    size: pageData.size,
-    number: pageData.number,
-  };
-};
+/**
+ * Normalise VAT rate to the values the backend accepts:
+ *   "23" | "8" | "5" | "0" | "ZW" | "NP"
+ */
+function normalizeVatRate(rate) {
+  const map = { 'VAT_23': '23', 'VAT_8': '8', 'VAT_5': '5', 'VAT_0': '0', 'EXEMPT': 'ZW', 'REVERSE_CHARGE': 'NP', 'exempt': 'ZW', 'reverse_charge': 'NP' };
+  return map[rate] ?? String(rate ?? '23');
+}

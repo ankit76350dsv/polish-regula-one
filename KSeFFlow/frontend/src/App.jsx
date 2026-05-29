@@ -1,12 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  INITIAL_TENANTS,
   INITIAL_CERTIFICATES,
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS
 } from './data/mockData';
 import { listInvoices } from './api/ksefApi';
+
+const API_URL       = import.meta.env.VITE_API_URL          ?? 'http://localhost:8080';
+const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
+
+// Map RegulaOne roles to KSeFFlow role names used by this app's RBAC
+const mapRole = (r) => {
+  if (r === 'ROLE_SUPER_ADMIN') return 'Super Admin';
+  if (r === 'ROLE_ADMIN')       return 'Company Admin';
+  return 'Accountant';  // ROLE_USER
+};
 
 import Dashboard from './components/Dashboard';
 import InvoiceForm from './components/InvoiceForm';
@@ -45,44 +54,15 @@ export default function App() {
   const currentInvoiceId = (pathParts[2] === 'invoices' && pathParts[3]) ? pathParts[3] : null;
   const pageKey = currentSection === 'invoices' && currentInvoiceId ? 'invoice-detail' : currentSection;
 
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => localStorage.getItem('ksefflow_authenticated') === 'true'
-  );
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('ksefflow_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [sessionToken, setSessionToken] = useState(
-    () => localStorage.getItem('ksefflow_jwt') || null
-  );
-
-  const [activeTenant, setActiveTenant] = useState(() => {
-    const stored = localStorage.getItem('ksefflow_user');
-    if (stored) {
-      try {
-        const usr = JSON.parse(stored);
-        const found = INITIAL_TENANTS.find(t => t.id === usr.tenantId);
-        if (found) return found;
-      } catch { }
-    }
-    return INITIAL_TENANTS[0];
-  });
-
-  const [activeRole, setActiveRole] = useState(() => {
-    const stored = localStorage.getItem('ksefflow_user');
-    if (stored) {
-      try {
-        const usr = JSON.parse(stored);
-        return usr.role;
-      } catch { }
-    }
-    return 'Company Admin';
-  });
-
+  // ── SSO Auth state ─────────────────────────────────────────────────────────
+  // isAuthLoading: true while we check the shared-domain cookie from RegulaOne.
+  // When false: either the user is authenticated (isAuthenticated=true) or the
+  // Login component fires the redirect to localhost:3000/login.
+  const [isAuthLoading,   setIsAuthLoading]   = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser,     setCurrentUser]     = useState(null);
+  const [activeTenant,    setActiveTenant]    = useState({ id: '', name: 'My Organisation', nip: '', subscriptionPlan: 'Active' });
+  const [activeRole,      setActiveRole]      = useState('Company Admin');
   const [invoices, setInvoices] = useState([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
   const [certificates, setCertificates] = useState(INITIAL_CERTIFICATES);
@@ -93,11 +73,43 @@ export default function App() {
 
   const navigateTo = (page) => navigate(`/company/${activeTenant.id}/${page}`);
 
+  // ── SSO session init ────────────────────────────────────────────────────────
+  // On every page load: ask the RegulaOne backend if the shared-domain
+  // idToken cookie is valid. If yes — populate user/tenant state and
+  // render the app. If no (401) — Login.jsx will redirect to the central
+  // login page with ?redirect_uri pointing back to /auth/sso-callback here.
   useEffect(() => {
-    if (!urlTenantId) return;
-    const found = INITIAL_TENANTS.find(t => t.id === urlTenantId);
-    if (found && found.id !== activeTenant.id) setActiveTenant(found);
-  }, [urlTenantId]);
+    fetch(`${API_URL}/api/auth/me`, { credentials: 'include' })
+      .then(res => {
+        if (!res.ok) throw new Error('not authenticated');
+        return res.json();
+      })
+      .then(user => {
+        const mappedRole = mapRole(user.role);
+        setCurrentUser({ name: user.name, email: user.email, role: mappedRole, tenantId: user.tenantId });
+        setActiveRole(mappedRole);
+        setActiveTenant({
+          id:               user.tenantId  ?? '',
+          name:             user.tenantName ?? 'My Organisation',
+          nip:              '',            // Available in Tenant model; not in /me response
+          subscriptionPlan: 'Active',
+        });
+        setIsAuthenticated(true);
+
+        // If landing on /auth/sso-callback or root, navigate to dashboard
+        if (location.pathname === '/auth/sso-callback' ||
+            location.pathname === '/' ||
+            location.pathname === '/login') {
+          const tid = user.tenantId ?? 'default';
+          navigate(`/company/${tid}/dashboard`, { replace: true });
+        }
+      })
+      .catch(() => {
+        // No valid session — Login.jsx will handle the SSO redirect
+        setIsAuthenticated(false);
+      })
+      .finally(() => setIsAuthLoading(false));
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated && (location.pathname === '/' || location.pathname === '/login')) {
@@ -147,66 +159,13 @@ export default function App() {
     setNotifications(prev => [newNotif, ...prev]);
   };
 
-  const handleLoginSuccess = (userSession) => {
-    localStorage.setItem('ksefflow_authenticated', 'true');
-    localStorage.setItem('ksefflow_user', JSON.stringify({
-      email: userSession.email,
-      name: userSession.name,
-      role: userSession.role,
-      tenantId: userSession.tenantId
-    }));
-    localStorage.setItem('ksefflow_jwt', userSession.token);
-
-    setIsAuthenticated(true);
-    setCurrentUser({ email: userSession.email, name: userSession.name, role: userSession.role, tenantId: userSession.tenantId });
-    setSessionToken(userSession.token);
-    setActiveRole(userSession.role);
-
-    const matchedTenant = INITIAL_TENANTS.find(t => t.id === userSession.tenantId) || INITIAL_TENANTS[0];
-    setActiveTenant(matchedTenant);
-
-    let landingPage = 'dashboard';
-    if (userSession.role === 'Accountant' || userSession.role === 'Finance User') landingPage = 'invoices';
-    else if (userSession.role === 'Auditor') landingPage = 'audit';
-
-    navigate(`/company/${userSession.tenantId}/${landingPage}`);
-
-    const newLog = {
-      id: `log-gen-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      tenantId: userSession.tenantId,
-      userId: 'user-id-dyn',
-      userEmail: userSession.email,
-      userRole: userSession.role,
-      action: 'USER_JWT_AUTH_SUCCESS',
-      ipAddress: '194.29.130.' + Math.floor(Math.random() * 250 + 1),
-      newValue: `JWT Authentication Successful. Role: ${userSession.role}.`,
-      complianceChecked: true
-    };
-    setAuditLogs(prev => [newLog, ...prev]);
-
-    setNotifications(prev => [{
-      id: `notif-${Date.now()}`,
-      tenantId: userSession.tenantId,
-      title: 'Decryption Key Seeded',
-      message: `Welcome back, ${userSession.name}! Your workspace is unlocked.`,
-      type: 'success',
-      timestamp: new Date().toISOString(),
-      read: false
-    }, ...prev]);
-  };
-
   const handleLogout = () => {
-    logAuditAction('USER_SESSION_TERMINATED', 'JWT token destroyed. Workspace session reset successfully.');
-    localStorage.removeItem('ksefflow_authenticated');
-    localStorage.removeItem('ksefflow_user');
-    localStorage.removeItem('ksefflow_jwt');
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    setSessionToken(null);
-    setActiveRole('Company Admin');
-    setActiveTenant(INITIAL_TENANTS[0]);
-    navigate('/login', { replace: true });
+    logAuditAction('USER_SESSION_TERMINATED', 'SSO session cleared. Shared-domain cookies invalidated.');
+    // POST /api/sso/logout clears all auth cookies and returns { logoutUrl }.
+    fetch(`${API_URL}/api/sso/logout`, { method: 'POST', credentials: 'include' })
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(({ logoutUrl }) => { window.location.href = logoutUrl; })
+      .catch(() => { window.location.href = CENTRAL_LOGIN; });
   };
 
   const addInvoice = (invoice, silentAuditAction) => {
@@ -253,8 +212,21 @@ export default function App() {
     architecture:    ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor']
   };
 
+  // Show a spinner while the SSO cookie check is in flight
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-10 h-10 mx-auto border-4 border-red-700 border-t-transparent rounded-full animate-spin" />
+          <p className="text-slate-400 text-sm font-medium">Verifying session…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Not authenticated — Login.jsx redirects to central login with SSO redirect_uri
   if (!isAuthenticated) {
-    return <Login onLoginSuccess={handleLoginSuccess} tenants={INITIAL_TENANTS} />;
+    return <Login />;
   }
 
   const navItem = (section, label, Icon, extra) => {
@@ -302,21 +274,10 @@ export default function App() {
             <span className="text-slate-500">Corporate Tenant:</span>
             <select
               value={activeTenant.id}
-              disabled={activeRole !== 'Super Admin'}
-              onChange={(e) => {
-                const found = INITIAL_TENANTS.find(t => t.id === e.target.value);
-                if (found) {
-                  setActiveTenant(found);
-                  logAuditAction('SaaS_TENANT_SWITCHED', `Workspace transitioned to tenant: ${found.name}`);
-                  addNotification('Tenant Changed', `Switched workspace to ${found.name}`, 'info');
-                  navigate(`/company/${found.id}/dashboard`);
-                }
-              }}
-              className={`bg-transparent border-0 font-bold text-slate-700 focus:outline-none focus:ring-0 leading-tight pr-1 ${activeRole !== 'Super Admin' ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
+              disabled
+              className="bg-transparent border-0 font-bold text-slate-700 focus:outline-none focus:ring-0 leading-tight pr-1 cursor-not-allowed opacity-80"
             >
-              {INITIAL_TENANTS.map(tenant => (
-                <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
-              ))}
+              <option value={activeTenant.id}>{activeTenant.name || 'My Organisation'}</option>
             </select>
           </div>
 
