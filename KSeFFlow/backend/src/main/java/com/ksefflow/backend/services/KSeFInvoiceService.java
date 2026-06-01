@@ -83,7 +83,7 @@ public class KSeFInvoiceService {
 
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
-        AuditLog.writeAuditLog(saved.getTenantId(), "INVOICE_CREATED", saved.getId(),
+        KSeFAuditLogService.writeAuditLog(saved.getTenantId(), "INVOICE_CREATED", saved.getId(),
                 null, "invoiceNumber=" + saved.getInvoiceNumber(), userEmail, ipAddress);
 
         log.info("Invoice [{}] created as DRAFT for tenant [{}]", saved.getInvoiceNumber(), saved.getTenantId());
@@ -121,7 +121,7 @@ public class KSeFInvoiceService {
         invoice.setSubmissionAttempts(invoice.getSubmissionAttempts() + 1);
         ksef_invoices_repository.save(invoice);
 
-        AuditLog.writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null,
+        KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null,
                 "attempt=" + invoice.getSubmissionAttempts(), userEmail, ipAddress);
 
         // Steps 3–4 — generate and strictly validate FA(3) XML
@@ -215,7 +215,7 @@ public class KSeFInvoiceService {
         invoice.setUpdatedAt(LocalDateTime.now());
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
-        AuditLog.writeAuditLog(tenantId, "INVOICE_SENT_TO_KSEF", invoiceId, null,
+        KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_SENT_TO_KSEF", invoiceId, null,
                 "ksefId=" + ksefId + " env=" + apiProperties.getEnvironment(), userEmail, ipAddress);
         log.info("Invoice [{}] successfully registered with KSeF — ksefId: [{}]",
                 invoice.getInvoiceNumber(), ksefId);
@@ -274,7 +274,7 @@ public class KSeFInvoiceService {
         invoice.setUpdatedAt(LocalDateTime.now());
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
-        AuditLog.writeAuditLog(invoice.getTenantId(), "INVOICE_OFFLINE_MODE", invoice.getId(),
+        KSeFAuditLogService.writeAuditLog(invoice.getTenantId(), "INVOICE_OFFLINE_MODE", invoice.getId(),
                 null, "reason=" + errorMessage, userEmail, ipAddress);
         return saved;
     }

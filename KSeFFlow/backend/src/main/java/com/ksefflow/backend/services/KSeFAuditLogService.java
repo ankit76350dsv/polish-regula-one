@@ -1,6 +1,8 @@
 package com.ksefflow.backend.services;
 
 import com.ksefflow.backend.models.KsefAuditLog;
+import com.ksefflow.backend.repository.KsefAuditLogRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -17,12 +19,31 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Single service for the KSeF audit trail — both writing immutable entries and
+ * reading them back for the Compliance Audit Center.
+ *
+ * Writes go through the repository ({@link #writeAuditLog}); reads use MongoTemplate
+ * for flexible server-side filtering ({@link #listAuditLogs}). The static write
+ * methods let service-layer callers log without injecting this bean.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class KSeFAuditLogService {
 
     private final MongoTemplate mongoTemplate;
+    private final KsefAuditLogRepository auditLogRepository;
+
+    // Static back-reference so service-layer callers can use writeAuditLog()
+    // without injecting this bean. Set once during application startup via
+    // @PostConstruct — guaranteed to be non-null before any HTTP request arrives.
+    private static KSeFAuditLogService instance;
+
+    @PostConstruct
+    void init() {
+        instance = this;
+    }
 
     /**
      * Returns a paginated, filtered view of the audit log for a single tenant.
@@ -98,6 +119,68 @@ public class KSeFAuditLogService {
         } catch (DateTimeParseException e) {
             log.debug("Ignoring unparseable datetime filter value: {}", iso);
             return null;
+        }
+    }
+
+    // ── Write ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Writes an immutable audit log entry for an INVOICE entity.
+     *
+     * Backward-compatible convenience overload — delegates to the full method with
+     * the entity type fixed to "INVOICE".
+     *
+     * @param tenantId   tenant that owns the audited entity
+     * @param action     action code e.g. INVOICE_CREATED, INVOICE_SENT_TO_KSEF
+     * @param entityId   MongoDB _id of the affected document
+     * @param oldValue   previous state — null for CREATE operations
+     * @param newValue   new state or descriptive detail
+     * @param userEmail  email of the user who triggered the action (nullable)
+     * @param ipAddress  client IP address extracted from the HTTP request (nullable)
+     */
+    public static void writeAuditLog(String tenantId, String action,
+            String entityId, String oldValue, String newValue,
+            String userEmail, String ipAddress) {
+        writeAuditLog(tenantId, action, "INVOICE", entityId, oldValue, newValue, userEmail, ipAddress);
+    }
+
+    /**
+     * Writes an immutable audit log entry for any entity type.
+     *
+     * @param tenantId    tenant that owns the audited entity
+     * @param action      action code e.g. CERTIFICATE_UPLOADED, INVOICE_SENT_TO_KSEF
+     * @param entityType  affected entity type e.g. "CERTIFICATE", "INVOICE", "SESSION"
+     * @param entityId    MongoDB _id of the affected document
+     * @param oldValue    previous state — null for CREATE operations
+     * @param newValue    new state or descriptive detail (must never contain secrets)
+     * @param userEmail   email of the user who triggered the action (nullable)
+     * @param ipAddress   client IP address extracted from the HTTP request (nullable)
+     */
+    public static void writeAuditLog(String tenantId, String action, String entityType,
+            String entityId, String oldValue, String newValue,
+            String userEmail, String ipAddress) {
+
+        if (instance == null) {
+            log.warn("KSeFAuditLogService bean not yet initialized — skipping log [action={}]", action);
+            return;
+        }
+
+        try {
+            instance.auditLogRepository.save(KsefAuditLog.builder()
+                    .tenantId(tenantId)
+                    .action(action)
+                    .targetEntityType(entityType)
+                    .targetEntityId(entityId)
+                    .oldValue(oldValue)
+                    .newValue(newValue)
+                    .userEmail(userEmail)
+                    .ipAddress(ipAddress)
+                    .complianceChecked(true)
+                    .timestamp(LocalDateTime.now())
+                    .build());
+        } catch (Exception e) {
+            log.error("Failed to write audit log [action={}] {} [{}]: {}",
+                    action, entityType, entityId, e.getMessage());
         }
     }
 }

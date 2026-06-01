@@ -527,7 +527,7 @@ public class CertificateService {
         // The AuditLog service tracks the actor by email; at the certificate service
         // layer we only have the user id, so it is folded into the description.
         String detail = userId != null ? "userId=" + userId + ", " + newValue : newValue;
-        AuditLog.writeAuditLog(tenantId, action, "CERTIFICATE", certId, null, detail, null, null);
+        KSeFAuditLogService.writeAuditLog(tenantId, action, "CERTIFICATE", certId, null, detail, null, null);
     }
 
     /**
