@@ -30,7 +30,6 @@ import java.util.stream.Collectors;
  * Endpoints:
  *   POST   /api/v1/certificates/upload          — upload a PFX or PEM file
  *   GET    /api/v1/certificates                 — list all certificates for tenant
- *   GET    /api/v1/certificates/active          — get the active certificate
  *   PATCH  /api/v1/certificates/{id}/deactivate — deactivate a certificate
  *
  * Accepted file types:
@@ -133,33 +132,6 @@ public class KSeFCertificateController {
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(certs);
-    }
-
-    // ── GET /api/v1/certificates/active ──────────────────────────────────────
-    /**
-     * Returns the tenant's currently active signing certificate.
-     *
-     * The active certificate is the one used by KSeFAuthService to sign
-     * challenge-response authentication requests sent to the KSeF government API.
-     *
-     * Headers:
-     *   X-Tenant-Id — required
-     *
-     * Response 200: CertificateResponse of the active certificate
-     * Response 404: no active certificate found (upload one first)
-     */
-    @GetMapping("/active")
-    public ResponseEntity<CertificateResponse> getActiveCertificate(
-            @RequestHeader("X-Tenant-Id") String tenantId) {
-
-        log.info("[CertificateController] GET /certificates/active — tenant={}", tenantId);
-
-        List<KsefCertificate> certs = certificateService.listCertificates(tenantId);
-        return certs.stream()
-                .filter(KsefCertificate::isActive)
-                .findFirst()
-                .map(c -> ResponseEntity.ok(CertificateResponse.from(c)))
-                .orElse(ResponseEntity.notFound().build());
     }
 
     // ── PATCH /api/v1/certificates/{id}/deactivate ────────────────────────────
