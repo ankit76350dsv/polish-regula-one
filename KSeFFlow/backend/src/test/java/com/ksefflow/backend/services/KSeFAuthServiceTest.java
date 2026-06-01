@@ -1,5 +1,7 @@
 package com.ksefflow.backend.services;
 
+import com.ksefflow.backend.services.ksefauth.KSeFAuthService;
+
 import com.ksefflow.backend.services.certificate.CertificateService;
 
 import com.ksefflow.backend.config.KsefApiProperties;
@@ -10,8 +12,8 @@ import com.ksefflow.backend.models.utils.KsefEnvironment;
 import com.ksefflow.backend.models.utils.KsefGovernmentStatus;
 import com.ksefflow.backend.repository.KsefAuditLogRepository;
 import com.ksefflow.backend.repository.KsefGovernmentSessionRepository;
-import com.ksefflow.backend.services.ksefauthutils.KsefApiClient;
-import com.ksefflow.backend.services.ksefauthutils.KsefSessionStore;
+import com.ksefflow.backend.services.ksefauth.KsefApiClient;
+import com.ksefflow.backend.services.ksefauth.KsefSessionStore;
 import com.ksefflow.backend.services.certificate.KeyStoreUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

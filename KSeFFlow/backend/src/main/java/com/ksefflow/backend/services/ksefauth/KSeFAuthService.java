@@ -1,4 +1,4 @@
-package com.ksefflow.backend.services;
+package com.ksefflow.backend.services.ksefauth;
 
 import com.ksefflow.backend.config.KsefApiProperties;
 import com.ksefflow.backend.exceptions.KsefAuthException;
@@ -7,9 +7,6 @@ import com.ksefflow.backend.models.KsefGovernmentSession;
 import com.ksefflow.backend.repository.KsefAuditLogRepository;
 import com.ksefflow.backend.repository.KsefGovernmentSessionRepository;
 import com.ksefflow.backend.services.certificate.CertificateService;
-import com.ksefflow.backend.services.ksefauthutils.KsefApiClient;
-import com.ksefflow.backend.services.ksefauthutils.KsefSessionStore;
-import com.ksefflow.backend.services.ksefauthutils.KsefSigningUtils; // static calls only
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

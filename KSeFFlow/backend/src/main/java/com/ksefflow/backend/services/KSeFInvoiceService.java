@@ -1,5 +1,7 @@
 package com.ksefflow.backend.services;
 
+import com.ksefflow.backend.services.ksefauth.KSeFAuthService;
+
 import com.ksefflow.backend.config.KsefApiProperties;
 import com.ksefflow.backend.dto.ksefapi.KsefInvoiceStatusResponse;
 import com.ksefflow.backend.dto.ksefapi.KsefSendInvoiceResponse;
@@ -10,7 +12,7 @@ import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
 import com.ksefflow.backend.models.utils.KsefUpoStatus;
 import com.ksefflow.backend.repository.KsefInvoiceRepository;
-import com.ksefflow.backend.services.ksefauthutils.KsefApiClient;
+import com.ksefflow.backend.services.ksefauth.KsefApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;

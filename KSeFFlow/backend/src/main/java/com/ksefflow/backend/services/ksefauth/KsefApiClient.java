@@ -1,4 +1,4 @@
-package com.ksefflow.backend.services.ksefauthutils;
+package com.ksefflow.backend.services.ksefauth;
 
 import com.ksefflow.backend.config.KsefApiProperties;
 import com.ksefflow.backend.dto.ksefapi.*;

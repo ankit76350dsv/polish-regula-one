@@ -1,5 +1,7 @@
 package com.ksefflow.backend.services;
 
+import com.ksefflow.backend.services.ksefauth.KSeFAuthService;
+
 import com.ksefflow.backend.config.KsefApiProperties;
 import com.ksefflow.backend.dto.ksefapi.KsefInvoiceStatusResponse;
 import com.ksefflow.backend.dto.ksefapi.KsefSendInvoiceResponse;
@@ -12,7 +14,7 @@ import com.ksefflow.backend.models.utils.KsefPaymentMethod;
 import com.ksefflow.backend.models.utils.KsefVatRate;
 import com.ksefflow.backend.repository.KsefAuditLogRepository;
 import com.ksefflow.backend.repository.KsefInvoiceRepository;
-import com.ksefflow.backend.services.ksefauthutils.KsefApiClient;
+import com.ksefflow.backend.services.ksefauth.KsefApiClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
