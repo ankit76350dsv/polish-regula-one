@@ -1,11 +1,13 @@
 package com.ksefflow.backend.services;
 
+import com.ksefflow.backend.services.fa3xml.FA3XmlGeneratorService;
+
 import com.ksefflow.backend.exceptions.KsefXmlGenerationException;
 import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefCurrency;
 import com.ksefflow.backend.models.utils.KsefPaymentMethod;
 import com.ksefflow.backend.models.utils.KsefVatRate;
-import com.ksefflow.backend.services.fa3xmlutils.FA3XmlBuilder;
+import com.ksefflow.backend.services.fa3xml.FA3XmlBuilder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

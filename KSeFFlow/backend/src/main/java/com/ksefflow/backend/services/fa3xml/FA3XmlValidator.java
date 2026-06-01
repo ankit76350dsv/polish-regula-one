@@ -1,4 +1,4 @@
-package com.ksefflow.backend.services.fa3xmlutils;
+package com.ksefflow.backend.services.fa3xml;
 
 import com.ksefflow.backend.exceptions.KsefXmlGenerationException;
 
