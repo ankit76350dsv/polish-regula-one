@@ -1,20 +1,17 @@
 /**
- * KSeFFlow API client — talks to the RegulaOne Spring Boot backend
- * at localhost:8080 (configured via VITE_API_URL in .env).
+ * KSeFFlow API client.
  *
- * Authentication: HTTP-only cookie (idToken) set by the RegulaOne auth service.
- * All requests use credentials: 'include' so the browser forwards the cookie
- * automatically. On 401, the user is redirected to the central login page.
+ * Two backends:
+ *   VITE_API_URL       (default :8080) — RegulaOne backend (auth, invoices)
+ *   VITE_KSEF_API_URL  (default :8081) — KSeFFlow backend  (certificates)
  *
- * Endpoints used:
- *   GET  /api/ksef/invoices           — list all invoices for current tenant
- *   POST /api/ksef/invoices           — create a draft invoice
- *   GET  /api/ksef/invoices/:id       — get single invoice
- *   POST /api/ksef/invoices/:id/submit — submit draft to KSeF
- *   GET  /api/ksef/stats              — dashboard stats
+ * Authentication: HTTP-only cookie forwarded automatically via credentials:'include'.
  */
 
 import { apiFetch } from '../lib/api';
+
+// KSeFFlow-specific backend (certificates, KSeF gov API)
+const KSEF_API_URL = import.meta.env.VITE_KSEF_API_URL ?? 'http://localhost:8081';
 
 // ── Response mapper ────────────────────────────────────────────────────────────
 // Maps the backend KSeFInvoiceResponse shape to what this frontend expects.
@@ -151,6 +148,69 @@ export const listAuditLogs = async () => ({
   size:          20,
   number:        0,
 });
+
+// ── Certificate API (KSeFFlow backend :8081) ──────────────────────────────────
+
+/**
+ * Upload a .pfx or .pem certificate for a tenant.
+ * Uses raw fetch + FormData because multipart/form-data cannot go through
+ * the JSON-based apiFetch wrapper.
+ *
+ * @param {string}  tenantId  tenant that owns the certificate
+ * @param {File}    file      the .pfx / .pem file object from the file input
+ * @param {string}  password  certificate password (required for PFX, omit for PEM)
+ * @param {string}  userId    optional user id for audit trail
+ * @returns {Promise<CertificateResponse>}
+ */
+export const uploadCertificate = async (tenantId, file, password = '', userId = '') => {
+  const form = new FormData();
+  form.append('file', file);
+  if (password) form.append('password', password);
+
+  const headers = { 'X-Tenant-Id': tenantId };
+  if (userId) headers['X-User-Id'] = userId;
+
+  const res = await fetch(`${KSEF_API_URL}/api/v1/certificates/upload`, {
+    method: 'POST',
+    headers,
+    body: form,
+    credentials: 'include',
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(json?.message ?? `Upload failed (${res.status})`);
+  }
+  return json;
+};
+
+/**
+ * List all certificates for a tenant (active + historical), newest first.
+ */
+export const listCertificates = async (tenantId) => {
+  const res = await fetch(`${KSEF_API_URL}/api/v1/certificates`, {
+    headers:     { 'X-Tenant-Id': tenantId },
+    credentials: 'include',
+  });
+  const json = await res.json().catch(() => []);
+  if (!res.ok) throw new Error(json?.message ?? 'Failed to load certificates');
+  return Array.isArray(json) ? json : [];
+};
+
+/**
+ * Deactivate (soft-disable) a certificate so it is no longer used for signing.
+ * The record is kept for audit history.
+ */
+export const deactivateCertificate = async (tenantId, certId) => {
+  const res = await fetch(`${KSEF_API_URL}/api/v1/certificates/${certId}/deactivate`, {
+    method:      'PATCH',
+    headers:     { 'X-Tenant-Id': tenantId },
+    credentials: 'include',
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(json?.message ?? 'Failed to deactivate certificate');
+  return json;
+};
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

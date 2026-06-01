@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  INITIAL_CERTIFICATES,
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS
 } from './data/mockData';
@@ -66,7 +65,6 @@ export default function App() {
   const [activeRole,      setActiveRole]      = useState('Company Admin');
   const [invoices, setInvoices] = useState([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
-  const [certificates, setCertificates] = useState(INITIAL_CERTIFICATES);
   const [, setAuditLogs] = useState(INITIAL_AUDIT_LOGS);
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [govStatus, setGovStatus] = useState('Connected');
@@ -202,16 +200,6 @@ export default function App() {
     }
   };
 
-  const removeCertificate = (id) => {
-    const cert = certificates.find(c => c.id === id);
-    setCertificates(prev => prev.filter(c => c.id !== id));
-    if (cert) logAuditAction('CERTIFICATE_REVOKED', `Certificate ${cert.fileName} stripped from digital directories.`);
-  };
-
-  const addCertificate = (cert) => {
-    setCertificates(prev => [cert, ...prev]);
-    logAuditAction('CERTIFICATE_ADDED', `Certificate ${cert.fileName} integrated into HSM vault.`);
-  };
 
   const processOfflineItem = (invoiceId, success, newKsefId) => {
     setInvoices(prev => prev.map(inv => {
@@ -458,7 +446,7 @@ export default function App() {
                 <Dashboard
                   tenant={activeTenant}
                   invoices={invoices}
-                  certificates={certificates}
+                  certificates={[]}
                   onNavigate={navigateTo}
                   govStatus={govStatus}
                   role={activeRole}
@@ -539,9 +527,6 @@ export default function App() {
                 <CertificateManager
                   tenant={activeTenant}
                   role={activeRole}
-                  certificates={certificates}
-                  onAddCertificate={addCertificate}
-                  onRemoveCertificate={removeCertificate}
                   onAddNotification={addNotification}
                 />
               )}
