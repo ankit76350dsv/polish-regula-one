@@ -30,7 +30,10 @@ public class AuditLog {
     }
 
     /**
-     * Writes an immutable audit log entry.
+     * Writes an immutable audit log entry for an INVOICE entity.
+     *
+     * Backward-compatible convenience overload — delegates to the full method with
+     * the entity type fixed to "INVOICE".
      *
      * @param tenantId   tenant that owns the audited entity
      * @param action     action code e.g. INVOICE_CREATED, INVOICE_SENT_TO_KSEF
@@ -43,6 +46,24 @@ public class AuditLog {
     public static void writeAuditLog(String tenantId, String action,
             String entityId, String oldValue, String newValue,
             String userEmail, String ipAddress) {
+        writeAuditLog(tenantId, action, "INVOICE", entityId, oldValue, newValue, userEmail, ipAddress);
+    }
+
+    /**
+     * Writes an immutable audit log entry for any entity type.
+     *
+     * @param tenantId    tenant that owns the audited entity
+     * @param action      action code e.g. CERTIFICATE_UPLOADED, INVOICE_SENT_TO_KSEF
+     * @param entityType  affected entity type e.g. "CERTIFICATE", "INVOICE", "SESSION"
+     * @param entityId    MongoDB _id of the affected document
+     * @param oldValue    previous state — null for CREATE operations
+     * @param newValue    new state or descriptive detail (must never contain secrets)
+     * @param userEmail   email of the user who triggered the action (nullable)
+     * @param ipAddress   client IP address extracted from the HTTP request (nullable)
+     */
+    public static void writeAuditLog(String tenantId, String action, String entityType,
+            String entityId, String oldValue, String newValue,
+            String userEmail, String ipAddress) {
 
         if (instance == null) {
             log.warn("AuditLog bean not yet initialized — skipping log [action={}]", action);
@@ -53,7 +74,7 @@ public class AuditLog {
             instance.auditLogRepository.save(KsefAuditLog.builder()
                     .tenantId(tenantId)
                     .action(action)
-                    .targetEntityType("INVOICE")
+                    .targetEntityType(entityType)
                     .targetEntityId(entityId)
                     .oldValue(oldValue)
                     .newValue(newValue)
@@ -63,8 +84,8 @@ public class AuditLog {
                     .timestamp(LocalDateTime.now())
                     .build());
         } catch (Exception e) {
-            log.error("Failed to write audit log [action={}] invoice [{}]: {}",
-                    action, entityId, e.getMessage());
+            log.error("Failed to write audit log [action={}] {} [{}]: {}",
+                    action, entityType, entityId, e.getMessage());
         }
     }
 }

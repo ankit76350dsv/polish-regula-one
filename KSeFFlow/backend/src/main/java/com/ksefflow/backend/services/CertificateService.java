@@ -126,6 +126,9 @@ public class CertificateService {
         KsefCertificate saved = ksef_certificates_repo.save(cert);
         log.info("Stored certificate [id={}] for tenant [{}], validTo={}",
                 saved.getId(), tenantId, saved.getValidTo());
+
+        writeAuditLog(tenantId, "CERTIFICATE_UPLOADED", saved.getId(), uploadedByUserId,
+                describeCertificate(saved));
         return saved;
     }
 
@@ -293,6 +296,9 @@ public class CertificateService {
         cert.setUpdatedAt(LocalDateTime.now());
         ksef_certificates_repo.save(cert);
         log.info("Manually deactivated certificate [id={}] for tenant [{}]", certId, tenantId);
+
+        writeAuditLog(tenantId, "CERTIFICATE_DEACTIVATED", cert.getId(),
+                cert.getUploadedByUserId(), describeCertificate(cert));
     }
 
     /**
@@ -437,6 +443,9 @@ public class CertificateService {
         KsefCertificate saved = ksef_certificates_repo.save(cert);
         log.info("Stored PEM certificate [id={}] for tenant [{}], validTo={}",
                 saved.getId(), tenantId, saved.getValidTo());
+
+        writeAuditLog(tenantId, "CERTIFICATE_UPLOADED", saved.getId(), uploadedByUserId,
+                describeCertificate(saved));
         return saved;
     }
 
@@ -493,5 +502,42 @@ public class CertificateService {
                     "Certificate [" + cert.getId() + "] expired on " + cert.getValidTo()
                             + ". Upload a new certificate to resume invoice submissions.");
         }
+    }
+
+    // ── Audit logging ───────────────────────────────────────────────────────────
+
+    /**
+     * Writes an immutable CERTIFICATE audit log entry via the shared {@link AuditLog}
+     * service. Uses the entity-type-aware overload so the entry is correctly tagged
+     * "CERTIFICATE" rather than the default "INVOICE".
+     *
+     * Security: {@code newValue} carries only non-sensitive descriptive metadata —
+     * NEVER the certificate password, vault reference, or any key material.
+     * AuditLog swallows and logs any persistence failure so it never blocks the
+     * underlying certificate operation.
+     *
+     * @param tenantId   tenant that owns the certificate (mandatory tenant scope)
+     * @param action     action code e.g. CERTIFICATE_UPLOADED, CERTIFICATE_DEACTIVATED
+     * @param certId     MongoDB _id of the affected certificate
+     * @param userId     User._id of the actor who triggered the action (nullable)
+     * @param newValue   human-readable, non-sensitive description of the certificate
+     */
+    private void writeAuditLog(String tenantId, String action, String certId,
+            String userId, String newValue) {
+        // The AuditLog service tracks the actor by email; at the certificate service
+        // layer we only have the user id, so it is folded into the description.
+        String detail = userId != null ? "userId=" + userId + ", " + newValue : newValue;
+        AuditLog.writeAuditLog(tenantId, action, "CERTIFICATE", certId, null, detail, null, null);
+    }
+
+    /**
+     * Builds a non-sensitive one-line description of a certificate for the audit
+     * trail. Deliberately excludes the password, vault reference, and storage path.
+     */
+    private String describeCertificate(KsefCertificate cert) {
+        return String.format(
+                "fileName=%s, type=%s, issuedTo=%s, issuer=%s, validFrom=%s, validTo=%s, status=%s, active=%s",
+                cert.getFileName(), cert.getType(), cert.getIssuedTo(), cert.getIssuer(),
+                cert.getValidFrom(), cert.getValidTo(), cert.getVerificationStatus(), cert.isActive());
     }
 }

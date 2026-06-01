@@ -138,16 +138,53 @@ export const downloadInvoiceXml = async (invoiceId) => {
 };
 
 /**
- * Audit logs — the KSeFFlow backend endpoint is not yet implemented in
- * RegulaOne. Returns an empty page so the Audit Center renders without errors.
+ * Fetch a paginated, filtered page of immutable audit logs for a tenant.
+ *
+ * Talks to the KSeFFlow backend (:8081) GET /api/v1/audit-logs, which returns a
+ * Spring Data Page<KsefAuditLog>: { content, totalElements, totalPages, size, number }.
+ * Tenant scope is enforced server-side via the X-Tenant-Id header — clients can
+ * never read logs outside their own tenant.
+ *
+ * @param {string} tenantId tenant whose logs to fetch (required)
+ * @param {object} [opts]
+ * @param {number} [opts.page=0]   zero-based page index
+ * @param {number} [opts.size=20]  entries per page
+ * @param {string} [opts.from]     ISO-8601 datetime lower bound (e.g. 2026-01-01T00:00)
+ * @param {string} [opts.to]       ISO-8601 datetime upper bound
+ * @param {string} [opts.role]     exact userRole filter (omit / "ALL" for no filter)
+ * @param {string} [opts.search]   substring match across email, action, IP, detail
+ * @returns {Promise<{content: object[], totalElements: number, totalPages: number, size: number, number: number}>}
  */
-export const listAuditLogs = async () => ({
-  content:       [],
-  totalElements: 0,
-  totalPages:    0,
-  size:          20,
-  number:        0,
-});
+export const listAuditLogs = async (tenantId, opts = {}) => {
+  const { page = 0, size = 20, from, to, role, search } = opts;
+
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('size', String(size));
+  if (from)   params.set('from', from);
+  if (to)     params.set('to', to);
+  if (role)   params.set('role', role);
+  if (search) params.set('search', search);
+
+  const res = await fetch(`${KSEF_API_URL}/api/v1/audit-logs?${params.toString()}`, {
+    headers:     { 'X-Tenant-Id': tenantId },
+    credentials: 'include',
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error((typeof json === 'string' ? json : json?.message) ?? `Failed to load audit logs (${res.status})`);
+  }
+
+  // Normalise so the UI always has the fields it reads, even on an empty response.
+  return {
+    content:       Array.isArray(json?.content) ? json.content : [],
+    totalElements: json?.totalElements ?? 0,
+    totalPages:    json?.totalPages    ?? 0,
+    size:          json?.size          ?? size,
+    number:        json?.number        ?? page,
+  };
+};
 
 // ── Certificate API (KSeFFlow backend :8081) ──────────────────────────────────
 

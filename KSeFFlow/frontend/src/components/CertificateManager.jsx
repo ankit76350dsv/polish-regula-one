@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   ShieldCheck,
   UploadCloud,
-  Trash2,
+  PowerOff,
   AlertTriangle,
   Key,
   Lock,
@@ -26,6 +26,10 @@ export default function CertificateManager({ tenant, role, onAddNotification }) 
   const [certs,         setCerts]         = useState([]);
   const [isLoading,     setIsLoading]     = useState(false);
   const [loadError,     setLoadError]     = useState('');
+
+  // ── Deactivation confirmation state ───────────────────────────────────────────
+  const [confirmCert,     setConfirmCert]     = useState(null);
+  const [isDeactivating,  setIsDeactivating]  = useState(false);
 
   // ── Load certificates from backend on mount / when tenant changes ─────────────
   const fetchCerts = useCallback(async () => {
@@ -106,17 +110,27 @@ export default function CertificateManager({ tenant, role, onAddNotification }) 
   };
 
   // ── Deactivate ─────────────────────────────────────────────────────────────────
-  const handleDeactivate = async (cert) => {
+  const requestDeactivate = (cert) => {
     if (!canModify) {
       onAddNotification('RBAC Permission Denied', 'Admin role is required to deactivate certificates.', 'error');
       return;
     }
+    setConfirmCert(cert);
+  };
+
+  const confirmDeactivate = async () => {
+    const cert = confirmCert;
+    if (!cert) return;
+    setIsDeactivating(true);
     try {
       await deactivateCertificate(tenant.id, cert.id);
       setCerts(prev => prev.map(c => c.id === cert.id ? { ...c, active: false } : c));
       onAddNotification('Certificate Deactivated', `${cert.fileName} has been deactivated.`, 'info');
+      setConfirmCert(null);
     } catch (err) {
       onAddNotification('Deactivation Failed', err.message ?? 'Could not deactivate certificate.', 'error');
+    } finally {
+      setIsDeactivating(false);
     }
   };
 
@@ -136,7 +150,7 @@ export default function CertificateManager({ tenant, role, onAddNotification }) 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
         {/* ── Upload panel ────────────────────────────────────────────────────── */}
-        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col justify-between">
+        <div className="lg:col-span-5 lg:self-start bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col">
           <div className="space-y-4">
             <div className="border-b pb-3 border-slate-100">
               <h3 className="font-semibold text-slate-700 text-sm">Register Qualified Seal Credentials</h3>
@@ -326,11 +340,11 @@ export default function CertificateManager({ tenant, role, onAddNotification }) 
                     </span>
                     {cert.active && (
                       <button
-                        onClick={() => handleDeactivate(cert)}
+                        onClick={() => requestDeactivate(cert)}
                         className="text-slate-400 hover:text-red-600 p-1 rounded transition ml-2"
                         title="Deactivate certificate"
                       >
-                        <Trash2 size={13} />
+                        <PowerOff size={13} />
                       </button>
                     )}
                   </div>
@@ -348,6 +362,57 @@ export default function CertificateManager({ tenant, role, onAddNotification }) 
         </div>
 
       </div>
+
+      {/* ── Deactivation confirmation modal ──────────────────────────────────── */}
+      {confirmCert && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm px-4"
+          onClick={() => !isDeactivating && setConfirmCert(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-sm p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-red-50 text-red-600 rounded-xl shrink-0">
+                <PowerOff size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-base tracking-tight">Deactivate certificate?</h3>
+                <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                  Do you really want to deactivate{' '}
+                  <strong className="font-mono text-slate-700 break-all">{confirmCert.fileName}</strong>?
+                  It will no longer be used to sign outbound KSeF transmissions. This action can be reverted by uploading the certificate again.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                onClick={() => setConfirmCert(null)}
+                disabled={isDeactivating}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeactivate}
+                disabled={isDeactivating}
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition flex items-center gap-2 disabled:opacity-50"
+              >
+                {isDeactivating ? (
+                  <><Loader2 size={13} className="animate-spin" /> Deactivating…</>
+                ) : (
+                  <><PowerOff size={13} /> Deactivate</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
