@@ -13,8 +13,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
 import java.security.KeyStore;
 import java.security.PrivateKey;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -83,9 +85,12 @@ public class CertificateService {
                     "Certificate file exceeds maximum allowed size of " + props.getMaxFileSize() + " bytes");
         }
 
-        // Validate and extract metadata before touching any stored state
+       
+        //! Validate and extract metadata before touching any stored state
         KeyStore keyStore = KeyStoreUtils.loadKeyStoreFromBytes(pfxBytes, password);
-        X509Certificate x509 = KeyStoreUtils.extractX509Certificate(keyStore);
+        //! get the certificate from the store...
+        X509Certificate x509 = KeyStoreUtils.extractX509Certificate(keyStore); //! A certificate is basically a digital identity card used on computers and the internet.
+                                                                            //! Government authority Certificate Authority (CA)
 
         // Deactivate existing active cert — only one active cert per tenant at any time
         ksef_certificates_repo.findByTenantIdAndActiveTrue(tenantId)
@@ -97,7 +102,9 @@ public class CertificateService {
                             existing.getId(), tenantId);
                 });
 
+        //encrypt and store the encrypt file and return the storage path...
         String storagePath = storage.writePfxEncrypted(tenantId, pfxBytes, fileName);
+        //just retunr the encrypt password...
         String vaultRef = crypto.encryptPassword(password);
 
         KsefCertificate cert = KsefCertificate.builder()
@@ -351,6 +358,86 @@ public class CertificateService {
             cert.setUpdatedAt(LocalDateTime.now());
             ksef_certificates_repo.save(cert);
         });
+    }
+
+    /**
+     * Uploads and securely stores a PEM-encoded certificate for a tenant.
+     *
+     * PEM files (.pem / .crt) contain a base64-encoded DER certificate between
+     * -----BEGIN CERTIFICATE----- / -----END CERTIFICATE----- markers.
+     * Unlike PFX, a standalone PEM certificate file does NOT contain a private key —
+     * it is used only for public certificate operations (e.g. trusting a CA or
+     * presenting a server certificate). KSeF signing still requires a PFX.
+     *
+     * What this method does:
+     * 1. Checks the uploaded file is within the size limit
+     * 2. Parses the PEM bytes with CertificateFactory to validate format and
+     *    extract X.509 metadata (subject, issuer, validity dates)
+     * 3. Deactivates the current active PEM certificate for the tenant (if any)
+     * 4. AES-256-GCM encrypts and stores the raw PEM bytes
+     * 5. Saves certificate metadata to MongoDB — no private key material stored
+     *
+     * @param pemBytes        Raw bytes of the .pem / .crt file
+     * @param tenantId        Tenant that owns this certificate
+     * @param fileName        Original uploaded filename (e.g. "company_cert.pem")
+     * @param uploadedByUserId MongoDB user._id of the uploading admin
+     * @throws KsefCertificateException if the file is too large or not a valid PEM certificate
+     */
+    public KsefCertificate storePemCertificate(
+            byte[] pemBytes,
+            String tenantId,
+            String fileName,
+            String uploadedByUserId) {
+
+        if (pemBytes.length > props.getMaxFileSize()) {
+            throw new KsefCertificateException(
+                    "Certificate file exceeds maximum allowed size of " + props.getMaxFileSize() + " bytes");
+        }
+
+        // Validate and extract metadata before touching any stored state
+        X509Certificate x509;
+        try {
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            x509 = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(pemBytes));
+        } catch (Exception e) {
+            throw new KsefCertificateException(
+                    "Invalid PEM certificate: " + e.getMessage(), e);
+        }
+
+        // Deactivate existing active PEM cert for this tenant
+        ksef_certificates_repo.findByTenantIdAndActiveTrue(tenantId)
+                .ifPresent(existing -> {
+                    existing.setActive(false);
+                    existing.setUpdatedAt(LocalDateTime.now());
+                    ksef_certificates_repo.save(existing);
+                    log.info("Deactivated previous PEM certificate [id={}] for tenant [{}]",
+                            existing.getId(), tenantId);
+                });
+
+        // Encrypt and persist the raw PEM bytes (same AES-256-GCM storage as PFX)
+        String storagePath = storage.writePfxEncrypted(tenantId, pemBytes, fileName);
+
+        KsefCertificate cert = KsefCertificate.builder()
+                .tenantId(tenantId)
+                .fileName(fileName)
+                .type(KsefCertificateType.PEM)
+                .issuedTo(x509.getSubjectX500Principal().getName())
+                .issuer(x509.getIssuerX500Principal().getName())
+                .validFrom(KeyStoreUtils.toLocalDate(x509.getNotBefore()))
+                .validTo(KeyStoreUtils.toLocalDate(x509.getNotAfter()))
+                .verificationStatus(KsefCertificateVerificationStatus.VERIFIED)
+                // PEM-only certificates carry no private key and need no vault password reference
+                .vaultPasswordReference(null)
+                .encryptedStoragePath(storagePath)
+                .uploadedByUserId(uploadedByUserId)
+                .active(true)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        KsefCertificate saved = ksef_certificates_repo.save(cert);
+        log.info("Stored PEM certificate [id={}] for tenant [{}], validTo={}",
+                saved.getId(), tenantId, saved.getValidTo());
+        return saved;
     }
 
     // private ── Domain-level guards (stay in service — they operate on the domain model)

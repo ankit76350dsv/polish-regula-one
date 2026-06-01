@@ -14,13 +14,20 @@ import java.util.Enumeration;
 // No Spring context needed — all methods are stateless.
 public final class KeyStoreUtils {
 
-    private KeyStoreUtils() {}
+    private KeyStoreUtils() {
+    }
 
     // Opens a PKCS12 KeyStore from raw .pfx bytes using the supplied password.
-    // Throws KsefCertificateException if the file is invalid or the password is wrong.
+    // Throws KsefCertificateException if the file is invalid or the password is
+    // wrong.
     public static KeyStore loadKeyStoreFromBytes(byte[] pfxBytes, String password) {
         try {
-            KeyStore ks = KeyStore.getInstance("PKCS12");
+            // Inside a .pfx file there is usually:
+                // Public certificate
+                // Private key
+                // Certificate chain
+                // Metadataf
+            KeyStore ks = KeyStore.getInstance("PKCS12"); //! Creates an empty PKCS12 keystore object.
             ks.load(new ByteArrayInputStream(pfxBytes), password.toCharArray());
             return ks;
         } catch (Exception e) {
@@ -30,15 +37,19 @@ public final class KeyStoreUtils {
     }
 
     // Finds and returns the first X509Certificate inside the KeyStore.
-    // Iterates all aliases — works regardless of what alias name was used when creating the .pfx.
+    // Iterates all aliases — works regardless of what alias name was used when
+    // creating the .pfx.
     public static X509Certificate extractX509Certificate(KeyStore keyStore) {
         try {
             Enumeration<String> aliases = keyStore.aliases();
             while (aliases.hasMoreElements()) {
                 String alias = aliases.nextElement();
+                //! finding the certificate 
                 if (keyStore.isCertificateEntry(alias) || keyStore.isKeyEntry(alias)) {
+                    //! get the certificate
                     java.security.cert.Certificate cert = keyStore.getCertificate(alias);
-                    if (cert instanceof X509Certificate x509) {
+                    //! X509 is the standard format for digital certificates.
+                    if (cert instanceof X509Certificate x509) { 
                         return x509;
                     }
                 }
@@ -54,7 +65,8 @@ public final class KeyStoreUtils {
     }
 
     // Finds and returns the PrivateKey inside the KeyStore.
-    // The password is needed a second time here — Java requires it to unlock the key entry.
+    // The password is needed a second time here — Java requires it to unlock the
+    // key entry.
     public static PrivateKey extractPrivateKey(KeyStore keyStore, String password) {
         try {
             Enumeration<String> aliases = keyStore.aliases();
@@ -74,7 +86,8 @@ public final class KeyStoreUtils {
         }
     }
 
-    // Converts a legacy java.util.Date (returned by X509Certificate.getNotBefore/getNotAfter)
+    // Converts a legacy java.util.Date (returned by
+    // X509Certificate.getNotBefore/getNotAfter)
     // to a modern LocalDate using the system default timezone.
     public static LocalDate toLocalDate(java.util.Date date) {
         return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();

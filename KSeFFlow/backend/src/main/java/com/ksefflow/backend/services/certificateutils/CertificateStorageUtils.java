@@ -30,7 +30,7 @@ public class CertificateStorageUtils {
     // Returns the full file path — stored in KsefCertificate.encryptedStoragePath in MongoDB.
     public String writePfxEncrypted(String tenantId, byte[] pfxBytes, String fileName) {
         try {
-            byte[] encrypted = crypto.aesEncrypt(pfxBytes);
+            byte[] encrypted = crypto.aesEncrypt(pfxBytes);  //! Encrypted : [ IV ][ ciphertext ][ auth tag ]
             Path dir = Paths.get(props.getStoragePath(), tenantId);
             Files.createDirectories(dir);
             Path target = dir.resolve(fileName + ".enc");
