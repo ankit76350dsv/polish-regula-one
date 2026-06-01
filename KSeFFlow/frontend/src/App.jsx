@@ -4,7 +4,7 @@ import {
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS
 } from './data/mockData';
-import { listInvoices } from './api/ksefApi';
+import { listInvoices, getMyTenant } from './api/ksefApi';
 import { SSO_CALLBACK_URL } from './lib/api';
 
 const API_URL       = import.meta.env.VITE_API_URL          ?? 'http://localhost:8080';
@@ -100,6 +100,22 @@ export default function App() {
           subscriptionPlan: 'Active',
         });
         setIsAuthenticated(true);
+
+        // Enrich the tenant with full organisation details (name, NIP, plan).
+        // The tenant id is derived server-side from the authenticated JWT —
+        // we never send it. Skipped for users with no tenant (e.g. Super Admin).
+        if (tenantId) {
+          getMyTenant()
+            .then(tenant => {
+              setActiveTenant(prev => ({
+                ...prev,
+                name:             tenant.name   ?? prev.name,
+                nip:              tenant.nip    ?? '',
+                subscriptionPlan: tenant.status ?? prev.subscriptionPlan,
+              }));
+            })
+            .catch(() => { /* non-fatal — keep the values seeded from /me */ });
+        }
 
         // ── URL tenant-ID correction ──────────────────────────────────────────
         // Three cases:

@@ -186,6 +186,16 @@ export const listAuditLogs = async (tenantId, opts = {}) => {
   };
 };
 
+/**
+ * Fetch the current user's own tenant/organisation from the RegulaOne backend.
+ *
+ * Calls GET /api/tenant/info, which derives the tenant id from the authenticated
+ * JWT (idToken cookie) — the client never sends a tenant id, enforcing tenant
+ * isolation. Returns the full TenantResponse: { id, name, nip, regon, status,
+ * currentPackage, ... }.
+ */
+export const getMyTenant = async () => apiFetch('/api/tenant/info');
+
 // ── Certificate API (KSeFFlow backend :8081) ──────────────────────────────────
 
 /**

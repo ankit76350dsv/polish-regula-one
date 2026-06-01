@@ -12,8 +12,11 @@ export const tenantService = {
     return api.get(`/api/superadmin/tenants?${params.toString()}`);
   },
 
-  getById: (id) =>
-    api.get(`/api/tenant/${id}`),
+  // GET /api/tenant/info
+  // Returns the current user's own tenant. The backend derives the tenant id from
+  // the authenticated JWT, so no id is sent from the client (tenant isolation).
+  getMyTenant: () =>
+    api.get('/api/tenant/info'),
 
   create: (data) =>
     api.post('/api/superadmin/tenant', data),

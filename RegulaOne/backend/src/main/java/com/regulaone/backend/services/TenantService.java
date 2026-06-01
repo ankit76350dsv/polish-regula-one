@@ -1,5 +1,6 @@
 package com.regulaone.backend.services;
 
+import com.regulaone.backend.dto.Tenant.MyTenantResponse;
 import com.regulaone.backend.dto.Tenant.TenantPageResponse;
 import com.regulaone.backend.dto.Tenant.TenantRequest;
 import com.regulaone.backend.dto.Tenant.TenantResponse;
@@ -154,6 +155,19 @@ public class TenantService {
                         "Tenant not found with id: " + id));
 
         return TenantResponse.from(tenant);
+    }
+
+    /**
+     * Returns the lean view of a single Tenant (no package/billing details) used by
+     * GET /api/tenant/info for a user viewing their own organisation.
+     * Throws 404 if not found.
+     */
+    public MyTenantResponse getMyTenantInfo(String id) {
+        Tenant tenant = tenantRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Tenant not found with id: " + id));
+
+        return MyTenantResponse.from(tenant);
     }
 
     /**

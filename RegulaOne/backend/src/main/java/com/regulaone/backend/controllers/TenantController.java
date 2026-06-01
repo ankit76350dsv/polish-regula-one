@@ -2,11 +2,13 @@ package com.regulaone.backend.controllers;
 
 import com.regulaone.backend.dto.AppResponse;
 import com.regulaone.backend.dto.Tenant.ChangeStatusRequest;
+import com.regulaone.backend.dto.Tenant.MyTenantResponse;
 import com.regulaone.backend.dto.Tenant.TenantPageResponse;
 import com.regulaone.backend.dto.Tenant.TenantRequest;
 import com.regulaone.backend.dto.Tenant.TenantResponse;
 import com.regulaone.backend.models.TenantStatus;
 import com.regulaone.backend.services.TenantService;
+import com.regulaone.backend.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -14,6 +16,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -22,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 public class TenantController {
 
     private final TenantService tenantService;
+    private final UserService userService;
 
     @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
     @PostMapping("/superadmin/tenant")
@@ -78,11 +83,16 @@ public class TenantController {
                 tenantService.getAllTenants(search, status, pageable)));
     }
 
+    // Returns the tenant of the currently authenticated user.
+    // The tenant id is derived from the JWT subject (never trusted from the client),
+    // so a user can only ever load their own organisation — enforcing tenant isolation.
     @PreAuthorize("isAuthenticated()")
-    @GetMapping("/tenant/{id}")
-    public ResponseEntity<AppResponse<TenantResponse>> getTenantById(@PathVariable String id) {
+    @GetMapping("/tenant/info")
+    public ResponseEntity<AppResponse<MyTenantResponse>> getMyTenant(
+            @AuthenticationPrincipal Jwt jwt) {
+        String tenantId = userService.getCurrentUser(jwt.getSubject()).getTenantId();
         return ResponseEntity.ok(AppResponse.success(
                 "Tenant loaded",
-                tenantService.getTenantById(id)));
+                tenantService.getMyTenantInfo(tenantId)));
     }
 }
