@@ -28,11 +28,32 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
+		<aws.sdk.version>2.29.51</aws.sdk.version>
 	</properties>
+
+	<!-- AWS SDK v2 BOM — keeps all software.amazon.awssdk:* artifacts on one version -->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>${aws.sdk.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-mongodb</artifactId>
+		</dependency>
+
+		<!-- AWS S3 — encrypted certificate storage (qualified-seal PFX/PEM files) -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
