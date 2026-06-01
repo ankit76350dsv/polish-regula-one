@@ -4,7 +4,7 @@ import com.ksefflow.backend.config.KsefApiProperties;
 import com.ksefflow.backend.models.KsefGovernmentSession;
 import com.ksefflow.backend.models.utils.KsefGovernmentStatus;
 import com.ksefflow.backend.repository.KsefGovernmentSessionRepository;
-import com.ksefflow.backend.services.certificateutils.CertificateCryptoUtils;
+import com.ksefflow.backend.services.certificate.CertificateCryptoUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

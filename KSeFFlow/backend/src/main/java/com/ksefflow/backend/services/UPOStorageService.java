@@ -3,7 +3,7 @@ package com.ksefflow.backend.services;
 import com.ksefflow.backend.config.KsefApiProperties;
 import com.ksefflow.backend.models.KsefUpoReceipt;
 import com.ksefflow.backend.repository.KsefUpoReceiptRepository;
-import com.ksefflow.backend.services.certificateutils.CertificateCryptoUtils;
+import com.ksefflow.backend.services.certificate.CertificateCryptoUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

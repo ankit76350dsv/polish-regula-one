@@ -2,7 +2,7 @@ package com.ksefflow.backend.controllers;
 
 import com.ksefflow.backend.dto.certificate.CertificateResponse;
 import com.ksefflow.backend.models.KsefCertificate;
-import com.ksefflow.backend.services.CertificateService;
+import com.ksefflow.backend.services.certificate.CertificateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;

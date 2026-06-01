@@ -1,5 +1,7 @@
 package com.ksefflow.backend.services;
 
+import com.ksefflow.backend.services.certificate.CertificateService;
+
 import com.ksefflow.backend.exceptions.KsefCertificateException;
 import com.ksefflow.backend.models.KsefCertificate;
 import com.ksefflow.backend.models.utils.KsefCertificateVerificationStatus;

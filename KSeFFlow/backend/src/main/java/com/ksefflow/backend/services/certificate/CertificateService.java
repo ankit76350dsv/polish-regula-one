@@ -1,4 +1,4 @@
-package com.ksefflow.backend.services;
+package com.ksefflow.backend.services.certificate;
 
 import com.ksefflow.backend.config.CertificateStorageProperties;
 import com.ksefflow.backend.exceptions.KsefCertificateException;
@@ -6,9 +6,7 @@ import com.ksefflow.backend.models.KsefCertificate;
 import com.ksefflow.backend.models.utils.KsefCertificateType;
 import com.ksefflow.backend.models.utils.KsefCertificateVerificationStatus;
 import com.ksefflow.backend.repository.KsefCertificateRepository;
-import com.ksefflow.backend.services.certificateutils.CertificateCryptoUtils;
-import com.ksefflow.backend.services.certificateutils.CertificateStorageUtils;
-import com.ksefflow.backend.services.certificateutils.KeyStoreUtils;
+import com.ksefflow.backend.services.KSeFAuditLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

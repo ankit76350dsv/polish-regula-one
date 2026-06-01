@@ -1,4 +1,4 @@
-package com.ksefflow.backend.services.certificateutils;
+package com.ksefflow.backend.services.certificate;
 
 import com.ksefflow.backend.exceptions.KsefCertificateException;
 
