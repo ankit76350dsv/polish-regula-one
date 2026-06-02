@@ -43,6 +43,10 @@ public interface KsefInvoiceRepository extends MongoRepository<KsefInvoice, Stri
     // Prevent duplicate invoice numbers within the same tenant
     boolean existsByTenantIdAndInvoiceNumber(String tenantId, String invoiceNumber);
 
+    // Resolve an existing invoice by tenant + number — used by create-draft to
+    // decide whether to update an existing DRAFT or reject a finalized duplicate.
+    Optional<KsefInvoice> findByTenantIdAndInvoiceNumber(String tenantId, String invoiceNumber);
+
     // ── Aggregation helpers ────────────────────────────────────────────────────
 
     // Count per status — used by the Dashboard metric cards

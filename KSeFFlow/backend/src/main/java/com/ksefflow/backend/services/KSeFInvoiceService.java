@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.Optional;
 
 /**
  * KSeFInvoiceService — Phase 4 Orchestrator.
@@ -69,23 +70,62 @@ public class KSeFInvoiceService {
     // ── Create ─────────────────────────────────────────────────────────────────
 
     /**
-     * Persists a new invoice in DRAFT status.
+     * Persists an invoice in DRAFT status.
      * No XML is generated or validated at this stage — the user can still edit the
      * invoice.
-     * Duplicate invoice numbers within the same tenant are rejected.
+     *
+     * Idempotent on (tenantId, invoiceNumber):
+     * - if an invoice with the same number already exists and is still a DRAFT,
+     * it is UPDATED in place (re-saving a draft is not an error);
+     * - if it exists but has moved past DRAFT (PENDING/SENT/…), it is a real
+     * duplicate and is rejected — a finalized invoice cannot be re-created.
      */
     public KsefInvoice createInvoice(KsefInvoice invoice, String userEmail, String ipAddress) {
-        //! checking if the ivoce alrady exist: existsByTenantIdAndInvoiceNumber()
-        if (ksef_invoices_repository.existsByTenantIdAndInvoiceNumber(invoice.getTenantId(), invoice.getInvoiceNumber())) {
+        // Look up any existing invoice with this number for the tenant.
+        Optional<KsefInvoice> existingOpt = ksef_invoices_repository
+                .findByTenantIdAndInvoiceNumber(invoice.getTenantId(), invoice.getInvoiceNumber());
 
-            log.error("Invoice number [{}] already exists for tenant [{}]",
-                    invoice.getInvoiceNumber(), invoice.getTenantId());
+        if (existingOpt.isPresent()) {
+            KsefInvoice existing = existingOpt.get();
 
-            throw new IllegalArgumentException(
-                    "Invoice number [" + invoice.getInvoiceNumber() +
-                            "] already exists for tenant [" + invoice.getTenantId() + "]");
+            // Already finalized (or in-flight) → re-creating it is a genuine conflict.
+            if (existing.getStatus() != KsefInvoiceStatus.DRAFT) {
+                log.error("Invoice number [{}] already exists for tenant [{}] with status [{}] — cannot re-create",
+                        invoice.getInvoiceNumber(), invoice.getTenantId(), existing.getStatus());
+                throw new IllegalArgumentException(
+                        "Invoice number [" + invoice.getInvoiceNumber() +
+                                "] already exists for tenant [" + invoice.getTenantId() +
+                                "] and is no longer a draft (status " + existing.getStatus() + ")");
+            }
+
+            // Still a DRAFT → update it in place. Keep the original id + createdAt,
+            // overwrite the editable data with the incoming draft, bump updatedAt.
+            log.info("Invoice [{}] already a DRAFT for tenant [{}] — updating existing draft [{}]",
+                    existing.getInvoiceNumber(), existing.getTenantId(), existing.getId());
+
+            invoice.setId(existing.getId());
+            invoice.setCreatedAt(existing.getCreatedAt());
+            invoice.setUpdatedAt(LocalDateTime.now());
+            invoice.setStatus(KsefInvoiceStatus.DRAFT);
+            invoice.setKsefEnvironment(apiProperties.getEnvironment());
+
+            KsefInvoice updated = ksef_invoices_repository.save(invoice);
+
+            KSeFAuditLogService.writeAuditLog(
+                    updated.getTenantId(),
+                    "INVOICE_DRAFT_UPDATED",
+                    updated.getId(),
+                    null,
+                    "invoiceNumber=" + updated.getInvoiceNumber(),
+                    userEmail,
+                    ipAddress);
+
+            log.info("Invoice [{}] DRAFT updated successfully for tenant [{}]",
+                    updated.getInvoiceNumber(), updated.getTenantId());
+            return updated;
         }
 
+        // No existing invoice → create a fresh DRAFT.
         invoice.setStatus(KsefInvoiceStatus.DRAFT);
         invoice.setCreatedAt(LocalDateTime.now());
         invoice.setKsefEnvironment(apiProperties.getEnvironment());
@@ -126,37 +166,63 @@ public class KSeFInvoiceService {
      * @throws KsefAuthException          if KSeF session cannot be opened
      *                                    (certificate problem)
      */
-
+    //!----------------------------------
     public KsefInvoice submitInvoice(String tenantId, String invoiceId, String nip,
             String userEmail, String ipAddress) {
-        // Step 1 — load and guard
+
+        log.info("[SUBMITINVOICE] Starting invoice submission process. TenantId=[{}], InvoiceId=[{}], NIP=[{}]", tenantId, invoiceId, nip);
+
+        // Step 1 — Load and validate DRAFT invoice
         KsefInvoice invoice = loadAndGuardDraft(tenantId, invoiceId);
 
-        // Step 2 — transition to PENDING so the UI shows processing state
+        //! Step 2 — Move invoice to PENDING state
         invoice.setStatus(KsefInvoiceStatus.PENDING);
         invoice.setUpdatedAt(LocalDateTime.now());
-        invoice.setSubmissionAttempts(invoice.getSubmissionAttempts() + 1);
+        int nextAttempt = invoice.getSubmissionAttempts() + 1;
+        invoice.setSubmissionAttempts(nextAttempt);
+        log.info("[SUBMITINVOICE] Submission attempt count updated to [{}] for invoice [{}]", nextAttempt, invoice.getInvoiceNumber());
         ksef_invoices_repository.save(invoice);
+        // Audit log for submission attempt
+        KSeFAuditLogService.writeAuditLog(tenantId,"INVOICE_SUBMISSION_STARTED", invoiceId, null, "attempt=" + invoice.getSubmissionAttempts(), userEmail, ipAddress);
 
-        KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null,
-                "attempt=" + invoice.getSubmissionAttempts(), userEmail, ipAddress);
-
-        // Steps 3–4 — generate and strictly validate FA(3) XML
+        
+        //! Step 3 — Generate FA(3) XML
+        //! return two thiing XML and hashof XML
         FA3XmlGeneratorService.FA3XmlResult xmlResult = xmlGeneratorService.generateXml(invoice);
+
+        // Step 4 — Validate XML
         xmlValidatorService.validateStrict(xmlResult.xmlContent());
 
-        // Persist hash immediately — needed for the offline QR even if submission fails
+        // Save XML hash
+        log.info("Saving XML SHA-256 hash for invoice [{}]", invoice.getInvoiceNumber());
         invoice.setFa3XmlHash(xmlResult.sha256Hash());
         ksef_invoices_repository.save(invoice);
 
-        // Steps 5–8 — KSeF network pipeline (triggers offline mode on failure)
+        // Step 5–8 — Submit invoice to KSeF
         try {
-            return executeKsefSubmission(invoice, xmlResult.xmlContent(), nip, userEmail, ipAddress);
+
+            KsefInvoice submittedInvoice = executeKsefSubmission(
+                    invoice,
+                    xmlResult.xmlContent(),
+                    nip,
+                    userEmail,
+                    ipAddress);
+
+            log.info("Invoice [{}] submitted successfully to KSeF", invoice.getInvoiceNumber());
+
+            return submittedInvoice;
+
         } catch (KsefSubmissionException | KsefAuthException e) {
-            log.warn("KSeF submission failed for invoice [{}]: {} — switching to OFFLINE_MODE",
-                    invoice.getInvoiceNumber(), e.getMessage());
-            // ! need to understand this...... for the offline
-            return handleOfflineMode(invoice, e.getMessage(), userEmail, ipAddress);
+
+            log.warn("KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE", invoice.getInvoiceNumber(), e.getMessage());
+
+            log.info("Handling offline mode for invoice [{}]", invoice.getInvoiceNumber());
+
+            return handleOfflineMode(
+                    invoice,
+                    e.getMessage(),
+                    userEmail,
+                    ipAddress);
         }
     }
 
@@ -177,7 +243,7 @@ public class KSeFInvoiceService {
         return ksef_invoices_repository.findByTenantIdOrderByCreatedAtDesc(tenantId, pageable);
     }
 
-    // ── Private: KSeF network pipeline ─────────────────────────────────────────
+    //! ── Private: KSeF network pipeline ─────────────────────────────────────────
 
     private KsefInvoice executeKsefSubmission(KsefInvoice invoice,
             String xmlContent, String nip,

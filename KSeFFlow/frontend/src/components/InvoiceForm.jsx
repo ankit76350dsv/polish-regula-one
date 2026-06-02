@@ -76,6 +76,9 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  // Last error from a Save-Draft / Submit / Offline action — shown inline in the
+  // Government Execution Deck so the user always sees why an action failed.
+  const [formError, setFormError] = useState(null);
 
   const calculateTotals = (currentItems) => {
     let netSum = 0;
@@ -220,13 +223,18 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
   };
 
   const handleSaveDraft = async () => {
+    setFormError(null);
     if (!canModify) {
-      onAddNotification('RBAC Permission Denied', 'Your active role does not permit creating invoices.', 'error');
+      const msg = 'Your active role does not permit creating invoices.';
+      setFormError(msg);
+      onAddNotification('RBAC Permission Denied', msg, 'error');
       return;
     }
 
     if (!buyerNip || !buyerName) {
-      onAddNotification('Validation Error', 'NIP and Buyer Name are mandatory.', 'error');
+      const msg = 'NIP and Buyer Name are mandatory.';
+      setFormError(msg);
+      onAddNotification('Validation Error', msg, 'error');
       return;
     }
 
@@ -271,6 +279,7 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
       onNavigate('invoices');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error while saving draft';
+      setFormError(message);
       onAddNotification('Draft Save Failed', message, 'error');
     } finally {
       setIsSavingDraft(false);
@@ -278,13 +287,18 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
   };
 
   const handleSubmit = async (_forceOffline = false) => {
+    setFormError(null);
     if (!canModify) {
-      onAddNotification('RBAC Permission Denied', 'Your active role does not permit sealing or generating compliance invoices.', 'error');
+      const msg = 'Your active role does not permit sealing or generating compliance invoices.';
+      setFormError(msg);
+      onAddNotification('RBAC Permission Denied', msg, 'error');
       return;
     }
 
     if (!buyerNip || !buyerName) {
-      onAddNotification('Validation Error', 'NIP and Buyer Name are mandatory for legitimate invoices.', 'error');
+      const msg = 'NIP and Buyer Name are mandatory for legitimate invoices.';
+      setFormError(msg);
+      onAddNotification('Validation Error', msg, 'error');
       return;
     }
 
@@ -344,6 +358,7 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error during submission';
+      setFormError(message);
       onAddNotification('Submission Failed', message, 'error');
     } finally {
       setIsSubmitting(false);
@@ -846,6 +861,27 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
                 </div>
               ) : (
                 <div className="space-y-2">
+                  {formError && (
+                    <div
+                      role="alert"
+                      className="flex items-start gap-2 p-3 rounded-xl border border-red-300 bg-red-50 text-red-800 text-xs"
+                    >
+                      <AlertCircle size={15} className="text-red-600 mt-0.5 shrink-0" />
+                      <div className="space-y-1">
+                        <p className="font-semibold">Action failed</p>
+                        <p className="break-words">{formError}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormError(null)}
+                        className="ml-auto text-red-400 hover:text-red-700 font-bold leading-none"
+                        aria-label="Dismiss error"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+
                   <button
                     onClick={() => handleSubmit(false)}
                     disabled={!canModify || isSubmitting}

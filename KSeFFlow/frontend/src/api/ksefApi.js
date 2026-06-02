@@ -92,14 +92,36 @@ const invoiceHeaders = ({ tenantId, userId, userEmail } = {}) => {
   return headers;
 };
 
-// Throws a normalised Error for a non-2xx response. The controller returns either
-// a plain-string body (IllegalArgument/IllegalState handlers) or a Spring JSON
-// error object — handle both so the UI always shows a meaningful message.
+// Throws a normalised Error for a non-2xx response so the UI always shows a
+// meaningful message. Handles every shape the backend can return:
+//   - plain-string body              (controller IllegalArgument/IllegalState handlers)
+//   - Spring validation error JSON   ({ errors: [{ field, defaultMessage }], ... })
+//   - Spring error JSON              ({ message } or { error })
 const throwInvoiceError = async (res) => {
-  const body = await res.json().catch(() => null);
-  const message = (typeof body === 'string' ? body : body?.message)
-    ?? res.statusText
-    ?? `Request failed (${res.status})`;
+  // Read as text first, then try JSON — a non-JSON body (proxy/HTML error page)
+  // would otherwise blow up res.json() and hide the real failure.
+  const raw = await res.text().catch(() => '');
+  let body = null;
+  try { body = raw ? JSON.parse(raw) : null; } catch { /* not JSON */ }
+
+  let message;
+  if (typeof body === 'string') {
+    message = body;
+  } else if (body) {
+    if (Array.isArray(body.errors) && body.errors.length) {
+      // Field-level validation errors → "Seller city is required; Buyer NIP must be 10 digits"
+      message = body.errors
+        .map(e => e.defaultMessage || e.message || (e.field ? `${e.field} is invalid` : null))
+        .filter(Boolean)
+        .join('; ');
+    }
+    message = message || body.message || body.error;
+  } else if (raw) {
+    message = raw;
+  }
+
+  message = message || res.statusText || `Request failed (${res.status})`;
+
   const err = new Error(message);
   err.httpStatus = res.status;
   throw err;

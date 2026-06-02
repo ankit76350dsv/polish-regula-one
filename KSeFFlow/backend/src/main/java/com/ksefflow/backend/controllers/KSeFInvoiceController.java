@@ -43,16 +43,7 @@ public class KSeFInvoiceController {
 
     // ── Create ─────────────────────────────────────────────────────────────────
 
-    /**
-     * 
-     * Create a new invoice.
-     *
-     * This API creates an invoice with DRAFT status.
-     * The invoice is saved in the database but not sent to KSeF yet.
-     *
-     * To submit the invoice to KSeF,
-     * call the submit API later.
-     */
+    //!create draft of the invoce into the mongodb only...
     @PostMapping("/draft")
     public ResponseEntity<KsefInvoice> createInvoice(
             AuthenticatedUser caller,

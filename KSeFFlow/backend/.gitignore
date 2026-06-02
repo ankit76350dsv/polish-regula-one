@@ -43,3 +43,6 @@ ksef-certs/
 *.pfx
 *.p12
 *.key
+
+# Locally dumped FA(3) XML (dev debug aid — ksef.xml.dump.enabled)
+generated-xml/

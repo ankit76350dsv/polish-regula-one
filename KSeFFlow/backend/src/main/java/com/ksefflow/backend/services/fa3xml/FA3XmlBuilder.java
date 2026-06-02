@@ -51,9 +51,10 @@ public final class FA3XmlBuilder {
     private FA3XmlBuilder() {
     }
 
-    // ── Entry point ────────────────────────────────────────────────────────────
+    //! ── Entry point ────────────────────────────────────────────────────────────
 
     public static Document build(KsefInvoice invoice) {
+        //! validate before building the xml...
         validate(invoice);
 
         try {
@@ -97,28 +98,28 @@ public final class FA3XmlBuilder {
         }
     }
 
-    // ── Naglowek (HEADER METADATA) ──────────────────────────────────────────────────────
+    //! ── Naglowek (HEADER METADATA) ──────────────────────────────────────────────────────
 
     private static Element buildNaglowek(Document doc, KsefInvoice invoice) {
-        Element naglowek = el(doc, "Naglowek");
+        Element naglowek = element(doc, "Naglowek");
 
-        Element kodFormularza = el(doc, "KodFormularza", "FA");
+        Element kodFormularza = element(doc, "KodFormularza", "FA");
         kodFormularza.setAttribute("kodSystemowy", SCHEMA_CODE);
         kodFormularza.setAttribute("wersjaSchemy", SCHEMA_VER);
         naglowek.appendChild(kodFormularza);
 
-        naglowek.appendChild(el(doc, "WariantFormularza", "3"));
-        naglowek.appendChild(el(doc, "DataWytworzeniaFa",
+        naglowek.appendChild(element(doc, "WariantFormularza", "3"));
+        naglowek.appendChild(element(doc, "DataWytworzeniaFa",
                 LocalDateTime.now().format(DT_FORMAT)));
-        naglowek.appendChild(el(doc, "SystemInfo", SYSTEM_INFO));
+        naglowek.appendChild(element(doc, "SystemInfo", SYSTEM_INFO));
 
         return naglowek;
     }
 
-    // ── Podmiot1 (SELLER DATA) ──────────────────────────────────────────────────────
+    //! ── Podmiot1 (SELLER DATA) ──────────────────────────────────────────────────────
 
     private static Element buildPodmiot1(Document doc, KsefInvoice invoice) {
-        Element podmiot1 = el(doc, "Podmiot1");
+        Element podmiot1 = element(doc, "Podmiot1");
         podmiot1.appendChild(buildDaneIdentyfikacyjne(doc,
                 invoice.getSellerNip(), invoice.getSellerName()));
         podmiot1.appendChild(buildAdres(doc,
@@ -127,10 +128,10 @@ public final class FA3XmlBuilder {
         return podmiot1;
     }
 
-    // ── Podmiot2 (BUYER DATA) ───────────────────────────────────────────────────────
+    //! ── Podmiot2 (BUYER DATA) ───────────────────────────────────────────────────────
 
     private static Element buildPodmiot2(Document doc, KsefInvoice invoice) {
-        Element podmiot2 = el(doc, "Podmiot2");
+        Element podmiot2 = element(doc, "Podmiot2");
         podmiot2.appendChild(buildDaneIdentyfikacyjne(doc,
                 invoice.getBuyerNip(), invoice.getBuyerName()));
         podmiot2.appendChild(buildAdres(doc,
@@ -139,20 +140,20 @@ public final class FA3XmlBuilder {
         return podmiot2;
     }
 
-    // ── Fa (INVOICE BODY (Items, Prices, Totals)) ───────────────────────────────────────────────────────
+    //! ── Fa (INVOICE BODY (Items, Prices, Totals)) ───────────────────────────────────────────────────────
 
     private static Element buildFa(Document doc, KsefInvoice invoice) {
-        Element fa = el(doc, "Fa");
+        Element fa = element(doc, "Fa");
 
-        fa.appendChild(el(doc, "KodWaluty", invoice.getCurrency().name()));
-        fa.appendChild(el(doc, "P_1", invoice.getIssueDate().toString()));
-        fa.appendChild(el(doc, "P_2", invoice.getInvoiceNumber()));
+        fa.appendChild(element(doc, "KodWaluty", invoice.getCurrency().name()));
+        fa.appendChild(element(doc, "P_1", invoice.getIssueDate().toString()));
+        fa.appendChild(element(doc, "P_2", invoice.getInvoiceNumber()));
 
         // P_6 = service/delivery date — use issue date when not separately tracked
-        fa.appendChild(el(doc, "P_6", invoice.getIssueDate().toString()));
+        fa.appendChild(element(doc, "P_6", invoice.getIssueDate().toString()));
 
         // Total gross at Fa level (schema requires it here AND in Podsumowanie)
-        fa.appendChild(el(doc, "P_15", amount(invoice.getTotalGross())));
+        fa.appendChild(element(doc, "P_15", amount(invoice.getTotalGross())));
 
         fa.appendChild(buildAdnotacje(doc, invoice));
 
@@ -175,33 +176,33 @@ public final class FA3XmlBuilder {
     // ── Adnotacje (Annotations / flags) ───────────────────────────────────────
 
     private static Element buildAdnotacje(Document doc, KsefInvoice invoice) {
-        Element ann = el(doc, "Adnotacje");
+        Element ann = element(doc, "Adnotacje");
 
         // P_16: Mechanizm Podzielonej Płatności (MPP / split payment)
         // "1" = applies, "2" = does not apply
         boolean isMpp = invoice.getPaymentMethod() == KsefPaymentMethod.SPLIT_PAYMENT;
-        ann.appendChild(el(doc, "P_16", isMpp ? "1" : "2"));
+        ann.appendChild(element(doc, "P_16", isMpp ? "1" : "2"));
 
         // P_17: samofakturowanie (self-billing) — always "2" (no) here
-        ann.appendChild(el(doc, "P_17", "2"));
+        ann.appendChild(element(doc, "P_17", "2"));
 
         // P_18: odwrotne obciążenie (reverse charge) — "1" if any item uses
         // REVERSE_CHARGE
         boolean hasReverseCharge = invoice.getItems().stream()
                 .anyMatch(i -> i.getVatRate() == KsefVatRate.REVERSE_CHARGE);
-        ann.appendChild(el(doc, "P_18", hasReverseCharge ? "1" : "2"));
+        ann.appendChild(element(doc, "P_18", hasReverseCharge ? "1" : "2"));
 
         // P_18A: VAT OSS — always "2" (no) — domestic invoices
-        ann.appendChild(el(doc, "P_18A", "2"));
+        ann.appendChild(element(doc, "P_18A", "2"));
 
         // P_19: procedura marży (margin scheme) — always "2" (no)
-        ann.appendChild(el(doc, "P_19", "2"));
+        ann.appendChild(element(doc, "P_19", "2"));
 
         // P_22: wewnątrzwspólnotowe dostawy towarów (intra-EU goods) — always "2"
-        ann.appendChild(el(doc, "P_22", "2"));
+        ann.appendChild(element(doc, "P_22", "2"));
 
         // P_23: transakcje trójstronne (triangular transactions) — always "2"
-        ann.appendChild(el(doc, "P_23", "2"));
+        ann.appendChild(element(doc, "P_23", "2"));
 
         return ann;
     }
@@ -209,19 +210,19 @@ public final class FA3XmlBuilder {
     // ── FaWiersz (Line item) ───────────────────────────────────────────────────
 
     private static Element buildFaWiersz(Document doc, KsefInvoice.InvoiceItem item, int lineNumber) {
-        Element wiersz = el(doc, "FaWiersz");
+        Element wiersz = element(doc, "FaWiersz");
 
-        wiersz.appendChild(el(doc, "NrWierszaFa", String.valueOf(lineNumber)));
-        wiersz.appendChild(el(doc, "P_7", item.getProductName()));
-        wiersz.appendChild(el(doc, "P_8A", item.getUnit() != null ? item.getUnit() : "szt."));
-        wiersz.appendChild(el(doc, "P_8B", qty(item.getQuantity())));
-        wiersz.appendChild(el(doc, "P_9A", amount(item.getUnitPrice())));
-        wiersz.appendChild(el(doc, "P_10", amount(item.getNetAmount())));
-        wiersz.appendChild(el(doc, "P_11", vatRateCode(item.getVatRate())));
-        wiersz.appendChild(el(doc, "P_12", amount(item.getVatAmount())));
+        wiersz.appendChild(element(doc, "NrWierszaFa", String.valueOf(lineNumber)));
+        wiersz.appendChild(element(doc, "P_7", item.getProductName()));
+        wiersz.appendChild(element(doc, "P_8A", item.getUnit() != null ? item.getUnit() : "szt."));
+        wiersz.appendChild(element(doc, "P_8B", qty(item.getQuantity())));
+        wiersz.appendChild(element(doc, "P_9A", amount(item.getUnitPrice())));
+        wiersz.appendChild(element(doc, "P_10", amount(item.getNetAmount())));
+        wiersz.appendChild(element(doc, "P_11", vatRateCode(item.getVatRate())));
+        wiersz.appendChild(element(doc, "P_12", amount(item.getVatAmount())));
 
         if (item.getPkwiuCode() != null && !item.getPkwiuCode().isBlank()) {
-            wiersz.appendChild(el(doc, "GTU", item.getPkwiuCode()));
+            wiersz.appendChild(element(doc, "GTU", item.getPkwiuCode()));
         }
 
         return wiersz;
@@ -230,12 +231,12 @@ public final class FA3XmlBuilder {
     // ── Podsumowanie (VAT summary) ─────────────────────────────────────────────
 
     private static Element buildPodsumowanie(Document doc, KsefInvoice invoice) {
-        Element podsumowanie = el(doc, "Podsumowanie");
+        Element podsumowanie = element(doc, "Podsumowanie");
 
         // Group net and VAT amounts by rate for P_13_X / P_14_X fields
         Map<KsefVatRate, BigDecimal[]> grouped = groupByVatRate(invoice.getItems());
 
-        Element podatekNalezny = el(doc, "PodatekNalezny");
+        Element podatekNalezny = element(doc, "PodatekNalezny");
 
         // Emit P_13_X (net) and P_14_X (VAT) only for rates that actually appear
         emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_23, "1");
@@ -246,7 +247,7 @@ public final class FA3XmlBuilder {
         emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.REVERSE_CHARGE, "6");
 
         podsumowanie.appendChild(podatekNalezny);
-        podsumowanie.appendChild(el(doc, "P_15", amount(invoice.getTotalGross())));
+        podsumowanie.appendChild(element(doc, "P_15", amount(invoice.getTotalGross())));
 
         return podsumowanie;
     }
@@ -257,8 +258,8 @@ public final class FA3XmlBuilder {
         BigDecimal[] pair = grouped.get(rate);
         if (pair == null)
             return;
-        parent.appendChild(el(doc, "P_13_" + suffix, amount(pair[0]))); // net
-        parent.appendChild(el(doc, "P_14_" + suffix, amount(pair[1]))); // VAT
+        parent.appendChild(element(doc, "P_13_" + suffix, amount(pair[0]))); // net
+        parent.appendChild(element(doc, "P_14_" + suffix, amount(pair[1]))); // VAT
     }
 
     // Groups items by VAT rate → BigDecimal[]{totalNet, totalVat}
@@ -280,16 +281,16 @@ public final class FA3XmlBuilder {
     // ── Platnosc (Payment) ─────────────────────────────────────────────────────
 
     private static Element buildPlatnosc(Document doc, KsefInvoice invoice) {
-        Element platnosc = el(doc, "Platnosc");
+        Element platnosc = element(doc, "Platnosc");
 
         if (invoice.getDueDate() != null) {
-            Element terminPlatnosci = el(doc, "TerminPlatnosci");
-            terminPlatnosci.appendChild(el(doc, "Termin", invoice.getDueDate().toString()));
+            Element terminPlatnosci = element(doc, "TerminPlatnosci");
+            terminPlatnosci.appendChild(element(doc, "Termin", invoice.getDueDate().toString()));
             platnosc.appendChild(terminPlatnosci);
         }
 
         if (invoice.getPaymentMethod() != null) {
-            platnosc.appendChild(el(doc, "FormaPlatnosci",
+            platnosc.appendChild(element(doc, "FormaPlatnosci",
                     paymentMethodCode(invoice.getPaymentMethod())));
         }
 
@@ -297,8 +298,8 @@ public final class FA3XmlBuilder {
         if (invoice.getPaymentMethod() == KsefPaymentMethod.SPLIT_PAYMENT
                 && invoice.getBankAccount() != null
                 && !invoice.getBankAccount().isBlank()) {
-            Element rachunek = el(doc, "RachunekBankowy");
-            rachunek.appendChild(el(doc, "NrRB", invoice.getBankAccount()));
+            Element rachunek = element(doc, "RachunekBankowy");
+            rachunek.appendChild(element(doc, "NrRB", invoice.getBankAccount()));
             platnosc.appendChild(rachunek);
         }
 
@@ -308,18 +309,18 @@ public final class FA3XmlBuilder {
     // ── Shared sub-elements ────────────────────────────────────────────────────
 
     private static Element buildDaneIdentyfikacyjne(Document doc, String nip, String nazwa) {
-        Element dane = el(doc, "DaneIdentyfikacyjne");
-        dane.appendChild(el(doc, "NIP", nip));
-        dane.appendChild(el(doc, "Nazwa", nazwa));
+        Element dane = element(doc, "DaneIdentyfikacyjne");
+        dane.appendChild(element(doc, "NIP", nip));
+        dane.appendChild(element(doc, "Nazwa", nazwa));
         return dane;
     }
 
     private static Element buildAdres(Document doc,
             String adresL1, String postalCode, String city) {
-        Element adres = el(doc, "Adres");
-        adres.appendChild(el(doc, "KodKraju", "PL"));
-        adres.appendChild(el(doc, "AdresL1", adresL1));
-        adres.appendChild(el(doc, "AdresL2", postalCode + " " + city));
+        Element adres = element(doc, "Adres");
+        adres.appendChild(element(doc, "KodKraju", "PL"));
+        adres.appendChild(element(doc, "AdresL1", adresL1));
+        adres.appendChild(element(doc, "AdresL2", postalCode + " " + city));
         return adres;
     }
 
@@ -371,17 +372,17 @@ public final class FA3XmlBuilder {
 
     // ── DOM element factory ────────────────────────────────────────────────────
 
-    private static Element el(Document doc, String name) {
+    private static Element element(Document doc, String name) {
         return doc.createElementNS(FA3_NAMESPACE, name);
     }
 
-    private static Element el(Document doc, String name, String text) {
+    private static Element element(Document doc, String name, String text) {
         Element e = doc.createElementNS(FA3_NAMESPACE, name);
         e.setTextContent(text);
         return e;
     }
 
-    // ── Pre-build validation ───────────────────────────────────────────────────
+    //! ── Pre-build validation ───────────────────────────────────────────────────
 
     private static void validate(KsefInvoice invoice) {
         if (invoice.getInvoiceNumber() == null || invoice.getInvoiceNumber().isBlank()) {
@@ -412,6 +413,7 @@ public final class FA3XmlBuilder {
         }
     }
 
+    //! validate the iteams...
     private static void validateItem(KsefInvoice.InvoiceItem item, int line, String invoiceNumber) {
         if (item.getProductName() == null || item.getProductName().isBlank()) {
             throw new KsefXmlGenerationException(
