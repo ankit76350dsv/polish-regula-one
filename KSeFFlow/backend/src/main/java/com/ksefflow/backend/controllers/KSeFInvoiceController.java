@@ -4,6 +4,7 @@ import com.ksefflow.backend.dto.invoice.CreateInvoiceRequest;
 import com.ksefflow.backend.dto.invoice.SubmitInvoiceResponse;
 import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
+import com.ksefflow.backend.security.AuthenticatedUser;
 import com.ksefflow.backend.services.KSeFInvoiceService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -26,9 +27,10 @@ import java.time.LocalDateTime;
 // KSeFInvoiceService, following the Clean Architecture rule:
 //   Controller → Service → Domain/Repository → Database
 //
-// Security: tenantId and userId are read from the request header (X-Tenant-Id,
-// X-User-Id) in this initial implementation. Phase 5 will replace this with
-// JWT claims extracted from the Authorization token via Spring Security.
+// Security: the authenticated caller (and their tenant) is resolved from the
+// idToken cookie by delegating to the RegulaOne backend. Controllers receive an
+// AuthenticatedUser parameter and MUST use its tenantId for scoping — the tenant
+// is never taken from a client header, which enforces tenant isolation.
 //
 // API versioning: all endpoints under /api/v1 to support future breaking changes.
 @RestController
@@ -53,21 +55,20 @@ public class KSeFInvoiceController {
      */
     @PostMapping("/draft")
     public ResponseEntity<KsefInvoice> createInvoice(
-            @RequestHeader("X-Tenant-Id") String tenantId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @RequestHeader(value = "X-User-Email", required = false) String userEmail,
+            AuthenticatedUser caller,
             @Valid @RequestBody CreateInvoiceRequest request,
             HttpServletRequest httpRequest) {
 
-
-        log.info("[KSeFInvoiceController] Create invoice request: [{}] tenant [{}]", request.getInvoiceNumber(), tenantId);
+        log.info("[InvoiceController] ▶ POST /draft — invoiceNumber={} tenant={} user={}",
+                request.getInvoiceNumber(), caller.tenantId(), caller.userId());
 
         KsefInvoice invoice = invoiceService.createInvoice(
-                request.toEntity(tenantId, userId),
-                userEmail,
+                request.toEntity(caller.tenantId(), caller.userId()),
+                caller.email(),
                 extractClientIp(httpRequest));
-        log.info("Create invoice request: [{}] tenant [{}]", request.getInvoiceNumber(), tenantId);
 
+        log.info("[InvoiceController] ✔ Draft created — id={} status={} → 201 CREATED",
+                invoice.getId(), invoice.getStatus());
         return ResponseEntity.status(HttpStatus.CREATED).body(invoice);
     }
 
@@ -93,16 +94,16 @@ public class KSeFInvoiceController {
 
     @PostMapping("/{invoiceId}/submit")
     public ResponseEntity<SubmitInvoiceResponse> submitInvoice(
-            @RequestHeader("X-Tenant-Id") String tenantId,
-            @RequestHeader(value = "X-User-Email", required = false) String userEmail,
+            AuthenticatedUser caller,
             @PathVariable String invoiceId,
             @RequestParam @NotBlank @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits") String nip,
             HttpServletRequest httpRequest) {
 
-        log.info("Submit invoice [{}] tenant [{}] nip [{}]", invoiceId, tenantId, nip);
+        log.info("[InvoiceController] ▶ POST /{}/submit — tenant={} nip={}", invoiceId, caller.tenantId(), nip);
 
-        KsefInvoice result = invoiceService.submitInvoice(tenantId, invoiceId, nip,
-                userEmail, extractClientIp(httpRequest));
+        KsefInvoice result = invoiceService.submitInvoice(caller.tenantId(), invoiceId, nip,
+                caller.email(), extractClientIp(httpRequest));
+        log.info("[InvoiceController] submit pipeline finished — id={} status={}", result.getId(), result.getStatus());
 
         String message = switch (result.getStatus()) {
             case SENT -> "Invoice successfully submitted to KSeF — reference: " + result.getKsefId();
@@ -128,6 +129,8 @@ public class KSeFInvoiceController {
                 ? HttpStatus.OK
                 : HttpStatus.ACCEPTED;
 
+        log.info("[InvoiceController] ✔ submit response — id={} status={} → {}",
+                result.getId(), result.getStatus(), httpStatus);
         return ResponseEntity.status(httpStatus).body(response);
     }
 
@@ -151,9 +154,12 @@ public class KSeFInvoiceController {
      */
     @GetMapping("/{invoiceId}")
     public ResponseEntity<KsefInvoice> getInvoice(
-            @RequestHeader("X-Tenant-Id") String tenantId,
+            AuthenticatedUser caller,
             @PathVariable String invoiceId) {
-        return ResponseEntity.ok(invoiceService.getInvoice(tenantId, invoiceId));
+        log.info("[InvoiceController] ▶ GET /{} — tenant={}", invoiceId, caller.tenantId());
+        KsefInvoice invoice = invoiceService.getInvoice(caller.tenantId(), invoiceId);
+        log.info("[InvoiceController] ✔ GET /{} — status={} → 200 OK", invoiceId, invoice.getStatus());
+        return ResponseEntity.ok(invoice);
     }
 
     /**
@@ -171,17 +177,17 @@ public class KSeFInvoiceController {
      */
     @GetMapping
     public ResponseEntity<Page<KsefInvoice>> listInvoices(
-            @RequestHeader("X-Tenant-Id") String tenantId,
+            AuthenticatedUser caller,
             @RequestParam(required = false) KsefInvoiceStatus status,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
 
-        log.info("Fetching invoices for tenantId={}, status={}, page={}, size={}",
-                tenantId,
-                status,
-                pageable.getPageNumber(),
-                pageable.getPageSize());
+        log.info("[InvoiceController] ▶ GET / (list) — tenant={} status={} page={} size={}",
+                caller.tenantId(), status, pageable.getPageNumber(), pageable.getPageSize());
 
-        return ResponseEntity.ok(invoiceService.listInvoices(tenantId, status, pageable));
+        Page<KsefInvoice> page = invoiceService.listInvoices(caller.tenantId(), status, pageable);
+        log.info("[InvoiceController] ✔ list — returned {} of {} invoices → 200 OK",
+                page.getNumberOfElements(), page.getTotalElements());
+        return ResponseEntity.ok(page);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -200,11 +206,13 @@ public class KSeFInvoiceController {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> handleBadRequest(IllegalArgumentException e) {
+        log.warn("[InvoiceController] ✘ 400 Bad Request — {}", e.getMessage());
         return ResponseEntity.badRequest().body(e.getMessage());
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<String> handleConflict(IllegalStateException e) {
+        log.warn("[InvoiceController] ✘ 409 Conflict — {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
     }
 }

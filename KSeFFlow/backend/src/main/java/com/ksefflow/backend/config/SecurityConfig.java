@@ -1,5 +1,6 @@
 package com.ksefflow.backend.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +16,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -25,6 +27,10 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        // Runs ONCE at startup while Spring Security builds the filter chain.
+        log.info("[SecurityConfig] Building security filter chain — CSRF disabled, STATELESS sessions, "
+                + "/api/v1/** is permitAll (auth is enforced per-request by AuthenticatedUserArgumentResolver "
+                + "via the RegulaOne /me call)");
         http
                 .csrf(csrf -> csrf.disable())
                 // Added: apply the CORS configuration bean so preflight OPTIONS requests are handled
@@ -38,6 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/**").permitAll()
                         .anyRequest().authenticated());
 
+        log.info("[SecurityConfig] Security filter chain built successfully");
         return http.build();
     }
 
@@ -50,7 +57,9 @@ public class SecurityConfig {
 
         // Split the comma-separated list from application*.properties
         for (String origin : allowedOrigins.split(",")) {
-            config.addAllowedOrigin(origin.trim());
+            String trimmed = origin.trim();
+            config.addAllowedOrigin(trimmed);
+            log.info("[SecurityConfig] CORS allowed origin registered: {}", trimmed);
         }
 
         config.setAllowCredentials(true);
@@ -60,6 +69,7 @@ public class SecurityConfig {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
+        log.info("[SecurityConfig] CORS source built — allowCredentials=true (cookies forwarded), maxAge=3600s");
         return source;
     }
 

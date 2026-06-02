@@ -2,6 +2,7 @@ package com.ksefflow.backend.controllers;
 
 import com.ksefflow.backend.dto.certificate.CertificateResponse;
 import com.ksefflow.backend.models.KsefCertificate;
+import com.ksefflow.backend.security.AuthenticatedUser;
 import com.ksefflow.backend.services.certificate.CertificateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,8 +25,8 @@ import java.util.stream.Collectors;
  * No private key material or raw certificate bytes are ever returned —
  * responses contain only safe metadata via CertificateResponse.
  *
- * Tenant identity is resolved from the X-Tenant-Id request header.
- * User identity is resolved from the X-User-Id request header.
+ * Tenant and user identity are resolved from the authenticated session (the
+ * idToken cookie, verified via the RegulaOne backend) — never from a client header.
  *
  * Endpoints:
  *   POST   /api/v1/certificates/upload          — upload a PFX or PEM file
@@ -66,19 +67,19 @@ public class KSeFCertificateController {
      *   file      — the certificate file (.pfx / .p12 / .pem / .crt)
      *   password  — certificate password (required for PFX, omit for PEM)
      *
-     * Headers:
-     *   X-Tenant-Id  — tenant that owns this certificate (required)
-     *   X-User-Id    — user performing the upload (optional, stored for audit)
+     * Tenant (owner) and user (for audit) are taken from the authenticated session.
      *
      * Response 200: CertificateResponse with metadata of the stored certificate
      * Response 400: invalid file format, wrong password, or file too large
      */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CertificateResponse> uploadCertificate(
-            @RequestHeader("X-Tenant-Id")                          String tenantId,
-            @RequestHeader(value = "X-User-Id", required = false)  String userId,
+            AuthenticatedUser                                       caller,
             @RequestPart("file")                                    MultipartFile file,
             @RequestParam(value = "password", required = false)     String password) throws IOException {
+
+        String tenantId = caller.tenantId();
+        String userId = caller.userId();
 
         log.info("[CertificateController] POST /upload — tenant={} fileName={} size={}",
                 tenantId, file.getOriginalFilename(), file.getSize());
@@ -115,15 +116,15 @@ public class KSeFCertificateController {
      * Returns both active and inactive certificates so admins can see the full
      * upload history. Only metadata is returned — no file bytes or passwords.
      *
-     * Headers:
-     *   X-Tenant-Id — required
+     * Tenant is taken from the authenticated session.
      *
      * Response 200: array of CertificateResponse (may be empty)
      */
     @GetMapping
     public ResponseEntity<List<CertificateResponse>> listCertificates(
-            @RequestHeader("X-Tenant-Id") String tenantId) {
+            AuthenticatedUser caller) {
 
+        String tenantId = caller.tenantId();
         log.info("[CertificateController] GET /certificates — tenant={}", tenantId);
 
         List<CertificateResponse> certs = certificateService.listCertificates(tenantId)
@@ -145,17 +146,17 @@ public class KSeFCertificateController {
      * Path variable:
      *   {id} — MongoDB document ID of the certificate to deactivate
      *
-     * Headers:
-     *   X-Tenant-Id — required (prevents cross-tenant deactivation)
+     * Tenant is taken from the authenticated session (prevents cross-tenant deactivation).
      *
      * Response 200: { "message": "Certificate deactivated" }
      * Response 404: certificate not found or belongs to a different tenant
      */
     @PatchMapping("/{id}/deactivate")
     public ResponseEntity<Map<String, String>> deactivateCertificate(
-            @RequestHeader("X-Tenant-Id") String tenantId,
-            @PathVariable                 String id) {
+            AuthenticatedUser caller,
+            @PathVariable     String id) {
 
+        String tenantId = caller.tenantId();
         log.info("[CertificateController] PATCH /{}/deactivate — tenant={}", id, tenantId);
 
         certificateService.deactivateCertificate(tenantId, id);

@@ -1,6 +1,7 @@
 package com.ksefflow.backend.controllers;
 
 import com.ksefflow.backend.models.KsefAuditLog;
+import com.ksefflow.backend.security.AuthenticatedUser;
 import com.ksefflow.backend.services.KSeFAuditLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,8 +14,8 @@ import org.springframework.web.bind.annotation.*;
 // Read-only audit log API used by the Enterprise Audit Center.
 //
 // Security contract:
-//   - tenantId comes exclusively from the X-Tenant-Id header (set by the
-//     load balancer / API gateway after JWT verification in Phase 5).
+//   - tenantId comes exclusively from the authenticated session (the idToken
+//     cookie, verified via the RegulaOne backend) — never from a client header.
 //   - Search and date-range filtering is done server-side — clients never
 //     receive logs outside their own tenantId scope.
 //   - No write endpoints are exposed: audit logs are immutable by design.
@@ -40,13 +41,14 @@ public class KSeFAuditLogController {
      */
     @GetMapping
     public ResponseEntity<Page<KsefAuditLog>> listAuditLogs(
-            @RequestHeader("X-Tenant-Id") String tenantId,
+            AuthenticatedUser caller,
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to,
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String search,
             @PageableDefault(size = 20) Pageable pageable) {
 
+        String tenantId = caller.tenantId();
         log.info("Audit log query: tenantId={} from={} to={} role={} search={}",
                 tenantId, from, to, role, search != null ? "[present]" : null);
 
