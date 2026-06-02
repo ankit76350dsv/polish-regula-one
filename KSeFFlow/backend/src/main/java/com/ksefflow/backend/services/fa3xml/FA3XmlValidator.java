@@ -54,7 +54,7 @@ public final class FA3XmlValidator {
     public static void validate(String xml, boolean strict) {
         Document doc = parseXml(xml);
         //Todo: 3rd
-        validateXsd(xml, strict);
+        validateXsd(xml, strict); //! this is structure validation...
         validateBusinessRules(doc);
     }
 
@@ -75,7 +75,7 @@ public final class FA3XmlValidator {
             if (strict) {
                 throw new KsefXmlGenerationException(msg);
             }
-            log.warn(msg + " Place the official KSeF FA3 XSD at src/main/resources/xsd/FA3_schema.xsd " +
+            log.warn("[ValidateXsd]" +msg + " Place the official KSeF FA3 XSD at src/main/resources/xsd/FA3_schema.xsd " +
                      "to enable structural validation.");
             return;
         }
@@ -96,7 +96,7 @@ public final class FA3XmlValidator {
             validator.validate(new StreamSource(
                     new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8))));
 
-            log.debug("FA(3) XSD structural validation passed");
+            log.debug("[ValidateXsd] FA(3) XSD structural validation passed");
 
         } catch (SAXException e) {
             throw new KsefXmlGenerationException(

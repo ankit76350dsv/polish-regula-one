@@ -79,49 +79,79 @@ public class KSeFAuthService {
      * @return active KSeF session token used in the "SessionToken" HTTP header
      * @throws KsefAuthException if authentication fails at any step
      */
-    //KSeF uses Public Key Infrastructure certificate-based authentication (not username/password). 
+    // KSeF uses Public Key Infrastructure certificate-based authentication (not
+    // username/password).
     public String openSession(String tenantId, String nip) {
+
+        log.info("[OpenSession] Opening or reusing KSeF session for tenant [{}]", tenantId);
+
         // Return existing session if still valid — avoid unnecessary re-authentication
         Optional<String> existing = sessionStore.getActiveToken(tenantId);
 
         if (existing.isPresent()) {
-            log.debug("Reusing existing active session for tenant [{}]", tenantId);
+            log.info("[OpenSession] Reusing existing active KSeF session for tenant [{}]", tenantId);
             return existing.get();
         }
-        //! yaha tak.....
+
+        log.debug("[OpenSession] No active session found for tenant [{}] — opening new session", tenantId);
+
         // Guard: validate the certificate before making any network calls
         certificateService.validateCertificateActive(tenantId);
 
         try {
-            //TODO: 1st thing with goverment 
+
             // Step 1 — request challenge from government
-            String challenge = ksefApiClient.requestChallenge(nip);
-            log.debug("Received challenge for tenant [{}]", tenantId);
+            //TODO: 1st thing with goverment 
+
+            log.info("[OpenSession] Requesting authentication challenge from KSeF for NIP [{}]", nip);
+
+            String challenge = ksefApiClient.requestChallenge(nip); //! this is failing the stuff to get the session...
+
+            log.debug("[OpenSession] Challenge successfully received from KSeF for tenant [{}]", tenantId);
 
             // Step 2 — sign the challenge and encode the public certificate
+            log.info("[OpenSession] Signing challenge using tenant certificate [{}]", tenantId);
             PrivateKey privateKey = certificateService.getPrivateKey(tenantId);
             X509Certificate publicCert = certificateService.getPublicCertificate(tenantId);
+
             String signedChallenge = KsefSigningUtils.signChallenge(challenge, privateKey);
             String certBase64 = KsefSigningUtils.encodeCertificate(publicCert);
+            log.debug("[OpenSession] Challenge signed successfully for tenant [{}]", tenantId);
 
-            //TODO: 2nd thing with goverment 
             // Step 3 — submit to government, receive session token
+            //TODO: 2nd thing with goverment 
+            log.info("[OpenSession] Sending signed challenge to KSeF for session authorization");
             String sessionToken = ksefApiClient.authorise(nip, signedChallenge, certBase64);
-            log.info("Session opened successfully for tenant [{}] in environment [{}]",
+
+            log.info("[OpenSession] KSeF session opened successfully for tenant [{}] in environment [{}]",
                     tenantId, apiProperties.getEnvironment());
 
             // Persist session (token encrypted at rest)
+            log.debug("[OpenSession] Persisting encrypted KSeF session token for tenant [{}]", tenantId);
             sessionStore.saveActiveSession(tenantId, sessionToken);
-
             certificateService.recordAuthSuccess(tenantId);
-            writeAuditLog(tenantId, "KSEF_SESSION_OPENED", "SESSION", null,
+
+            writeAuditLog(
+                    tenantId,
+                    "KSEF_SESSION_OPENED",
+                    "SESSION",
+                    null,
                     "environment=" + apiProperties.getEnvironment());
+
+            log.info("[OpenSession] Session initialization completed successfully for tenant [{}]", tenantId);
 
             return sessionToken;
 
         } catch (KsefAuthException kae) {
+
+            log.error("[OpenSession] Failed to open KSeF session for tenant [{}] - reason: {}",tenantId,kae.getMessage(),kae);
             certificateService.recordAuthFailure(tenantId);
-            writeAuditLog(tenantId, "KSEF_SESSION_FAILED", "SESSION", null, kae.getMessage());
+            writeAuditLog(
+                    tenantId,
+                    "KSEF_SESSION_FAILED",
+                    "SESSION",
+                    null,
+                    kae.getMessage());
             throw kae;
         }
     }

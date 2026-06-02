@@ -166,35 +166,37 @@ public class KSeFInvoiceService {
      * @throws KsefAuthException          if KSeF session cannot be opened
      *                                    (certificate problem)
      */
-    //!----------------------------------
+    // !----------------------------------
     public KsefInvoice submitInvoice(String tenantId, String invoiceId, String nip,
             String userEmail, String ipAddress) {
 
-        log.info("[SUBMITINVOICE] Starting invoice submission process. TenantId=[{}], InvoiceId=[{}], NIP=[{}]", tenantId, invoiceId, nip);
+        log.info("[SubmitInvoice] Starting invoice submission process. TenantId=[{}], InvoiceId=[{}], NIP=[{}]",
+                tenantId, invoiceId, nip);
 
         // Step 1 — Load and validate DRAFT invoice
         KsefInvoice invoice = loadAndGuardDraft(tenantId, invoiceId);
 
-        //! Step 2 — Move invoice to PENDING state
+        // ! Step 2 — Move invoice to PENDING state
         invoice.setStatus(KsefInvoiceStatus.PENDING);
         invoice.setUpdatedAt(LocalDateTime.now());
         int nextAttempt = invoice.getSubmissionAttempts() + 1;
         invoice.setSubmissionAttempts(nextAttempt);
-        log.info("[SUBMITINVOICE] Submission attempt count updated to [{}] for invoice [{}]", nextAttempt, invoice.getInvoiceNumber());
+        log.info("[SubmitInvoice] Submission attempt count updated to [{}] for invoice [{}]", nextAttempt,
+                invoice.getInvoiceNumber());
         ksef_invoices_repository.save(invoice);
         // Audit log for submission attempt
-        KSeFAuditLogService.writeAuditLog(tenantId,"INVOICE_SUBMISSION_STARTED", invoiceId, null, "attempt=" + invoice.getSubmissionAttempts(), userEmail, ipAddress);
+        KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null,
+                "attempt=" + invoice.getSubmissionAttempts(), userEmail, ipAddress);
 
-        
-        //! Step 3 — Generate FA(3) XML
-        //! return two thiing XML and hashof XML
+        // ! Step 3 — Generate FA(3) XML
+        // ! return two thiing XML and hashof XML
         FA3XmlGeneratorService.FA3XmlResult xmlResult = xmlGeneratorService.generateXml(invoice);
 
         // Step 4 — Validate XML
         xmlValidatorService.validateStrict(xmlResult.xmlContent());
 
         // Save XML hash
-        log.info("Saving XML SHA-256 hash for invoice [{}]", invoice.getInvoiceNumber());
+        log.info("[SubmitInvoice] Saving XML SHA-256 hash for invoice [{}]", invoice.getInvoiceNumber());
         invoice.setFa3XmlHash(xmlResult.sha256Hash());
         ksef_invoices_repository.save(invoice);
 
@@ -214,7 +216,8 @@ public class KSeFInvoiceService {
 
         } catch (KsefSubmissionException | KsefAuthException e) {
 
-            log.warn("KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE", invoice.getInvoiceNumber(), e.getMessage());
+            log.warn("KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE",
+                    invoice.getInvoiceNumber(), e.getMessage());
 
             log.info("Handling offline mode for invoice [{}]", invoice.getInvoiceNumber());
 
@@ -243,11 +246,15 @@ public class KSeFInvoiceService {
         return ksef_invoices_repository.findByTenantIdOrderByCreatedAtDesc(tenantId, pageable);
     }
 
-    //! ── Private: KSeF network pipeline ─────────────────────────────────────────
+    // ! ── Private: KSeF network pipeline ─────────────────────────────────────────
 
     private KsefInvoice executeKsefSubmission(KsefInvoice invoice,
             String xmlContent, String nip,
             String userEmail, String ipAddress) {
+
+        log.info("[ExecuteKsefSubmission] Starting KSeF invoice submission flow for invoice [{}]",
+                invoice.getInvoiceNumber());
+
         String tenantId = invoice.getTenantId();
         String invoiceId = invoice.getId();
 
@@ -255,22 +262,41 @@ public class KSeFInvoiceService {
         // TODO: 1st step to get {Header: SessionToken: 20230615-SE-...}
         String sessionToken = authService.openSession(tenantId, nip);
 
+        log.debug("[ExecuteKsefSubmission] Session token acquired successfully for tenant [{}]",
+                tenantId);
+
         // Step 6 — POST the FA(3) XML to KSeF
         LocalDateTime submittedAt = LocalDateTime.now();
+
         // TODO: last step of the sending invoce to goverment { Header: SessionToken:
         // 20230615-SE-... | Body: <FA3 XML bytes> }
+        log.info("[ExecuteKsefSubmission] Sending invoice XML to KSeF for invoice [{}]",
+                invoice.getInvoiceNumber());
+
         KsefSendInvoiceResponse sendResponse = ksefApiClient.sendInvoice(sessionToken, xmlContent);
+
         String elementRef = sendResponse.getElementReferenceNumber();
 
-        log.info("Invoice [{}] accepted by KSeF — elementRef: [{}]", invoice.getInvoiceNumber(), elementRef);
+        log.info("[ExecuteKsefSubmission] Invoice [{}] accepted by KSeF — elementRef: [{}]",
+                invoice.getInvoiceNumber(),
+                elementRef);
 
         // Step 7 — poll for the permanent KSeF reference number + acquisition
         // timestamp.
         // In production this can take a few seconds; the sandbox usually responds
         // immediately.
+        log.info("[ExecuteKsefSubmission] Polling KSeF for permanent reference number for invoice [{}]",
+                invoice.getInvoiceNumber());
+
         KsefPollResult pollResult = pollForKsefId(sessionToken, elementRef, invoice.getInvoiceNumber());
+
         String ksefId = pollResult.ksefReferenceNumber();
+
         LocalDateTime receivedAt = LocalDateTime.now();
+
+        log.info("[ExecuteKsefSubmission] Permanent KSeF reference number received for invoice [{}] — ksefId [{}]",
+                invoice.getInvoiceNumber(),
+                ksefId);
 
         // Prefer the government's own acquisitionTimestamp; fall back to sendResponse
         // timestamp,
@@ -282,17 +308,35 @@ public class KSeFInvoiceService {
                         : sendResponse.getTimestamp(),
                 receivedAt);
 
+        log.debug("[ExecuteKsefSubmission] UPO timestamp resolved successfully for invoice [{}]",
+                invoice.getInvoiceNumber());
+
         // Step 8 — fetch the real UPO XML from KSeF (production).
         // In sandbox KSeF does not return a UPO body, so we fall back to the stub.
         // TODO: get the receipt using the sessionToken and ksfid that we get after
         // recpeit not the invoice.
+        log.info("[ExecuteKsefSubmission] Fetching UPO XML from KSeF for ksefId [{}]",
+                ksefId);
+
         String upoXml = ksefApiClient.fetchUpoXml(sessionToken, ksefId)
-                .orElseGet(() -> buildUpoXml(invoice, ksefId, upoTimestamp));
+                .orElseGet(() -> {
+                    log.warn(
+                            "[ExecuteKsefSubmission] KSeF did not return UPO XML — generating fallback UPO for invoice [{}]",
+                            invoice.getInvoiceNumber());
+
+                    return buildUpoXml(invoice, ksefId, upoTimestamp);
+                });
+
+        log.info("[ExecuteKsefSubmission] Persisting UPO document for invoice [{}]",
+                invoice.getInvoiceNumber());
 
         String upoDocumentId = upoStorageService.storeUpo(
                 invoiceId, tenantId, ksefId, upoXml, upoTimestamp);
 
         // Step 9 — mark invoice as SENT
+        log.info("[ExecuteKsefSubmission] Updating invoice status to SENT for invoice [{}]",
+                invoice.getInvoiceNumber());
+
         invoice.setStatus(KsefInvoiceStatus.SENT);
         invoice.setKsefId(ksefId); // ! ksefReferenceNumber
         invoice.setUpoDocumentId(upoDocumentId); // ! mongodb _id of the invoice
@@ -302,12 +346,28 @@ public class KSeFInvoiceService {
         invoice.setReceivedFromKsefAt(receivedAt); // ! when get ksefReferenceNumber
         invoice.setLastErrorMessage(null);
         invoice.setUpdatedAt(LocalDateTime.now());
+
+        log.info("[ExecuteKsefSubmission] Saving updated invoice state into database for invoice [{}]",
+                invoice.getInvoiceNumber());
+
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
-        KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_SENT_TO_KSEF", invoiceId, null,
-                "ksefId=" + ksefId + " env=" + apiProperties.getEnvironment(), userEmail, ipAddress);
-        log.info("Invoice [{}] successfully registered with KSeF — ksefId: [{}]",
-                invoice.getInvoiceNumber(), ksefId);
+        KSeFAuditLogService.writeAuditLog(
+                tenantId,
+                "INVOICE_SENT_TO_KSEF",
+                invoiceId,
+                null,
+                "ksefId=" + ksefId + " env=" + apiProperties.getEnvironment(),
+                userEmail,
+                ipAddress);
+
+        log.info("[ExecuteKsefSubmission] Invoice [{}] successfully registered with KSeF — ksefId: [{}]",
+                invoice.getInvoiceNumber(),
+                ksefId);
+
+        log.info("[ExecuteKsefSubmission] KSeF submission flow completed successfully for invoice [{}]",
+                invoice.getInvoiceNumber());
+
         return saved;
     }
 

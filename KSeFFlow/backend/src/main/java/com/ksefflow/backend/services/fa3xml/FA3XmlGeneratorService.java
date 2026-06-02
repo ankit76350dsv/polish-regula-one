@@ -81,7 +81,6 @@ public class FA3XmlGeneratorService {
         FA3XmlValidator.validate(xml);
 
         // Step 4: SHA-256 hash for tamper-evidence audit trail
-        
         String hash = sha256Hex(xml);
 
         log.info("[GenerateXml] Generated: FA(3) XML successfully for invoice [{}] — SHA-256: [{}]", invoice.getInvoiceNumber(), hash);
@@ -118,9 +117,9 @@ public class FA3XmlGeneratorService {
             Path file = dir.resolve(fileName);
             Files.writeString(file, xml, StandardCharsets.UTF_8);
 
-            log.info("[GenerateXml] Dumped FA(3) XML to [{}]", file.toAbsolutePath());
+            log.info("[DumpXmlToFile] Dumped FA(3) XML to [{}]", file.toAbsolutePath());
         } catch (IOException | RuntimeException e) {
-            log.warn("[GenerateXml] Could not dump FA(3) XML to disk (dir=[{}]): {}",
+            log.warn("[DumpXmlToFile] Could not dump FA(3) XML to disk (dir=[{}]): {}",
                     xmlDumpDir, e.getMessage());
         }
     }

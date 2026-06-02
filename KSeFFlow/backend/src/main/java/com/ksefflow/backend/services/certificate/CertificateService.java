@@ -83,12 +83,14 @@ public class CertificateService {
                     "Certificate file exceeds maximum allowed size of " + props.getMaxFileSize() + " bytes");
         }
 
-       
-        //! Validate and extract metadata before touching any stored state
+        // ! Validate and extract metadata before touching any stored state
         KeyStore keyStore = KeyStoreUtils.loadKeyStoreFromBytes(pfxBytes, password);
-        //! get the certificate from the store...
-        X509Certificate x509 = KeyStoreUtils.extractX509Certificate(keyStore); //! A certificate is basically a digital identity card used on computers and the internet.
-                                                                            //! Government authority Certificate Authority (CA)
+        // ! get the certificate from the store...
+        X509Certificate x509 = KeyStoreUtils.extractX509Certificate(keyStore); // ! A certificate is basically a digital
+                                                                               // identity card used on computers and
+                                                                               // the internet.
+                                                                               // ! Government authority Certificate
+                                                                               // Authority (CA)
 
         // Deactivate existing active cert — only one active cert per tenant at any time
         ksef_certificates_repo.findByTenantIdAndActiveTrue(tenantId)
@@ -100,9 +102,9 @@ public class CertificateService {
                             existing.getId(), tenantId);
                 });
 
-        //encrypt and store the encrypt file and return the storage path...
+        // encrypt and store the encrypt file and return the storage path...
         String storagePath = storage.writePfxEncrypted(tenantId, pfxBytes, fileName);
-        //just retunr the encrypt password...
+        // just retunr the encrypt password...
         String vaultRef = crypto.encryptPassword(password);
 
         KsefCertificate cert = KsefCertificate.builder()
@@ -160,7 +162,7 @@ public class CertificateService {
         String password = crypto.decryptPassword(cert.getVaultPasswordReference());
 
         KeyStore keyStore = KeyStoreUtils.loadKeyStoreFromBytes(pfxBytes, password);
-        
+
         return KeyStoreUtils.extractPrivateKey(keyStore, password);
     }
 
@@ -219,17 +221,37 @@ public class CertificateService {
      *                                  - or the certificate has been revoked
      */
     public void validateCertificateActive(String tenantId) {
+
+        log.info("[ValidateCertificateActive] Validating active certificate for tenant [{}]",
+                tenantId);
+
         KsefCertificate cert = getActiveCertOrThrow(tenantId);
+
+        log.debug("[ValidateCertificateActive] Active certificate found for tenant [{}] — certificateId [{}]",
+                tenantId,
+                cert.getId());
+
         validateNotExpired(cert);
 
+        log.debug("[ValidateCertificateActive] Certificate expiry validation passed for certificate [{}]",
+                cert.getId());
+
         if (cert.getVerificationStatus() == KsefCertificateVerificationStatus.REVOKED) {
+            log.error("[ValidateCertificateActive] Certificate [{}] is revoked and cannot be used",
+                    cert.getId());
             throw new KsefCertificateException(
                     "Certificate [" + cert.getId() + "] has been revoked and cannot be used");
         }
+
         if (cert.getVerificationStatus() == KsefCertificateVerificationStatus.EXPIRED) {
+            log.error("[ValidateCertificateActive] Certificate [{}] is marked as expired",
+                    cert.getId());
             throw new KsefCertificateException(
                     "Certificate [" + cert.getId() + "] is marked as expired");
         }
+
+        log.info("[ValidateCertificateActive] Certificate validation completed successfully for tenant [{}]",
+                tenantId);
     }
 
     /**
@@ -369,23 +391,25 @@ public class CertificateService {
      *
      * PEM files (.pem / .crt) contain a base64-encoded DER certificate between
      * -----BEGIN CERTIFICATE----- / -----END CERTIFICATE----- markers.
-     * Unlike PFX, a standalone PEM certificate file does NOT contain a private key —
+     * Unlike PFX, a standalone PEM certificate file does NOT contain a private key
+     * —
      * it is used only for public certificate operations (e.g. trusting a CA or
      * presenting a server certificate). KSeF signing still requires a PFX.
      *
      * What this method does:
      * 1. Checks the uploaded file is within the size limit
      * 2. Parses the PEM bytes with CertificateFactory to validate format and
-     *    extract X.509 metadata (subject, issuer, validity dates)
+     * extract X.509 metadata (subject, issuer, validity dates)
      * 3. Deactivates the current active PEM certificate for the tenant (if any)
      * 4. AES-256-GCM encrypts and stores the raw PEM bytes
      * 5. Saves certificate metadata to MongoDB — no private key material stored
      *
-     * @param pemBytes        Raw bytes of the .pem / .crt file
-     * @param tenantId        Tenant that owns this certificate
-     * @param fileName        Original uploaded filename (e.g. "company_cert.pem")
+     * @param pemBytes         Raw bytes of the .pem / .crt file
+     * @param tenantId         Tenant that owns this certificate
+     * @param fileName         Original uploaded filename (e.g. "company_cert.pem")
      * @param uploadedByUserId MongoDB user._id of the uploading admin
-     * @throws KsefCertificateException if the file is too large or not a valid PEM certificate
+     * @throws KsefCertificateException if the file is too large or not a valid PEM
+     *                                  certificate
      */
     public KsefCertificate storePemCertificate(
             byte[] pemBytes,
@@ -430,7 +454,8 @@ public class CertificateService {
                 .validFrom(KeyStoreUtils.toLocalDate(x509.getNotBefore()))
                 .validTo(KeyStoreUtils.toLocalDate(x509.getNotAfter()))
                 .verificationStatus(KsefCertificateVerificationStatus.VERIFIED)
-                // PEM-only certificates carry no private key and need no vault password reference
+                // PEM-only certificates carry no private key and need no vault password
+                // reference
                 .vaultPasswordReference(null)
                 .encryptedStoragePath(storagePath)
                 .uploadedByUserId(uploadedByUserId)
@@ -447,7 +472,8 @@ public class CertificateService {
         return saved;
     }
 
-    // private ── Domain-level guards (stay in service — they operate on the domain model)
+    // private ── Domain-level guards (stay in service — they operate on the domain
+    // model)
 
     /**
      * Finds and returns the tenant's currently active certificate.
@@ -505,7 +531,8 @@ public class CertificateService {
     // ── Audit logging ───────────────────────────────────────────────────────────
 
     /**
-     * Writes an immutable CERTIFICATE audit log entry via the shared {@link AuditLog}
+     * Writes an immutable CERTIFICATE audit log entry via the shared
+     * {@link AuditLog}
      * service. Uses the entity-type-aware overload so the entry is correctly tagged
      * "CERTIFICATE" rather than the default "INVOICE".
      *
@@ -514,11 +541,12 @@ public class CertificateService {
      * AuditLog swallows and logs any persistence failure so it never blocks the
      * underlying certificate operation.
      *
-     * @param tenantId   tenant that owns the certificate (mandatory tenant scope)
-     * @param action     action code e.g. CERTIFICATE_UPLOADED, CERTIFICATE_DEACTIVATED
-     * @param certId     MongoDB _id of the affected certificate
-     * @param userId     User._id of the actor who triggered the action (nullable)
-     * @param newValue   human-readable, non-sensitive description of the certificate
+     * @param tenantId tenant that owns the certificate (mandatory tenant scope)
+     * @param action   action code e.g. CERTIFICATE_UPLOADED,
+     *                 CERTIFICATE_DEACTIVATED
+     * @param certId   MongoDB _id of the affected certificate
+     * @param userId   User._id of the actor who triggered the action (nullable)
+     * @param newValue human-readable, non-sensitive description of the certificate
      */
     private void writeAuditLog(String tenantId, String action, String certId,
             String userId, String newValue) {

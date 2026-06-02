@@ -22,7 +22,7 @@ import org.springframework.web.client.RestTemplate;
 public class KsefApiClient {
 
     private static final String CHALLENGE_PATH = "/online/Session/AuthorisationChallenge";
-    private static final String AUTH_PATH      = "/online/Session/Authorisation";
+    private static final String AUTH_PATH = "/online/Session/Authorisation";
     private static final String TERMINATE_PATH = "/online/Session/Terminate";
     private static final String SESSION_HEADER = "SessionToken";
 
@@ -33,24 +33,36 @@ public class KsefApiClient {
     // POST /online/Session/AuthorisationChallenge → returns the challenge string
     // the company must sign to prove identity.
     public String requestChallenge(String nip) {
+
         String url = apiProperties.getActiveBaseUrl() + CHALLENGE_PATH;
-        log.debug("Requesting challenge from {}", url);
+        log.info("[RequestChallenge] Initiating KSeF challenge request for NIP [{}] to URL [{}]", nip, url);
 
         try {
-            ResponseEntity<KsefChallengeResponse> response =
-                    ksefRestTemplate.postForEntity(url, KsefChallengeRequest.forNip(nip), KsefChallengeResponse.class);
+
+            ResponseEntity<KsefChallengeResponse> response = ksefRestTemplate.postForEntity(
+                    url,
+                    KsefChallengeRequest.forNip(nip),
+                    KsefChallengeResponse.class);
+                    
+            log.debug("[RequestChallenge] Challenge response received successfully from KSeF");
 
             if (response.getBody() == null || response.getBody().getChallenge() == null) {
+                log.error("[RequestChallenge] Empty challenge response received from KSeF URL [{}]",url);
                 throw new KsefAuthException("KSeF returned an empty challenge response from " + url);
             }
+
+            log.info("[RequestChallenge] Challenge generated successfully for NIP [{}]",nip);
             return response.getBody().getChallenge();
 
         } catch (HttpStatusCodeException e) {
-            throw new KsefAuthException(
-                    "KSeF challenge request failed [" + e.getStatusCode() + "]: " + e.getResponseBodyAsString(), e);
+
+            log.error("[RequestChallenge] KSeF challenge request failed for NIP [{}] — status [{}], response [{}]", nip,e.getStatusCode(), e.getResponseBodyAsString(), e);
+
+            throw new KsefAuthException("KSeF challenge request failed [" + e.getStatusCode() + "]: " + e.getResponseBodyAsString(), e);
+
         } catch (ResourceAccessException e) {
-            throw new KsefAuthException(
-                    "KSeF API is unreachable at " + url + " — check network or consider offline mode", e);
+            log.error("[RequestChallenge] Unable to connect to KSeF API at URL [{}]", url, e);
+            throw new KsefAuthException("KSeF API is unreachable at " + url + " — check network or consider offline mode", e);
         }
     }
 
@@ -70,8 +82,8 @@ public class KsefApiClient {
                 .build();
 
         try {
-            ResponseEntity<KsefAuthResponse> response =
-                    ksefRestTemplate.postForEntity(url, body, KsefAuthResponse.class);
+            ResponseEntity<KsefAuthResponse> response = ksefRestTemplate.postForEntity(url, body,
+                    KsefAuthResponse.class);
 
             if (response.getBody() == null
                     || response.getBody().getSessionToken() == null
@@ -91,7 +103,8 @@ public class KsefApiClient {
 
     // POST /online/Invoice/Send — submits the FA(3) XML to KSeF for processing.
     // Returns the elementReferenceNumber used to poll for the final KSeF ID.
-    // The XML must be UTF-8 encoded bytes; Content-Type must be application/octet-stream.
+    // The XML must be UTF-8 encoded bytes; Content-Type must be
+    // application/octet-stream.
     public KsefSendInvoiceResponse sendInvoice(String sessionToken, String xmlContent) {
         String url = apiProperties.getActiveBaseUrl() + "/online/Invoice/Send";
         HttpHeaders headers = new HttpHeaders();
@@ -104,9 +117,9 @@ public class KsefApiClient {
         log.debug("Sending invoice XML ({} bytes) to {}", xmlBytes.length, url);
 
         try {
-            //! here making the sending certificate api call
-            ResponseEntity<KsefSendInvoiceResponse> response =
-                    ksefRestTemplate.postForEntity(url, entity, KsefSendInvoiceResponse.class);
+            // ! here making the sending certificate api call
+            ResponseEntity<KsefSendInvoiceResponse> response = ksefRestTemplate.postForEntity(url, entity,
+                    KsefSendInvoiceResponse.class);
 
             if (response.getBody() == null || response.getBody().getElementReferenceNumber() == null) {
                 throw new KsefSubmissionException(
@@ -115,32 +128,33 @@ public class KsefApiClient {
 
             log.info("Invoice submitted to KSeF — elementReferenceNumber: [{}]",
                     response.getBody().getElementReferenceNumber());
-            
+
             return response.getBody();
 
         } catch (HttpStatusCodeException e) {
             throw new KsefSubmissionException(
                     "KSeF invoice submission failed [" + e.getStatusCode() + "]: " +
-                    e.getResponseBodyAsString(), e);
+                            e.getResponseBodyAsString(),
+                    e);
         } catch (ResourceAccessException e) {
             throw new KsefSubmissionException(
                     "KSeF API is unreachable at " + url + " — triggering offline mode", e);
         }
     }
 
-    // GET /online/Invoice/Status/{elementReferenceNumber} — polls for the final KSeF ID.
+    // GET /online/Invoice/Status/{elementReferenceNumber} — polls for the final
+    // KSeF ID.
     // Call after sendInvoice() until ksefReferenceNumber is non-null.
     public KsefInvoiceStatusResponse getInvoiceStatus(String sessionToken, String elementReferenceNumber) {
         String url = apiProperties.getActiveBaseUrl() +
-                     "/online/Invoice/Status/" + elementReferenceNumber;
-                     
+                "/online/Invoice/Status/" + elementReferenceNumber;
+
         HttpHeaders headers = new HttpHeaders();
         headers.set(SESSION_HEADER, sessionToken);
 
         try {
-            ResponseEntity<KsefInvoiceStatusResponse> response =
-                    ksefRestTemplate.exchange(url, HttpMethod.GET,
-                            new HttpEntity<>(headers), KsefInvoiceStatusResponse.class);
+            ResponseEntity<KsefInvoiceStatusResponse> response = ksefRestTemplate.exchange(url, HttpMethod.GET,
+                    new HttpEntity<>(headers), KsefInvoiceStatusResponse.class);
 
             if (response.getBody() == null) {
                 throw new KsefSubmissionException(
@@ -151,16 +165,19 @@ public class KsefApiClient {
         } catch (HttpStatusCodeException e) {
             throw new KsefSubmissionException(
                     "KSeF invoice status check failed [" + e.getStatusCode() + "]: " +
-                    e.getResponseBodyAsString(), e);
+                            e.getResponseBodyAsString(),
+                    e);
         } catch (ResourceAccessException e) {
             throw new KsefSubmissionException(
                     "KSeF API is unreachable while polling status for ref: " + elementReferenceNumber, e);
         }
     }
 
-    // GET /online/Invoice/UPO/{ksefReferenceNumber} — downloads the official UPO receipt XML.
+    // GET /online/Invoice/UPO/{ksefReferenceNumber} — downloads the official UPO
+    // receipt XML.
     // Returns empty if KSeF does not provide a UPO body (normal sandbox behaviour).
-    // Never throws — a missing UPO triggers the stub fallback in KSeFInvoiceService.
+    // Never throws — a missing UPO triggers the stub fallback in
+    // KSeFInvoiceService.
     public java.util.Optional<String> fetchUpoXml(String sessionToken, String ksefReferenceNumber) {
         String url = apiProperties.getActiveBaseUrl() + "/online/Invoice/UPO/" + ksefReferenceNumber;
         HttpHeaders headers = new HttpHeaders();
@@ -176,7 +193,8 @@ public class KsefApiClient {
             }
             return java.util.Optional.empty();
         } catch (HttpStatusCodeException e) {
-            // 404 is normal in sandbox — KSeF does not issue signed UPO for test submissions
+            // 404 is normal in sandbox — KSeF does not issue signed UPO for test
+            // submissions
             log.warn("KSeF UPO fetch returned [{}] for ref [{}] — falling back to stub UPO",
                     e.getStatusCode(), ksefReferenceNumber);
             return java.util.Optional.empty();
