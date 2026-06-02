@@ -22,7 +22,18 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
 
   const [buyerName, setBuyerName] = useState(existingInvoice?.buyerName ?? 'Central Trade Poland Sp. z o.o.');
   const [buyerNip, setBuyerNip] = useState(existingInvoice?.buyerNIP ?? '5229983144');
-  const [buyerAddress, setBuyerAddress] = useState(existingInvoice?.buyerAddress ?? 'Al. Jerozolimskie 22, 00-345 Warszawa');
+  const [buyerAddress, setBuyerAddress] = useState(existingInvoice?.buyerAddress ?? 'Al. Jerozolimskie 22');
+  // FA(3) requires the buyer postal code and city as discrete fields (not a single
+  // address line) so they can be emitted as <KodPocztowy> / <Miejscowosc> in the XML.
+  const [buyerPostalCode, setBuyerPostalCode] = useState(existingInvoice?.buyerPostalCode ?? '00-345');
+  const [buyerCity, setBuyerCity] = useState(existingInvoice?.buyerCity ?? 'Warszawa');
+
+  // Seller address is editable and prefilled from the organisation profile when set.
+  // Some org records have no address on file, so these stay editable to let the user
+  // supply the FA(3)-required seller address inline rather than being blocked.
+  const [sellerAddress, setSellerAddress] = useState(existingInvoice?.sellerAddress ?? tenant.address ?? '');
+  const [sellerPostalCode, setSellerPostalCode] = useState(existingInvoice?.sellerPostalCode ?? tenant.postalCode ?? '');
+  const [sellerCity, setSellerCity] = useState(existingInvoice?.sellerCity ?? tenant.city ?? '');
 
   const [invoiceNumber, setInvoiceNumber] = useState(existingInvoice?.invoiceNumber ?? `FV/2026/05/000${Math.floor(Math.random() * 90) + 10}`);
   const [issueDate, setIssueDate] = useState(existingInvoice?.issueDate ?? new Date().toISOString().split('T')[0]);
@@ -231,12 +242,14 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
         dueDate,
         sellerName: tenant.name,
         sellerNip: tenant.nip,
-        sellerAddress: tenant.address,
-        sellerPostalCode: tenant.postalCode,
-        sellerCity: tenant.city,
+        sellerAddress,
+        sellerPostalCode,
+        sellerCity,
         buyerName,
         buyerNip,
         buyerAddress,
+        buyerPostalCode,
+        buyerCity,
         currency,
         totalNet,
         totalVat,
@@ -289,12 +302,14 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
         dueDate,
         sellerName: tenant.name,
         sellerNip: tenant.nip,
-        sellerAddress: tenant.address,
-        sellerPostalCode: tenant.postalCode,
-        sellerCity: tenant.city,
+        sellerAddress,
+        sellerPostalCode,
+        sellerCity,
         buyerName,
         buyerNip,
         buyerAddress,
+        buyerPostalCode,
+        buyerCity,
         currency,
         totalNet,
         totalVat,
@@ -458,10 +473,34 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
                 </span>
                 <div className="space-y-1">
                   <h3 className="font-semibold text-stone-800 text-sm">{tenant.name}</h3>
-                  <div className="text-xs text-stone-500 space-y-0.5 font-sans">
+                  <div className="text-xs text-stone-500 space-y-1.5 font-sans">
                     <p>NIP (Tax ID): <strong className="font-mono text-stone-800">{tenant.nip}</strong></p>
-                    <p>{tenant.address}</p>
-                    <p>{tenant.postalCode} {tenant.city}</p>
+                    <input
+                      type="text"
+                      value={sellerAddress}
+                      onChange={(e) => { setSellerAddress(e.target.value); simulateAutosave(); }}
+                      disabled={!canModify}
+                      placeholder="Seller street and building number"
+                      className="w-full bg-white px-2 py-1.5 border border-stone-200 rounded"
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <input
+                        type="text"
+                        value={sellerPostalCode}
+                        onChange={(e) => { setSellerPostalCode(e.target.value); simulateAutosave(); }}
+                        disabled={!canModify}
+                        placeholder="00-000"
+                        className="col-span-1 bg-white px-2 py-1.5 border border-stone-200 rounded font-mono"
+                      />
+                      <input
+                        type="text"
+                        value={sellerCity}
+                        onChange={(e) => { setSellerCity(e.target.value); simulateAutosave(); }}
+                        disabled={!canModify}
+                        placeholder="City"
+                        className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded"
+                      />
+                    </div>
                     <p className="text-emerald-700 font-medium">Auto-sealed qualified signature attached</p>
                   </div>
                 </div>
@@ -501,7 +540,29 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
                       value={buyerAddress}
                       onChange={(e) => { setBuyerAddress(e.target.value); simulateAutosave(); }}
                       disabled={!canModify}
-                      placeholder="Billing Address, City"
+                      placeholder="Street and building number"
+                      className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="text-stone-500 col-span-1 self-center">Postal Code</label>
+                    <input
+                      type="text"
+                      value={buyerPostalCode}
+                      onChange={(e) => { setBuyerPostalCode(e.target.value); simulateAutosave(); }}
+                      disabled={!canModify}
+                      placeholder="e.g. 00-345"
+                      className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded font-mono"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="text-stone-500 col-span-1 self-center">City</label>
+                    <input
+                      type="text"
+                      value={buyerCity}
+                      onChange={(e) => { setBuyerCity(e.target.value); simulateAutosave(); }}
+                      disabled={!canModify}
+                      placeholder="e.g. Warszawa"
                       className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded"
                     />
                   </div>
@@ -862,14 +923,15 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
             <div>
               <h4 className="font-bold text-stone-400 uppercase tracking-wider mb-2 border-b pb-1">SPRZEDAWCA (SELLER)</h4>
               <p className="font-semibold text-stone-850 text-sm">{tenant.name}</p>
-              <p>{tenant.address}</p>
-              <p>{tenant.postalCode} {tenant.city}</p>
+              <p>{sellerAddress}</p>
+              <p>{sellerPostalCode} {sellerCity}</p>
               <p className="font-mono mt-1 font-semibold text-stone-800">NIP: {tenant.nip}</p>
             </div>
             <div>
               <h4 className="font-bold text-stone-400 uppercase tracking-wider mb-2 border-b pb-1">NABYWCA (BUYER)</h4>
               <p className="font-semibold text-stone-850 text-sm">{buyerName || "[Insert Buyer Name]"}</p>
               <p>{buyerAddress || "[Insert Buyer Address]"}</p>
+              <p>{buyerPostalCode} {buyerCity}</p>
               <p className="font-mono mt-1 font-semibold text-stone-800">NIP: {buyerNip || "[Insert NIP]"}</p>
             </div>
           </div>

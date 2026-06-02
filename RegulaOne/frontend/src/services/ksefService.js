@@ -13,9 +13,9 @@ export const ksefService = {
   getInvoice: (id) =>
     api.get(`/api/ksef/invoices/${id}`),
 
-  // POST /api/ksef/invoices  — creates a DRAFT invoice
+  // POST /api/ksef/invoices/draft  — creates a DRAFT invoice
   createInvoice: (data) =>
-    api.post('/api/ksef/invoices', data),
+    api.post('/api/ksef/invoices/draft', data),
 
   // POST /api/ksef/invoices/:id/submit  — submits DRAFT to KSeF
   submitToKSeF: (id) =>

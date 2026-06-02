@@ -111,6 +111,11 @@ export default function App() {
                 ...prev,
                 name:             tenant.name   ?? prev.name,
                 nip:              tenant.nip    ?? '',
+                // Seller address is required by the FA(3) invoice DTO — carry the
+                // full organisation address through so InvoiceForm can populate it.
+                address:          tenant.address    ?? prev.address    ?? '',
+                postalCode:       tenant.postalCode ?? prev.postalCode ?? '',
+                city:             tenant.city       ?? prev.city       ?? '',
                 subscriptionPlan: tenant.status ?? prev.subscriptionPlan,
               }));
             })

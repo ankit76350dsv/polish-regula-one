@@ -51,7 +51,7 @@ public class KSeFInvoiceController {
      * To submit the invoice to KSeF,
      * call the submit API later.
      */
-    @PostMapping
+    @PostMapping("/draft")
     public ResponseEntity<KsefInvoice> createInvoice(
             @RequestHeader("X-Tenant-Id") String tenantId,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
@@ -59,12 +59,14 @@ public class KSeFInvoiceController {
             @Valid @RequestBody CreateInvoiceRequest request,
             HttpServletRequest httpRequest) {
 
-        log.debug("Create invoice request: [{}] tenant [{}]", request.getInvoiceNumber(), tenantId);
+
+        log.info("[KSeFInvoiceController] Create invoice request: [{}] tenant [{}]", request.getInvoiceNumber(), tenantId);
 
         KsefInvoice invoice = invoiceService.createInvoice(
                 request.toEntity(tenantId, userId),
                 userEmail,
                 extractClientIp(httpRequest));
+        log.info("Create invoice request: [{}] tenant [{}]", request.getInvoiceNumber(), tenantId);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(invoice);
     }
