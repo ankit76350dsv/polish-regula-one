@@ -471,38 +471,61 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
                 <span className="text-[10px] font-bold text-stone-400 bg-white px-2 py-0.5 border rounded-full uppercase tracking-wider">
                   01 SELL / TAX IDENTIFIER
                 </span>
-                <div className="space-y-1">
-                  <h3 className="font-semibold text-stone-800 text-sm">{tenant.name}</h3>
-                  <div className="text-xs text-stone-500 space-y-1.5 font-sans">
-                    <p>NIP (Tax ID): <strong className="font-mono text-stone-800">{tenant.nip}</strong></p>
+                <div className="space-y-2.5 text-xs text-stone-700">
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="text-stone-500 col-span-1 self-center">Seller NIP</label>
+                    <input
+                      type="text"
+                      value={tenant.nip ?? ''}
+                      disabled
+                      placeholder="Organisation NIP"
+                      className="col-span-2 bg-stone-100 px-2 py-1.5 border border-stone-200 rounded font-mono font-semibold text-stone-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="text-stone-500 col-span-1 self-center">Company Name</label>
+                    <input
+                      type="text"
+                      value={tenant.name ?? ''}
+                      disabled
+                      placeholder="Organisation Name"
+                      className="col-span-2 bg-stone-100 px-2 py-1.5 border border-stone-200 rounded font-semibold text-stone-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="text-stone-500 col-span-1 self-center">Address</label>
                     <input
                       type="text"
                       value={sellerAddress}
                       onChange={(e) => { setSellerAddress(e.target.value); simulateAutosave(); }}
                       disabled={!canModify}
-                      placeholder="Seller street and building number"
-                      className="w-full bg-white px-2 py-1.5 border border-stone-200 rounded"
+                      placeholder="Street and building number"
+                      className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded"
                     />
-                    <div className="grid grid-cols-3 gap-2">
-                      <input
-                        type="text"
-                        value={sellerPostalCode}
-                        onChange={(e) => { setSellerPostalCode(e.target.value); simulateAutosave(); }}
-                        disabled={!canModify}
-                        placeholder="00-000"
-                        className="col-span-1 bg-white px-2 py-1.5 border border-stone-200 rounded font-mono"
-                      />
-                      <input
-                        type="text"
-                        value={sellerCity}
-                        onChange={(e) => { setSellerCity(e.target.value); simulateAutosave(); }}
-                        disabled={!canModify}
-                        placeholder="City"
-                        className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded"
-                      />
-                    </div>
-                    <p className="text-emerald-700 font-medium">Auto-sealed qualified signature attached</p>
                   </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="text-stone-500 col-span-1 self-center">Postal Code</label>
+                    <input
+                      type="text"
+                      value={sellerPostalCode}
+                      onChange={(e) => { setSellerPostalCode(e.target.value); simulateAutosave(); }}
+                      disabled={!canModify}
+                      placeholder="e.g. 00-001"
+                      className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded font-mono"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="text-stone-500 col-span-1 self-center">City</label>
+                    <input
+                      type="text"
+                      value={sellerCity}
+                      onChange={(e) => { setSellerCity(e.target.value); simulateAutosave(); }}
+                      disabled={!canModify}
+                      placeholder="e.g. Pune"
+                      className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded"
+                    />
+                  </div>
+                  <p className="text-emerald-700 font-medium pt-0.5">Auto-sealed qualified signature attached</p>
                 </div>
               </div>
 
