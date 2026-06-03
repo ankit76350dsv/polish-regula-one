@@ -57,7 +57,7 @@ public class OfflinePdfService {
      * @return PDF bytes ready to send to the buyer or store in S3
      */
     public byte[] generateOfflinePdf(KsefInvoice invoice) {
-        log.info("Generating offline PDF for invoice [{}] tenant [{}]",
+        log.info("[GenerateOfflinePdf] Generating offline PDF for invoice [{}] tenant [{}]",
                 invoice.getInvoiceNumber(), invoice.getTenantId());
 
         try (PDDocument doc = new PDDocument()) {
@@ -167,12 +167,12 @@ public class OfflinePdfService {
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             doc.save(out);
-            log.debug("Offline PDF generated ({} bytes) for invoice [{}]",
+            log.debug("[GenerateOfflinePdf] Offline PDF generated ({} bytes) for invoice [{}]",
                     out.size(), invoice.getInvoiceNumber());
             return out.toByteArray();
 
         } catch (IOException e) {
-            log.error("Failed to generate offline PDF for invoice [{}]: {}",
+            log.error("[GenerateOfflinePdf] Failed to generate offline PDF for invoice [{}]: {}",
                     invoice.getInvoiceNumber(), e.getMessage(), e);
             throw new RuntimeException("Offline PDF generation failed: " + e.getMessage(), e);
         }

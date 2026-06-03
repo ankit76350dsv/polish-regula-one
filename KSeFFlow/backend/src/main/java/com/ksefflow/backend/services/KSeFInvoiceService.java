@@ -67,7 +67,7 @@ public class KSeFInvoiceService {
     private final OfflinePdfService offlinePdfService;
     private final KsefApiProperties apiProperties;
 
-    // ── Create ─────────────────────────────────────────────────────────────────
+    //! ── Create ─────────────────────────────────────────────────────────────────
 
     /**
      * Persists an invoice in DRAFT status.
@@ -148,7 +148,7 @@ public class KSeFInvoiceService {
         return saved;
     }
 
-    // ── Submit Pipeline ────────────────────────────────────────────────────────
+    //! ── Submit Pipeline ────────────────────────────────────────────────────────
 
     /**
      * Executes the full KSeF submission pipeline for the given invoice.
@@ -166,7 +166,6 @@ public class KSeFInvoiceService {
      * @throws KsefAuthException          if KSeF session cannot be opened
      *                                    (certificate problem)
      */
-    // !----------------------------------
     public KsefInvoice submitInvoice(String tenantId, String invoiceId, String nip, String userEmail, String ipAddress) {
 
         log.info("[SubmitInvoice] Starting invoice submission process. TenantId=[{}], InvoiceId=[{}], NIP=[{}]", tenantId, invoiceId, nip);
@@ -322,7 +321,7 @@ public class KSeFInvoiceService {
     private record KsefPollResult(String ksefReferenceNumber, String acquisitionTimestamp) {
     }
 
-    // Polls GET /online/Invoice/Status until a ksefReferenceNumber is returned.
+    //! Polls GET /online/Invoice/Status until a ksefReferenceNumber is returned.
     // Retries up to 5 times with 1-second gaps — adequate for sandbox + production.
    private KsefPollResult pollForKsefId(String sessionToken, String elementRef, String invoiceNumber) {
     int maxAttempts = 5;
@@ -348,18 +347,17 @@ public class KSeFInvoiceService {
     throw new KsefSubmissionException("KSeF did not assign a reference number after " + maxAttempts + " polling attempts for elementRef: " + elementRef);
    }
 
-    // ── Private: offline fallback ──────────────────────────────────────────────
+    //! ── Private: offline fallback ──────────────────────────────────────────────
 
-    private KsefInvoice handleOfflineMode(KsefInvoice invoice, String errorMessage,
-            String userEmail, String ipAddress) {
+    private KsefInvoice handleOfflineMode(KsefInvoice invoice, String errorMessage, String userEmail, String ipAddress) {
         try {
             // Generate offline PDF + QR (does not throw on failure — logged only)
-            offlinePdfService.generateOfflinePdf(invoice);
+            offlinePdfService.generateOfflinePdf(invoice); //! ← return value is IGNORED
             String qrUrl = offlinePdfService.verificationUrl(invoice);
-            invoice.setOfflineQrCode(qrUrl);
-            log.info("Offline PDF generated for invoice [{}] — QR: {}", invoice.getInvoiceNumber(), qrUrl);
+            invoice.setOfflineQrCode(qrUrl); //! only the QR URL is kept
+            log.info("[HandleOfflineMode] Offline PDF generated for invoice [{}] — QR: {}", invoice.getInvoiceNumber(), qrUrl);
         } catch (Exception pdfEx) {
-            log.error("Offline PDF generation also failed for invoice [{}]: {}",
+            log.error("[HandleOfflineMode] Offline PDF generation also failed for invoice [{}]: {}",
                     invoice.getInvoiceNumber(), pdfEx.getMessage());
         }
 
