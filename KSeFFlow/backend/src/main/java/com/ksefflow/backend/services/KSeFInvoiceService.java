@@ -172,24 +172,15 @@ public class KSeFInvoiceService {
         log.info("[SubmitInvoice] Starting invoice submission process. TenantId=[{}], InvoiceId=[{}], NIP=[{}]", tenantId, invoiceId, nip);
 
         // Step 1 — Load and validate DRAFT invoice
-        log.info("[SubmitInvoice] Loading and validating DRAFT invoice. InvoiceId=[{}]", invoiceId);
-
         KsefInvoice invoice = loadAndGuardDraft(tenantId, invoiceId);
 
-        log.info("[SubmitInvoice] Invoice validation completed successfully. InvoiceNumber=[{}]", invoice.getInvoiceNumber());
-
         // ! Step 2 — Move invoice to PENDING state
-        log.info("[SubmitInvoice] Moving invoice [{}] to PENDING state", invoice.getInvoiceNumber());
-
         invoice.setStatus(KsefInvoiceStatus.PENDING);
         invoice.setUpdatedAt(LocalDateTime.now());
-
         int nextAttempt = invoice.getSubmissionAttempts() + 1;
         invoice.setSubmissionAttempts(nextAttempt);
 
-        log.info("[SubmitInvoice] Submission attempt count updated to [{}] for invoice [{}]", nextAttempt, invoice.getInvoiceNumber());
-
-        log.info("[SubmitInvoice] Saving PENDING invoice state into database for invoice [{}]", invoice.getInvoiceNumber());
+        log.info("[SubmitInvoice] Submission attempt count updated to [{}] and saving PENDING invoice state into database for invoice [{}]", nextAttempt, invoice.getInvoiceNumber());
 
         ksef_invoices_repository.save(invoice);
 
@@ -200,45 +191,24 @@ public class KSeFInvoiceService {
 
         // ! Step 3 — Generate FA(3) XML
         // ! return two thiing XML and hashof XML
-        log.info("[SubmitInvoice] Generating FA(3) XML for invoice [{}]", invoice.getInvoiceNumber());
-
         FA3XmlGeneratorService.FA3XmlResult xmlResult = xmlGeneratorService.generateXml(invoice);
 
-        log.info("[SubmitInvoice] FA(3) XML generated successfully for invoice [{}]", invoice.getInvoiceNumber());
-
         // Step 4 — Validate XML
-        log.info("[SubmitInvoice] Validating generated XML for invoice [{}]", invoice.getInvoiceNumber());
-
         xmlValidatorService.validateStrict(xmlResult.xmlContent());
-
-        log.info("[SubmitInvoice] XML validation completed successfully for invoice [{}]", invoice.getInvoiceNumber());
-
         // Save XML hash
-        log.info("[SubmitInvoice] Saving XML SHA-256 hash for invoice [{}]", invoice.getInvoiceNumber());
-
         invoice.setFa3XmlHash(xmlResult.sha256Hash());
-
         ksef_invoices_repository.save(invoice);
-
-        log.info("[SubmitInvoice] XML hash saved successfully for invoice [{}]", invoice.getInvoiceNumber());
 
         // Step 5–8 — Submit invoice to KSeF
         try {
 
-            log.info("[SubmitInvoice] Starting KSeF submission execution for invoice [{}]", invoice.getInvoiceNumber());
-
             KsefInvoice submittedInvoice = executeKsefSubmission(invoice, xmlResult.xmlContent(), nip, userEmail, ipAddress);
-
             log.info("[SubmitInvoice] Invoice [{}] submitted successfully to KSeF", invoice.getInvoiceNumber());
-
             return submittedInvoice;
 
         } catch (KsefSubmissionException | KsefAuthException e) {
 
             log.warn("[SubmitInvoice] KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE", invoice.getInvoiceNumber(), e.getMessage());
-
-            log.info("[SubmitInvoice] Handling offline mode for invoice [{}]", invoice.getInvoiceNumber());
-
             return handleOfflineMode(invoice, e.getMessage(), userEmail, ipAddress);
         }
     }
@@ -293,15 +263,9 @@ public class KSeFInvoiceService {
         // timestamp.
         // In production this can take a few seconds; the sandbox usually responds
         // immediately.
-        log.info("[ExecuteKsefSubmission] Polling KSeF for permanent reference number for invoice [{}]",
-                invoice.getInvoiceNumber());
-
         KsefPollResult pollResult = pollForKsefId(sessionToken, elementRef, invoice.getInvoiceNumber());
-
         String ksefId = pollResult.ksefReferenceNumber();
-
         LocalDateTime receivedAt = LocalDateTime.now();
-
         log.info("[ExecuteKsefSubmission] Permanent KSeF reference number received for invoice [{}] — ksefId [{}]",
                 invoice.getInvoiceNumber(),
                 ksefId);
@@ -316,16 +280,11 @@ public class KSeFInvoiceService {
                         : sendResponse.getTimestamp(),
                 receivedAt);
 
-        log.debug("[ExecuteKsefSubmission] UPO timestamp resolved successfully for invoice [{}]",
-                invoice.getInvoiceNumber());
 
         // Step 8 — fetch the real UPO XML from KSeF (production).
         // In sandbox KSeF does not return a UPO body, so we fall back to the stub.
         // TODO: get the receipt using the sessionToken and ksfid that we get after
-        // recpeit not the invoice.
-        log.info("[ExecuteKsefSubmission] Fetching UPO XML from KSeF for ksefId [{}]",
-                ksefId);
-
+        //! recpeit not the invoice.
         String upoXml = ksefApiClient.fetchUpoXml(sessionToken, ksefId)
                 .orElseGet(() -> {
                     log.warn(
@@ -334,17 +293,12 @@ public class KSeFInvoiceService {
 
                     return buildUpoXml(invoice, ksefId, upoTimestamp);
                 });
-
-        log.info("[ExecuteKsefSubmission] Persisting UPO document for invoice [{}]",
-                invoice.getInvoiceNumber());
-
-        String upoDocumentId = upoStorageService.storeUpo(
-                invoiceId, tenantId, ksefId, upoXml, upoTimestamp);
+        String upoDocumentId = upoStorageService.storeUpo( invoiceId, tenantId, ksefId, upoXml, upoTimestamp);
 
         // Step 9 — mark invoice as SENT
+        //! invoce update...
         log.info("[ExecuteKsefSubmission] Updating invoice status to SENT for invoice [{}]",
                 invoice.getInvoiceNumber());
-
         invoice.setStatus(KsefInvoiceStatus.SENT);
         invoice.setKsefId(ksefId); // ! ksefReferenceNumber
         invoice.setUpoDocumentId(upoDocumentId); // ! mongodb _id of the invoice
@@ -354,28 +308,12 @@ public class KSeFInvoiceService {
         invoice.setReceivedFromKsefAt(receivedAt); // ! when get ksefReferenceNumber
         invoice.setLastErrorMessage(null);
         invoice.setUpdatedAt(LocalDateTime.now());
-
         log.info("[ExecuteKsefSubmission] Saving updated invoice state into database for invoice [{}]",
                 invoice.getInvoiceNumber());
 
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
-
-        KSeFAuditLogService.writeAuditLog(
-                tenantId,
-                "INVOICE_SENT_TO_KSEF",
-                invoiceId,
-                null,
-                "ksefId=" + ksefId + " env=" + apiProperties.getEnvironment(),
-                userEmail,
-                ipAddress);
-
-        log.info("[ExecuteKsefSubmission] Invoice [{}] successfully registered with KSeF — ksefId: [{}]",
-                invoice.getInvoiceNumber(),
-                ksefId);
-
-        log.info("[ExecuteKsefSubmission] KSeF submission flow completed successfully for invoice [{}]",
-                invoice.getInvoiceNumber());
-
+        KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_SENT_TO_KSEF", invoiceId, null, "ksefId=" + ksefId + " env=" + apiProperties.getEnvironment(), userEmail, ipAddress);
+        log.info("[ExecuteKsefSubmission] Invoice [{}] successfully registered with KSeF and submission flow completed — ksefId: [{}]", invoice.getInvoiceNumber(), ksefId);
         return saved;
     }
 
@@ -386,28 +324,29 @@ public class KSeFInvoiceService {
 
     // Polls GET /online/Invoice/Status until a ksefReferenceNumber is returned.
     // Retries up to 5 times with 1-second gaps — adequate for sandbox + production.
-    private KsefPollResult pollForKsefId(String sessionToken, String elementRef, String invoiceNumber) {
-        int maxAttempts = 5;
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            KsefInvoiceStatusResponse statusResponse = ksefApiClient.getInvoiceStatus(sessionToken, elementRef);
-
-            if (statusResponse.getInvoiceStatus() != null &&
-                    statusResponse.getInvoiceStatus().getKsefReferenceNumber() != null) {
-                return new KsefPollResult(
-                        statusResponse.getInvoiceStatus().getKsefReferenceNumber(),
-                        statusResponse.getInvoiceStatus().getAcquisitionTimestamp());
-            }
-
-            if (attempt < maxAttempts) {
-                log.debug("KSeF has not yet assigned reference for invoice [{}] — " +
-                        "attempt {}/{}, retrying in 1s", invoiceNumber, attempt, maxAttempts);
-                sleepQuietly(1000);
-            }
+   private KsefPollResult pollForKsefId(String sessionToken, String elementRef, String invoiceNumber) {
+    int maxAttempts = 5;
+    log.info("[PollForKsefId] Starting KSeF polling for invoice [{}] with elementRef [{}]", invoiceNumber, elementRef);
+    
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        
+        log.debug("[PollForKsefId] Checking KSeF invoice status for invoice [{}] — attempt {}/{}", invoiceNumber, attempt, maxAttempts);
+        KsefInvoiceStatusResponse statusResponse = ksefApiClient.getInvoiceStatus(sessionToken, elementRef);
+        
+        if (statusResponse.getInvoiceStatus() != null && statusResponse.getInvoiceStatus().getKsefReferenceNumber() != null) {
+            log.info("[PollForKsefId] KSeF reference number generated successfully for invoice [{}] — ksefRef [{}]", invoiceNumber, statusResponse.getInvoiceStatus().getKsefReferenceNumber());
+            return new KsefPollResult(statusResponse.getInvoiceStatus().getKsefReferenceNumber(), statusResponse.getInvoiceStatus().getAcquisitionTimestamp());
         }
-        throw new KsefSubmissionException(
-                "KSeF did not assign a reference number after " + maxAttempts +
-                        " polling attempts for elementRef: " + elementRef);
+
+        if (attempt < maxAttempts) {
+            log.debug("[PollForKsefId] KSeF reference number not yet available for invoice [{}] — retrying in 1s", invoiceNumber);
+            sleepQuietly(1000);
+        }
     }
+
+    log.error("[PollForKsefId] KSeF did not assign reference number after [{}] attempts for invoice [{}]", maxAttempts, invoiceNumber);
+    throw new KsefSubmissionException("KSeF did not assign a reference number after " + maxAttempts + " polling attempts for elementRef: " + elementRef);
+   }
 
     // ── Private: offline fallback ──────────────────────────────────────────────
 

@@ -47,10 +47,10 @@ public class UPOStorageService {
                            String ksefReferenceNumber, String upoXml,
                            LocalDateTime upoTimestamp) {
 
-        log.info("Storing UPO for invoice [{}] tenant [{}] ksefRef [{}]",
+        log.info("[StoreUpo] Storing UPO for invoice [{}] tenant [{}] ksefRef [{}]",
                 invoiceId, tenantId, ksefReferenceNumber);
 
-        String hash = sha256Hex(upoXml); //! a91ff82bb3918827c1d1aa || cannot be reversed : : always same input → same output
+        String hash = sha256Hex(upoXml); //! a91ff82bb3918827c1d1aa || cannot be reversed :  always same input → same output
         // AES encryption works ONLY with bytes.
         byte[] encryptedBytes = cryptoUtils.aesEncrypt(upoXml.getBytes(StandardCharsets.UTF_8)); // pass this :: [72, 69, 76, 76, 79]
        // encryptedBytes == [ IV ] + [ Encrypted Data ] + [ Authentication Tag ]
@@ -60,14 +60,14 @@ public class UPOStorageService {
                 .tenantId(tenantId)
                 .invoiceId(invoiceId)
                 .ksefReferenceNumber(ksefReferenceNumber)
-                .upoXmlEncrypted(encrypted)
+                .upoXmlEncrypted(encrypted) //! stroring the encrpted so that latter get the origin
                 .upoXmlHash(hash)
                 .upoTimestamp(upoTimestamp)
                 .environment(apiProperties.getEnvironment())
                 .build();
 
         KsefUpoReceipt saved = ksef_upo_receipts_repo.save(receipt);
-        log.debug("UPO stored with id [{}] for invoice [{}]", saved.getId(), invoiceId);
+        log.debug("[StoreUpo] UPO stored with id [{}] for invoice [{}]", saved.getId(), invoiceId);
         return saved.getId();
     }
 

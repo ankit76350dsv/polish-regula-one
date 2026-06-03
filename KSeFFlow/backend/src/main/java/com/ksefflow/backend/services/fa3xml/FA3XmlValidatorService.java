@@ -21,9 +21,9 @@ public class FA3XmlValidatorService {
     // sending to the government API. KSeF counts rejected submissions against the
     // company's compliance score, so we never send without local validation passing.
     public void validateStrict(String xml) {
-        log.debug("Running strict FA(3) XML validation before KSeF submission");
+        log.debug("[validateStrict] Running strict FA(3) XML validation before KSeF submission");
         FA3XmlValidator.validate(xml, true);
-        log.debug("Strict FA(3) XML validation passed");
+        log.debug("[validateStrict] Strict FA(3) XML validation passed");
     }
 
     // Non-strict validation — used during invoice creation/preview in dev.

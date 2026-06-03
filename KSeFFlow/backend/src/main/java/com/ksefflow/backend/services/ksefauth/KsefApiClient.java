@@ -195,6 +195,8 @@ public class KsefApiClient {
     // KSeFInvoiceService.
     public java.util.Optional<String> fetchUpoXml(String sessionToken, String ksefReferenceNumber) {
         String url = apiProperties.getActiveBaseUrl() + "/online/Invoice/UPO/" + ksefReferenceNumber;
+        log.info("[FetchUpoXml] Fetching UPO XML from KSeF for ref [{}] using URL [{}]", ksefReferenceNumber, url);
+
         HttpHeaders headers = new HttpHeaders();
         headers.set(SESSION_HEADER, sessionToken);
 
@@ -206,15 +208,16 @@ public class KsefApiClient {
                 log.info("Real UPO XML received from KSeF for ksefRef [{}]", ksefReferenceNumber);
                 return java.util.Optional.of(body);
             }
+            log.warn("[FetchUpoXml] Empty UPO XML response received for ref [{}]", ksefReferenceNumber);
             return java.util.Optional.empty();
         } catch (HttpStatusCodeException e) {
             // 404 is normal in sandbox — KSeF does not issue signed UPO for test
             // submissions
-            log.warn("KSeF UPO fetch returned [{}] for ref [{}] — falling back to stub UPO",
+            log.warn("[FetchUpoXml] KSeF UPO fetch returned [{}] for ref [{}] — falling back to stub UPO",
                     e.getStatusCode(), ksefReferenceNumber);
             return java.util.Optional.empty();
         } catch (ResourceAccessException e) {
-            log.warn("KSeF UPO endpoint unreachable for ref [{}] — falling back to stub UPO",
+            log.warn("[FetchUpoXml] KSeF UPO endpoint unreachable for ref [{}] — falling back to stub UPO",
                     ksefReferenceNumber);
             return java.util.Optional.empty();
         }
