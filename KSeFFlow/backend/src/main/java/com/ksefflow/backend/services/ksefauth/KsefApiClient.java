@@ -30,7 +30,7 @@ public class KsefApiClient {
     private final RestTemplate ksefRestTemplate;
 
     // Step 1 of the auth flow.
-    // POST /online/Session/AuthorisationChallenge → returns the challenge string
+    //! POST /online/Session/AuthorisationChallenge → returns the challenge string
     // the company must sign to prove identity.
     public String requestChallenge(String nip) {
 
@@ -42,7 +42,7 @@ public class KsefApiClient {
             ResponseEntity<KsefChallengeResponse> response = ksefRestTemplate.postForEntity(
                     url,
                     KsefChallengeRequest.forNip(nip),
-                    KsefChallengeResponse.class);
+                    KsefChallengeResponse.class); //! here first is faling...
                     
             log.debug("[RequestChallenge] Challenge response received successfully from KSeF");
 
@@ -67,12 +67,25 @@ public class KsefApiClient {
     }
 
     // Step 3 of the auth flow.
-    // POST /online/Session/Authorisation → returns the session token.
-    // challenge is included for traceability but not re-sent to the API —
-    // only the signature (which proves the challenge was signed) is sent.
+    // challenge is included for traceability but not re-sent to the API — only the signature (which proves the challenge was signed) is sent.
+    //! POST /online/Session/Authorisation → returns the session token.
+    // {
+    //     "contextIdentifier":        { "type": "onip", "identifier": "<nip>" },
+    //     "documentType":             { ... fa2() ... },
+    //     "authenticationIdentifier": "<nip>",
+    //     "signature":                { ... signedChallenge (Base64) ... },
+    //     "certificateBase64":        "<Base64-DER public cert>"
+    // }
+    //! response
+    // : {
+        // "sessionToken": { "token": "eyJhbGciOi...<long opaque token>..." },
+        // "timestamp":       "2026-06-02T12:35:10.402Z",
+        // "referenceNumber": "20260602-SR-AB12CD34EF-..."
+    //  }
     public String authorise(String nip, String signedChallengeBase64, String certBase64) {
-        String url = apiProperties.getActiveBaseUrl() + AUTH_PATH;
 
+        String url = apiProperties.getActiveBaseUrl() + AUTH_PATH;
+        log.info("[Authorise] Initiating KSeF authorisation for NIP [{}] to URL [{}]", nip, url);
         KsefAuthRequest body = KsefAuthRequest.builder()
                 .contextIdentifier(KsefContextIdentifier.ofNip(nip))
                 .documentType(KsefDocumentType.fa2())
@@ -82,22 +95,24 @@ public class KsefApiClient {
                 .build();
 
         try {
-            ResponseEntity<KsefAuthResponse> response = ksefRestTemplate.postForEntity(url, body,
-                    KsefAuthResponse.class);
 
-            if (response.getBody() == null
-                    || response.getBody().getSessionToken() == null
-                    || response.getBody().getSessionToken().getToken() == null) {
+            ResponseEntity<KsefAuthResponse> response = ksefRestTemplate.postForEntity(url, body, KsefAuthResponse.class);
+            log.debug("[Authorise] Authorisation response received successfully from KSeF");
+            if (response.getBody() == null || response.getBody().getSessionToken() == null || response.getBody().getSessionToken().getToken() == null) {
+                log.error("[Authorise] Empty session token received from KSeF URL [{}]", url);
                 throw new KsefAuthException("KSeF authorisation response did not contain a session token");
             }
+
+            log.info("[Authorise] KSeF session token generated successfully for NIP [{}]", nip);
             return response.getBody().getSessionToken().getToken();
 
         } catch (HttpStatusCodeException e) {
-            throw new KsefAuthException(
-                    "KSeF authorisation failed [" + e.getStatusCode() + "]: " + e.getResponseBodyAsString(), e);
+            log.error("[Authorise] KSeF authorisation failed for NIP [{}] — status [{}], response [{}]", nip, e.getStatusCode(), e.getResponseBodyAsString(), e);
+            throw new KsefAuthException("KSeF authorisation failed [" + e.getStatusCode() + "]: " + e.getResponseBodyAsString(), e);
+
         } catch (ResourceAccessException e) {
-            throw new KsefAuthException(
-                    "KSeF API is unreachable at " + url + " — check network or consider offline mode", e);
+            log.error("[Authorise] Unable to connect to KSeF API at URL [{}]", url, e);
+            throw new KsefAuthException("KSeF API is unreachable at " + url + " — check network or consider offline mode", e);
         }
     }
 
@@ -114,7 +129,7 @@ public class KsefApiClient {
         byte[] xmlBytes = xmlContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         HttpEntity<byte[]> entity = new HttpEntity<>(xmlBytes, headers);
 
-        log.debug("Sending invoice XML ({} bytes) to {}", xmlBytes.length, url);
+        log.debug("[SendInvoice] Sending invoice XML ({} bytes) to {}", xmlBytes.length, url);
 
         try {
             // ! here making the sending certificate api call

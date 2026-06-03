@@ -59,7 +59,7 @@ public class CertificateCryptoUtils {
         }
     }
 
-    // Decrypts bytes produced by aesEncrypt(). GCM authentication is verified automatically.
+    //! Decrypts bytes produced by aesEncrypt(). GCM authentication is verified automatically.
     public byte[] aesDecrypt(byte[] encryptedData) {
         try {
             byte[] iv = new byte[GCM_IV_LENGTH];

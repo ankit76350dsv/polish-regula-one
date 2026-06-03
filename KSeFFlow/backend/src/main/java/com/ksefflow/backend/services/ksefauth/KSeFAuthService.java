@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.Optional;
 
 /**
@@ -101,51 +102,33 @@ public class KSeFAuthService {
         try {
 
             // Step 1 — request challenge from government
-            //TODO: 1st thing with goverment 
-
-            log.info("[OpenSession] Requesting authentication challenge from KSeF for NIP [{}]", nip);
-
-            String challenge = ksefApiClient.requestChallenge(nip); //! this is failing the stuff to get the session...
-
-            log.debug("[OpenSession] Challenge successfully received from KSeF for tenant [{}]", tenantId);
+            //TODO: 1st thing with goverment --> {"challenge": "20260602-CR-8F3A2B1C9D-AB12CD34EF56...", "timestamp": "2026-06-02T12:34:56.789Z" }
+            String challenge = ksefApiClient.requestChallenge(nip); //! here is failing...
 
             // Step 2 — sign the challenge and encode the public certificate
-            log.info("[OpenSession] Signing challenge using tenant certificate [{}]", tenantId);
             PrivateKey privateKey = certificateService.getPrivateKey(tenantId);
             X509Certificate publicCert = certificateService.getPublicCertificate(tenantId);
-
             String signedChallenge = KsefSigningUtils.signChallenge(challenge, privateKey);
             String certBase64 = KsefSigningUtils.encodeCertificate(publicCert);
-            log.debug("[OpenSession] Challenge signed successfully for tenant [{}]", tenantId);
 
             // Step 3 — submit to government, receive session token
-            //TODO: 2nd thing with goverment 
-            log.info("[OpenSession] Sending signed challenge to KSeF for session authorization");
+            //TODO: 2nd thing with goverment --> "eyJhbGciOi...<long opaque token>..."
             String sessionToken = ksefApiClient.authorise(nip, signedChallenge, certBase64);
 
-            log.info("[OpenSession] KSeF session opened successfully for tenant [{}] in environment [{}]",
-                    tenantId, apiProperties.getEnvironment());
-
-            // Persist session (token encrypted at rest)
-            log.debug("[OpenSession] Persisting encrypted KSeF session token for tenant [{}]", tenantId);
+            // store the session token in the DB.
             sessionStore.saveActiveSession(tenantId, sessionToken);
             certificateService.recordAuthSuccess(tenantId);
 
-            writeAuditLog(
-                    tenantId,
-                    "KSEF_SESSION_OPENED",
-                    "SESSION",
-                    null,
-                    "environment=" + apiProperties.getEnvironment());
+            writeAuditLog(tenantId, "KSEF_SESSION_OPENED", "SESSION", null, "environment=" + apiProperties.getEnvironment());
 
             log.info("[OpenSession] Session initialization completed successfully for tenant [{}]", tenantId);
 
             return sessionToken;
 
-        } catch (KsefAuthException kae) {
+        }   catch (KsefAuthException kae) {
 
             log.error("[OpenSession] Failed to open KSeF session for tenant [{}] - reason: {}",tenantId,kae.getMessage(),kae);
-            certificateService.recordAuthFailure(tenantId);
+            certificateService.recordAuthFailure(tenantId); //TODO: 
             writeAuditLog(
                     tenantId,
                     "KSEF_SESSION_FAILED",

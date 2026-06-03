@@ -64,9 +64,8 @@ public final class KeyStoreUtils {
         }
     }
 
-    // Finds and returns the PrivateKey inside the KeyStore.
-    // The password is needed a second time here — Java requires it to unlock the
-    // key entry.
+    //! Finds and returns the PrivateKey inside the KeyStore.
+    // The password is needed a second time here — Java requires it to unlock the key entry.
     public static PrivateKey extractPrivateKey(KeyStore keyStore, String password) {
         try {
             Enumeration<String> aliases = keyStore.aliases();

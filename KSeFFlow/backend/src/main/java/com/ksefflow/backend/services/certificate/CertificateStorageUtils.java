@@ -64,14 +64,14 @@ public class CertificateStorageUtils {
         }
     }
 
-    // Downloads the encrypted object from S3 and decrypts it back to the original .pfx bytes.
+    //! Downloads the encrypted object from S3 and decrypts it back to the original .pfx bytes.
     // Called when the service needs to load the KeyStore at runtime (e.g. for signing).
     public byte[] readPfxDecrypted(String storagePath) {
         byte[] encrypted = readFromS3(storagePath);
         return crypto.aesDecrypt(encrypted);
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────────
+    //! ── Helpers ────────────────────────────────────────────────────────────────────
 
     private byte[] readFromS3(String locator) {
         if (locator == null || !locator.startsWith(S3_SCHEME)) {
