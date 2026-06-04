@@ -386,7 +386,6 @@ public class KSeFInvoiceService {
             String codeCertificate = offlineQrService.generateCertificateCode(invoice); // CODE II "CERTYFIKAT"
             invoice.setQrCodeOffline(codeOffline);
             invoice.setQrCodeCertificate(codeCertificate);
-            invoice.setOfflineQrCode(codeOffline); // back-compat mirror of CODE I
             log.info("[HandleOfflineMode] Offline QR codes generated for invoice [{}] (mode={})",
                     invoice.getInvoiceNumber(), mode);
         } catch (Exception qrEx) {

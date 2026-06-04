@@ -108,7 +108,8 @@ public class KSeFInvoiceController {
                 .status(result.getStatus())
                 .ksefId(result.getKsefId())
                 .upoDocumentId(result.getUpoDocumentId())
-                .offlineQrCode(result.getOfflineQrCode())
+                .qrCodeOffline(result.getQrCodeOffline())
+                .qrCodeCertificate(result.getQrCodeCertificate())
                 .message(message)
                 .submittedAt(result.getSubmittedToKsefAt() != null
                         ? result.getSubmittedToKsefAt()

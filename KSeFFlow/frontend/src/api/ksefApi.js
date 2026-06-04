@@ -73,10 +73,8 @@ export const mapBackendInvoice = (b) => ({
   offlineMode:            b.offlineMode            ?? null,
   offlineIssuedAt:        b.offlineIssuedAt        ?? null,
   ksefSubmissionDeadline: b.ksefSubmissionDeadline ?? null,
-  qrCodeOffline:          b.qrCodeOffline          ?? b.offlineQrCode ?? null,
+  qrCodeOffline:          b.qrCodeOffline          ?? null,
   qrCodeCertificate:      b.qrCodeCertificate      ?? null,
-  // legacy single-QR field kept as a mirror of CODE I for older UI
-  offlineQrCode:          b.qrCodeOffline          ?? b.offlineQrCode ?? null,
 
   fa3XmlHash:        b.fa3XmlHash         ?? null,
   submissionAttempts: b.submissionAttempts ?? 0,

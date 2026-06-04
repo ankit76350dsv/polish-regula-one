@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+⚠️ **VERIFICATION REQUIREMENT:** Before implementing any KSeF-related feature or making any changes to KSeFFlow, always verify the relevant spec, endpoint, field, or business rule against the **official Polish Ministry of Finance / KSeF documentation** at [https://www.podatki.gov.pl/ksef](https://www.podatki.gov.pl/ksef) and the KSeF API reference at [https://ksef.mf.gov.pl](https://ksef.mf.gov.pl). Do not rely solely on this memory file — requirements and API contracts can change. Confirm first, then implement.
+
 Each module runs a **standalone backend on its own port** — there is **no API gateway/proxy** (verified: no spring-cloud-gateway, no proxy controller, start.sh just launches each). Ports: RegulaOne 8080, KSeFFlow 8081, SafeVoice 8082, WasteSync 8083, SafeWork 8084, WorkPulse 8085, PrivacyPilot 8086 (frontends 3000–3006).
 
 KSeF **invoices + certificates + audit logs are served by the KSeFFlow backend (8081)** under `/api/v1/*`, NOT by RegulaOne (8080). Create-draft is `POST /api/v1/invoices/draft`; list returns a Spring Data `Page` (read `.content`); submit needs `?nip=` query param + returns `SubmitInvoiceResponse` (not the entity).

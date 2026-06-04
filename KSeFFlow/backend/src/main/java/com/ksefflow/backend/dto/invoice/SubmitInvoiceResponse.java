@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 // Response for POST /api/v1/invoices/{id}/submit.
 // Returns enough information for the UI to update immediately without a
-// follow-up GET — the ksefId (once SENT) or the offlineQrCode (when OFFLINE_MODE).
+// follow-up GET — the ksefId (once SENT) or the two offline QR codes (when OFFLINE_MODE).
 @Data
 @Builder
 public class SubmitInvoiceResponse {
@@ -24,8 +24,10 @@ public class SubmitInvoiceResponse {
     // Populated on status=SENT — ID of the stored UPO receipt document
     private String upoDocumentId;
 
-    // Populated on status=OFFLINE_MODE — QR verification URL embedded in the offline PDF
-    private String offlineQrCode;
+    // Populated on status=OFFLINE_MODE — the two mandatory offline QR payloads.
+    // qrCodeOffline = CODE I "OFFLINE"; qrCodeCertificate = CODE II "CERTYFIKAT".
+    private String qrCodeOffline;
+    private String qrCodeCertificate;
 
     // Human-readable summary of the submission result
     private String message;

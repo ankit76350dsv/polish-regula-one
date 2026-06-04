@@ -131,11 +131,6 @@ public class KsefInvoice {
 
     // ── Offline fallback / compliance ──────────────────────────────────────────
 
-    // @deprecated legacy single QR URL — superseded by qrCodeOffline + qrCodeCertificate.
-    // Kept (mirrors qrCodeOffline) for backward compatibility with existing UI/clients.
-    @Deprecated
-    private String offlineQrCode;
-
     // Which offline mode the invoice was issued under — drives the legal submission
     // deadline (offline24 / KSeF-unavailability → next business day; emergency → 7 business days).
     private KsefOfflineMode offlineMode;
