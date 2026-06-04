@@ -1,5 +1,7 @@
 package com.ksefflow.backend.services;
 
+import com.ksefflow.backend.exceptions.KsefCertificateException;
+import com.ksefflow.backend.models.KsefCertificate;
 import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.services.certificate.CertificateService;
 import com.ksefflow.backend.services.ksefauth.KsefSigningUtils;
@@ -8,91 +10,119 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
+import java.time.format.DateTimeFormatter;
+import java.util.Base64;
 
 /**
- * Generates the two QR codes required for invoices issued when KSeF is unavailable
- * (Offline24, KSeF Unavailability, or Emergency mode).
+ * Generates the two QR codes required on an invoice issued while KSeF is unavailable
+ * (offline24 / KSeF-unavailability / emergency), per the Ministry of Finance QR spec:
+ *   https://github.com/CIRFMF/ksef-docs/blob/main/kody-qr.md
  *
- * CODE I (OFFLINE):
- * - Contains information that helps identify and verify the invoice later in KSeF.
- * - Built using the invoice details and the FA(3) XML hash.
- * - Allows the buyer to verify the invoice after it is successfully uploaded to KSeF.
+ * CODE I — "OFFLINE" (invoice verification):
+ *   {base}/invoice/{NIP}/{issueDate DD-MM-YYYY}/{SHA-256 file hash, Base64URL}
  *
- * CODE II (CERTIFICATE):
- * - Proves which company issued the invoice before it is uploaded to KSeF.
- * - Created by digitally signing key invoice information using the tenant's certificate.
- * - The signature can be verified using the corresponding public certificate.
+ * CODE II — "CERTYFIKAT" (issuer verification, offline only):
+ *   {base}/certificate/{ContextType}/{ContextValue}/{SellerNIP}/{SerialNumber}/{FileHash}/{Signature}
+ *   The Signature is over the URL path WITHOUT the scheme and WITHOUT the trailing
+ *   /{Signature} segment, using the issuer's offline-type KSeF certificate private key
+ *   (RSASSA-PSS for RSA, ECDSA P-256 for EC).
  *
- * Both QR codes are generated on the server.
- * CODE II uses the certificate's private key, which is sensitive and must never
- * be exposed to the browser or frontend application.
+ * Both QR codes are produced SERVER-SIDE: CODE II needs the certificate private key,
+ * which must never reach the browser. The frontend only renders the resulting URLs.
  *
- * NOTE:
- * The current implementation follows the expected KSeF offline flow, but the exact
- * QR code format and certificate requirements must still be verified against the
- * official KSeF 2.0 documentation before production use. Until that verification
- * is completed, this implementation should not be considered fully compliant.
+ * COMPLIANCE: URL shape and hashing now follow the documented MF format. Two items still
+ * require confirmation against the official spec/cert before production:
+ *   1. CODE II must be sealed with the issuer's active OFFLINE-type KSeF certificate
+ *      (a.k.a. "Type 2"); here we use the tenant's stored certificate via CertificateService.
+ *   2. {FileHash} must be the SHA-256 of the exact bytes KSeF will receive; we reuse the
+ *      invoice's stored fa3XmlHash (re-encoded hex → Base64URL).
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class OfflineQrService {
 
+    private static final DateTimeFormatter QR_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
     private final CertificateService certificateService;
 
-    // MF verification endpoint the QR links point at (confirm exact host/path with the spec).
-    @Value("${ksef.offline.verification-base-url:https://ksef.mf.gov.pl/web/verify}")
-    private String verificationBaseUrl;
+    // QR verification host (no path). Test: https://qr-test.ksef.mf.gov.pl
+    // Production: https://qr.ksef.mf.gov.pl
+    @Value("${ksef.offline.verification-base-url:https://qr-test.ksef.mf.gov.pl}")
+    private String baseUrl;
 
     /**
-     * CODE I — the "OFFLINE" QR payload (a verification URL).
-     * Requires {@code invoice.fa3XmlHash} to be set (the invoice's distinguishing feature).
+     * CODE I — "OFFLINE": {base}/invoice/{NIP}/{DD-MM-YYYY}/{Base64URL SHA-256}
      */
     public String generateOfflineCode(KsefInvoice invoice) {
-        String hash = invoice.getFa3XmlHash() != null ? invoice.getFa3XmlHash() : "pending";
-        String url = verificationBaseUrl
-                + "?nip=" + enc(invoice.getSellerNip())
-                + "&num=" + enc(invoice.getInvoiceNumber())
-                + "&hash=" + enc(hash);
+        String hash = hexToBase64Url(invoice.getFa3XmlHash());
+        String issueDate = invoice.getIssueDate() != null ? invoice.getIssueDate().format(QR_DATE) : "";
+
+        String url = host() + "/invoice/"
+                + invoice.getSellerNip() + "/"
+                + issueDate + "/"
+                + hash;
         log.debug("[OfflineQr] CODE I (OFFLINE) built for invoice [{}]", invoice.getInvoiceNumber());
         return url;
     }
 
     /**
-     * CODE II — the "CERTYFIKAT" QR payload (a verification URL carrying a certificate seal).
-     * Seals a canonical representation of the invoice's identifying fields with the tenant's
-     * certificate private key so the buyer can confirm issuer identity before KSeF upload.
+     * CODE II — "CERTYFIKAT":
+     *   {base}/certificate/Nip/{ctxNip}/{sellerNip}/{serial}/{hash}/{signature}
+     * where {signature} signs the path (host + everything up to and including {hash}),
+     * without the scheme and without the trailing /{signature}.
      */
     public String generateCertificateCode(KsefInvoice invoice) {
-        PrivateKey privateKey = certificateService.getPrivateKey(invoice.getTenantId());
+        // MUST use the tenant's OFFLINE-purpose KSeF certificate (Non-Repudiation).
+        // These calls throw KsefCertificateException if no OFFLINE cert is provisioned —
+        // we never fall back to the authentication certificate (would be non-compliant).
+        KsefCertificate offlineCert = certificateService.getActiveOfflineCert(invoice.getTenantId());
+        PrivateKey privateKey = certificateService.getOfflineSealPrivateKey(invoice.getTenantId());
 
-        // Canonical payload — the stable, issuer-attributable identity of this invoice.
-        // COMPLIANCE: replace with the MF-prescribed canonical form before production.
-        String canonical = String.join("|",
-                safe(invoice.getSellerNip()),
-                safe(invoice.getInvoiceNumber()),
-                invoice.getIssueDate() != null ? invoice.getIssueDate().toString() : "",
-                invoice.getTotalGross() != null ? invoice.getTotalGross().toPlainString() : "",
-                safe(invoice.getFa3XmlHash()));
+        String nip = invoice.getSellerNip();
+        String serial = offlineCert.getCertificateSerialNumber();
+        if (serial == null || serial.isBlank()) {
+            throw new KsefCertificateException(
+                    "OFFLINE certificate for tenant " + invoice.getTenantId()
+                            + " has no certificateSerialNumber — cannot build a compliant QR Code II.");
+        }
+        String hash = hexToBase64Url(invoice.getFa3XmlHash());
 
-        String seal = KsefSigningUtils.signChallenge(canonical, privateKey); // RSA-SHA256 → Base64
+        // Self-issue: the context (whose KSeF the invoice is issued in) is the seller's NIP.
+        String contextType = "Nip";
+        String contextValue = nip;
 
-        String url = verificationBaseUrl
-                + "?nip=" + enc(invoice.getSellerNip())
-                + "&num=" + enc(invoice.getInvoiceNumber())
-                + "&seal=" + enc(seal);
+        // The exact string that gets signed: host + path, NO scheme, NO trailing /{signature}.
+        String hostNoScheme = host().replaceFirst("^https?://", "");
+        String signedPath = hostNoScheme + "/certificate/"
+                + contextType + "/" + contextValue + "/"
+                + nip + "/" + serial + "/" + hash;
+
+        String signature = KsefSigningUtils.signQrPathBase64Url(signedPath, privateKey);
+
+        String url = host() + "/certificate/"
+                + contextType + "/" + contextValue + "/"
+                + nip + "/" + serial + "/" + hash + "/"
+                + signature;
         log.debug("[OfflineQr] CODE II (CERTYFIKAT) built for invoice [{}]", invoice.getInvoiceNumber());
         return url;
     }
 
-    private static String enc(String s) {
-        return URLEncoder.encode(s != null ? s : "", StandardCharsets.UTF_8);
+    // Strip any trailing slash from the configured base URL.
+    private String host() {
+        return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
     }
 
-    private static String safe(String s) {
-        return s != null ? s : "";
+    // Convert the stored hex SHA-256 into Base64URL (no padding) as the spec requires.
+    private static String hexToBase64Url(String hex) {
+        if (hex == null || hex.isBlank()) return "";
+        int len = hex.length();
+        if (len % 2 != 0) return ""; // malformed — let validation elsewhere catch it
+        byte[] bytes = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            bytes[i / 2] = (byte) Integer.parseInt(hex.substring(i, i + 2), 16);
+        }
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }

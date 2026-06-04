@@ -9,6 +9,7 @@ import com.ksefflow.backend.config.KsefApiProperties;
 import com.ksefflow.backend.dto.ksefapi.KsefInvoiceStatusResponse;
 import com.ksefflow.backend.dto.ksefapi.KsefSendInvoiceResponse;
 import com.ksefflow.backend.exceptions.KsefAuthException;
+import com.ksefflow.backend.exceptions.KsefCertificateException;
 import com.ksefflow.backend.exceptions.KsefSubmissionException;
 import com.ksefflow.backend.exceptions.KsefXmlGenerationException;
 import com.ksefflow.backend.models.KsefInvoice;
@@ -379,22 +380,37 @@ public class KSeFInvoiceService {
         invoice.setOfflineMode(mode);
         invoice.setKsefSubmissionDeadline(computeSubmissionDeadline(mode, invoice.getOfflineIssuedAt()));
 
-        // Two QR codes per MF offline rules. Generated server-side (CODE II needs the
-        // certificate's private key). Failure here is logged but never blocks the fallback.
+        // Two QR codes per MF offline rules, generated server-side. CODE II ("CERTYFIKAT")
+        // REQUIRES an OFFLINE-purpose KSeF certificate. If the tenant has not provisioned one
+        // we must NOT fabricate a partial/invalid visualization — we leave BOTH QR codes empty
+        // and record an explicit compliance block. The invoice is still parked OFFLINE_MODE so
+        // it is not lost and will be retried to KSeF (online retry does not need the offline cert).
+        String complianceNote = null;
         try {
-            String codeOffline     = offlineQrService.generateOfflineCode(invoice);     // CODE I  "OFFLINE"
+            // Generate CODE II first — it is the gated one (throws if no OFFLINE cert).
             String codeCertificate = offlineQrService.generateCertificateCode(invoice); // CODE II "CERTYFIKAT"
+            String codeOffline     = offlineQrService.generateOfflineCode(invoice);     // CODE I  "OFFLINE"
             invoice.setQrCodeOffline(codeOffline);
             invoice.setQrCodeCertificate(codeCertificate);
             log.info("[HandleOfflineMode] Offline QR codes generated for invoice [{}] (mode={})",
                     invoice.getInvoiceNumber(), mode);
+        } catch (KsefCertificateException ce) {
+            // No OFFLINE-type KSeF certificate → a compliant offline invoice cannot be issued.
+            invoice.setQrCodeOffline(null);
+            invoice.setQrCodeCertificate(null);
+            complianceNote = "OFFLINE_CERT_REQUIRED: " + ce.getMessage();
+            log.error("[HandleOfflineMode] COMPLIANCE BLOCK for invoice [{}] — {}",
+                    invoice.getInvoiceNumber(), ce.getMessage());
         } catch (Exception qrEx) {
+            invoice.setQrCodeOffline(null);
+            invoice.setQrCodeCertificate(null);
+            complianceNote = "QR_GENERATION_FAILED: " + qrEx.getMessage();
             log.error("[HandleOfflineMode] Failed to generate offline QR codes for invoice [{}]: {}",
                     invoice.getInvoiceNumber(), qrEx.getMessage(), qrEx);
         }
 
         invoice.setStatus(KsefInvoiceStatus.OFFLINE_MODE);
-        invoice.setLastErrorMessage(errorMessage);
+        invoice.setLastErrorMessage(complianceNote != null ? errorMessage + " | " + complianceNote : errorMessage);
         invoice.setLastRetryAt(now);
         invoice.setUpdatedAt(now);
         KsefInvoice saved = ksef_invoices_repository.save(invoice);

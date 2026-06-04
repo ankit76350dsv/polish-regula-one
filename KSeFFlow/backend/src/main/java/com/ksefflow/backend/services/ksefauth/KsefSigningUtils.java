@@ -6,6 +6,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.cert.X509Certificate;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.PSSParameterSpec;
 import java.util.Base64;
 
 // Pure static utilities for signing and certificate encoding.
@@ -31,6 +33,37 @@ public final class KsefSigningUtils {
         } catch (Exception e) {
             throw new KsefAuthException(
                     "Failed to sign KSeF challenge with SHA256withRSA: " + e.getMessage(), e);
+        }
+    }
+
+    // Signs the KSeF offline CODE II ("CERTYFIKAT") QR URL path and returns the
+    // signature as Base64URL (no padding), per the MF QR-code specification.
+    //
+    // The spec mandates one of:
+    //   - RSA  → RSASSA-PSS (SHA-256, MGF1-SHA256, 32-byte salt, ≥2048-bit key)
+    //   - EC   → ECDSA on NIST P-256 with SHA-256
+    // The algorithm is chosen from the signing key's type.
+    public static String signQrPathBase64Url(String urlPath, PrivateKey privateKey) {
+        try {
+            String keyAlg = privateKey.getAlgorithm();
+            Signature sig;
+            if ("RSA".equalsIgnoreCase(keyAlg) || "RSASSA-PSS".equalsIgnoreCase(keyAlg)) {
+                sig = Signature.getInstance("RSASSA-PSS");
+                sig.setParameter(new PSSParameterSpec(
+                        "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1));
+            } else if ("EC".equalsIgnoreCase(keyAlg) || "ECDSA".equalsIgnoreCase(keyAlg)) {
+                sig = Signature.getInstance("SHA256withECDSA");
+            } else {
+                throw new KsefAuthException("Unsupported QR signing key algorithm: " + keyAlg);
+            }
+            sig.initSign(privateKey);
+            sig.update(urlPath.getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(sig.sign());
+        } catch (KsefAuthException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new KsefAuthException(
+                    "Failed to sign KSeF offline QR path: " + e.getMessage(), e);
         }
     }
 

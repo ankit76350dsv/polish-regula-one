@@ -5,6 +5,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import com.ksefflow.backend.models.utils.KsefCertificatePurpose;
 import com.ksefflow.backend.models.utils.KsefCertificateType;
 import com.ksefflow.backend.models.utils.KsefCertificateVerificationStatus;
 
@@ -44,7 +45,17 @@ public class KsefCertificate {
     // Original filename uploaded by the admin (e.g. "ksefflow_warszawa_2027.pfx")
     private String fileName;
 
+    // File format / source of the certificate (PFX / PEM / TRUSTED_PROFILE).
     private KsefCertificateType type;
+
+    // KSeF role of the certificate (AUTHENTICATION vs OFFLINE). Per the MF spec a KSeF
+    // certificate has exactly one purpose; only an OFFLINE certificate may seal QR Code II.
+    // May be null for legacy/uploaded certs whose KSeF role was never declared.
+    private KsefCertificatePurpose purpose;
+
+    // KSeF certificate serial number (certificateSerialNumber from enrollment) — embedded
+    // in the offline QR Code II so the verifier can resolve the issuer's certificate.
+    private String certificateSerialNumber;
 
     // Subject (CN) from the certificate — who the cert was issued to
     private String issuedTo;

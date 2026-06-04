@@ -1,6 +1,7 @@
 package com.ksefflow.backend.repository;
 
 import com.ksefflow.backend.models.KsefCertificate;
+import com.ksefflow.backend.models.utils.KsefCertificatePurpose;
 import com.ksefflow.backend.models.utils.KsefCertificateVerificationStatus;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
@@ -17,6 +18,10 @@ public interface KsefCertificateRepository extends MongoRepository<KsefCertifica
     // Active cert for a tenant — used to open KSeF sessions.
     // Expected to return at most one result (only one active=true cert per tenant).
     Optional<KsefCertificate> findByTenantIdAndActiveTrue(String tenantId);
+
+    // Active cert for a tenant filtered by KSeF role (AUTHENTICATION / OFFLINE).
+    // Used to enforce that offline QR Code II is sealed ONLY with an OFFLINE certificate.
+    Optional<KsefCertificate> findByTenantIdAndPurposeAndActiveTrue(String tenantId, KsefCertificatePurpose purpose);
 
     // Filter by verification status — used by the daily validation cron job
     // to find PENDING certs that need OCSP/CRL checking, and VERIFIED certs

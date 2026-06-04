@@ -29,6 +29,11 @@ export default function OfflineComplianceCard({ invoice, onAddNotification }) {
   const deadline = invoice.ksefSubmissionDeadline ? new Date(invoice.ksefSubmissionDeadline) : null;
   const overdue = deadline && deadline.getTime() < Date.now();
 
+  // A compliant offline invoice MUST carry CODE II (sealed with an OFFLINE-type KSeF
+  // certificate). If it's missing, the backend refused to seal — we must NOT let the user
+  // export a non-compliant PDF.
+  const certMissing = !invoice.qrCodeCertificate;
+
   const handleDownload = async () => {
     setPrinting(true);
     try {
@@ -83,15 +88,27 @@ export default function OfflineComplianceCard({ invoice, onAddNotification }) {
         )}
       </div>
 
-      <div className="flex gap-6 justify-center py-1">
-        {qrTile(offlineQr, 'OFFLINE', 'Weryfikacja treści faktury w KSeF po przesłaniu', !invoice.qrCodeOffline)}
-        {qrTile(certQr, 'CERTYFIKAT', 'Potwierdzenie tożsamości wystawcy (pieczęć)', !invoice.qrCodeCertificate)}
-      </div>
+      {certMissing ? (
+        <div className="flex items-start gap-2 p-2.5 rounded-lg border border-red-300 bg-red-50 text-red-800 text-[11px]">
+          <FileWarning size={14} className="mt-0.5 shrink-0" />
+          <span>
+            <strong>Brak certyfikatu OFFLINE (KSeF) — blokada zgodności.</strong> Kod QR „CERTYFIKAT” może być
+            wygenerowany wyłącznie certyfikatem KSeF typu <em>Offline</em> (Non-Repudiation). Wdróż certyfikat
+            offline w KSeF, aby wystawiać faktury w trybie offline. Faktura oczekuje na przesłanie do KSeF.
+          </span>
+        </div>
+      ) : (
+        <div className="flex gap-6 justify-center py-1">
+          {qrTile(offlineQr, 'OFFLINE', 'Weryfikacja treści faktury w KSeF po przesłaniu', !invoice.qrCodeOffline)}
+          {qrTile(certQr, 'CERTYFIKAT', 'Potwierdzenie tożsamości wystawcy (pieczęć)', !invoice.qrCodeCertificate)}
+        </div>
+      )}
 
       <button
         onClick={handleDownload}
-        disabled={printing}
-        className="w-full flex items-center justify-center gap-2 text-[11px] font-semibold border border-stone-300 hover:border-stone-400 hover:bg-white text-stone-700 rounded-lg py-2 transition disabled:opacity-50"
+        disabled={printing || certMissing}
+        title={certMissing ? 'Niedostępne — brak certyfikatu OFFLINE (kod QR CERTYFIKAT)' : undefined}
+        className="w-full flex items-center justify-center gap-2 text-[11px] font-semibold border border-stone-300 hover:border-stone-400 hover:bg-white text-stone-700 rounded-lg py-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Download size={13} />
         {printing ? 'Przygotowywanie…' : 'Pobierz fakturę offline (PDF)'}

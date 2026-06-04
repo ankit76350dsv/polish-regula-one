@@ -3,6 +3,7 @@ package com.ksefflow.backend.services.certificate;
 import com.ksefflow.backend.config.CertificateStorageProperties;
 import com.ksefflow.backend.exceptions.KsefCertificateException;
 import com.ksefflow.backend.models.KsefCertificate;
+import com.ksefflow.backend.models.utils.KsefCertificatePurpose;
 import com.ksefflow.backend.models.utils.KsefCertificateType;
 import com.ksefflow.backend.models.utils.KsefCertificateVerificationStatus;
 import com.ksefflow.backend.repository.KsefCertificateRepository;
@@ -185,6 +186,51 @@ public class CertificateService {
 
                 KeyStore keyStore = KeyStoreUtils.loadKeyStoreFromBytes(pfxBytes, password);
                 return KeyStoreUtils.extractX509Certificate(keyStore);
+        }
+
+        // ── Offline-sealing certificate (KSeF Code II) ──────────────────────────────
+        //
+        // Per the MF spec (certyfikaty-KSeF.md), the offline QR Code II ("CERTYFIKAT")
+        // MUST be sealed with an OFFLINE-purpose KSeF certificate (KeyUsage Non-Repudiation).
+        // The AUTHENTICATION certificate must NEVER be substituted. These methods select
+        // the OFFLINE certificate explicitly and FAIL LOUDLY (no fallback) when none exists,
+        // so we never produce a non-compliant seal.
+
+        /**
+         * Returns the tenant's active OFFLINE-purpose certificate metadata (incl. its KSeF
+         * certificateSerialNumber for the QR), or throws an explicit compliance error.
+         */
+        public KsefCertificate getActiveOfflineCert(String tenantId) {
+                return getActiveOfflineCertOrThrow(tenantId);
+        }
+
+        /**
+         * Returns the private key of the tenant's active OFFLINE-purpose certificate,
+         * used to sign the offline QR Code II. Throws if no OFFLINE certificate is provisioned.
+         */
+        public PrivateKey getOfflineSealPrivateKey(String tenantId) {
+                KsefCertificate certInfo = getActiveOfflineCertOrThrow(tenantId);
+                validateNotExpired(certInfo);
+
+                byte[] pfxBytes = storage.readPfxDecrypted(certInfo.getEncryptedStoragePath());
+                String password = crypto.decryptPassword(certInfo.getVaultPasswordReference());
+
+                KeyStore keyStore = KeyStoreUtils.loadKeyStoreFromBytes(pfxBytes, password);
+                return KeyStoreUtils.extractPrivateKey(keyStore, password);
+        }
+
+        // Looks up the active OFFLINE-purpose certificate; throws a clear, compliance-oriented
+        // error when absent (a prerequisite for issuing offline invoices under the MF rules).
+        private KsefCertificate getActiveOfflineCertOrThrow(String tenantId) {
+                return ksef_certificates_repo
+                                .findByTenantIdAndPurposeAndActiveTrue(tenantId, KsefCertificatePurpose.OFFLINE)
+                                .orElseThrow(() -> new KsefCertificateException(
+                                                "No active OFFLINE-type KSeF certificate for tenant " + tenantId
+                                                                + ". The offline QR Code II ('CERTYFIKAT') can only be sealed with a"
+                                                                + " dedicated OFFLINE KSeF certificate (Non-Repudiation), which must be"
+                                                                + " enrolled via KSeF (POST /certificates/enrollments). The authentication"
+                                                                + " certificate must NOT be used. Provision an OFFLINE certificate before"
+                                                                + " issuing invoices in offline mode."));
         }
 
         /**
