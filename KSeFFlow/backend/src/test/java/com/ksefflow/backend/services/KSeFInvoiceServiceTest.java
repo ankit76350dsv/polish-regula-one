@@ -48,7 +48,7 @@ class KSeFInvoiceServiceTest {
     @Mock private KSeFAuthService authService;
     @Mock private KsefApiClient apiClient;
     @Mock private UPOStorageService upoStorageService;
-    @Mock private OfflinePdfService offlinePdfService;
+    @Mock private OfflineQrService offlineQrService;
     @Mock private KsefApiProperties apiProperties;
 
     @InjectMocks
@@ -71,8 +71,8 @@ class KSeFInvoiceServiceTest {
         saved.setId(INVOICE_ID);
 
         when(apiProperties.getEnvironment()).thenReturn(KsefEnvironment.SANDBOX);
-        when(invoiceRepository.existsByTenantIdAndInvoiceNumber(TENANT_ID, "FV/2026/05/0001"))
-                .thenReturn(false);
+        when(invoiceRepository.findByTenantIdAndInvoiceNumber(TENANT_ID, "FV/2026/05/0001"))
+                .thenReturn(Optional.empty());
         when(invoiceRepository.save(any(KsefInvoice.class))).thenReturn(saved);
 
         KsefInvoice result = invoiceService.createInvoice(input, null, null);
@@ -84,16 +84,39 @@ class KSeFInvoiceServiceTest {
     }
 
     @Test
-    @DisplayName("createInvoice: throws on duplicate invoice number within same tenant")
+    @DisplayName("createInvoice: throws when an existing invoice with the same number is no longer a DRAFT")
     void createInvoice_duplicateNumber_throws() {
-        when(invoiceRepository.existsByTenantIdAndInvoiceNumber(TENANT_ID, "FV/2026/05/0001"))
-                .thenReturn(true);
+        // A finalized (non-DRAFT) invoice with the same number is a real conflict.
+        KsefInvoice existingSent = buildDraftInvoice();
+        existingSent.setId(INVOICE_ID);
+        existingSent.setStatus(KsefInvoiceStatus.SENT);
+        when(invoiceRepository.findByTenantIdAndInvoiceNumber(TENANT_ID, "FV/2026/05/0001"))
+                .thenReturn(Optional.of(existingSent));
 
         assertThatThrownBy(() -> invoiceService.createInvoice(buildDraftInvoice(), null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("already exists");
 
         verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createInvoice: updates the existing DRAFT in place (idempotent) instead of throwing")
+    void createInvoice_existingDraft_updatedInPlace() {
+        KsefInvoice existingDraft = buildDraftInvoice();
+        existingDraft.setId(INVOICE_ID);
+        existingDraft.setStatus(KsefInvoiceStatus.DRAFT);
+
+        when(apiProperties.getEnvironment()).thenReturn(KsefEnvironment.SANDBOX);
+        when(invoiceRepository.findByTenantIdAndInvoiceNumber(TENANT_ID, "FV/2026/05/0001"))
+                .thenReturn(Optional.of(existingDraft));
+        when(invoiceRepository.save(any(KsefInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        KsefInvoice result = invoiceService.createInvoice(buildDraftInvoice(), null, null);
+
+        // Reuses the existing draft's id and stays a DRAFT — no duplicate, no exception.
+        assertThat(result.getId()).isEqualTo(INVOICE_ID);
+        assertThat(result.getStatus()).isEqualTo(KsefInvoiceStatus.DRAFT);
     }
 
     // ── submitInvoice: happy path ──────────────────────────────────────────────
@@ -202,15 +225,19 @@ class KSeFInvoiceServiceTest {
         when(authService.openSession(TENANT_ID, NIP)).thenReturn(SESSION_TOK);
         when(apiClient.sendInvoice(any(), any()))
                 .thenThrow(new KsefSubmissionException("KSeF API is unreachable — triggering offline mode"));
-        when(offlinePdfService.generateOfflinePdf(any())).thenReturn(new byte[0]);
-        when(offlinePdfService.verificationUrl(any())).thenReturn("https://ksef.mf.gov.pl/offline/verify?inv=FV/2026/05/0001&hash=deadbeef");
+        // Offline QR codes are generated server-side; an OFFLINE certificate is available here.
+        when(offlineQrService.generateCertificateCode(any()))
+                .thenReturn("https://qr-test.ksef.mf.gov.pl/certificate/Nip/1234567890/1234567890/01F2/HASH/SEAL");
+        when(offlineQrService.generateOfflineCode(any()))
+                .thenReturn("https://qr-test.ksef.mf.gov.pl/invoice/1234567890/26-05-2026/HASH");
         // apiProperties.getEnvironment() is NOT called in the offline path — no stub needed
 
         KsefInvoice result = invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP, null, null);
 
         assertThat(result.getStatus()).isEqualTo(KsefInvoiceStatus.OFFLINE_MODE);
         assertThat(result.getLastErrorMessage()).contains("unreachable");
-        assertThat(result.getOfflineQrCode()).isNotNull();
+        assertThat(result.getQrCodeOffline()).isNotNull();
+        assertThat(result.getQrCodeCertificate()).isNotNull();
 
         // UPO must NOT be stored in offline mode
         verify(upoStorageService, never()).storeUpo(any(), any(), any(), any(), any());
@@ -242,8 +269,8 @@ class KSeFInvoiceServiceTest {
         when(xmlGeneratorService.generateXml(any())).thenReturn(xmlResult);
         when(authService.openSession(TENANT_ID, NIP))
                 .thenThrow(new KsefSubmissionException("auth failed"));
-        when(offlinePdfService.generateOfflinePdf(any())).thenReturn(new byte[0]);
-        when(offlinePdfService.verificationUrl(any())).thenReturn("https://test");
+        // offlineQrService is a mock; its QR methods return null here, which is fine —
+        // we only assert the PENDING-state submissionAttempts counter below.
 
         invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP, null, null);
 

@@ -7,7 +7,7 @@ metadata:
 
 KSeF offline invoicing was reworked for Polish MF compliance (June 2026). Design decisions:
 
-- **Legal record = the FA(3) XML in KSeF, not the PDF.** The server no longer generates/stores a PDF. `OfflinePdfService` is deprecated/unwired; the PDF is rendered **client-side** from invoice data + the two QR payloads.
+- **Legal record = the FA(3) XML in KSeF, not the PDF.** The server no longer generates/stores a PDF. `OfflinePdfService` was **deleted** (June 2026); the PDF is rendered **client-side** from invoice data + the two QR payloads.
 - **Two mandatory QR codes** on offline invoices, both generated **server-side** by `services/OfflineQrService`: CODE I "OFFLINE" (FA(3) XML hash + verify URL) and CODE II "CERTYFIKAT" (a certificate seal over invoice identity — needs the cert private key, so it cannot be done in the browser). CODE II legally requires a **KSeF Type 2 Certificate**.
 - **New `KsefInvoice` fields:** `offlineMode` ([[ksef-api-topology]] enum `KsefOfflineMode`: OFFLINE24 / OFFLINE_UNAVAILABILITY / EMERGENCY), `offlineIssuedAt` (set once, never overwritten), `ksefSubmissionDeadline`, `qrCodeOffline`, `qrCodeCertificate`. Legacy `offlineQrCode` kept (deprecated) as a CODE I mirror.
 - **Retention, not deletion:** when an offline invoice later succeeds, offline fields are RETAINED (append ksefId/UPO) — never deleted. The user originally proposed deleting offline data on success; that was rejected as a compliance/audit violation.
