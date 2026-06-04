@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
 // Unit tests for the offline QR builder. Verify the exact MF URL formats and that the
 // CODE II certificate seal is a valid signature over the spec-defined path.
 @ExtendWith(MockitoExtension.class)
-class OfflineQrServiceTest {
+class KsefQrServiceTest {
 
     private static final String BASE = "https://qr-test.ksef.mf.gov.pl";
     private static final String TENANT = "tenant-1";
@@ -42,13 +42,13 @@ class OfflineQrServiceTest {
 
     @Mock private CertificateService certificateService;
 
-    @InjectMocks private OfflineQrService offlineQrService;
+    @InjectMocks private KsefQrService qrService;
 
     private static KeyPair rsaKeyPair;
 
     @BeforeEach
     void setBaseUrl() {
-        ReflectionTestUtils.setField(offlineQrService, "baseUrl", BASE);
+        ReflectionTestUtils.setField(qrService, "baseUrl", BASE);
     }
 
     private static String expectedHashBase64Url() {
@@ -73,7 +73,7 @@ class OfflineQrServiceTest {
     @Test
     @DisplayName("CODE I: builds the exact MF /invoice/{NIP}/{DD-MM-YYYY}/{Base64URL-SHA256} URL")
     void codeI_matchesMfFormat() {
-        String url = offlineQrService.generateInvoiceCode(invoice());
+        String url = qrService.generateInvoiceCode(invoice());
 
         assertThat(url).isEqualTo(
                 BASE + "/invoice/" + NIP + "/01-02-2026/" + expectedHashBase64Url());
@@ -89,7 +89,7 @@ class OfflineQrServiceTest {
         when(certificateService.getActiveOfflineCert(TENANT)).thenReturn(cert);
         when(certificateService.getOfflineSealPrivateKey(TENANT)).thenReturn(kp.getPrivate());
 
-        String url = offlineQrService.generateCertificateCode(invoice());
+        String url = qrService.generateCertificateCode(invoice());
 
         String hash = expectedHashBase64Url();
         String prefix = BASE + "/certificate/Nip/" + NIP + "/" + NIP + "/" + SERIAL + "/" + hash + "/";
@@ -114,7 +114,7 @@ class OfflineQrServiceTest {
         when(certificateService.getActiveOfflineCert(TENANT))
                 .thenThrow(new KsefCertificateException("No active OFFLINE-type KSeF certificate"));
 
-        assertThatThrownBy(() -> offlineQrService.generateCertificateCode(invoice()))
+        assertThatThrownBy(() -> qrService.generateCertificateCode(invoice()))
                 .isInstanceOf(KsefCertificateException.class)
                 .hasMessageContaining("OFFLINE");
     }

@@ -49,7 +49,7 @@ class KSeFInvoiceServiceTest {
     @Mock private KSeFAuthService authService;
     @Mock private KsefApiClient apiClient;
     @Mock private UPOStorageService upoStorageService;
-    @Mock private OfflineQrService offlineQrService;
+    @Mock private KsefQrService qrService;
     @Mock private KsefApiProperties apiProperties;
 
     @InjectMocks
@@ -227,9 +227,9 @@ class KSeFInvoiceServiceTest {
         when(apiClient.sendInvoice(any(), any()))
                 .thenThrow(new KsefSubmissionException("KSeF API is unreachable — triggering offline mode"));
         // Offline QR codes are generated server-side; an OFFLINE certificate is available here.
-        when(offlineQrService.generateCertificateCode(any()))
+        when(qrService.generateCertificateCode(any()))
                 .thenReturn("https://qr-test.ksef.mf.gov.pl/certificate/Nip/1234567890/1234567890/01F2/HASH/SEAL");
-        when(offlineQrService.generateInvoiceCode(any()))
+        when(qrService.generateInvoiceCode(any()))
                 .thenReturn("https://qr-test.ksef.mf.gov.pl/invoice/1234567890/26-05-2026/HASH");
         // apiProperties.getEnvironment() is NOT called in the offline path — no stub needed
 
@@ -260,7 +260,7 @@ class KSeFInvoiceServiceTest {
                 .thenThrow(new KsefSubmissionException("KSeF API is unreachable"));
         // No OFFLINE certificate provisioned → CODE II generation must throw, blocking a
         // compliant offline visualization (the auth cert must NOT be substituted).
-        when(offlineQrService.generateCertificateCode(any()))
+        when(qrService.generateCertificateCode(any()))
                 .thenThrow(new KsefCertificateException("No active OFFLINE-type KSeF certificate"));
 
         KsefInvoice result = invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP, null, null);
@@ -299,7 +299,7 @@ class KSeFInvoiceServiceTest {
         when(xmlGeneratorService.generateXml(any())).thenReturn(xmlResult);
         when(authService.openSession(TENANT_ID, NIP))
                 .thenThrow(new KsefSubmissionException("auth failed"));
-        // offlineQrService is a mock; its QR methods return null here, which is fine —
+        // qrService is a mock; its QR methods return null here, which is fine —
         // we only assert the PENDING-state submissionAttempts counter below.
 
         invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP, null, null);

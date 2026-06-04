@@ -51,7 +51,7 @@ import java.util.Optional;
  * 9. auditLog — immutable audit trail of every action
  *
  * Offline fallback (steps 5–8 fail):
- * → OfflineQrService generates the two mandatory QR codes (OFFLINE + CERTYFIKAT)
+ * → KsefQrService generates the two mandatory QR codes (OFFLINE + CERTYFIKAT)
  * → invoice set to OFFLINE_MODE with offlineMode, offlineIssuedAt, and the legal
  *   ksefSubmissionDeadline; offline data is RETAINED for audit even after success
  * → the human-readable PDF is produced CLIENT-SIDE from the invoice + QR payloads
@@ -69,7 +69,7 @@ public class KSeFInvoiceService {
     private final KSeFAuthService authService;
     private final KsefApiClient ksefApiClient;
     private final UPOStorageService upoStorageService;
-    private final OfflineQrService offlineQrService;
+    private final KsefQrService qrService;
     private final KsefApiProperties apiProperties;
 
     //! ── Create ─────────────────────────────────────────────────────────────────
@@ -320,7 +320,7 @@ public class KSeFInvoiceService {
         // so no certificate is needed. The frontend labels it with the KSeF number once SENT.
         // (CODE II / "CERTYFIKAT" is offline-only and is NOT generated here.)
         try {
-            invoice.setQrCodeInvoice(offlineQrService.generateInvoiceCode(invoice));
+            invoice.setQrCodeInvoice(qrService.generateInvoiceCode(invoice));
         } catch (Exception qrEx) {
             // Never fail a successful KSeF submission because of QR generation.
             log.warn("[ExecuteKsefSubmission] CODE I generation failed for SENT invoice [{}]: {}",
@@ -401,8 +401,8 @@ public class KSeFInvoiceService {
         String complianceNote = null;
         try {
             // Generate CODE II first — it is the gated one (throws if no OFFLINE cert).
-            String codeCertificate = offlineQrService.generateCertificateCode(invoice); // CODE II "CERTYFIKAT"
-            String codeOffline     = offlineQrService.generateInvoiceCode(invoice);     // CODE I  "OFFLINE"
+            String codeCertificate = qrService.generateCertificateCode(invoice); // CODE II "CERTYFIKAT"
+            String codeOffline     = qrService.generateInvoiceCode(invoice);     // CODE I  "OFFLINE"
             invoice.setQrCodeInvoice(codeOffline);
             invoice.setQrCodeCertificate(codeCertificate);
             log.info("[HandleOfflineMode] Offline QR codes generated for invoice [{}] (mode={})",

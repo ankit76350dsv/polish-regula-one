@@ -41,7 +41,7 @@ import java.util.Base64;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class OfflineQrService {
+public class KsefQrService {
 
     private static final DateTimeFormatter QR_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
