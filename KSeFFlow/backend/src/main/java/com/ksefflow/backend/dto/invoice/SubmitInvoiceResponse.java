@@ -25,8 +25,8 @@ public class SubmitInvoiceResponse {
     private String upoDocumentId;
 
     // Populated on status=OFFLINE_MODE — the two mandatory offline QR payloads.
-    // qrCodeOffline = CODE I "OFFLINE"; qrCodeCertificate = CODE II "CERTYFIKAT".
-    private String qrCodeOffline;
+    // qrCodeInvoice = CODE I "OFFLINE"; qrCodeCertificate = CODE II "CERTYFIKAT".
+    private String qrCodeInvoice;
     private String qrCodeCertificate;
 
     // Human-readable summary of the submission result

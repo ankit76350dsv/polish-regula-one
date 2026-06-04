@@ -4,7 +4,7 @@
 //  - QR codes are rendered LOCALLY in the browser (no external QR image service),
 //    so invoice identifiers + the issuer's certificate seal never leave the client
 //    to a third party (GDPR / data-residency).
-//  - The two QR payloads come from the backend: CODE I "OFFLINE" (qrCodeOffline) and
+//  - The two QR payloads come from the backend: CODE I "OFFLINE" (qrCodeInvoice) and
 //    CODE II "CERTYFIKAT" (qrCodeCertificate, sealed server-side with the tenant's
 //    certificate). The client only RENDERS them — it must never recompute CODE II.
 //  - The PDF is the human-readable visualization only; the legal record is the FA(3)
@@ -42,7 +42,7 @@ const fmtDateTime = (v) => (v ? new Date(v).toLocaleString('pl-PL') : '—');
 export async function openInvoicePrint(invoice) {
   const isRegistered = !!invoice.ksefId;
   const [codeIPng, codeIIPng] = await Promise.all([
-    qrDataUrl(invoice.qrCodeOffline),     // CODE I  — invoice verification (online + offline)
+    qrDataUrl(invoice.qrCodeInvoice),     // CODE I  — invoice verification (online + offline)
     qrDataUrl(invoice.qrCodeCertificate), // CODE II — offline only
   ]);
 

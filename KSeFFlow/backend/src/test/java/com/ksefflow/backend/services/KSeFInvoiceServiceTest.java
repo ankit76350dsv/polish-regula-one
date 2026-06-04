@@ -8,6 +8,7 @@ import com.ksefflow.backend.services.ksefauth.KSeFAuthService;
 import com.ksefflow.backend.config.KsefApiProperties;
 import com.ksefflow.backend.dto.ksefapi.KsefInvoiceStatusResponse;
 import com.ksefflow.backend.dto.ksefapi.KsefSendInvoiceResponse;
+import com.ksefflow.backend.exceptions.KsefCertificateException;
 import com.ksefflow.backend.exceptions.KsefSubmissionException;
 import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefCurrency;
@@ -228,7 +229,7 @@ class KSeFInvoiceServiceTest {
         // Offline QR codes are generated server-side; an OFFLINE certificate is available here.
         when(offlineQrService.generateCertificateCode(any()))
                 .thenReturn("https://qr-test.ksef.mf.gov.pl/certificate/Nip/1234567890/1234567890/01F2/HASH/SEAL");
-        when(offlineQrService.generateOfflineCode(any()))
+        when(offlineQrService.generateInvoiceCode(any()))
                 .thenReturn("https://qr-test.ksef.mf.gov.pl/invoice/1234567890/26-05-2026/HASH");
         // apiProperties.getEnvironment() is NOT called in the offline path — no stub needed
 
@@ -236,11 +237,40 @@ class KSeFInvoiceServiceTest {
 
         assertThat(result.getStatus()).isEqualTo(KsefInvoiceStatus.OFFLINE_MODE);
         assertThat(result.getLastErrorMessage()).contains("unreachable");
-        assertThat(result.getQrCodeOffline()).isNotNull();
+        assertThat(result.getQrCodeInvoice()).isNotNull();
         assertThat(result.getQrCodeCertificate()).isNotNull();
 
         // UPO must NOT be stored in offline mode
         verify(upoStorageService, never()).storeUpo(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("submitInvoice: offline with NO offline certificate → blocks CODE II (both QR null, compliance error)")
+    void submitInvoice_offlineNoOfflineCert_blocksCodeII() {
+        KsefInvoice draft = buildDraftInvoice();
+        draft.setId(INVOICE_ID);
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(draft));
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        FA3XmlGeneratorService.FA3XmlResult xmlResult =
+                new FA3XmlGeneratorService.FA3XmlResult("<Faktura/>", "deadbeef");
+        when(xmlGeneratorService.generateXml(any())).thenReturn(xmlResult);
+        // KSeF unreachable → falls into offline handling.
+        when(authService.openSession(TENANT_ID, NIP))
+                .thenThrow(new KsefSubmissionException("KSeF API is unreachable"));
+        // No OFFLINE certificate provisioned → CODE II generation must throw, blocking a
+        // compliant offline visualization (the auth cert must NOT be substituted).
+        when(offlineQrService.generateCertificateCode(any()))
+                .thenThrow(new KsefCertificateException("No active OFFLINE-type KSeF certificate"));
+
+        KsefInvoice result = invoiceService.submitInvoice(TENANT_ID, INVOICE_ID, NIP, null, null);
+
+        assertThat(result.getStatus()).isEqualTo(KsefInvoiceStatus.OFFLINE_MODE);
+        // No fabricated/partial visualization — BOTH QR codes are left empty.
+        assertThat(result.getQrCodeInvoice()).isNull();
+        assertThat(result.getQrCodeCertificate()).isNull();
+        // The compliance block is recorded on the invoice for the UI/audit.
+        assertThat(result.getLastErrorMessage()).contains("OFFLINE_CERT_REQUIRED");
     }
 
     @Test

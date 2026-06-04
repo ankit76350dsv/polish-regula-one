@@ -55,7 +55,7 @@ public class OfflineQrService {
     /**
      * CODE I — "OFFLINE": {base}/invoice/{NIP}/{DD-MM-YYYY}/{Base64URL SHA-256}
      */
-    public String generateOfflineCode(KsefInvoice invoice) {
+    public String generateInvoiceCode(KsefInvoice invoice) {
         String hash = hexToBase64Url(invoice.getFa3XmlHash());
         String issueDate = invoice.getIssueDate() != null ? invoice.getIssueDate().format(QR_DATE) : "";
 

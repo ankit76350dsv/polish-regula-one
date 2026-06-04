@@ -16,7 +16,7 @@ export default function OfflineComplianceCard({ invoice, onAddNotification }) {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([qrDataUrl(invoice.qrCodeOffline), qrDataUrl(invoice.qrCodeCertificate)])
+    Promise.all([qrDataUrl(invoice.qrCodeInvoice), qrDataUrl(invoice.qrCodeCertificate)])
       .then(([o, c]) => {
         if (!alive) return;
         setOfflineQr(o);
@@ -24,7 +24,7 @@ export default function OfflineComplianceCard({ invoice, onAddNotification }) {
       })
       .catch(() => { /* QR render failure is non-fatal; placeholders shown */ });
     return () => { alive = false; };
-  }, [invoice.qrCodeOffline, invoice.qrCodeCertificate]);
+  }, [invoice.qrCodeInvoice, invoice.qrCodeCertificate]);
 
   const deadline = invoice.ksefSubmissionDeadline ? new Date(invoice.ksefSubmissionDeadline) : null;
   const overdue = deadline && deadline.getTime() < Date.now();
@@ -99,7 +99,7 @@ export default function OfflineComplianceCard({ invoice, onAddNotification }) {
         </div>
       ) : (
         <div className="flex gap-6 justify-center py-1">
-          {qrTile(offlineQr, 'OFFLINE', 'Weryfikacja treści faktury w KSeF po przesłaniu', !invoice.qrCodeOffline)}
+          {qrTile(offlineQr, 'OFFLINE', 'Weryfikacja treści faktury w KSeF po przesłaniu', !invoice.qrCodeInvoice)}
           {qrTile(certQr, 'CERTYFIKAT', 'Potwierdzenie tożsamości wystawcy (pieczęć)', !invoice.qrCodeCertificate)}
         </div>
       )}

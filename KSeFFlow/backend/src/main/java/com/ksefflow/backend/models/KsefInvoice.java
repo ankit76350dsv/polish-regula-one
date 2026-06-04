@@ -145,7 +145,7 @@ public class KsefInvoice {
 
     // CODE I QR ("OFFLINE") — lets the buyer verify the invoice CONTENT in KSeF once it is
     // uploaded (encodes the FA(3) XML hash + MF verification link). Retained for audit.
-    private String qrCodeOffline;
+    private String qrCodeInvoice;
 
     // CODE II QR ("CERTYFIKAT") — certificate seal proving the ISSUER's identity BEFORE the
     // invoice reaches KSeF. Sealed server-side with the tenant's KSeF certificate. Retained.

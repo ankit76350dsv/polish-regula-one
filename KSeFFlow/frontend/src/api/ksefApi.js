@@ -67,13 +67,13 @@ export const mapBackendInvoice = (b) => ({
   upoTimestamp:      b.upoTimestamp       ?? null,
 
   // ── Offline compliance (KSeF offline / offline24 / emergency) ──────────────
-  // qrCodeOffline = CODE I "OFFLINE"; qrCodeCertificate = CODE II "CERTYFIKAT".
+  // qrCodeInvoice = CODE I "OFFLINE"; qrCodeCertificate = CODE II "CERTYFIKAT".
   // These are server-issued payloads — the client only RENDERS them as QR images,
   // it must NEVER recompute the CODE II certificate seal.
   offlineMode:            b.offlineMode            ?? null,
   offlineIssuedAt:        b.offlineIssuedAt        ?? null,
   ksefSubmissionDeadline: b.ksefSubmissionDeadline ?? null,
-  qrCodeOffline:          b.qrCodeOffline          ?? null,
+  qrCodeInvoice:          b.qrCodeInvoice          ?? null,
   qrCodeCertificate:      b.qrCodeCertificate      ?? null,
 
   fa3XmlHash:        b.fa3XmlHash         ?? null,

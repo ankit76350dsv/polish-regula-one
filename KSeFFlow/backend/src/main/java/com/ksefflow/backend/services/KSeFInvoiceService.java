@@ -320,7 +320,7 @@ public class KSeFInvoiceService {
         // so no certificate is needed. The frontend labels it with the KSeF number once SENT.
         // (CODE II / "CERTYFIKAT" is offline-only and is NOT generated here.)
         try {
-            invoice.setQrCodeOffline(offlineQrService.generateOfflineCode(invoice));
+            invoice.setQrCodeInvoice(offlineQrService.generateInvoiceCode(invoice));
         } catch (Exception qrEx) {
             // Never fail a successful KSeF submission because of QR generation.
             log.warn("[ExecuteKsefSubmission] CODE I generation failed for SENT invoice [{}]: {}",
@@ -402,20 +402,20 @@ public class KSeFInvoiceService {
         try {
             // Generate CODE II first — it is the gated one (throws if no OFFLINE cert).
             String codeCertificate = offlineQrService.generateCertificateCode(invoice); // CODE II "CERTYFIKAT"
-            String codeOffline     = offlineQrService.generateOfflineCode(invoice);     // CODE I  "OFFLINE"
-            invoice.setQrCodeOffline(codeOffline);
+            String codeOffline     = offlineQrService.generateInvoiceCode(invoice);     // CODE I  "OFFLINE"
+            invoice.setQrCodeInvoice(codeOffline);
             invoice.setQrCodeCertificate(codeCertificate);
             log.info("[HandleOfflineMode] Offline QR codes generated for invoice [{}] (mode={})",
                     invoice.getInvoiceNumber(), mode);
         } catch (KsefCertificateException ce) {
             // No OFFLINE-type KSeF certificate → a compliant offline invoice cannot be issued.
-            invoice.setQrCodeOffline(null);
+            invoice.setQrCodeInvoice(null);
             invoice.setQrCodeCertificate(null);
             complianceNote = "OFFLINE_CERT_REQUIRED: " + ce.getMessage();
             log.error("[HandleOfflineMode] COMPLIANCE BLOCK for invoice [{}] — {}",
                     invoice.getInvoiceNumber(), ce.getMessage());
         } catch (Exception qrEx) {
-            invoice.setQrCodeOffline(null);
+            invoice.setQrCodeInvoice(null);
             invoice.setQrCodeCertificate(null);
             complianceNote = "QR_GENERATION_FAILED: " + qrEx.getMessage();
             log.error("[HandleOfflineMode] Failed to generate offline QR codes for invoice [{}]: {}",

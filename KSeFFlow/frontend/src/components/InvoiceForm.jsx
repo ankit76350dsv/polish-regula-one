@@ -861,7 +861,7 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
                   {/* CODE I (KOD I) is required on any shared visualization (PDF/print/email),
                       online or offline. Generated client-side; for SENT invoices it is labelled
                       with the KSeF number. */}
-                  {existingInvoice?.qrCodeOffline && (
+                  {existingInvoice?.qrCodeInvoice && (
                     <button
                       onClick={() => openInvoicePrint(existingInvoice)}
                       className="w-full flex items-center justify-center gap-2 text-[11px] font-semibold border border-stone-300 hover:border-stone-400 hover:bg-stone-50 text-stone-700 rounded-lg py-2 transition"
