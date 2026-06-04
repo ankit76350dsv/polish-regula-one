@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Download, ShieldCheck, FileWarning, Clock } from 'lucide-react';
-import { qrDataUrl, openOfflineInvoicePrint } from '../lib/offlineInvoice';
+import { qrDataUrl, openInvoicePrint } from '../lib/offlineInvoice';
 
 // Shows the KSeF offline-compliance state of an invoice: the two mandatory QR codes
 // (CODE I "OFFLINE" + CODE II "CERTYFIKAT"), the offline mode, the legal submission
@@ -37,7 +37,7 @@ export default function OfflineComplianceCard({ invoice, onAddNotification }) {
   const handleDownload = async () => {
     setPrinting(true);
     try {
-      await openOfflineInvoicePrint(invoice);
+      await openInvoicePrint(invoice);
     } catch (err) {
       onAddNotification?.('PDF Generation Failed', err?.message ?? 'Could not open the print view', 'error');
     } finally {

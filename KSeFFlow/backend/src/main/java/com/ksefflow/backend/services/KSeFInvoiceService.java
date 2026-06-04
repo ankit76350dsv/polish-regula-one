@@ -314,6 +314,19 @@ public class KSeFInvoiceService {
         invoice.setSubmittedToKsefAt(submittedAt);
         invoice.setReceivedFromKsefAt(receivedAt); // ! when get ksefReferenceNumber
         invoice.setLastErrorMessage(null);
+
+        // CODE I (KOD I) — required by the MF QR spec on ANY invoice shared outside KSeF
+        // (PDF/print/email), online OR offline. It is unsigned (NIP + issue date + XML hash),
+        // so no certificate is needed. The frontend labels it with the KSeF number once SENT.
+        // (CODE II / "CERTYFIKAT" is offline-only and is NOT generated here.)
+        try {
+            invoice.setQrCodeOffline(offlineQrService.generateOfflineCode(invoice));
+        } catch (Exception qrEx) {
+            // Never fail a successful KSeF submission because of QR generation.
+            log.warn("[ExecuteKsefSubmission] CODE I generation failed for SENT invoice [{}]: {}",
+                    invoice.getInvoiceNumber(), qrEx.getMessage());
+        }
+
         invoice.setUpdatedAt(LocalDateTime.now());
         log.info("[ExecuteKsefSubmission] Saving updated invoice state into database for invoice [{}]",
                 invoice.getInvoiceNumber());

@@ -31,16 +31,19 @@ const money = (v) =>
 const fmtDateTime = (v) => (v ? new Date(v).toLocaleString('pl-PL') : '—');
 
 /**
- * Generate the offline invoice visualization (PDF via the browser's native
- * Save-as-PDF) entirely client-side, including BOTH mandatory QR codes.
- *
- * Opens a print window; the user saves/prints to PDF. Fully local — no server PDF,
- * no external calls.
+ * Generate the invoice visualization (PDF via the browser's native Save-as-PDF)
+ * entirely client-side. Works for BOTH:
+ *   - registered (online/SENT) invoices → CODE I labelled with the KSeF number,
+ *   - offline invoices → CODE I labelled "OFFLINE" + CODE II "CERTYFIKAT".
+ * CODE I (unsigned, MF-required on any shared visualization) is always rendered when
+ * present; CODE II is rendered only when present (offline-only). Fully local — no
+ * server PDF, no external calls.
  */
-export async function openOfflineInvoicePrint(invoice) {
-  const [offlinePng, certPng] = await Promise.all([
-    qrDataUrl(invoice.qrCodeOffline),
-    qrDataUrl(invoice.qrCodeCertificate),
+export async function openInvoicePrint(invoice) {
+  const isRegistered = !!invoice.ksefId;
+  const [codeIPng, codeIIPng] = await Promise.all([
+    qrDataUrl(invoice.qrCodeOffline),     // CODE I  — invoice verification (online + offline)
+    qrDataUrl(invoice.qrCodeCertificate), // CODE II — offline only
   ]);
 
   const rows = (invoice.items ?? [])
@@ -64,14 +67,33 @@ export async function openOfflineInvoicePrint(invoice) {
       <div style="font-size:9px;color:#555;max-width:170px">${esc(caption)}</div>
     </div>`;
 
+  // Adaptive header / notice / QR labelling for registered vs offline invoices.
+  const title = isRegistered ? 'FAKTURA VAT' : 'FAKTURA VAT (TRYB OFFLINE)';
+  const sub = isRegistered
+    ? 'Faktura ustrukturyzowana zarejestrowana w KSeF'
+    : 'Dokument wygenerowany w trybie offline — oczekuje na rejestrację w KSeF';
+  const noticeHtml = isRegistered
+    ? `<div class="notice ok"><strong>Zarejestrowana w KSeF.</strong> Numer KSeF: <strong>${esc(invoice.ksefId)}</strong></div>`
+    : `<div class="notice"><strong>UWAGA:</strong> Faktura nie posiada jeszcze numeru KSeF.
+        Tryb: <strong>${esc(invoice.offlineMode ?? 'OFFLINE')}</strong> ·
+        Wystawiono offline: <strong>${fmtDateTime(invoice.offlineIssuedAt)}</strong> ·
+        Termin przesłania do KSeF: <strong>${fmtDateTime(invoice.ksefSubmissionDeadline)}</strong></div>`;
+  // CODE I label = KSeF number when registered, otherwise "OFFLINE" (per MF spec).
+  const codeILabel = isRegistered ? invoice.ksefId : 'OFFLINE';
+  const qrsHtml = `<div class="qrs">
+      ${qrBlock(codeIPng, codeILabel, 'Weryfikacja faktury w KSeF (KOD I)')}
+      ${codeIIPng ? qrBlock(codeIIPng, 'CERTYFIKAT', 'Potwierdzenie tożsamości wystawcy — KOD II') : ''}
+    </div>`;
+
   const html = `<!doctype html>
 <html lang="pl"><head><meta charset="utf-8"/>
-<title>Faktura ${esc(invoice.invoiceNumber)} (offline)</title>
+<title>Faktura ${esc(invoice.invoiceNumber)}</title>
 <style>
   body{font-family:Helvetica,Arial,sans-serif;color:#1c1917;margin:32px;font-size:12px}
   h1{font-size:18px;margin:0 0 2px}
   .sub{font-size:10px;color:#666;margin-bottom:14px}
   .notice{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;padding:8px 10px;border-radius:6px;font-size:11px;margin:10px 0}
+  .notice.ok{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
   .grid{display:flex;gap:40px;margin:12px 0}
   .grid h3{font-size:11px;text-transform:uppercase;color:#888;margin:0 0 4px}
   table{width:100%;border-collapse:collapse;margin:12px 0}
@@ -83,15 +105,10 @@ export async function openOfflineInvoicePrint(invoice) {
   @media print{button{display:none}}
 </style></head>
 <body>
-  <h1>FAKTURA VAT (TRYB OFFLINE)</h1>
-  <div class="sub">Dokument wygenerowany w trybie offline — oczekuje na rejestrację w KSeF</div>
+  <h1>${title}</h1>
+  <div class="sub">${sub}</div>
 
-  <div class="notice">
-    <strong>UWAGA:</strong> Faktura nie posiada jeszcze numeru KSeF.
-    Tryb: <strong>${esc(invoice.offlineMode ?? 'OFFLINE')}</strong> ·
-    Wystawiono offline: <strong>${fmtDateTime(invoice.offlineIssuedAt)}</strong> ·
-    Termin przesłania do KSeF: <strong>${fmtDateTime(invoice.ksefSubmissionDeadline)}</strong>
-  </div>
+  ${noticeHtml}
 
   <div><strong>Nr faktury:</strong> ${esc(invoice.invoiceNumber)}
     &nbsp;·&nbsp; <strong>Data wystawienia:</strong> ${esc(invoice.issueDate)}
@@ -123,10 +140,7 @@ export async function openOfflineInvoicePrint(invoice) {
     <div class="g">Razem brutto: ${money(invoice.totalGross)} ${esc(invoice.currency ?? 'PLN')}</div>
   </div>
 
-  <div class="qrs">
-    ${qrBlock(offlinePng, 'OFFLINE', 'Weryfikacja treści faktury w KSeF po przesłaniu')}
-    ${qrBlock(certPng, 'CERTYFIKAT', 'Potwierdzenie tożsamości wystawcy (pieczęć certyfikatem)')}
-  </div>
+  ${qrsHtml}
 
   <button onclick="window.print()" style="margin-top:24px;padding:8px 14px">Drukuj / Zapisz jako PDF</button>
   <script>window.onload = () => setTimeout(() => window.print(), 300);</script>

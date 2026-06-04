@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { createInvoice, submitInvoice, getInvoice } from '../api/ksefApi';
+import { openInvoicePrint } from '../lib/offlineInvoice';
 import {
   Plus,
   Trash2,
   FileCode2,
   Save,
+  Download,
   CheckCircle,
   AlertCircle,
   FileCheck2,
@@ -855,6 +857,19 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
                       </div>
                     )}
                   </div>
+
+                  {/* CODE I (KOD I) is required on any shared visualization (PDF/print/email),
+                      online or offline. Generated client-side; for SENT invoices it is labelled
+                      with the KSeF number. */}
+                  {existingInvoice?.qrCodeOffline && (
+                    <button
+                      onClick={() => openInvoicePrint(existingInvoice)}
+                      className="w-full flex items-center justify-center gap-2 text-[11px] font-semibold border border-stone-300 hover:border-stone-400 hover:bg-stone-50 text-stone-700 rounded-lg py-2 transition"
+                    >
+                      <Download size={13} /> Pobierz fakturę (PDF)
+                    </button>
+                  )}
+
                   <div className="text-[10px] text-stone-400 text-center">
                     This invoice has already been processed. Switch to the XML or PDF tab to inspect the full document.
                   </div>
