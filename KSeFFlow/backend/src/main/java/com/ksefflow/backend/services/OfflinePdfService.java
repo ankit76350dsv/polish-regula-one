@@ -25,6 +25,12 @@ import java.io.IOException;
 import java.util.EnumMap;
 import java.util.Map;
 
+// @deprecated SUPERSEDED — the offline PDF is now generated CLIENT-SIDE from the invoice
+// data + the two QR payloads (qrCodeOffline / qrCodeCertificate) produced by
+// OfflineQrService. The legal record is the FA(3) XML in KSeF, not this PDF, so the
+// server no longer renders or stores it. Kept for reference / potential server-side
+// rendering needs, but it is no longer wired into the submission pipeline.
+//
 // Generates a legally-adequate offline PDF invoice with an embedded QR verification code.
 //
 // Used when the KSeF government API is unreachable (network timeout, maintenance).

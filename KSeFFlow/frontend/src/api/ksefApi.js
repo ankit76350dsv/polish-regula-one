@@ -63,11 +63,24 @@ export const mapBackendInvoice = (b) => ({
   notes:             b.notes ?? '',
   status:            b.status             ?? 'DRAFT',
   ksefId:            b.ksefId             ?? null,
-  upoStatus:         b.hasUpo ? 'RECEIVED' : 'NONE',
-  upoTimestamp:      b.hasUpo ? b.updatedAt : null,
-  offlineQrCode:     null,
-  submissionAttempts: 0,
-  lastErrorMessage:  b.rejectionReason    ?? null,
+  upoStatus:         b.upoStatus          ?? (b.hasUpo ? 'RECEIVED' : 'NONE'),
+  upoTimestamp:      b.upoTimestamp       ?? null,
+
+  // ── Offline compliance (KSeF offline / offline24 / emergency) ──────────────
+  // qrCodeOffline = CODE I "OFFLINE"; qrCodeCertificate = CODE II "CERTYFIKAT".
+  // These are server-issued payloads — the client only RENDERS them as QR images,
+  // it must NEVER recompute the CODE II certificate seal.
+  offlineMode:            b.offlineMode            ?? null,
+  offlineIssuedAt:        b.offlineIssuedAt        ?? null,
+  ksefSubmissionDeadline: b.ksefSubmissionDeadline ?? null,
+  qrCodeOffline:          b.qrCodeOffline          ?? b.offlineQrCode ?? null,
+  qrCodeCertificate:      b.qrCodeCertificate      ?? null,
+  // legacy single-QR field kept as a mirror of CODE I for older UI
+  offlineQrCode:          b.qrCodeOffline          ?? b.offlineQrCode ?? null,
+
+  fa3XmlHash:        b.fa3XmlHash         ?? null,
+  submissionAttempts: b.submissionAttempts ?? 0,
+  lastErrorMessage:  b.lastErrorMessage   ?? b.rejectionReason ?? null,
   createdAt:         b.createdAt          ?? null,
   // Extra fields used by this app's UI
   canSubmit:         b.canSubmit,

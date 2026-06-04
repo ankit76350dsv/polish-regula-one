@@ -13,6 +13,7 @@ import com.ksefflow.backend.exceptions.KsefSubmissionException;
 import com.ksefflow.backend.exceptions.KsefXmlGenerationException;
 import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
+import com.ksefflow.backend.models.utils.KsefOfflineMode;
 import com.ksefflow.backend.models.utils.KsefUpoStatus;
 import com.ksefflow.backend.repository.KsefInvoiceRepository;
 import com.ksefflow.backend.services.ksefauth.KsefApiClient;
@@ -22,6 +23,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -47,10 +50,11 @@ import java.util.Optional;
  * 9. auditLog — immutable audit trail of every action
  *
  * Offline fallback (steps 5–8 fail):
- * → OfflinePdfService generates PDF + QR code
- * → invoice set to OFFLINE_MODE with lastErrorMessage
- * → RetryQueueService (Phase 5) picks it up and retries with exponential
- * backoff
+ * → OfflineQrService generates the two mandatory QR codes (OFFLINE + CERTYFIKAT)
+ * → invoice set to OFFLINE_MODE with offlineMode, offlineIssuedAt, and the legal
+ *   ksefSubmissionDeadline; offline data is RETAINED for audit even after success
+ * → the human-readable PDF is produced CLIENT-SIDE from the invoice + QR payloads
+ * → RetryQueueService (Phase 5) re-submits before the deadline with exponential backoff
  */
 @Service
 @RequiredArgsConstructor
@@ -64,7 +68,7 @@ public class KSeFInvoiceService {
     private final KSeFAuthService authService;
     private final KsefApiClient ksefApiClient;
     private final UPOStorageService upoStorageService;
-    private final OfflinePdfService offlinePdfService;
+    private final OfflineQrService offlineQrService;
     private final KsefApiProperties apiProperties;
 
     //! ── Create ─────────────────────────────────────────────────────────────────
@@ -207,8 +211,11 @@ public class KSeFInvoiceService {
 
         } catch (KsefSubmissionException | KsefAuthException e) {
 
+            // KSeF was reachable-but-rejected or unreachable at the session/network layer →
+            // this is the system-detected "KSeF unavailability" offline mode. (offline24 vs
+            // emergency are user/MF-declared and would be passed in explicitly.)
             log.warn("[SubmitInvoice] KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE", invoice.getInvoiceNumber(), e.getMessage());
-            return handleOfflineMode(invoice, e.getMessage(), userEmail, ipAddress);
+            return handleOfflineMode(invoice, KsefOfflineMode.OFFLINE_UNAVAILABILITY, e.getMessage(), userEmail, ipAddress);
         }
     }
 
@@ -349,27 +356,76 @@ public class KSeFInvoiceService {
 
     //! ── Private: offline fallback ──────────────────────────────────────────────
 
-    private KsefInvoice handleOfflineMode(KsefInvoice invoice, String errorMessage, String userEmail, String ipAddress) {
+    // Parks an invoice in OFFLINE_MODE in a legally-compliant way.
+    //
+    // NOTE: the PDF is intentionally NOT generated here — the legal record is the FA(3)
+    // XML in KSeF, and the human-readable visualization (PDF) is produced client-side from
+    // the invoice data + the two QR payloads computed below. This method only:
+    //   1. records the legally-significant offline issuance time (once),
+    //   2. computes the legal KSeF submission deadline for the mode,
+    //   3. generates the two mandatory QR codes (CODE I "OFFLINE" + CODE II "CERTYFIKAT"),
+    //   4. persists OFFLINE_MODE + an immutable audit entry.
+    // The retry scheduler must re-submit before ksefSubmissionDeadline; on success the
+    // offline fields are RETAINED (never deleted) for audit — see the markSent step.
+    private KsefInvoice handleOfflineMode(KsefInvoice invoice, KsefOfflineMode mode,
+                                          String errorMessage, String userEmail, String ipAddress) {
+        LocalDateTime now = LocalDateTime.now();
+
+        // Offline issuance time is set ONCE and never overwritten on later retries — it is
+        // the legally significant moment the invoice was issued outside KSeF.
+        if (invoice.getOfflineIssuedAt() == null) {
+            invoice.setOfflineIssuedAt(now);
+        }
+        invoice.setOfflineMode(mode);
+        invoice.setKsefSubmissionDeadline(computeSubmissionDeadline(mode, invoice.getOfflineIssuedAt()));
+
+        // Two QR codes per MF offline rules. Generated server-side (CODE II needs the
+        // certificate's private key). Failure here is logged but never blocks the fallback.
         try {
-            // Generate offline PDF + QR (does not throw on failure — logged only)
-            offlinePdfService.generateOfflinePdf(invoice); //! ← return value is IGNORED
-            String qrUrl = offlinePdfService.verificationUrl(invoice);
-            invoice.setOfflineQrCode(qrUrl); //! only the QR URL is kept
-            log.info("[HandleOfflineMode] Offline PDF generated for invoice [{}] — QR: {}", invoice.getInvoiceNumber(), qrUrl);
-        } catch (Exception pdfEx) {
-            log.error("[HandleOfflineMode] Offline PDF generation also failed for invoice [{}]: {}",
-                    invoice.getInvoiceNumber(), pdfEx.getMessage());
+            String codeOffline     = offlineQrService.generateOfflineCode(invoice);     // CODE I  "OFFLINE"
+            String codeCertificate = offlineQrService.generateCertificateCode(invoice); // CODE II "CERTYFIKAT"
+            invoice.setQrCodeOffline(codeOffline);
+            invoice.setQrCodeCertificate(codeCertificate);
+            invoice.setOfflineQrCode(codeOffline); // back-compat mirror of CODE I
+            log.info("[HandleOfflineMode] Offline QR codes generated for invoice [{}] (mode={})",
+                    invoice.getInvoiceNumber(), mode);
+        } catch (Exception qrEx) {
+            log.error("[HandleOfflineMode] Failed to generate offline QR codes for invoice [{}]: {}",
+                    invoice.getInvoiceNumber(), qrEx.getMessage(), qrEx);
         }
 
         invoice.setStatus(KsefInvoiceStatus.OFFLINE_MODE);
         invoice.setLastErrorMessage(errorMessage);
-        invoice.setLastRetryAt(LocalDateTime.now());
-        invoice.setUpdatedAt(LocalDateTime.now());
+        invoice.setLastRetryAt(now);
+        invoice.setUpdatedAt(now);
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
         KSeFAuditLogService.writeAuditLog(invoice.getTenantId(), "INVOICE_OFFLINE_MODE", invoice.getId(),
-                null, "reason=" + errorMessage, userEmail, ipAddress);
+                null,
+                "mode=" + mode + " deadline=" + invoice.getKsefSubmissionDeadline() + " reason=" + errorMessage,
+                userEmail, ipAddress);
+
+        log.warn("[HandleOfflineMode] Invoice [{}] parked OFFLINE (mode={}) — MUST reach KSeF by [{}]",
+                invoice.getInvoiceNumber(), mode, invoice.getKsefSubmissionDeadline());
         return saved;
+    }
+
+    // Computes the legal deadline by which an offline invoice must be accepted by KSeF.
+    //   offline24 / KSeF-unavailability → end of the NEXT business day
+    //   emergency (tryb awaryjny)       → end of the 7th business day
+    // NOTE: skips weekends only — Polish public holidays are NOT accounted for here and
+    // should be added (a holiday calendar) before relying on this for hard deadlines.
+    private LocalDateTime computeSubmissionDeadline(KsefOfflineMode mode, LocalDateTime from) {
+        int businessDays = (mode == KsefOfflineMode.EMERGENCY) ? 7 : 1;
+        LocalDate day = from.toLocalDate();
+        int added = 0;
+        while (added < businessDays) {
+            day = day.plusDays(1);
+            if (day.getDayOfWeek() != DayOfWeek.SATURDAY && day.getDayOfWeek() != DayOfWeek.SUNDAY) {
+                added++;
+            }
+        }
+        return day.atTime(23, 59, 59); // end of the business day
     }
 
     // ── Private: helpers ───────────────────────────────────────────────────────

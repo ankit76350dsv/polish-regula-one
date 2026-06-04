@@ -9,6 +9,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import com.ksefflow.backend.models.utils.KsefCurrency;
 import com.ksefflow.backend.models.utils.KsefEnvironment;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
+import com.ksefflow.backend.models.utils.KsefOfflineMode;
 import com.ksefflow.backend.models.utils.KsefPaymentMethod;
 import com.ksefflow.backend.models.utils.KsefPaymentStatus;
 import com.ksefflow.backend.models.utils.KsefUpoStatus;
@@ -128,11 +129,32 @@ public class KsefInvoice {
     // Reference ID of the KsefUpoDocument stored in encrypted S3 storage
     private String upoDocumentId;
 
-    // ── Offline fallback ───────────────────────────────────────────────────────
+    // ── Offline fallback / compliance ──────────────────────────────────────────
 
-    // QR verification URL embedded in the offline PDF fallback — allows buyers
-    // to verify the invoice before KSeF confirmation is received.
-    private String offlineQrCode; //! ????????
+    // @deprecated legacy single QR URL — superseded by qrCodeOffline + qrCodeCertificate.
+    // Kept (mirrors qrCodeOffline) for backward compatibility with existing UI/clients.
+    @Deprecated
+    private String offlineQrCode;
+
+    // Which offline mode the invoice was issued under — drives the legal submission
+    // deadline (offline24 / KSeF-unavailability → next business day; emergency → 7 business days).
+    private KsefOfflineMode offlineMode;
+
+    // When the invoice was FIRST issued offline — legally significant. Set once, never
+    // overwritten on subsequent retries, and RETAINED after the invoice is later registered.
+    private LocalDateTime offlineIssuedAt;
+
+    // Legal deadline by which this invoice must be accepted by KSeF. The retry job must
+    // succeed before this; a breach is a compliance exposure and must be escalated.
+    private LocalDateTime ksefSubmissionDeadline;
+
+    // CODE I QR ("OFFLINE") — lets the buyer verify the invoice CONTENT in KSeF once it is
+    // uploaded (encodes the FA(3) XML hash + MF verification link). Retained for audit.
+    private String qrCodeOffline;
+
+    // CODE II QR ("CERTYFIKAT") — certificate seal proving the ISSUER's identity BEFORE the
+    // invoice reaches KSeF. Sealed server-side with the tenant's KSeF certificate. Retained.
+    private String qrCodeCertificate;
 
     // Total number of times this invoice has been submitted or retried.
     // Used by the retry scheduler to enforce exponential backoff limits.

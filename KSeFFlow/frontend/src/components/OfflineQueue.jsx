@@ -5,6 +5,7 @@ import {
   CheckCircle,
   Zap
 } from 'lucide-react';
+import OfflineComplianceCard from './OfflineComplianceCard';
 
 export default function OfflineQueue({ tenant, role, invoices, govStatus, onSetGovStatus, onProcessOfflineItem, onAddNotification }) {
   const canModify = role === 'Super Admin' || role === 'Company Admin' || role === 'Accountant' || role === 'Finance User';
@@ -196,6 +197,9 @@ export default function OfflineQueue({ tenant, role, invoices, govStatus, onSetG
                     LOG CONSOLE SYNC ERROR: {inv.lastErrorMessage}
                   </div>
                 )}
+
+                {/* KSeF offline-compliance: two QR codes + deadline + client-side PDF */}
+                <OfflineComplianceCard invoice={inv} onAddNotification={onAddNotification} />
               </div>
             ))}
 
