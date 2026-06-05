@@ -29,6 +29,10 @@
 	<properties>
 		<java.version>17</java.version>
 		<aws.sdk.version>2.29.51</aws.sdk.version>
+		<!-- Test groups (JUnit tags) skipped in the normal "mvn test" run.
+		     "slow" = the FA(3) XSD validation tests (one-time multi-minute rule-table build).
+		     The integration-tests profile clears this so they run. -->
+		<surefire.excludedGroups>slow</surefire.excludedGroups>
 	</properties>
 
 	<!-- AWS SDK v2 BOM — keeps all software.amazon.awssdk:* artifacts on one version -->
@@ -168,7 +172,29 @@
 					</execution>
 				</executions>
 			</plugin>
+
+			<!-- Normal test run (mvn test): skip tests tagged "slow" so the build stays fast.
+			     The FA(3) XSD validation tests build a big rule table (a few minutes once),
+			     so they are kept out of the everyday unit-test run. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludedGroups>${surefire.excludedGroups}</excludedGroups>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!-- Run the slow integration tests too:  mvn test -Pintegration-tests
+		     This clears the excluded group so the FA(3) XSD tests (tagged "slow") run. -->
+		<profile>
+			<id>integration-tests</id>
+			<properties>
+				<surefire.excludedGroups></surefire.excludedGroups>
+			</properties>
+		</profile>
+	</profiles>
 
 </project>

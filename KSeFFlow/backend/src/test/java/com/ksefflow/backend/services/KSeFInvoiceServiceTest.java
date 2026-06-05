@@ -1,7 +1,7 @@
 package com.ksefflow.backend.services;
 
 import com.ksefflow.backend.services.fa3xml.FA3XmlGeneratorService;
-import com.ksefflow.backend.services.fa3xml.FA3XmlValidatorService;
+import com.ksefflow.backend.services.fa3xml.Fa3ValidationGate;
 
 import com.ksefflow.backend.services.ksefauth.KSeFAuthService;
 
@@ -45,7 +45,7 @@ class KSeFInvoiceServiceTest {
     @Mock private KsefInvoiceRepository invoiceRepository;
     @Mock private KsefAuditLogRepository auditLogRepository;
     @Mock private FA3XmlGeneratorService xmlGeneratorService;
-    @Mock private FA3XmlValidatorService xmlValidatorService;
+    @Mock private Fa3ValidationGate fa3ValidationGate;
     @Mock private KSeFAuthService authService;
     @Mock private KsefApiClient apiClient;
     @Mock private UPOStorageService upoStorageService;
@@ -168,7 +168,7 @@ class KSeFInvoiceServiceTest {
         assertThat(result.getKsefId()).isEqualTo(KSEF_ID);
         assertThat(result.getUpoDocumentId()).isEqualTo("upo-doc-999");
 
-        verify(xmlValidatorService).validateStrict("<Faktura/>");
+        verify(fa3ValidationGate).validateBeforeSubmission("<Faktura/>");
         verify(upoStorageService).storeUpo(eq(INVOICE_ID), eq(TENANT_ID), eq(KSEF_ID),
                 anyString(), any());
     }

@@ -1,7 +1,7 @@
 package com.ksefflow.backend.services;
 
 import com.ksefflow.backend.services.fa3xml.FA3XmlGeneratorService;
-import com.ksefflow.backend.services.fa3xml.FA3XmlValidatorService;
+import com.ksefflow.backend.services.fa3xml.Fa3ValidationGate;
 
 import com.ksefflow.backend.services.ksefauth.KSeFAuthService;
 
@@ -39,8 +39,8 @@ import java.util.Optional;
  *
  * 1. validateDraft — guard: invoice must exist and be in DRAFT status
  * 2. generateXml — FA3XmlGeneratorService converts KsefInvoice → FA(3) XML
- * 3. validateXml — FA3XmlValidatorService strict-validates XML before touching
- * KSeF API
+ * 3. validateXml — Fa3ValidationGate runs the official FA(3) XSD check before submission
+ * ONLY when ksef.validation.xsd.enabled=true (off in prod → KSeF validates server-side)
  * 4. openSession — KSeFAuthService challenge-response auth → session token
  * 5. sendInvoice — KsefApiClient POST /online/Invoice/Send →
  * elementReferenceNumber
@@ -65,7 +65,7 @@ public class KSeFInvoiceService {
     private final KsefInvoiceRepository ksef_invoices_repository;
 
     private final FA3XmlGeneratorService xmlGeneratorService;
-    private final FA3XmlValidatorService xmlValidatorService;
+    private final Fa3ValidationGate fa3ValidationGate;
     private final KSeFAuthService authService;
     private final KsefApiClient ksefApiClient;
     private final UPOStorageService upoStorageService;
@@ -197,8 +197,10 @@ public class KSeFInvoiceService {
         // ! return two thiing XML and hashof XML
         FA3XmlGeneratorService.FA3XmlResult xmlResult = xmlGeneratorService.generateXml(invoice);
 
-        // Step 4 — Validate XML
-        xmlValidatorService.validateStrict(xmlResult.xmlContent());
+        // Step 4 — Validate XML against the official FA(3) schema, but ONLY if the
+        // local XSD check is turned on (see ksef.validation.xsd.enabled). When it is off,
+        // KSeF checks the invoice on its side. Business rules already ran during XML build.
+        fa3ValidationGate.validateBeforeSubmission(xmlResult.xmlContent());
         // Save XML hash
         invoice.setFa3XmlHash(xmlResult.sha256Hash());
         ksef_invoices_repository.save(invoice);
