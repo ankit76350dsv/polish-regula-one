@@ -7,46 +7,37 @@ import com.ksefflow.backend.models.utils.KsefVatRate;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
-import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
-// Converts a KsefInvoice into a DOM Document conforming to the FA(3) schema.
+// SIMPLE EXPLANATION:
+// This class turns one invoice (from our database) into the official FA(3) XML that KSeF wants.
 //
-// FA(3) is the official Polish e-invoice format mandated by the KSeF government system.
-// Namespace: http://crd.gov.pl/wzor/2023/06/29/12648/
-// Schema version: 1-0E
+// FA(3) is the NEW Polish e-invoice shape, required from 1 February 2026.
+// Official schema (we ship it locally): resources/xsd/fa3/schemat.xsd
+// Official namespace (the "address" of the schema): http://crd.gov.pl/wzor/2025/06/25/13775/
 //
-// Element naming follows the official Ministerstwo Finansów specification:
-//   P_*  fields are numbered data fields per the schema (P_1 = issue date, P_7 = product name, etc.)
-//   Named elements (Podmiot1, Fa, FaWiersz, Podsumowanie) match the XSD type names.
+// The shape below was copied from the OFFICIAL example invoice that already passes the
+// FA(3) check (ksef-client-java sample), so we are not guessing the structure.
 //
-// VAT rate codes in FA(3):
-//   "23", "8", "5", "0" → standard rates
-//   "zw"                → zwolniony (VAT-exempt supply)
-//   "np"                → nie podlega (outside VAT scope / reverse charge)
-//
-// Payment method codes (FormaPlatnosci):
-//   "1" = gotówka (cash)
-//   "3" = karta (card)
-//   "6" = przelew (bank transfer / split payment)
-//
-// Podsumowanie VAT grouping (P_13_X net / P_14_X VAT):
-//   _1 = 23%,  _2 = 8%,  _3 = 5%,  _4 = 0%,  _5 = zw,  _6 = np
+// The big parts of the invoice, in order:
+//   Naglowek   = the header (form code, version, made-on date)
+//   Podmiot1   = the seller
+//   Podmiot2   = the buyer
+//   Fa         = the body (money totals, notes, and the lines)
 public final class FA3XmlBuilder {
 
-    public static final String FA3_NAMESPACE = "http://crd.gov.pl/wzor/2023/06/29/12648/";
+    // FA(3) namespace and form info (from the official schema + example).
+    public static final String FA3_NAMESPACE = "http://crd.gov.pl/wzor/2025/06/25/13775/";
     private static final String SCHEMA_CODE = "FA (3)";
     private static final String SCHEMA_VER = "1-0E";
-    private static final String SYSTEM_INFO = "KSeFFlow v1.0 | RegulaOne";
-
-    private static final DateTimeFormatter DT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    private static final String SYSTEM_INFO = "RegulaOne KSeFFlow";
 
     private FA3XmlBuilder() {
     }
@@ -54,259 +45,201 @@ public final class FA3XmlBuilder {
     //! ── Entry point ────────────────────────────────────────────────────────────
 
     public static Document build(KsefInvoice invoice) {
-        //! validate before building the xml...
+        // First make sure the invoice has the must-have fields.
         validate(invoice);
 
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(true);
+            Document doc = factory.newDocumentBuilder().newDocument();
 
-            DocumentBuilder builder = factory.newDocumentBuilder();
-            Document doc = builder.newDocument();
-
-            // Root FA(3) invoice element
+            // The top tag <Faktura> with the FA(3) namespace.
             Element root = doc.createElementNS(FA3_NAMESPACE, "Faktura");
             doc.appendChild(root);
 
-            // 1. Invoice header metadata
-            // Contains schema version, invoice type,
-            // issue date, currency, and system information.
-            root.appendChild(buildNaglowek(doc, invoice));
-
-            // 2. Seller information (Podmiot1)
-            // Includes seller company details such as
-            // NIP, name, and registered address.
-            root.appendChild(buildPodmiot1(doc, invoice));
-
-            // 3. Buyer information (Podmiot2)
-            // Includes buyer/customer identification
-            // and address information.
-            root.appendChild(buildPodmiot2(doc, invoice));
-
-            // 4. Main invoice section (Fa)
-            // Contains invoice items, VAT details,
-            // totals, payment data, and summary values.
-            root.appendChild(buildFa(doc, invoice));
+            // The 4 big parts, in the exact order the schema wants.
+            root.appendChild(buildNaglowek(doc));        // header
+            root.appendChild(buildPodmiot1(doc, invoice)); // seller
+            root.appendChild(buildPodmiot2(doc, invoice)); // buyer
+            root.appendChild(buildFa(doc, invoice));       // invoice body
 
             return doc;
-
         } catch (KsefXmlGenerationException kxge) {
             throw kxge;
-
         } catch (Exception e) {
-            throw new KsefXmlGenerationException("Failed to build FA(3) XML DOM for invoice [" + invoice.getInvoiceNumber() + "]: " + e.getMessage(), e);
+            throw new KsefXmlGenerationException("Failed to build FA(3) XML for invoice ["
+                    + invoice.getInvoiceNumber() + "]: " + e.getMessage(), e);
         }
     }
 
-    //! ── Naglowek (HEADER METADATA) ──────────────────────────────────────────────────────
+    //! ── Naglowek (HEADER) ───────────────────────────────────────────────────────
 
-    private static Element buildNaglowek(Document doc, KsefInvoice invoice) {
+    // Build the invoice header: which form, which version, and when it was made.
+    private static Element buildNaglowek(Document doc) {
         Element naglowek = element(doc, "Naglowek");
 
+        // The form code tag carries two attributes that name the schema.
         Element kodFormularza = element(doc, "KodFormularza", "FA");
-        kodFormularza.setAttribute("kodSystemowy", SCHEMA_CODE);
-        kodFormularza.setAttribute("wersjaSchemy", SCHEMA_VER);
+        kodFormularza.setAttribute("kodSystemowy", SCHEMA_CODE); // "FA (3)"
+        kodFormularza.setAttribute("wersjaSchemy", SCHEMA_VER);   // "1-0E"
         naglowek.appendChild(kodFormularza);
 
+        // The form variant for FA(3) is always 3.
         naglowek.appendChild(element(doc, "WariantFormularza", "3"));
-        naglowek.appendChild(element(doc, "DataWytworzeniaFa",
-                LocalDateTime.now().format(DT_FORMAT)));
-        naglowek.appendChild(element(doc, "SystemInfo", SYSTEM_INFO));
 
+        // The exact moment we made this XML, in world time (UTC, ends with "Z").
+        naglowek.appendChild(element(doc, "DataWytworzeniaFa",
+                Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()));
+
+        // The name of the system that made it (just info).
+        naglowek.appendChild(element(doc, "SystemInfo", SYSTEM_INFO));
         return naglowek;
     }
 
-    //! ── Podmiot1 (SELLER DATA) ──────────────────────────────────────────────────────
+    //! ── Podmiot1 (SELLER) ───────────────────────────────────────────────────────
 
     private static Element buildPodmiot1(Document doc, KsefInvoice invoice) {
         Element podmiot1 = element(doc, "Podmiot1");
-        podmiot1.appendChild(buildDaneIdentyfikacyjne(doc,
-                invoice.getSellerNip(), invoice.getSellerName()));
-        podmiot1.appendChild(buildAdres(doc,
-                invoice.getSellerAddress(),
+        // Who the seller is: tax number + name.
+        podmiot1.appendChild(buildDaneIdentyfikacyjne(doc, invoice.getSellerNip(), invoice.getSellerName()));
+        // Where the seller is.
+        podmiot1.appendChild(buildAdres(doc, invoice.getSellerAddress(),
                 invoice.getSellerPostalCode(), invoice.getSellerCity()));
         return podmiot1;
     }
 
-    //! ── Podmiot2 (BUYER DATA) ───────────────────────────────────────────────────────
+    //! ── Podmiot2 (BUYER) ────────────────────────────────────────────────────────
 
     private static Element buildPodmiot2(Document doc, KsefInvoice invoice) {
         Element podmiot2 = element(doc, "Podmiot2");
-        podmiot2.appendChild(buildDaneIdentyfikacyjne(doc,
-                invoice.getBuyerNip(), invoice.getBuyerName()));
-        podmiot2.appendChild(buildAdres(doc,
-                invoice.getBuyerAddress(),
+        // Who the buyer is: tax number + name.
+        podmiot2.appendChild(buildDaneIdentyfikacyjne(doc, invoice.getBuyerNip(), invoice.getBuyerName()));
+        // Where the buyer is.
+        podmiot2.appendChild(buildAdres(doc, invoice.getBuyerAddress(),
                 invoice.getBuyerPostalCode(), invoice.getBuyerCity()));
+        // The schema MUST have these two yes/no flags for the buyer:
+        //   JST = is the buyer a local-government unit?  GV = is the buyer a VAT group?
+        // For a normal company buyer both are "2" (no), as in the official example.
+        podmiot2.appendChild(element(doc, "JST", "2"));
+        podmiot2.appendChild(element(doc, "GV", "2"));
         return podmiot2;
     }
 
-    //! ── Fa (INVOICE BODY (Items, Prices, Totals)) ───────────────────────────────────────────────────────
+    //! ── Fa (INVOICE BODY) ───────────────────────────────────────────────────────
 
     private static Element buildFa(Document doc, KsefInvoice invoice) {
         Element fa = element(doc, "Fa");
 
+        // Money currency, issue date, and invoice number.
         fa.appendChild(element(doc, "KodWaluty", invoice.getCurrency().name()));
-        fa.appendChild(element(doc, "P_1", invoice.getIssueDate().toString()));
-        fa.appendChild(element(doc, "P_2", invoice.getInvoiceNumber()));
+        fa.appendChild(element(doc, "P_1", invoice.getIssueDate().toString())); // issue date (a day)
+        fa.appendChild(element(doc, "P_2", invoice.getInvoiceNumber()));        // invoice number
 
-        // P_6 = service/delivery date — use issue date when not separately tracked
-        fa.appendChild(element(doc, "P_6", invoice.getIssueDate().toString()));
+        // Money totals, grouped by VAT rate (must be in this exact number order).
+        Map<KsefVatRate, BigDecimal[]> byRate = groupByVatRate(invoice.getItems());
+        appendVatTotals(doc, fa, byRate);
 
-        // Total gross at Fa level (schema requires it here AND in Podsumowanie)
+        // Total amount to pay (gross). Always present.
         fa.appendChild(element(doc, "P_15", amount(invoice.getTotalGross())));
 
+        // The required note flags (split payment, etc.).
         fa.appendChild(buildAdnotacje(doc, invoice));
 
-        // Line items
+        // The kind of invoice. A normal one is "VAT".
+        fa.appendChild(element(doc, "RodzajFaktury", "VAT"));
+
+        // The invoice lines (one per product/service).
         List<KsefInvoice.InvoiceItem> items = invoice.getItems();
         for (int i = 0; i < items.size(); i++) {
             fa.appendChild(buildFaWiersz(doc, items.get(i), i + 1));
         }
-
-        fa.appendChild(buildPodsumowanie(doc, invoice));
-
-        // Payment block (optional when dueDate is present)
-        if (invoice.getDueDate() != null || invoice.getPaymentMethod() != null) {
-            fa.appendChild(buildPlatnosc(doc, invoice));
-        }
-
         return fa;
     }
 
-    // ── Adnotacje (Annotations / flags) ───────────────────────────────────────
+    // Put the net and tax totals into the right P_13_x / P_14_x tags, in number order.
+    // Official meaning (from the schema notes):
+    //   P_13_1/P_14_1 = 23% (or 22%)   P_13_2/P_14_2 = 8% (or 7%)   P_13_3/P_14_3 = 5%
+    //   P_13_6_1 = 0%        P_13_7 = exempt (zwolnione)        P_13_10 = reverse charge
+    private static void appendVatTotals(Document doc, Element fa, Map<KsefVatRate, BigDecimal[]> byRate) {
+        // 23% — the schema/example always shows this pair, even when it is 0.00.
+        BigDecimal[] r23 = byRate.getOrDefault(KsefVatRate.VAT_23, zeroPair());
+        fa.appendChild(element(doc, "P_13_1", amount(r23[0])));
+        fa.appendChild(element(doc, "P_14_1", amount(r23[1])));
 
+        // 8% — only if the invoice has 8% lines.
+        if (byRate.containsKey(KsefVatRate.VAT_8)) {
+            fa.appendChild(element(doc, "P_13_2", amount(byRate.get(KsefVatRate.VAT_8)[0])));
+            fa.appendChild(element(doc, "P_14_2", amount(byRate.get(KsefVatRate.VAT_8)[1])));
+        }
+        // 5% — only if present.
+        if (byRate.containsKey(KsefVatRate.VAT_5)) {
+            fa.appendChild(element(doc, "P_13_3", amount(byRate.get(KsefVatRate.VAT_5)[0])));
+            fa.appendChild(element(doc, "P_14_3", amount(byRate.get(KsefVatRate.VAT_5)[1])));
+        }
+        // 0% — only the net sum (there is no tax). Field P_13_6_1.
+        if (byRate.containsKey(KsefVatRate.VAT_0)) {
+            fa.appendChild(element(doc, "P_13_6_1", amount(byRate.get(KsefVatRate.VAT_0)[0])));
+        }
+        // Exempt (zwolnione) — only the net sum. Field P_13_7.
+        if (byRate.containsKey(KsefVatRate.EXEMPT)) {
+            fa.appendChild(element(doc, "P_13_7", amount(byRate.get(KsefVatRate.EXEMPT)[0])));
+        }
+        // Reverse charge — only the net sum. Field P_13_10.
+        if (byRate.containsKey(KsefVatRate.REVERSE_CHARGE)) {
+            fa.appendChild(element(doc, "P_13_10", amount(byRate.get(KsefVatRate.REVERSE_CHARGE)[0])));
+        }
+    }
+
+    // ── Adnotacje (NOTE FLAGS) ──────────────────────────────────────────────────
+    // These yes/no flags are required. "2" = no / not applicable. The nested boxes
+    // (Zwolnienie, NoweSrodkiTransportu, PMarzy) use a "...N" tag = "does not apply".
+    // Values copied from the official example invoice.
     private static Element buildAdnotacje(Document doc, KsefInvoice invoice) {
         Element ann = element(doc, "Adnotacje");
 
-        // P_16: Mechanizm Podzielonej Płatności (MPP / split payment)
-        // "1" = applies, "2" = does not apply
-        boolean isMpp = invoice.getPaymentMethod() == KsefPaymentMethod.SPLIT_PAYMENT;
-        ann.appendChild(element(doc, "P_16", isMpp ? "1" : "2"));
+        // P_16 = split payment used?  "1" yes, "2" no.
+        boolean splitPayment = invoice.getPaymentMethod() == KsefPaymentMethod.SPLIT_PAYMENT;
+        ann.appendChild(element(doc, "P_16", splitPayment ? "1" : "2"));
+        ann.appendChild(element(doc, "P_17", "2")); // self-billing? no
+        ann.appendChild(element(doc, "P_18", "2")); // foreign-currency note? no
+        ann.appendChild(element(doc, "P_18A", "2")); // cash method note? no
 
-        // P_17: samofakturowanie (self-billing) — always "2" (no) here
-        ann.appendChild(element(doc, "P_17", "2"));
+        // Tax exemption box — "does not apply".
+        Element zwolnienie = element(doc, "Zwolnienie");
+        zwolnienie.appendChild(element(doc, "P_19N", "1"));
+        ann.appendChild(zwolnienie);
 
-        // P_18: odwrotne obciążenie (reverse charge) — "1" if any item uses
-        // REVERSE_CHARGE
-        boolean hasReverseCharge = invoice.getItems().stream()
-                .anyMatch(i -> i.getVatRate() == KsefVatRate.REVERSE_CHARGE);
-        ann.appendChild(element(doc, "P_18", hasReverseCharge ? "1" : "2"));
+        // New means of transport box — "does not apply".
+        Element nowe = element(doc, "NoweSrodkiTransportu");
+        nowe.appendChild(element(doc, "P_22N", "1"));
+        ann.appendChild(nowe);
 
-        // P_18A: VAT OSS — always "2" (no) — domestic invoices
-        ann.appendChild(element(doc, "P_18A", "2"));
+        ann.appendChild(element(doc, "P_23", "2")); // simplified procedure? no
 
-        // P_19: procedura marży (margin scheme) — always "2" (no)
-        ann.appendChild(element(doc, "P_19", "2"));
-
-        // P_22: wewnątrzwspólnotowe dostawy towarów (intra-EU goods) — always "2"
-        ann.appendChild(element(doc, "P_22", "2"));
-
-        // P_23: transakcje trójstronne (triangular transactions) — always "2"
-        ann.appendChild(element(doc, "P_23", "2"));
+        // Margin scheme box — "does not apply".
+        Element marza = element(doc, "PMarzy");
+        marza.appendChild(element(doc, "P_PMarzyN", "1"));
+        ann.appendChild(marza);
 
         return ann;
     }
 
-    // ── FaWiersz (Line item) ───────────────────────────────────────────────────
-
+    // ── FaWiersz (ONE INVOICE LINE) ─────────────────────────────────────────────
+    // Official meaning: P_7 = name, P_8A = unit, P_8B = how many, P_9A = price for one,
+    //                   P_11 = net value of the line, P_12 = tax rate.
     private static Element buildFaWiersz(Document doc, KsefInvoice.InvoiceItem item, int lineNumber) {
         Element wiersz = element(doc, "FaWiersz");
-
-        wiersz.appendChild(element(doc, "NrWierszaFa", String.valueOf(lineNumber)));
-        wiersz.appendChild(element(doc, "P_7", item.getProductName()));
-        wiersz.appendChild(element(doc, "P_8A", item.getUnit() != null ? item.getUnit() : "szt."));
-        wiersz.appendChild(element(doc, "P_8B", qty(item.getQuantity())));
-        wiersz.appendChild(element(doc, "P_9A", amount(item.getUnitPrice())));
-        wiersz.appendChild(element(doc, "P_10", amount(item.getNetAmount())));
-        wiersz.appendChild(element(doc, "P_11", vatRateCode(item.getVatRate())));
-        wiersz.appendChild(element(doc, "P_12", amount(item.getVatAmount())));
-
-        if (item.getPkwiuCode() != null && !item.getPkwiuCode().isBlank()) {
-            wiersz.appendChild(element(doc, "GTU", item.getPkwiuCode()));
-        }
-
+        wiersz.appendChild(element(doc, "NrWierszaFa", String.valueOf(lineNumber))); // line number
+        wiersz.appendChild(element(doc, "P_7", item.getProductName()));               // name
+        wiersz.appendChild(element(doc, "P_8A", item.getUnit() != null ? item.getUnit() : "szt.")); // unit
+        wiersz.appendChild(element(doc, "P_8B", qty(item.getQuantity())));            // quantity
+        wiersz.appendChild(element(doc, "P_9A", amount(item.getUnitPrice())));        // price for one (net)
+        wiersz.appendChild(element(doc, "P_11", amount(item.getNetAmount())));        // line net value
+        wiersz.appendChild(element(doc, "P_12", vatRateCode(item.getVatRate())));     // tax rate
         return wiersz;
     }
 
-    // ── Podsumowanie (VAT summary) ─────────────────────────────────────────────
-
-    private static Element buildPodsumowanie(Document doc, KsefInvoice invoice) {
-        Element podsumowanie = element(doc, "Podsumowanie");
-
-        // Group net and VAT amounts by rate for P_13_X / P_14_X fields
-        Map<KsefVatRate, BigDecimal[]> grouped = groupByVatRate(invoice.getItems());
-
-        Element podatekNalezny = element(doc, "PodatekNalezny");
-
-        // Emit P_13_X (net) and P_14_X (VAT) only for rates that actually appear
-        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_23, "1");
-        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_8, "2");
-        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_5, "3");
-        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.VAT_0, "4");
-        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.EXEMPT, "5");
-        emitVatGroup(doc, podatekNalezny, grouped, KsefVatRate.REVERSE_CHARGE, "6");
-
-        podsumowanie.appendChild(podatekNalezny);
-        podsumowanie.appendChild(element(doc, "P_15", amount(invoice.getTotalGross())));
-
-        return podsumowanie;
-    }
-
-    private static void emitVatGroup(Document doc, Element parent,
-            Map<KsefVatRate, BigDecimal[]> grouped,
-            KsefVatRate rate, String suffix) {
-        BigDecimal[] pair = grouped.get(rate);
-        if (pair == null)
-            return;
-        parent.appendChild(element(doc, "P_13_" + suffix, amount(pair[0]))); // net
-        parent.appendChild(element(doc, "P_14_" + suffix, amount(pair[1]))); // VAT
-    }
-
-    // Groups items by VAT rate → BigDecimal[]{totalNet, totalVat}
-    private static Map<KsefVatRate, BigDecimal[]> groupByVatRate(List<KsefInvoice.InvoiceItem> items) {
-        Map<KsefVatRate, BigDecimal[]> map = new EnumMap<>(KsefVatRate.class);
-        for (KsefInvoice.InvoiceItem item : items) {
-            KsefVatRate rate = item.getVatRate() != null ? item.getVatRate() : KsefVatRate.VAT_23;
-            BigDecimal net = item.getNetAmount() != null ? item.getNetAmount() : BigDecimal.ZERO;
-            BigDecimal vat = item.getVatAmount() != null ? item.getVatAmount() : BigDecimal.ZERO;
-            map.merge(rate, new BigDecimal[] { net, vat },
-                    (existing, incoming) -> new BigDecimal[] {
-                            existing[0].add(incoming[0]),
-                            existing[1].add(incoming[1])
-                    });
-        }
-        return map;
-    }
-
-    // ── Platnosc (Payment) ─────────────────────────────────────────────────────
-
-    private static Element buildPlatnosc(Document doc, KsefInvoice invoice) {
-        Element platnosc = element(doc, "Platnosc");
-
-        if (invoice.getDueDate() != null) {
-            Element terminPlatnosci = element(doc, "TerminPlatnosci");
-            terminPlatnosci.appendChild(element(doc, "Termin", invoice.getDueDate().toString()));
-            platnosc.appendChild(terminPlatnosci);
-        }
-
-        if (invoice.getPaymentMethod() != null) {
-            platnosc.appendChild(element(doc, "FormaPlatnosci",
-                    paymentMethodCode(invoice.getPaymentMethod())));
-        }
-
-        // Bank account required for SPLIT_PAYMENT (MPP)
-        if (invoice.getPaymentMethod() == KsefPaymentMethod.SPLIT_PAYMENT
-                && invoice.getBankAccount() != null
-                && !invoice.getBankAccount().isBlank()) {
-            Element rachunek = element(doc, "RachunekBankowy");
-            rachunek.appendChild(element(doc, "NrRB", invoice.getBankAccount()));
-            platnosc.appendChild(rachunek);
-        }
-
-        return platnosc;
-    }
-
-    // ── Shared sub-elements ────────────────────────────────────────────────────
+    // ── Shared small parts ──────────────────────────────────────────────────────
 
     private static Element buildDaneIdentyfikacyjne(Document doc, String nip, String nazwa) {
         Element dane = element(doc, "DaneIdentyfikacyjne");
@@ -315,62 +248,62 @@ public final class FA3XmlBuilder {
         return dane;
     }
 
-    private static Element buildAdres(Document doc,
-            String adresL1, String postalCode, String city) {
+    // Address: country, street line, and postcode + city on the second line.
+    private static Element buildAdres(Document doc, String adresL1, String postalCode, String city) {
         Element adres = element(doc, "Adres");
         adres.appendChild(element(doc, "KodKraju", "PL"));
         adres.appendChild(element(doc, "AdresL1", adresL1));
-        adres.appendChild(element(doc, "AdresL2", postalCode + " " + city));
+        adres.appendChild(element(doc, "AdresL2", (safe(postalCode) + " " + safe(city)).trim()));
         return adres;
     }
 
-    // ── Encoding helpers ───────────────────────────────────────────────────────
+    // ── Value helpers ───────────────────────────────────────────────────────────
 
-    // Formats monetary amounts: always 2 decimal places, period separator, no
-    // grouping.
-    // Polish accounting law requires exact 2-decimal precision for all VAT amounts.
+    // Money: always 2 numbers after the dot, e.g. 123.45.
     public static String amount(BigDecimal value) {
-        if (value == null)
-            return "0.00";
-        return value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+        return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
-    // Quantities: 2 decimal places (supports fractional units e.g. 1.50 hours)
+    // Quantity: also 2 numbers after the dot.
     public static String qty(BigDecimal value) {
-        if (value == null)
-            return "1.00";
-        return value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+        return (value == null ? BigDecimal.ONE : value).setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
-    // Maps KsefVatRate enum → FA(3) XML rate code
+    // Turn our rate name into the rate text the schema wants.
     public static String vatRateCode(KsefVatRate rate) {
-        if (rate == null)
-            return "23";
+        if (rate == null) return "23";
         return switch (rate) {
             case VAT_23 -> "23";
             case VAT_8 -> "8";
             case VAT_5 -> "5";
             case VAT_0 -> "0";
-            case EXEMPT -> "zw";
-            case REVERSE_CHARGE -> "np";
+            case EXEMPT -> "zw";          // zwolnione
+            case REVERSE_CHARGE -> "oo";  // odwrotne obciążenie
         };
     }
 
-    // Maps KsefPaymentMethod → FA(3) FormaPlatnosci code
-    // 1 = gotówka (cash), 3 = karta (card), 6 = przelew (transfer/MPP)
-    public static String paymentMethodCode(KsefPaymentMethod method) {
-        if (method == null)
-            return "6";
-        return switch (method) {
-            case CASH -> "1";
-            case CARD -> "3";
-            case TRANSFER,
-                    SPLIT_PAYMENT ->
-                "6";
-        };
+    // Add up net and tax for each rate. Returns rate -> [net, tax].
+    private static Map<KsefVatRate, BigDecimal[]> groupByVatRate(List<KsefInvoice.InvoiceItem> items) {
+        Map<KsefVatRate, BigDecimal[]> map = new EnumMap<>(KsefVatRate.class);
+        for (KsefInvoice.InvoiceItem item : items) {
+            KsefVatRate rate = item.getVatRate() != null ? item.getVatRate() : KsefVatRate.VAT_23;
+            BigDecimal net = item.getNetAmount() != null ? item.getNetAmount() : BigDecimal.ZERO;
+            BigDecimal vat = item.getVatAmount() != null ? item.getVatAmount() : BigDecimal.ZERO;
+            map.merge(rate, new BigDecimal[] { net, vat },
+                    (a, b) -> new BigDecimal[] { a[0].add(b[0]), a[1].add(b[1]) });
+        }
+        return map;
     }
 
-    // ── DOM element factory ────────────────────────────────────────────────────
+    private static BigDecimal[] zeroPair() {
+        return new BigDecimal[] { BigDecimal.ZERO, BigDecimal.ZERO };
+    }
+
+    private static String safe(String s) {
+        return s != null ? s : "";
+    }
+
+    // ── DOM tag makers ──────────────────────────────────────────────────────────
 
     private static Element element(Document doc, String name) {
         return doc.createElementNS(FA3_NAMESPACE, name);
@@ -382,50 +315,40 @@ public final class FA3XmlBuilder {
         return e;
     }
 
-    //! ── Pre-build validation ───────────────────────────────────────────────────
+    //! ── Pre-build checks (must-have fields) ─────────────────────────────────────
 
     private static void validate(KsefInvoice invoice) {
         if (invoice.getInvoiceNumber() == null || invoice.getInvoiceNumber().isBlank()) {
-            throw new KsefXmlGenerationException("Invoice number is required for FA(3) XML generation");
+            throw new KsefXmlGenerationException("Invoice number is required for FA(3) XML");
         }
         if (invoice.getIssueDate() == null) {
-            throw new KsefXmlGenerationException(
-                    "Issue date is required for invoice [" + invoice.getInvoiceNumber() + "]");
+            throw new KsefXmlGenerationException("Issue date is required for invoice [" + invoice.getInvoiceNumber() + "]");
+        }
+        if (invoice.getCurrency() == null) {
+            throw new KsefXmlGenerationException("Currency is required for invoice [" + invoice.getInvoiceNumber() + "]");
         }
         if (invoice.getSellerNip() == null || invoice.getSellerNip().isBlank()) {
-            throw new KsefXmlGenerationException(
-                    "Seller NIP is required for invoice [" + invoice.getInvoiceNumber() + "]");
+            throw new KsefXmlGenerationException("Seller NIP is required for invoice [" + invoice.getInvoiceNumber() + "]");
         }
         if (invoice.getBuyerNip() == null || invoice.getBuyerNip().isBlank()) {
-            throw new KsefXmlGenerationException(
-                    "Buyer NIP is required for invoice [" + invoice.getInvoiceNumber() + "]");
+            throw new KsefXmlGenerationException("Buyer NIP is required for invoice [" + invoice.getInvoiceNumber() + "]");
         }
         if (invoice.getItems() == null || invoice.getItems().isEmpty()) {
-            throw new KsefXmlGenerationException(
-                    "At least one line item is required for invoice [" + invoice.getInvoiceNumber() + "]");
+            throw new KsefXmlGenerationException("At least one line item is required for invoice [" + invoice.getInvoiceNumber() + "]");
         }
         if (invoice.getTotalGross() == null) {
-            throw new KsefXmlGenerationException(
-                    "Total gross amount is required for invoice [" + invoice.getInvoiceNumber() + "]");
+            throw new KsefXmlGenerationException("Total gross is required for invoice [" + invoice.getInvoiceNumber() + "]");
         }
         for (int i = 0; i < invoice.getItems().size(); i++) {
-            validateItem(invoice.getItems().get(i), i + 1, invoice.getInvoiceNumber());
-        }
-    }
-
-    //! validate the iteams...
-    private static void validateItem(KsefInvoice.InvoiceItem item, int line, String invoiceNumber) {
-        if (item.getProductName() == null || item.getProductName().isBlank()) {
-            throw new KsefXmlGenerationException(
-                    "Product name is required for line " + line + " of invoice [" + invoiceNumber + "]");
-        }
-        if (item.getNetAmount() == null) {
-            throw new KsefXmlGenerationException(
-                    "Net amount is required for line " + line + " of invoice [" + invoiceNumber + "]");
-        }
-        if (item.getVatAmount() == null) {
-            throw new KsefXmlGenerationException(
-                    "VAT amount is required for line " + line + " of invoice [" + invoiceNumber + "]");
+            KsefInvoice.InvoiceItem item = invoice.getItems().get(i);
+            if (item.getProductName() == null || item.getProductName().isBlank()) {
+                throw new KsefXmlGenerationException("Product name is required for line " + (i + 1)
+                        + " of invoice [" + invoice.getInvoiceNumber() + "]");
+            }
+            if (item.getNetAmount() == null) {
+                throw new KsefXmlGenerationException("Net amount is required for line " + (i + 1)
+                        + " of invoice [" + invoice.getInvoiceNumber() + "]");
+            }
         }
     }
 }

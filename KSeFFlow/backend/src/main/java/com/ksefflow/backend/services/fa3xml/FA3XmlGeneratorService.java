@@ -26,7 +26,8 @@ import java.time.format.DateTimeFormatter;
  *   1. Pre-flight guard — validates required fields are present (no partial invoice)
  *   2. Build — FA3XmlBuilder converts the invoice into a DOM Document
  *   3. Serialize — FA3XmlSerializer transforms DOM → UTF-8 XML string
- *   4. Validate — FA3XmlValidator checks structure + business rules (NIP format, P_15 consistency)
+ *   4. Validate — the official FA(3) XSD check runs in Fa3ValidationGate before submission
+ *      (only when ksef.validation.xsd.enabled=true); KSeF also validates server-side
  *   5. Hash — SHA-256 of the final XML bytes stored for tamper-evidence audit
  *
  * Returns FA3XmlResult which the caller (KSeFInvoiceService in Phase 4) uses to:
@@ -71,16 +72,15 @@ public class FA3XmlGeneratorService {
         String xml = FA3XmlSerializer.serialize(doc);
 
         //TODO: in future comment this...
-        // Step 2b (optional, debug): dump the generated XML to a local file.
-        // Done BEFORE validation so XML that later fails validation is still captured.
+        // Step 2b (optional, debug): save the made XML to a local file so we can read it.
         dumpXmlToFile(invoice, xml);
 
-        // Step 3: Validate structure and business rules
-        // Strict=false in dev: XSD warning is logged but does not block.
-        // Phase 4 (KSeFInvoiceService) will call validate(xml, true) before production submission.
-        FA3XmlValidator.validate(xml);
+        // NOTE: we do NOT run the old FA(2) check here anymore. The official FA(3) schema
+        // check now happens in Fa3ValidationGate before submission (only when turned on),
+        // and KSeF always checks the invoice on its side. Must-have fields were already
+        // checked inside FA3XmlBuilder.build().
 
-        // Step 4: SHA-256 hash for tamper-evidence audit trail
+        // Step 3: make the tamper-proof fingerprint (SHA-256) of the exact XML we will send.
         String hash = sha256Hex(xml);
 
         log.info("[GenerateXml] Generated: FA(3) XML successfully for invoice [{}] — SHA-256: [{}]", invoice.getInvoiceNumber(), hash);
