@@ -126,7 +126,11 @@ public class FA3XmlGeneratorService {
 
     //! ── SHA-256 helper ─────────────────────────────────────────────────────────
 
-    private static String sha256Hex(String xml) {
+    // SIMPLE EXPLANATION: this makes a unique "fingerprint" of the invoice XML. We
+    // fingerprint the EXACT same text that we send to KSeF, so the fingerprint always
+    // matches the real document. If even one character changes, the fingerprint changes.
+    // Package-private so the hash test can check it directly.
+    static String sha256Hex(String xml) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hashBytes = digest.digest(xml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
