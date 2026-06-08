@@ -2,6 +2,7 @@ package com.ksefflow.backend.services.fa3xml;
 
 import com.ksefflow.backend.exceptions.KsefXmlGenerationException;
 import com.ksefflow.backend.models.KsefInvoice;
+import com.ksefflow.backend.models.utils.KsefCurrency;
 import com.ksefflow.backend.models.utils.KsefPaymentMethod;
 import com.ksefflow.backend.models.utils.KsefVatRate;
 import org.w3c.dom.Document;
@@ -142,7 +143,13 @@ public final class FA3XmlBuilder {
         // Total amount to pay (gross). Always present.
         fa.appendChild(element(doc, "P_15", amount(invoice.getTotalGross())));
 
-        // The required note flags (split payment, etc.).
+        // If the invoice is in a foreign money (not PLN), add the rate used to change it
+        // into PLN. KSeF needs this for foreign-currency invoices. (Goes right after P_15.)
+        if (invoice.getCurrency() != KsefCurrency.PLN && invoice.getExchangeRate() != null) {
+            fa.appendChild(element(doc, "KursWalutyZ", invoice.getExchangeRate().toPlainString()));
+        }
+
+        // The required note flags (split payment, exemption, etc.).
         fa.appendChild(buildAdnotacje(doc, invoice));
 
         // The kind of invoice. A normal one is "VAT".
@@ -204,9 +211,18 @@ public final class FA3XmlBuilder {
         ann.appendChild(element(doc, "P_18", "2")); // foreign-currency note? no
         ann.appendChild(element(doc, "P_18A", "2")); // cash method note? no
 
-        // Tax exemption box — "does not apply".
+        // Tax exemption box.
+        //  - If the invoice HAS an exempt (zw) line: say "yes, exempt" (P_19=1) and give the
+        //    law text that allows it (P_19A). Without the law text we cannot make this invoice.
+        //  - If there is NO exempt line: say "does not apply" (P_19N=1).
+        boolean hasExempt = invoice.getItems().stream().anyMatch(i -> i.getVatRate() == KsefVatRate.EXEMPT);
         Element zwolnienie = element(doc, "Zwolnienie");
-        zwolnienie.appendChild(element(doc, "P_19N", "1"));
+        if (hasExempt) {
+            zwolnienie.appendChild(element(doc, "P_19", "1"));
+            zwolnienie.appendChild(element(doc, "P_19A", invoice.getExemptionLegalBasis()));
+        } else {
+            zwolnienie.appendChild(element(doc, "P_19N", "1"));
+        }
         ann.appendChild(zwolnienie);
 
         // New means of transport box — "does not apply".
@@ -349,6 +365,20 @@ public final class FA3XmlBuilder {
                 throw new KsefXmlGenerationException("Net amount is required for line " + (i + 1)
                         + " of invoice [" + invoice.getInvoiceNumber() + "]");
             }
+        }
+
+        // If any line is VAT-exempt (zw), the law text (legal basis) is a must-have.
+        boolean hasExempt = invoice.getItems().stream().anyMatch(it -> it.getVatRate() == KsefVatRate.EXEMPT);
+        if (hasExempt && (invoice.getExemptionLegalBasis() == null || invoice.getExemptionLegalBasis().isBlank())) {
+            throw new KsefXmlGenerationException("An exempt (zw) line needs a legal basis (exemptionLegalBasis) "
+                    + "for FA(3) field P_19A — invoice [" + invoice.getInvoiceNumber() + "]");
+        }
+
+        // If the invoice is not in PLN, we need the exchange rate to PLN.
+        if (invoice.getCurrency() != null && invoice.getCurrency() != KsefCurrency.PLN
+                && invoice.getExchangeRate() == null) {
+            throw new KsefXmlGenerationException("A non-PLN invoice needs an exchange rate (exchangeRate) "
+                    + "for FA(3) field KursWalutyZ — invoice [" + invoice.getInvoiceNumber() + "]");
         }
     }
 }

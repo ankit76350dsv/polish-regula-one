@@ -98,10 +98,13 @@ class FA3XmlGeneratorServiceTest {
                         KsefVatRate.EXEMPT, new BigDecimal("500.00"), BigDecimal.ZERO, new BigDecimal("500.00"))
         ), new BigDecimal("500.00"), BigDecimal.ZERO, new BigDecimal("500.00"),
                 KsefPaymentMethod.TRANSFER, null);
+        // Exempt lines need the law text (legal basis).
+        invoice.setExemptionLegalBasis("art. 43 ust. 1 pkt 19 ustawy o VAT");
 
         String xml = generator.generateXml(invoice).xmlContent();
         assertThat(xml).contains("<P_12>zw</P_12>");
         assertThat(xml).contains("<P_13_7>500.00</P_13_7>");
+        assertThat(xml).contains("<P_19>1</P_19>").contains("<P_19A>"); // exempt now declared correctly
     }
 
     @Test
@@ -167,6 +170,29 @@ class FA3XmlGeneratorServiceTest {
                 KsefPaymentMethod.TRANSFER, null);
         assertThatThrownBy(() -> generator.generateXml(invoice))
                 .isInstanceOf(KsefXmlGenerationException.class).hasMessageContaining("Product name");
+    }
+
+    @Test
+    @DisplayName("generateXml: stops when an exempt line has no legal basis")
+    void generateXml_exemptWithoutLegalBasis_throws() {
+        KsefInvoice invoice = buildInvoice(List.of(
+                buildItem("Medical Service", "szt.", new BigDecimal("1"), new BigDecimal("500.00"),
+                        KsefVatRate.EXEMPT, new BigDecimal("500.00"), BigDecimal.ZERO, new BigDecimal("500.00"))
+        ), new BigDecimal("500.00"), BigDecimal.ZERO, new BigDecimal("500.00"),
+                KsefPaymentMethod.TRANSFER, null);
+        // exemptionLegalBasis is left null on purpose.
+        assertThatThrownBy(() -> generator.generateXml(invoice))
+                .isInstanceOf(KsefXmlGenerationException.class).hasMessageContaining("legal basis");
+    }
+
+    @Test
+    @DisplayName("generateXml: stops when a non-PLN invoice has no exchange rate")
+    void generateXml_foreignCurrencyWithoutRate_throws() {
+        KsefInvoice invoice = buildSimpleInvoice();
+        invoice.setCurrency(KsefCurrency.EUR);
+        invoice.setExchangeRate(null); // missing on purpose
+        assertThatThrownBy(() -> generator.generateXml(invoice))
+                .isInstanceOf(KsefXmlGenerationException.class).hasMessageContaining("exchange rate");
     }
 
     // ── Small helpers in the builder ────────────────────────────────────────────

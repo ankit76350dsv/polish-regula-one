@@ -56,6 +56,81 @@ class FA3XmlBuilderFa3Test {
         assertThat(xml).doesNotContain("<Podsumowanie>");
     }
 
+    @Test
+    @DisplayName("Exempt (zw) invoice with a legal basis passes the official FA(3) XSD")
+    void exemptInvoice_passesXsd() {
+        KsefInvoice.InvoiceItem exemptLine = new KsefInvoice.InvoiceItem();
+        exemptLine.setProductName("Medical Service");
+        exemptLine.setUnit("szt.");
+        exemptLine.setQuantity(new BigDecimal("1"));
+        exemptLine.setUnitPrice(new BigDecimal("500.00"));
+        exemptLine.setVatRate(KsefVatRate.EXEMPT);
+        exemptLine.setNetAmount(new BigDecimal("500.00"));
+        exemptLine.setVatAmount(BigDecimal.ZERO);
+        exemptLine.setGrossAmount(new BigDecimal("500.00"));
+
+        KsefInvoice inv = baseInvoice();
+        inv.setItems(List.of(exemptLine));
+        inv.setTotalNet(new BigDecimal("500.00"));
+        inv.setTotalVat(BigDecimal.ZERO);
+        inv.setTotalGross(new BigDecimal("500.00"));
+        inv.setExemptionLegalBasis("art. 43 ust. 1 pkt 19 ustawy o VAT");
+
+        String xml = generator.generateXml(inv).xmlContent();
+        validator.validate(xml); // must pass the official FA(3) XSD
+        assertThat(xml).contains("<P_19>1</P_19>").contains("<P_19A>");
+        assertThat(xml).contains("<P_13_7>500.00</P_13_7>");
+        assertThat(xml).doesNotContain("<P_19N>");
+    }
+
+    @Test
+    @DisplayName("Foreign-currency (EUR) invoice with an exchange rate passes the official FA(3) XSD")
+    void foreignCurrencyInvoice_passesXsd() {
+        KsefInvoice inv = baseInvoice();
+        inv.setCurrency(KsefCurrency.EUR);
+        inv.setExchangeRate(new BigDecimal("4.3012"));
+        // one normal 23% line
+        KsefInvoice.InvoiceItem line = new KsefInvoice.InvoiceItem();
+        line.setProductName("Export Service");
+        line.setUnit("szt.");
+        line.setQuantity(new BigDecimal("1"));
+        line.setUnitPrice(new BigDecimal("100.00"));
+        line.setVatRate(KsefVatRate.VAT_23);
+        line.setNetAmount(new BigDecimal("100.00"));
+        line.setVatAmount(new BigDecimal("23.00"));
+        line.setGrossAmount(new BigDecimal("123.00"));
+        inv.setItems(List.of(line));
+        inv.setTotalNet(new BigDecimal("100.00"));
+        inv.setTotalVat(new BigDecimal("23.00"));
+        inv.setTotalGross(new BigDecimal("123.00"));
+
+        String xml = generator.generateXml(inv).xmlContent();
+        validator.validate(xml); // must pass the official FA(3) XSD
+        assertThat(xml).contains("<KodWaluty>EUR</KodWaluty>");
+        assertThat(xml).contains("<KursWalutyZ>4.3012</KursWalutyZ>");
+    }
+
+    // A seller/buyer/header scaffold with NO items/totals yet (each test fills those).
+    private static KsefInvoice baseInvoice() {
+        KsefInvoice inv = new KsefInvoice();
+        inv.setInvoiceNumber("FV/2026/06/0002");
+        inv.setIssueDate(LocalDate.of(2026, 6, 4));
+        inv.setDueDate(LocalDate.of(2026, 6, 18));
+        inv.setSellerName("DSV TEAM Sp. z o.o.");
+        inv.setSellerNip("7410852096");
+        inv.setSellerAddress("High Street 1");
+        inv.setSellerPostalCode("00-001");
+        inv.setSellerCity("Warszawa");
+        inv.setBuyerName("Central Trade Poland Sp. z o.o.");
+        inv.setBuyerNip("5229983144");
+        inv.setBuyerAddress("Al. Jerozolimskie 22");
+        inv.setBuyerPostalCode("00-345");
+        inv.setBuyerCity("Warszawa");
+        inv.setCurrency(KsefCurrency.PLN);
+        inv.setPaymentMethod(KsefPaymentMethod.TRANSFER);
+        return inv;
+    }
+
     // A normal invoice with one 23% line and one 8% line.
     private static KsefInvoice sampleInvoice() {
         KsefInvoice.InvoiceItem line1 = new KsefInvoice.InvoiceItem();

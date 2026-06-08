@@ -73,6 +73,12 @@ public class CreateInvoiceRequest {
 
     private KsefCurrency currency = KsefCurrency.PLN;
 
+    // Money rate to PLN — needed only for non-PLN invoices (FA(3) KursWalutyZ).
+    private BigDecimal exchangeRate;
+
+    // Law text saying why the sale is VAT-exempt — needed only when a line is exempt (FA(3) P_19A).
+    private String exemptionLegalBasis;
+
     @NotNull(message = "Total net amount is required")
     @DecimalMin(value = "0.00", inclusive = true, message = "Total net must be non-negative")
     private BigDecimal totalNet;
@@ -124,6 +130,8 @@ public class CreateInvoiceRequest {
         invoice.setBuyerCity(buyerCity);
 
         invoice.setCurrency(currency != null ? currency : KsefCurrency.PLN);
+        invoice.setExchangeRate(exchangeRate);
+        invoice.setExemptionLegalBasis(exemptionLegalBasis);
         invoice.setTotalNet(totalNet);
         invoice.setTotalVat(totalVat);
         invoice.setTotalGross(totalGross);

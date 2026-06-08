@@ -87,6 +87,14 @@ public class KsefInvoice {
     @Builder.Default
     private KsefCurrency currency = KsefCurrency.PLN;
 
+    // The money rate to change a foreign currency into PLN. Only used (and required by
+    // KSeF) when the invoice is NOT in PLN. Goes into the FA(3) field KursWalutyZ.
+    private BigDecimal exchangeRate;
+
+    // The law text that says why the sale has no VAT (is exempt). Must be filled when the
+    // invoice has any exempt (zw) line. Goes into the FA(3) field P_19A.
+    private String exemptionLegalBasis;
+
     // All monetary values use BigDecimal to prevent floating-point rounding errors
     // in VAT calculations (required by Polish accounting law).
     private BigDecimal totalNet;
