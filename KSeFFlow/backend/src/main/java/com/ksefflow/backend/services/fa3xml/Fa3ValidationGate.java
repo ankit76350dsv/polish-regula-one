@@ -40,15 +40,15 @@ public class Fa3ValidationGate {
     // If the switch is OFF: skip our check and let KSeF check it on its side.
     public void validateBeforeSubmission(String xml) {
         if (!xsdValidationEnabled) {
-            log.debug("[Fa3ValidationGate] Local FA(3) XSD check is OFF — KSeF will check the invoice on its side");
+            log.debug("[Fa3ValidationGate]:1 Local FA(3) XSD check is OFF — KSeF will check the invoice on its side");
             return;
         }
         try {
             fa3XsdValidator.validate(xml);
-            log.info("[Fa3ValidationGate] Invoice passed the official FA(3) check");
+            log.info("[Fa3ValidationGate]:2 Invoice passed the official FA(3) check");
         } catch (KsefXmlGenerationException e) {
             // Log the reason clearly, then stop — we never send a bad invoice when the check is ON.
-            log.error("[Fa3ValidationGate] Invoice FAILED the official FA(3) check: {}", e.getMessage());
+            log.error("[Fa3ValidationGate]:3 Invoice FAILED the official FA(3) check: {}", e.getMessage());
             throw e;
         }
     }

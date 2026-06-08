@@ -63,7 +63,7 @@ public class FA3XmlGeneratorService {
      * @throws KsefXmlGenerationException if the invoice is incomplete or the generated XML is invalid
      */
     public FA3XmlResult generateXml(KsefInvoice invoice) {
-        log.debug("[GenerateXml] Generating: FA(3) XML for invoice [{}] tenant [{}]", invoice.getInvoiceNumber(), invoice.getTenantId());
+        log.debug("[GenerateXml]:1 Generating: FA(3) XML for invoice [{}] tenant [{}]", invoice.getInvoiceNumber(), invoice.getTenantId());
 
         // Step 1: Build DOM — also runs pre-flight field validation inside FA3XmlBuilder
         Document doc = FA3XmlBuilder.build(invoice); 
@@ -83,7 +83,7 @@ public class FA3XmlGeneratorService {
         // Step 3: make the tamper-proof fingerprint (SHA-256) of the exact XML we will send.
         String hash = sha256Hex(xml);
 
-        log.info("[GenerateXml] Generated: FA(3) XML successfully for invoice [{}] — SHA-256: [{}]", invoice.getInvoiceNumber(), hash);
+        log.info("[GenerateXml]:2 Generated: FA(3) XML successfully for invoice [{}] — SHA-256: [{}]", invoice.getInvoiceNumber(), hash);
 
         return new FA3XmlResult(xml, hash);
     }

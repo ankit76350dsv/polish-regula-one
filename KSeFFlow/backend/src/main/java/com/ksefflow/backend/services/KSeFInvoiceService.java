@@ -183,9 +183,9 @@ public class KSeFInvoiceService {
      */
     public KsefInvoice submitInvoice(String tenantId, String invoiceId, String nip, String userEmail, String ipAddress) {
 
-        log.info("[SubmitInvoice] Starting invoice submission process. TenantId=[{}], InvoiceId=[{}], NIP=[{}]", tenantId, invoiceId, nip);
+        log.info("[SubmitInvoice]:1 Starting invoice submission process. TenantId=[{}], InvoiceId=[{}], NIP=[{}]", tenantId, invoiceId, nip);
 
-        // Step 1 — Load and validate DRAFT invoice
+        //! Step 1 — Load and validate DRAFT invoice
         KsefInvoice invoice = loadAndGuardDraft(tenantId, invoiceId);
 
         // ! Step 2 — Move invoice to PENDING state
@@ -194,12 +194,12 @@ public class KSeFInvoiceService {
         int nextAttempt = invoice.getSubmissionAttempts() + 1;
         invoice.setSubmissionAttempts(nextAttempt);
 
-        log.info("[SubmitInvoice] Submission attempt count updated to [{}] and saving PENDING invoice state into database for invoice [{}]", nextAttempt, invoice.getInvoiceNumber());
+        log.info("[SubmitInvoice]:2 Submission attempt count updated to [{}] and saving PENDING invoice state into database for invoice [{}]", nextAttempt, invoice.getInvoiceNumber());
 
         ksef_invoices_repository.save(invoice);
 
         // Audit log for submission attempt
-        log.info("[SubmitInvoice] Creating audit log entry for invoice submission attempt. InvoiceId=[{}]", invoiceId);
+        log.info("[SubmitInvoice]:3 Creating audit log entry for invoice submission attempt. InvoiceId=[{}]", invoiceId);
 
         KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null, "attempt=" + invoice.getSubmissionAttempts(), userEmail, ipAddress);
 
@@ -219,7 +219,7 @@ public class KSeFInvoiceService {
         try {
 
             KsefInvoice submittedInvoice = executeKsefSubmission(invoice, xmlResult.xmlContent(), nip, userEmail, ipAddress);
-            log.info("[SubmitInvoice] Invoice [{}] submitted successfully to KSeF", invoice.getInvoiceNumber());
+            log.info("[SubmitInvoice]:4 Invoice [{}] submitted successfully to KSeF", invoice.getInvoiceNumber());
             return submittedInvoice;
 
         } catch (KsefSubmissionException | KsefAuthException e) {
@@ -227,7 +227,7 @@ public class KSeFInvoiceService {
             // KSeF was reachable-but-rejected or unreachable at the session/network layer →
             // this is the system-detected "KSeF unavailability" offline mode. (offline24 vs
             // emergency are user/MF-declared and would be passed in explicitly.)
-            log.warn("[SubmitInvoice] KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE", invoice.getInvoiceNumber(), e.getMessage());
+            log.warn("[SubmitInvoice]:4 KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE", invoice.getInvoiceNumber(), e.getMessage());
             return handleOfflineMode(invoice, KsefOfflineMode.OFFLINE_UNAVAILABILITY, e.getMessage(), userEmail, ipAddress);
         }
     }
@@ -255,7 +255,7 @@ public class KSeFInvoiceService {
             String xmlContent, String nip,
             String userEmail, String ipAddress) {
 
-        log.info("[ExecuteKsefSubmission] Starting KSeF 2.0 invoice submission flow for invoice [{}]",
+        log.info("[ExecuteKsefSubmission]:1 Starting KSeF 2.0 invoice submission flow for invoice [{}]",
                 invoice.getInvoiceNumber());
 
         String tenantId = invoice.getTenantId();
@@ -263,7 +263,7 @@ public class KSeFInvoiceService {
 
         // Step 5 — acquire a KSeF 2.0 accessToken (reuse / refresh / full XAdES auth).
         String accessToken = authService.openSession(tenantId, nip);
-        log.debug("[ExecuteKsefSubmission] accessToken acquired for tenant [{}]", tenantId);
+        log.debug("[ExecuteKsefSubmission]:2 accessToken acquired for tenant [{}]", tenantId);
 
         // Step 6 — fetch the MF public key and open an encrypted online session.
         PublicKeyCertificate symmetricKeyCert = resolveSymmetricKeyCertificate();

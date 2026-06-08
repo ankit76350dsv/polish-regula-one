@@ -59,12 +59,12 @@ public class KSeFAuthService {
      * @param nip      the 10-digit NIP that forms the authentication context
      */
     public String openSession(String tenantId, String nip) {
-        log.info("[KSeF2 Auth] Acquiring accessToken for tenant [{}]", tenantId);
+        log.info("[OpenSession]:1 Acquiring accessToken for tenant [{}]", tenantId);
 
         // 1) Reuse a still-valid accessToken.
         Optional<String> active = sessionStore.getActiveAccessToken(tenantId);
         if (active.isPresent()) {
-            log.info("[KSeF2 Auth] Reusing valid accessToken for tenant [{}]", tenantId);
+            log.info("[OpenSession]:2 Reusing valid accessToken for tenant [{}]", tenantId);
             return active.get();
         }
 
@@ -72,12 +72,12 @@ public class KSeFAuthService {
         Optional<String> refresh = sessionStore.getValidRefreshToken(tenantId);
         if (refresh.isPresent()) {
             try {
-                log.info("[KSeF2 Auth] Refreshing accessToken for tenant [{}]", tenantId);
+                log.info("[OpenSession]:3 Refreshing accessToken for tenant [{}]", tenantId);
                 AuthTokenRefreshResponse refreshed = ksefApiClient.refreshAccessToken(refresh.get());
                 sessionStore.updateAccessToken(tenantId, refreshed.accessToken());
                 return refreshed.accessToken().token();
             } catch (KsefAuthException e) {
-                log.warn("[KSeF2 Auth] Refresh failed for tenant [{}] — falling back to full auth: {}",
+                log.warn("[OpenSession]:4 Refresh failed for tenant [{}] — falling back to full auth: {}",
                         tenantId, e.getMessage());
             }
         }

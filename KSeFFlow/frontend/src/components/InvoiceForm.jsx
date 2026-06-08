@@ -240,6 +240,13 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
       return;
     }
 
+    if (!sellerAddress || !sellerPostalCode || !sellerCity) {
+      const msg = 'Seller address, postal code and city are required for FA(3).';
+      setFormError(msg);
+      onAddNotification('Validation Error', msg, 'error');
+      return;
+    }
+
     setIsSavingDraft(true);
     const userId = getSessionUserId();
 
@@ -299,6 +306,13 @@ export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotificat
 
     if (!buyerNip || !buyerName) {
       const msg = 'NIP and Buyer Name are mandatory for legitimate invoices.';
+      setFormError(msg);
+      onAddNotification('Validation Error', msg, 'error');
+      return;
+    }
+
+    if (!sellerAddress || !sellerPostalCode || !sellerCity) {
+      const msg = 'Seller address, postal code and city are required for FA(3).';
       setFormError(msg);
       onAddNotification('Validation Error', msg, 'error');
       return;

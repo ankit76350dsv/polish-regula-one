@@ -90,11 +90,11 @@ public class KSeFInvoiceController {
             @RequestParam @NotBlank @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits") String nip,
             HttpServletRequest httpRequest) {
 
-        log.info("[SubmitInvoice] ▶ POST /{}/submit — tenant={} nip={}", invoiceId, caller.tenantId(), nip);
+        log.info("[SubmitInvoice]:1 POST /{}/submit — tenant={} nip={}", invoiceId, caller.tenantId(), nip);
 
         KsefInvoice result = invoiceService.submitInvoice(caller.tenantId(), invoiceId, nip,
                 caller.email(), extractClientIp(httpRequest));
-        log.info("[SubmitInvoice] submit pipeline finished — id={} status={}", result.getId(), result.getStatus());
+        log.info("[SubmitInvoice]:2 submit pipeline finished — id={} status={}", result.getId(), result.getStatus());
 
         String message = switch (result.getStatus()) {
             case SENT -> "Invoice successfully submitted to KSeF — reference: " + result.getKsefId();
@@ -121,7 +121,7 @@ public class KSeFInvoiceController {
                 ? HttpStatus.OK
                 : HttpStatus.ACCEPTED;
 
-        log.info("[SubmitInvoice] ✔ submit response — id={} status={} → {}",
+        log.info("[SubmitInvoice]:3 submit response — id={} status={} → {}",
                 result.getId(), result.getStatus(), httpStatus);
         return ResponseEntity.status(httpStatus).body(response);
     }

@@ -2,11 +2,14 @@ package com.ksefflow.backend.exceptions;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Translates KSeF domain exceptions and common Spring exceptions into
@@ -49,6 +52,29 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("[GlobalExceptionHandler] Validation error: {}", e.getMessage());
         return ResponseEntity.badRequest().body(errorBody(400, "VALIDATION_ERROR", e.getMessage()));
+    }
+
+    // 400 — @Valid DTO validation failure (e.g. missing sellerAddress / sellerCity).
+    // Returns BOTH a per-field list and a combined message so the client can show
+    // exactly which fields are wrong instead of a generic "something went wrong".
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> handleBeanValidation(MethodArgumentNotValidException e) {
+        List<Map<String, String>> fieldErrors = e.getBindingResult().getFieldErrors().stream()
+                .map(fe -> Map.of(
+                        "field", fe.getField(),
+                        "defaultMessage", fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "is invalid"))
+                .collect(Collectors.toList());
+
+        String combined = fieldErrors.stream()
+                .map(fe -> fe.get("defaultMessage"))
+                .collect(Collectors.joining("; "));
+
+        log.warn("[GlobalExceptionHandler] DTO validation failed: {}", combined);
+
+        Map<String, Object> body = new java.util.HashMap<>(errorBody(400, "VALIDATION_ERROR",
+                combined.isBlank() ? "Request validation failed" : combined));
+        body.put("errors", fieldErrors);
+        return ResponseEntity.badRequest().body(body);
     }
 
     // 413 — file larger than Spring's multipart limit (spring.servlet.multipart.max-file-size)
