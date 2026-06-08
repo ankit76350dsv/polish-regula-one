@@ -2,16 +2,20 @@
  * KSeFFlow API client.
  *
  * Two backends:
- *   VITE_API_URL       (default :8080) — RegulaOne backend (auth, invoices)
- *   VITE_KSEF_API_URL  (default :8081) — KSeFFlow backend  (certificates)
+ *   VITE_API_URL       (default :8080) — RegulaOne backend (auth/tenant, via apiFetch)
+ *   VITE_KSEF_API_URL  (default :8081) — KSeFFlow backend  (invoices, certificates,
+ *                                        audit logs — via the hardened ksefFetch)
  *
- * Authentication: HTTP-only cookie forwarded automatically via credentials:'include'.
+ * Security / compliance:
+ *   - Authentication is the httpOnly idToken cookie ONLY (ksefFetch sends
+ *     credentials:'include'). JS never reads or stores the token → not XSS-exposed.
+ *   - The client NEVER sends tenant/user identity. The backend derives tenant + user
+ *     from the verified session (RegulaOne /api/auth/me); this is what enforces tenant
+ *     isolation. The leading `tenantId` parameters below are kept only for call-site
+ *     compatibility and are intentionally NOT sent on the request.
  */
 
-import { apiFetch } from '../lib/api';
-
-// KSeFFlow-specific backend (certificates, KSeF gov API)
-const KSEF_API_URL = import.meta.env.VITE_KSEF_API_URL ?? 'http://localhost:8081';
+import { apiFetch, ksefFetch } from '../lib/api';
 
 // ── Response mapper ────────────────────────────────────────────────────────────
 // Maps the backend KsefInvoice entity shape onto what this frontend expects.
@@ -86,57 +90,11 @@ export const mapBackendInvoice = (b) => ({
 });
 
 // ── Invoice API (KSeFFlow backend :8081, /api/v1/invoices) ──────────────────────
-// Invoices are served by the KSeFFlow backend (VITE_KSEF_API_URL), NOT the
-// RegulaOne backend that apiFetch targets. The KSeFInvoiceController reads the
-// tenant from the X-Tenant-Id header (JWT-claim extraction is a later phase), so
-// every call MUST send it — the backend rejects requests without it.
+// All calls go through ksefFetch (lib/api.js): httpOnly-cookie auth, no client-asserted
+// identity headers, central 401→login + normalised errors. The backend resolves the
+// tenant from the session, so it returns ONLY the caller's tenant's data.
 
-const INVOICE_BASE = `${KSEF_API_URL}/api/v1/invoices`;
-
-// Standard tenant/user headers expected by KSeFInvoiceController.
-// X-Tenant-Id is mandatory; X-User-Id / X-User-Email are optional audit context.
-const invoiceHeaders = ({ tenantId, userId, userEmail } = {}) => {
-  const headers = { 'Content-Type': 'application/json' };
-  if (tenantId)  headers['X-Tenant-Id']  = tenantId;
-  if (userId)    headers['X-User-Id']    = userId;
-  if (userEmail) headers['X-User-Email'] = userEmail;
-  return headers;
-};
-
-// Throws a normalised Error for a non-2xx response so the UI always shows a
-// meaningful message. Handles every shape the backend can return:
-//   - plain-string body              (controller IllegalArgument/IllegalState handlers)
-//   - Spring validation error JSON   ({ errors: [{ field, defaultMessage }], ... })
-//   - Spring error JSON              ({ message } or { error })
-const throwInvoiceError = async (res) => {
-  // Read as text first, then try JSON — a non-JSON body (proxy/HTML error page)
-  // would otherwise blow up res.json() and hide the real failure.
-  const raw = await res.text().catch(() => '');
-  let body = null;
-  try { body = raw ? JSON.parse(raw) : null; } catch { /* not JSON */ }
-
-  let message;
-  if (typeof body === 'string') {
-    message = body;
-  } else if (body) {
-    if (Array.isArray(body.errors) && body.errors.length) {
-      // Field-level validation errors → "Seller city is required; Buyer NIP must be 10 digits"
-      message = body.errors
-        .map(e => e.defaultMessage || e.message || (e.field ? `${e.field} is invalid` : null))
-        .filter(Boolean)
-        .join('; ');
-    }
-    message = message || body.message || body.error;
-  } else if (raw) {
-    message = raw;
-  }
-
-  message = message || res.statusText || `Request failed (${res.status})`;
-
-  const err = new Error(message);
-  err.httpStatus = res.status;
-  throw err;
-};
+const INVOICE_PATH = '/api/v1/invoices';
 
 // Enum mappers — the backend deserialises enums by their exact Java name, so the
 // frontend's display/code values must be translated before sending.
@@ -157,27 +115,18 @@ const toCurrencyEnum = (currency) => {
 };
 
 /**
- * List all invoices for a tenant. The backend returns a Spring Data Page, so we
- * read `.content`; a bare array is tolerated for forward compatibility.
+ * List the caller's invoices. The backend scopes to the session tenant and returns a
+ * Spring Data Page, so we read `.content`; a bare array is tolerated for compatibility.
+ * (Any leading tenantId arg from older call sites is ignored — see the file header.)
  */
-export const listInvoices = async (tenantId = '') => {
-  const res = await fetch(INVOICE_BASE, {
-    headers:     invoiceHeaders({ tenantId }),
-    credentials: 'include',
-  });
-  if (!res.ok) await throwInvoiceError(res);
-  const page = await res.json();
+export const listInvoices = async () => {
+  const page = await ksefFetch(INVOICE_PATH);
   const content = Array.isArray(page) ? page : (page?.content ?? []);
   return content.map(mapBackendInvoice);
 };
 
-export const getInvoice = async (tenantId, invoiceId) => {
-  const res = await fetch(`${INVOICE_BASE}/${invoiceId}`, {
-    headers:     invoiceHeaders({ tenantId }),
-    credentials: 'include',
-  });
-  if (!res.ok) await throwInvoiceError(res);
-  return mapBackendInvoice(await res.json());
+export const getInvoice = async (_tenantId, invoiceId) => {
+  return mapBackendInvoice(await ksefFetch(`${INVOICE_PATH}/${invoiceId}`));
 };
 
 /**
@@ -223,29 +172,23 @@ export const createInvoice = async (payload) => {
     })),
   };
 
-  const res = await fetch(`${INVOICE_BASE}/draft`, {
-    method:      'POST',
-    headers:     invoiceHeaders({ tenantId: payload.tenantId, userId: payload.userId }),
-    credentials: 'include',
-    body:        JSON.stringify(body),
+  const created = await ksefFetch(`${INVOICE_PATH}/draft`, {
+    method: 'POST',
+    body:   JSON.stringify(body),
   });
-  if (!res.ok) await throwInvoiceError(res);
-  return mapBackendInvoice(await res.json());
+  return mapBackendInvoice(created);
 };
 
 /**
  * Submit a DRAFT invoice to the KSeF gateway (POST /api/v1/invoices/{id}/submit).
- * The backend requires the company NIP as a query param and the tenant header.
- * Returns the raw SubmitInvoiceResponse ({ status, ksefId, message, ... }).
+ * The backend requires the company NIP as a query param; tenant/user come from the
+ * session. Returns the raw SubmitInvoiceResponse ({ status, ksefId, message, ... }).
+ * (Leading tenantId / trailing userId args from older call sites are ignored.)
  */
-export const submitInvoice = async (tenantId, invoiceId, nip, userId) => {
-  const res = await fetch(`${INVOICE_BASE}/${invoiceId}/submit?nip=${encodeURIComponent(nip ?? '')}`, {
-    method:      'POST',
-    headers:     invoiceHeaders({ tenantId, userId }),
-    credentials: 'include',
+export const submitInvoice = async (_tenantId, invoiceId, nip) => {
+  return ksefFetch(`${INVOICE_PATH}/${invoiceId}/submit?nip=${encodeURIComponent(nip ?? '')}`, {
+    method: 'POST',
   });
-  if (!res.ok) await throwInvoiceError(res);
-  return res.json();
 };
 
 /**
@@ -272,10 +215,10 @@ export const downloadInvoiceXml = async (invoiceId) => {
  *
  * Talks to the KSeFFlow backend (:8081) GET /api/v1/audit-logs, which returns a
  * Spring Data Page<KsefAuditLog>: { content, totalElements, totalPages, size, number }.
- * Tenant scope is enforced server-side via the X-Tenant-Id header — clients can
- * never read logs outside their own tenant.
+ * Tenant scope is enforced server-side from the session — clients can never read logs
+ * outside their own tenant, and never send a tenant id.
  *
- * @param {string} tenantId tenant whose logs to fetch (required)
+ * @param {string} [_tenantId] ignored (kept for call-site compatibility)
  * @param {object} [opts]
  * @param {number} [opts.page=0]   zero-based page index
  * @param {number} [opts.size=20]  entries per page
@@ -285,7 +228,7 @@ export const downloadInvoiceXml = async (invoiceId) => {
  * @param {string} [opts.search]   substring match across email, action, IP, detail
  * @returns {Promise<{content: object[], totalElements: number, totalPages: number, size: number, number: number}>}
  */
-export const listAuditLogs = async (tenantId, opts = {}) => {
+export const listAuditLogs = async (_tenantId, opts = {}) => {
   const { page = 0, size = 20, from, to, role, search } = opts;
 
   const params = new URLSearchParams();
@@ -296,15 +239,7 @@ export const listAuditLogs = async (tenantId, opts = {}) => {
   if (role)   params.set('role', role);
   if (search) params.set('search', search);
 
-  const res = await fetch(`${KSEF_API_URL}/api/v1/audit-logs?${params.toString()}`, {
-    headers:     { 'X-Tenant-Id': tenantId },
-    credentials: 'include',
-  });
-
-  const json = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error((typeof json === 'string' ? json : json?.message) ?? `Failed to load audit logs (${res.status})`);
-  }
+  const json = await ksefFetch(`/api/v1/audit-logs?${params.toString()}`);
 
   // Normalise so the UI always has the fields it reads, even on an empty response.
   return {
@@ -329,48 +264,28 @@ export const getMyTenant = async () => apiFetch('/api/tenant/info');
 // ── Certificate API (KSeFFlow backend :8081) ──────────────────────────────────
 
 /**
- * Upload a .pfx or .pem certificate for a tenant.
- * Uses raw fetch + FormData because multipart/form-data cannot go through
- * the JSON-based apiFetch wrapper.
+ * Upload a .pfx or .pem certificate for the caller's tenant.
+ * Sends multipart/form-data through ksefFetch (the browser sets the boundary;
+ * the httpOnly cookie carries auth). Tenant/user are taken from the session.
  *
- * @param {string}  tenantId  tenant that owns the certificate
- * @param {File}    file      the .pfx / .pem file object from the file input
- * @param {string}  password  certificate password (required for PFX, omit for PEM)
- * @param {string}  userId    optional user id for audit trail
+ * @param {string}  [_tenantId] ignored (kept for call-site compatibility)
+ * @param {File}    file        the .pfx / .pem file object from the file input
+ * @param {string}  [password]  certificate password (required for PFX, omit for PEM)
  * @returns {Promise<CertificateResponse>}
  */
-export const uploadCertificate = async (tenantId, file, password = '', userId = '') => {
+export const uploadCertificate = async (_tenantId, file, password = '') => {
   const form = new FormData();
   form.append('file', file);
   if (password) form.append('password', password);
 
-  const headers = { 'X-Tenant-Id': tenantId };
-  if (userId) headers['X-User-Id'] = userId;
-
-  const res = await fetch(`${KSEF_API_URL}/api/v1/certificates/upload`, {
-    method: 'POST',
-    headers,
-    body: form,
-    credentials: 'include',
-  });
-
-  const json = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(json?.message ?? `Upload failed (${res.status})`);
-  }
-  return json;
+  return ksefFetch('/api/v1/certificates/upload', { method: 'POST', body: form });
 };
 
 /**
- * List all certificates for a tenant (active + historical), newest first.
+ * List all certificates for the caller's tenant (active + historical), newest first.
  */
-export const listCertificates = async (tenantId) => {
-  const res = await fetch(`${KSEF_API_URL}/api/v1/certificates`, {
-    headers:     { 'X-Tenant-Id': tenantId },
-    credentials: 'include',
-  });
-  const json = await res.json().catch(() => []);
-  if (!res.ok) throw new Error(json?.message ?? 'Failed to load certificates');
+export const listCertificates = async () => {
+  const json = await ksefFetch('/api/v1/certificates');
   return Array.isArray(json) ? json : [];
 };
 
@@ -378,13 +293,6 @@ export const listCertificates = async (tenantId) => {
  * Deactivate (soft-disable) a certificate so it is no longer used for signing.
  * The record is kept for audit history.
  */
-export const deactivateCertificate = async (tenantId, certId) => {
-  const res = await fetch(`${KSEF_API_URL}/api/v1/certificates/${certId}/deactivate`, {
-    method:      'PATCH',
-    headers:     { 'X-Tenant-Id': tenantId },
-    credentials: 'include',
-  });
-  const json = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(json?.message ?? 'Failed to deactivate certificate');
-  return json;
+export const deactivateCertificate = async (_tenantId, certId) => {
+  return ksefFetch(`/api/v1/certificates/${certId}/deactivate`, { method: 'PATCH' });
 };
