@@ -1,10 +1,12 @@
 package com.ksefflow.backend.config;
 
+import com.ksefflow.backend.dto.ksefapi.FormCode;
 import com.ksefflow.backend.models.utils.KsefEnvironment;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.NestedConfigurationProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
@@ -32,8 +34,25 @@ public class KsefApiProperties {
     @NotNull(message = "ksef.api.environment must be set (SANDBOX or PRODUCTION)")
     private KsefEnvironment environment;
 
+    // Invoice schema declared when opening an online session (defaults to FA(3)).
+    @NestedConfigurationProperty
+    private FormCodeProps formCode = new FormCodeProps();
+
     // Returns the correct base URL for the current environment
     public String getActiveBaseUrl() {
         return environment == KsefEnvironment.PRODUCTION ? productionUrl : sandboxUrl;
+    }
+
+    // Maps the configured form code to the API DTO used by POST /sessions/online.
+    public FormCode toFormCode() {
+        return new FormCode(formCode.getSystemCode(), formCode.getSchemaVersion(), formCode.getValue());
+    }
+
+    /** Bound from {@code ksef.api.form-code.*}; defaults match the FA(3) online-session schema. */
+    @Data
+    public static class FormCodeProps {
+        private String systemCode = "FA (3)";
+        private String schemaVersion = "1-0E";
+        private String value = "FA";
     }
 }

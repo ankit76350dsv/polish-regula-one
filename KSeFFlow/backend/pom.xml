@@ -80,6 +80,14 @@
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
 
+		<!-- Apache Santuario (XML Security) — XAdES/XML-DSig enveloped signature over the
+		     KSeF 2.0 AuthTokenRequest document (POST /auth/xades-signature). -->
+		<dependency>
+			<groupId>org.apache.santuario</groupId>
+			<artifactId>xmlsec</artifactId>
+			<version>3.0.4</version>
+		</dependency>
+
 		<!-- Configuration metadata — IDE autocomplete for application.properties -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

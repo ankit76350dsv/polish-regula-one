@@ -1,11 +1,14 @@
 package com.ksefflow.backend.services.ksefauth;
 
 import com.ksefflow.backend.config.KsefApiProperties;
+import com.ksefflow.backend.dto.ksefapi.AuthChallengeResponse;
+import com.ksefflow.backend.dto.ksefapi.AuthInitResponse;
+import com.ksefflow.backend.dto.ksefapi.AuthStatusResponse;
+import com.ksefflow.backend.dto.ksefapi.AuthTokenRefreshResponse;
+import com.ksefflow.backend.dto.ksefapi.AuthTokensResponse;
 import com.ksefflow.backend.exceptions.KsefAuthException;
 import com.ksefflow.backend.models.KsefAuditLog;
-import com.ksefflow.backend.models.KsefGovernmentSession;
 import com.ksefflow.backend.repository.KsefAuditLogRepository;
-import com.ksefflow.backend.repository.KsefGovernmentSessionRepository;
 import com.ksefflow.backend.services.certificate.CertificateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,194 +20,171 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
- * KSeF Government API — Challenge-Response Authentication (Phase 2).
+ * KSeF 2.0 — token-based authentication.
  *
- * The 3-step flow to open a government session:
+ * <p>{@link #openSession(String, String)} returns a usable {@code accessToken}, acquiring it
+ * by the cheapest available path:
+ * <ol>
+ *   <li>reuse a still-valid stored accessToken;</li>
+ *   <li>otherwise refresh it with a still-valid refreshToken (POST /auth/token/refresh);</li>
+ *   <li>otherwise run the full XAdES authentication:
+ *       challenge → build + XAdES-sign AuthTokenRequest → submit → poll status → redeem tokens.</li>
+ * </ol>
  *
- * Step 1 — POST /online/Session/AuthorisationChallenge
- * Send the company NIP → receive a random challenge string.
- *
- * Step 2 — Sign the challenge locally
- * Load the tenant's active .pfx certificate (via CertificateService).
- * Sign the challenge bytes with SHA256withRSA using the private key.
- * DER-encode and Base64-encode the public certificate.
- *
- * Step 3 — POST /online/Session/Authorisation
- * Send NIP + signed challenge + public certificate.
- * The government verifies the signature and returns a session token.
- *
- * Helper responsibilities:
- * - KsefApiClient — all HTTP calls to the KSeF government REST API
- * - KsefSigningUtils — RSA-SHA256 challenge signing + DER certificate encoding
- * (static)
- * - KsefSessionStore — session token encrypt/save/deactivate in MongoDB
+ * The legacy KSeF 1.0 challenge-signing + 24h "SessionToken" flow has been removed.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class KSeFAuthService {
 
+    // KSeF auth-operation status codes (GET /auth/{referenceNumber}).
+    private static final int AUTH_STATUS_SUCCESS = 200;
+    private static final int AUTH_POLL_MAX_ATTEMPTS = 10;
+    private static final long AUTH_POLL_INTERVAL_MS = 1500;
+
     private final CertificateService certificateService;
     private final KsefApiClient ksefApiClient;
     private final KsefSessionStore sessionStore;
-    private final KsefGovernmentSessionRepository sessionRepository;
+    private final XAdESSigner xadesSigner;
     private final KsefAuditLogRepository auditLogRepository;
     private final KsefApiProperties apiProperties;
 
     // ── Public API ─────────────────────────────────────────────────────────────
 
     /**
-     * Opens a secure session with the KSeF government system for a company.
+     * Returns a valid KSeF 2.0 accessToken for the tenant, authenticating if necessary.
      *
-     * What happens in this method:
-     * 1. Checks if the company already has an active session
-     * → if yes, returns the existing session token
-     *
-     * 2. Checks if the company certificate is valid
-     * → makes sure it is not expired or revoked
-     *
-     * 3. Requests a challenge code from the KSeF government API
-     *
-     * 4. Signs the challenge using the company’s private certificate key
-     *
-     * 5. Sends the signed challenge and public certificate to KSeF
-     *
-     * 6. Receives a session token from KSeF
-     * → encrypts and stores it safely in MongoDB
-     *
-     * 7. Saves audit logs for tracking and compliance
-     *
-     * @param tenantId company/tenant identifier
-     * @param nip      company's 10-digit Polish tax number
-     * @return active KSeF session token used in the "SessionToken" HTTP header
-     * @throws KsefAuthException if authentication fails at any step
+     * @param tenantId the tenant/company
+     * @param nip      the 10-digit NIP that forms the authentication context
      */
-    // KSeF uses Public Key Infrastructure certificate-based authentication (not
-    // username/password).
     public String openSession(String tenantId, String nip) {
+        log.info("[KSeF2 Auth] Acquiring accessToken for tenant [{}]", tenantId);
 
-        log.info("[OpenSession] Opening or reusing KSeF session for tenant [{}]", tenantId);
-
-        // Return existing session if still valid — avoid unnecessary re-authentication
-        Optional<String> existing = sessionStore.getActiveToken(tenantId);
-
-        if (existing.isPresent()) {
-            log.info("[OpenSession] Reusing existing active KSeF session for tenant [{}]", tenantId);
-            return existing.get();
+        // 1) Reuse a still-valid accessToken.
+        Optional<String> active = sessionStore.getActiveAccessToken(tenantId);
+        if (active.isPresent()) {
+            log.info("[KSeF2 Auth] Reusing valid accessToken for tenant [{}]", tenantId);
+            return active.get();
         }
 
-        log.debug("[OpenSession] No active session found for tenant [{}] — opening new session", tenantId);
+        // 2) Refresh using a still-valid refreshToken — avoids a full re-auth.
+        Optional<String> refresh = sessionStore.getValidRefreshToken(tenantId);
+        if (refresh.isPresent()) {
+            try {
+                log.info("[KSeF2 Auth] Refreshing accessToken for tenant [{}]", tenantId);
+                AuthTokenRefreshResponse refreshed = ksefApiClient.refreshAccessToken(refresh.get());
+                sessionStore.updateAccessToken(tenantId, refreshed.accessToken());
+                return refreshed.accessToken().token();
+            } catch (KsefAuthException e) {
+                log.warn("[KSeF2 Auth] Refresh failed for tenant [{}] — falling back to full auth: {}",
+                        tenantId, e.getMessage());
+            }
+        }
 
-        // Guard: validate the certificate before making any network calls
+        // 3) Full XAdES authentication.
+        return authenticateWithCertificate(tenantId, nip);
+    }
+
+    public Optional<String> getActiveSessionToken(String tenantId) {
+        return sessionStore.getActiveAccessToken(tenantId);
+    }
+
+    public boolean isSessionActive(String tenantId) {
+        return sessionStore.getActiveAccessToken(tenantId).isPresent();
+    }
+
+    /** Deactivates the local token session for the tenant. */
+    public void closeSession(String tenantId) {
+        sessionStore.deactivateSession(tenantId);
+        writeAuditLog(tenantId, "KSEF_SESSION_CLOSED", "local deactivation");
+    }
+
+    // ── Full certificate (XAdES) authentication ──────────────────────────────────
+
+    private String authenticateWithCertificate(String tenantId, String nip) {
+        // Guard: certificate must be active before any network calls.
         certificateService.validateCertificateActive(tenantId);
 
         try {
+            // Step 1 — challenge
+            AuthChallengeResponse challenge = ksefApiClient.getAuthChallenge();
 
-            // Step 1 — request challenge from government
-            //TODO: 1st thing with goverment --> {"challenge": "20260602-CR-8F3A2B1C9D-AB12CD34EF56...", "timestamp": "2026-06-02T12:34:56.789Z" }
-            String challenge = ksefApiClient.requestChallenge(nip); //! here is failing...
-
-            // Step 2 — sign the challenge and encode the public certificate
+            // Step 2 — build + XAdES-sign the AuthTokenRequest
+            String unsignedXml = AuthTokenRequestBuilder.buildForNip(challenge.challenge(), nip);
             PrivateKey privateKey = certificateService.getPrivateKey(tenantId);
-            X509Certificate publicCert = certificateService.getPublicCertificate(tenantId);
-            String signedChallenge = KsefSigningUtils.signChallenge(challenge, privateKey);
-            String certBase64 = KsefSigningUtils.encodeCertificate(publicCert);
+            X509Certificate cert = certificateService.getPublicCertificate(tenantId);
+            String signedXml = xadesSigner.sign(unsignedXml, privateKey, cert);
 
-            // Step 3 — submit to government, receive session token
-            //TODO: 2nd thing with goverment --> "eyJhbGciOi...<long opaque token>..."
-            String sessionToken = ksefApiClient.authorise(nip, signedChallenge, certBase64);
+            // Step 3 — submit signed XML, receive temporary auth operation token
+            AuthInitResponse init = ksefApiClient.submitXadesSignature(signedXml);
+            String authToken = init.authenticationToken().token();
 
-            // store the session token in the DB.
-            sessionStore.saveActiveSession(tenantId, sessionToken);
+            // Step 4 — poll until the async auth operation succeeds
+            awaitAuthSuccess(init.referenceNumber(), authToken);
+
+            // Step 5 — redeem the access + refresh tokens
+            AuthTokensResponse tokens = ksefApiClient.redeemTokens(authToken);
+            sessionStore.saveSession(tenantId, tokens.accessToken(), tokens.refreshToken());
             certificateService.recordAuthSuccess(tenantId);
 
-            writeAuditLog(tenantId, "KSEF_SESSION_OPENED", "SESSION", null, "environment=" + apiProperties.getEnvironment());
+            writeAuditLog(tenantId, "KSEF_SESSION_OPENED", "environment=" + apiProperties.getEnvironment());
+            log.info("[KSeF2 Auth] Authentication complete for tenant [{}]", tenantId);
+            return tokens.accessToken().token();
 
-            log.info("[OpenSession] Session initialization completed successfully for tenant [{}]", tenantId);
-
-            return sessionToken;
-
-        }   catch (KsefAuthException kae) {
-
-            log.error("[OpenSession] Failed to open KSeF session for tenant [{}] - reason: {}",tenantId,kae.getMessage(),kae);
-            certificateService.recordAuthFailure(tenantId); //TODO: 
-            writeAuditLog(
-                    tenantId,
-                    "KSEF_SESSION_FAILED",
-                    "SESSION",
-                    null,
-                    kae.getMessage());
-            throw kae;
+        } catch (KsefAuthException e) {
+            log.error("[KSeF2 Auth] Authentication failed for tenant [{}]: {}", tenantId, e.getMessage(), e);
+            certificateService.recordAuthFailure(tenantId);
+            writeAuditLog(tenantId, "KSEF_SESSION_FAILED", e.getMessage());
+            throw e;
         }
     }
 
-    /**
-     * Returns the active session token for a tenant if one exists and has not
-     * expired.
-     * The returned token is decrypted — ready to use as the "SessionToken" HTTP
-     * header.
-     * Returns Optional.empty() if there is no session or it has expired.
-     */
-    public Optional<String> getActiveSessionToken(String tenantId) {
-        return sessionStore.getActiveToken(tenantId);
+    // Polls GET /auth/{referenceNumber} until the operation reports success or fails.
+    private void awaitAuthSuccess(String referenceNumber, String authToken) {
+        for (int attempt = 1; attempt <= AUTH_POLL_MAX_ATTEMPTS; attempt++) {
+            AuthStatusResponse status = ksefApiClient.getAuthStatus(referenceNumber, authToken);
+            Integer code = status.status() != null ? status.status().code() : null;
+
+            if (code != null && code == AUTH_STATUS_SUCCESS) {
+                log.info("[KSeF2 Auth] Auth operation [{}] succeeded", referenceNumber);
+                return;
+            }
+            if (code != null && code >= 400) {
+                throw new KsefAuthException("KSeF authentication rejected (code " + code + "): "
+                        + (status.status().description() != null ? status.status().description() : ""));
+            }
+            // Still in progress (e.g. awaiting OCSP/CRL) — wait and retry.
+            if (attempt < AUTH_POLL_MAX_ATTEMPTS) {
+                sleepQuietly(AUTH_POLL_INTERVAL_MS);
+            }
+        }
+        throw new KsefAuthException("KSeF authentication did not complete after "
+                + AUTH_POLL_MAX_ATTEMPTS + " status checks for ref " + referenceNumber);
     }
 
-    /**
-     * Returns true if the tenant has a valid, unexpired government session.
-     * Called by KSeFInvoiceService before attempting to submit an invoice.
-     */
-    public boolean isSessionActive(String tenantId) {
-        return sessionStore.getActiveToken(tenantId).isPresent();
-    }
+    // ── Audit ────────────────────────────────────────────────────────────────────
 
-    /**
-     * Terminates the tenant's active government session.
-     *
-     * Calls DELETE /online/Session/Terminate on the KSeF API, then deactivates
-     * the local session record regardless of API result.
-     * If KSeF is unreachable the session will expire naturally after 24 hours.
-     */
-    public void closeSession(String tenantId) {
-        sessionRepository.findByTenantId(tenantId)
-                .filter(KsefGovernmentSession::isActive)
-                .ifPresent(session -> {
-                    // Decrypt token to send in the Terminate request
-                    String token = sessionStore.getActiveToken(tenantId).orElse(null);
-                    if (token != null) {
-                        try {
-                            ksefApiClient.terminateSession(token);
-                            log.info("Session terminated at KSeF API for tenant [{}]", tenantId);
-                        } catch (Exception e) {
-                            // Log but do not throw — local cleanup must still happen
-                            log.warn("Failed to terminate session at KSeF API for tenant [{}]: {}",
-                                    tenantId, e.getMessage());
-                        }
-                    }
-                    sessionStore.deactivateSession(session);
-                    writeAuditLog(tenantId, "KSEF_SESSION_CLOSED", "SESSION",
-                            session.getId(), "manual termination");
-                });
-    }
-
-    // ── Domain-level audit log (stays in service — it writes to compliance
-    // records) ──
-
-    private void writeAuditLog(String tenantId, String action,
-            String entityType, String entityId, String newValue) {
+    private void writeAuditLog(String tenantId, String action, String newValue) {
         try {
             auditLogRepository.save(KsefAuditLog.builder()
                     .tenantId(tenantId)
                     .action(action)
-                    .targetEntityType(entityType)
-                    .targetEntityId(entityId)
+                    .targetEntityType("SESSION")
                     .newValue(newValue)
                     .complianceChecked(true)
                     .timestamp(LocalDateTime.now())
                     .build());
         } catch (Exception e) {
-            // Audit log failure must never block the main operation
-            log.error("Failed to write audit log [action={}] for tenant [{}]: {}",
-                    action, tenantId, e.getMessage());
+            log.error("Failed to write audit log [action={}] for tenant [{}]: {}", action, tenantId, e.getMessage());
+        }
+    }
+
+    private static void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

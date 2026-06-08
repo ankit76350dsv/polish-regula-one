@@ -6,8 +6,15 @@ import com.ksefflow.backend.services.fa3xml.Fa3ValidationGate;
 import com.ksefflow.backend.services.ksefauth.KSeFAuthService;
 
 import com.ksefflow.backend.config.KsefApiProperties;
-import com.ksefflow.backend.dto.ksefapi.KsefInvoiceStatusResponse;
-import com.ksefflow.backend.dto.ksefapi.KsefSendInvoiceResponse;
+import com.ksefflow.backend.dto.ksefapi.EncryptionInfo;
+import com.ksefflow.backend.dto.ksefapi.FormCode;
+import com.ksefflow.backend.dto.ksefapi.OpenOnlineSessionRequest;
+import com.ksefflow.backend.dto.ksefapi.OpenOnlineSessionResponse;
+import com.ksefflow.backend.dto.ksefapi.PublicKeyCertificate;
+import com.ksefflow.backend.dto.ksefapi.SendInvoiceRequest;
+import com.ksefflow.backend.dto.ksefapi.SendInvoiceResponse;
+import com.ksefflow.backend.dto.ksefapi.SessionInvoiceStatusResponse;
+import com.ksefflow.backend.services.ksefauth.KsefSessionEncryptionService;
 import com.ksefflow.backend.exceptions.KsefAuthException;
 import com.ksefflow.backend.exceptions.KsefCertificateException;
 import com.ksefflow.backend.exceptions.KsefSubmissionException;
@@ -68,9 +75,13 @@ public class KSeFInvoiceService {
     private final Fa3ValidationGate fa3ValidationGate;
     private final KSeFAuthService authService;
     private final KsefApiClient ksefApiClient;
+    private final KsefSessionEncryptionService encryptionService;
     private final UPOStorageService upoStorageService;
     private final KsefQrService qrService;
     private final KsefApiProperties apiProperties;
+
+    // KSeF 2.0 usage flag identifying the MF public key that wraps the session AES key.
+    private static final String SYMMETRIC_KEY_ENCRYPTION_USAGE = "SymmetricKeyEncryption";
 
     //! ── Create ─────────────────────────────────────────────────────────────────
 
@@ -245,64 +256,64 @@ public class KSeFInvoiceService {
             String xmlContent, String nip,
             String userEmail, String ipAddress) {
 
-        log.info("[ExecuteKsefSubmission] Starting KSeF invoice submission flow for invoice [{}]",
+        log.info("[ExecuteKsefSubmission] Starting KSeF 2.0 invoice submission flow for invoice [{}]",
                 invoice.getInvoiceNumber());
 
         String tenantId = invoice.getTenantId();
         String invoiceId = invoice.getId();
 
-        // Step 5 — open / reuse KSeF government session
-        // TODO: 1st step to get {Header: SessionToken: 20230615-SE-...}
-        String sessionToken = authService.openSession(tenantId, nip);
+        // Step 5 — acquire a KSeF 2.0 accessToken (reuse / refresh / full XAdES auth).
+        String accessToken = authService.openSession(tenantId, nip);
+        log.debug("[ExecuteKsefSubmission] accessToken acquired for tenant [{}]", tenantId);
 
-        log.debug("[ExecuteKsefSubmission] Session token acquired successfully for tenant [{}]", tenantId);
+        // Step 6 — fetch the MF public key and open an encrypted online session.
+        PublicKeyCertificate symmetricKeyCert = resolveSymmetricKeyCertificate();
+        KsefSessionEncryptionService.SessionKey sessionKey = encryptionService.generateSessionKey();
+        EncryptionInfo encryption = encryptionService.buildEncryptionInfo(
+                sessionKey, symmetricKeyCert.certificate(), symmetricKeyCert.publicKeyId());
 
-        // Step 6 — POST the FA(3) XML to KSeF
+        OpenOnlineSessionResponse session = ksefApiClient.openOnlineSession(accessToken,
+                new OpenOnlineSessionRequest(apiProperties.toFormCode(), encryption));
+        String sessionRef = session.referenceNumber();
+        log.info("[ExecuteKsefSubmission] Online session [{}] opened for invoice [{}]",
+                sessionRef, invoice.getInvoiceNumber());
+
         LocalDateTime submittedAt = LocalDateTime.now();
 
-        // TODO: last step of the sending invoce to goverment { Header: SessionToken: 20230615-SE-... | Body: <FA3 XML bytes> }
-        KsefSendInvoiceResponse sendResponse = ksefApiClient.sendInvoice(sessionToken, xmlContent);
-        String elementRef = sendResponse.getElementReferenceNumber();
+        // Step 7 — encrypt the FA(3) XML with the session key and send it.
+        KsefSessionEncryptionService.EncryptedInvoice enc = encryptionService.encryptInvoice(
+                xmlContent.getBytes(java.nio.charset.StandardCharsets.UTF_8), sessionKey);
+        SendInvoiceResponse sendResponse = ksefApiClient.sendInvoice(accessToken, sessionRef,
+                new SendInvoiceRequest(
+                        enc.invoiceHashB64(), enc.invoiceSize(),
+                        enc.encryptedInvoiceHashB64(), enc.encryptedInvoiceSize(),
+                        java.util.Base64.getEncoder().encodeToString(enc.cipherBytes()),
+                        Boolean.FALSE));
+        String invoiceRef = sendResponse.referenceNumber();
+        log.info("[ExecuteKsefSubmission] Invoice [{}] accepted into session — invoiceRef [{}]",
+                invoice.getInvoiceNumber(), invoiceRef);
 
-        log.info("[ExecuteKsefSubmission] Invoice [{}] accepted by KSeF — elementRef: [{}]",
-                invoice.getInvoiceNumber(),
-                elementRef);
-
-        // Step 7 — poll for the permanent KSeF reference number + acquisition
-        // timestamp.
-        // In production this can take a few seconds; the sandbox usually responds
-        // immediately.
-        KsefPollResult pollResult = pollForKsefId(sessionToken, elementRef, invoice.getInvoiceNumber());
+        // Step 8 — poll the per-invoice status until KSeF assigns the permanent KSeF number.
+        KsefPollResult pollResult = pollForKsefId(accessToken, sessionRef, invoiceRef, invoice.getInvoiceNumber());
         String ksefId = pollResult.ksefReferenceNumber();
         LocalDateTime receivedAt = LocalDateTime.now();
-        log.info("[ExecuteKsefSubmission] Permanent KSeF reference number received for invoice [{}] — ksefId [{}]",
-                invoice.getInvoiceNumber(),
-                ksefId);
+        log.info("[ExecuteKsefSubmission] Permanent KSeF number received for invoice [{}] — ksefId [{}]",
+                invoice.getInvoiceNumber(), ksefId);
 
-        // Prefer the government's own acquisitionTimestamp; fall back to sendResponse
-        // timestamp,
-        // then to the local clock — so the UPO is stamped with the legally correct
-        // time.
-        LocalDateTime upoTimestamp = extractTimestamp(
-                pollResult.acquisitionTimestamp() != null
-                        ? pollResult.acquisitionTimestamp()
-                        : sendResponse.getTimestamp(),
-                receivedAt);
+        // Prefer KSeF's own acquisition timestamp; fall back to the local clock.
+        LocalDateTime upoTimestamp = extractTimestamp(pollResult.acquisitionTimestamp(), receivedAt);
 
-
-        // Step 8 — fetch the real UPO XML from KSeF (production).
-        // In sandbox KSeF does not return a UPO body, so we fall back to the stub.
-        // TODO: get the receipt using the sessionToken and ksfid that we get after
-        //! recpeit not the invoice.
-        String upoXml = ksefApiClient.fetchUpoXml(sessionToken, ksefId)
+        // Step 9 — fetch the official per-invoice UPO XML from KSeF.
+        String upoXml = ksefApiClient.fetchUpoXml(accessToken, sessionRef, invoiceRef)
                 .orElseGet(() -> {
-                    log.warn(
-                            "[ExecuteKsefSubmission] KSeF did not return UPO XML — generating fallback UPO for invoice [{}]",
+                    log.warn("[ExecuteKsefSubmission] KSeF did not return UPO XML yet — storing placeholder for invoice [{}]",
                             invoice.getInvoiceNumber());
-
-                    return buildUpoXml(invoice, ksefId, upoTimestamp);
+                    return buildUpoPlaceholder(invoice, ksefId, upoTimestamp);
                 });
-        String upoDocumentId = upoStorageService.storeUpo( invoiceId, tenantId, ksefId, upoXml, upoTimestamp);
+        String upoDocumentId = upoStorageService.storeUpo(invoiceId, tenantId, ksefId, upoXml, upoTimestamp);
+
+        // Step 10 — close the online session (best-effort; it also expires on its own).
+        ksefApiClient.closeOnlineSession(accessToken, sessionRef);
 
         // Step 9 — mark invoice as SENT
         //! invoce update...
@@ -339,36 +350,49 @@ public class KSeFInvoiceService {
         return saved;
     }
 
-    // Carries both the permanent KSeF reference number and the government's own
-    // acquisition timestamp so the UPO is stamped with the legally correct time.
+    // Carries both the permanent KSeF number and KSeF's own acquisition timestamp so the
+    // UPO is stamped with the legally correct time.
     private record KsefPollResult(String ksefReferenceNumber, String acquisitionTimestamp) {
     }
 
-    //! Polls GET /online/Invoice/Status until a ksefReferenceNumber is returned.
-    // Retries up to 5 times with 1-second gaps — adequate for sandbox + production.
-   private KsefPollResult pollForKsefId(String sessionToken, String elementRef, String invoiceNumber) {
-    int maxAttempts = 5;
-    log.info("[PollForKsefId] Starting KSeF polling for invoice [{}] with elementRef [{}]", invoiceNumber, elementRef);
-    
-    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-        
-        log.debug("[PollForKsefId] Checking KSeF invoice status for invoice [{}] — attempt {}/{}", invoiceNumber, attempt, maxAttempts);
-        KsefInvoiceStatusResponse statusResponse = ksefApiClient.getInvoiceStatus(sessionToken, elementRef);
-        
-        if (statusResponse.getInvoiceStatus() != null && statusResponse.getInvoiceStatus().getKsefReferenceNumber() != null) {
-            log.info("[PollForKsefId] KSeF reference number generated successfully for invoice [{}] — ksefRef [{}]", invoiceNumber, statusResponse.getInvoiceStatus().getKsefReferenceNumber());
-            return new KsefPollResult(statusResponse.getInvoiceStatus().getKsefReferenceNumber(), statusResponse.getInvoiceStatus().getAcquisitionTimestamp());
-        }
-
-        if (attempt < maxAttempts) {
-            log.debug("[PollForKsefId] KSeF reference number not yet available for invoice [{}] — retrying in 1s", invoiceNumber);
-            sleepQuietly(1000);
-        }
+    // Picks the MF public-key certificate whose usage allows wrapping the session AES key.
+    private PublicKeyCertificate resolveSymmetricKeyCertificate() {
+        return ksefApiClient.getPublicKeyCertificates().stream()
+                .filter(c -> c.usage() != null && c.usage().contains(SYMMETRIC_KEY_ENCRYPTION_USAGE))
+                .findFirst()
+                .orElseThrow(() -> new KsefSubmissionException(
+                        "No KSeF public key with usage '" + SYMMETRIC_KEY_ENCRYPTION_USAGE + "' available"));
     }
 
-    log.error("[PollForKsefId] KSeF did not assign reference number after [{}] attempts for invoice [{}]", maxAttempts, invoiceNumber);
-    throw new KsefSubmissionException("KSeF did not assign a reference number after " + maxAttempts + " polling attempts for elementRef: " + elementRef);
-   }
+    // Polls GET /sessions/{ref}/invoices/{invoiceRef} until KSeF assigns the permanent
+    // KSeF number. Retries with short gaps — adequate for sandbox + production.
+    private KsefPollResult pollForKsefId(String accessToken, String sessionRef, String invoiceRef,
+                                         String invoiceNumber) {
+        int maxAttempts = 5;
+        log.info("[PollForKsefId] Polling KSeF status for invoice [{}] (invoiceRef [{}])", invoiceNumber, invoiceRef);
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            SessionInvoiceStatusResponse status = ksefApiClient.getInvoiceStatus(accessToken, sessionRef, invoiceRef);
+
+            if (status.ksefNumber() != null && !status.ksefNumber().isBlank()) {
+                log.info("[PollForKsefId] KSeF number assigned for invoice [{}] — [{}]", invoiceNumber, status.ksefNumber());
+                return new KsefPollResult(status.ksefNumber(), status.acquisitionDate());
+            }
+            // A terminal failure status (4xx code) means KSeF rejected the invoice — stop early.
+            if (status.status() != null && status.status().code() != null && status.status().code() >= 400) {
+                throw new KsefSubmissionException("KSeF rejected invoice [" + invoiceNumber + "] (code "
+                        + status.status().code() + "): "
+                        + (status.status().description() != null ? status.status().description() : ""));
+            }
+            if (attempt < maxAttempts) {
+                sleepQuietly(1000);
+            }
+        }
+
+        log.error("[PollForKsefId] KSeF did not assign a number after [{}] attempts for invoice [{}]", maxAttempts, invoiceNumber);
+        throw new KsefSubmissionException("KSeF did not assign a number after " + maxAttempts
+                + " polling attempts for invoiceRef: " + invoiceRef);
+    }
 
     //! ── Private: offline fallback ──────────────────────────────────────────────
 
@@ -476,30 +500,19 @@ public class KSeFInvoiceService {
         return invoice;
     }
 
-    // ! try to understand what is this doing................
-    // Builds a simple fallback UPO XML document containing the KSeF acknowledgement
-    // details.
-    // In the production environment, KSeF normally returns the official UPO XML
-    // response.
-    // However, in the sandbox environment the UPO body may sometimes be missing,
-    // so this method generates a minimal placeholder UPO for local storage and
-    // tracking.
-    private String buildUpoXml(KsefInvoice invoice, String ksefId, LocalDateTime timestamp) {
-        // ! It's just a small XML saying: "Invoice FV/2026/05/001 was received by KSeF
-        // at this time and given this permanent ID."
-        // In production, KSeF sends you a real UPO XML with digital signature and more
-        // fields.
-
-        // In sandbox (test environment), KSeF does NOT send back a UPO body — the
-        // status poll just gives you the ksefReferenceNumber and nothing else.
-
+    // Builds a NON-official placeholder used only when KSeF has not yet returned the real
+    // per-invoice UPO (e.g. the UPO is still being generated, or in sandbox). It deliberately
+    // does NOT use any government FA/UPO namespace — it must never be mistaken for the legal
+    // UPO. The real signed UPO is fetched from GET /sessions/{ref}/invoices/{invoiceRef}/upo
+    // and overwrites this once available.
+    private String buildUpoPlaceholder(KsefInvoice invoice, String ksefId, LocalDateTime timestamp) {
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                "<UPO xmlns=\"http://crd.gov.pl/wzor/2023/06/29/12648/\">" +
-                "<NumerKSeF>" + ksefId + "</NumerKSeF>" + // ! ← KSeF-ID (permanent govt number)
-                "<NumerFaktury>" + invoice.getInvoiceNumber() + "</NumerFaktury>" + // ! ← Your invoice number
-                "<DataCzasOdbioru>" + timestamp + "</DataCzasOdbioru>" + // ! ← When govt received it
-                "<Srodowisko>" + apiProperties.getEnvironment() + "</Srodowisko>" + // ! ← TEST or PRODUCTION
-                "</UPO>";
+                "<UpoPlaceholder generatedBy=\"KSeFFlow\" official=\"false\">" +
+                "<KsefNumber>" + ksefId + "</KsefNumber>" +
+                "<InvoiceNumber>" + invoice.getInvoiceNumber() + "</InvoiceNumber>" +
+                "<AcquisitionTime>" + timestamp + "</AcquisitionTime>" +
+                "<Environment>" + apiProperties.getEnvironment() + "</Environment>" +
+                "</UpoPlaceholder>";
     }
 
     private LocalDateTime extractTimestamp(String iso, LocalDateTime fallback) {

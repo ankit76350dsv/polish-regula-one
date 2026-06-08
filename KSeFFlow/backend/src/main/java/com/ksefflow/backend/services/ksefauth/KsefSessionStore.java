@@ -1,37 +1,44 @@
 package com.ksefflow.backend.services.ksefauth;
 
 import com.ksefflow.backend.config.KsefApiProperties;
+import com.ksefflow.backend.dto.ksefapi.TokenInfo;
 import com.ksefflow.backend.models.KsefGovernmentSession;
 import com.ksefflow.backend.models.utils.KsefGovernmentStatus;
 import com.ksefflow.backend.repository.KsefGovernmentSessionRepository;
 import com.ksefflow.backend.services.certificate.CertificateCryptoUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 
-// Handles KsefGovernmentSession read/write in MongoDB.
-// One session document per tenant — upserted on every open/close (not appended).
-// The session token is AES-256-GCM encrypted before storage via CertificateCryptoUtils.
+/**
+ * Persists the KSeF 2.0 token pair (accessToken + refreshToken) per tenant in MongoDB.
+ * One document per tenant, upserted on every authentication. Both tokens are
+ * AES-256-GCM encrypted before storage via {@link CertificateCryptoUtils}.
+ *
+ * <p>The accessToken is short-lived (minutes); the refreshToken lives up to 7 days and is
+ * used to mint fresh accessTokens without re-running the XAdES authentication.
+ */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class KsefSessionStore {
 
-    // KSeF enforces a maximum session lifetime of 24 hours.
-    // We track this locally so we do not attempt to use an expired token.
-    private static final int SESSION_LIFETIME_HOURS = 24;
+    // Fallback lifetimes used only when KSeF does not return a parseable validUntil.
+    private static final int ACCESS_FALLBACK_MINUTES = 10;
+    private static final int REFRESH_FALLBACK_HOURS = 24;
 
-    private final KsefGovernmentSessionRepository ksef_government_sessions_repo;
+    private final KsefGovernmentSessionRepository sessionRepository;
     private final KsefApiProperties apiProperties;
     private final CertificateCryptoUtils crypto;
 
-    // Saves (or updates) the government session for a tenant.
-    // The session token is encrypted before being written to MongoDB.
-    // Uses find-then-update (upsert) so only one document exists per tenant.
-    public void saveActiveSession(String tenantId, String plainSessionToken) {
-        String encryptedToken = crypto.encryptPassword(plainSessionToken);
-
-        KsefGovernmentSession session = ksef_government_sessions_repo.findByTenantId(tenantId)
+    /** Saves (upserts) both tokens for a tenant, encrypting each at rest. */
+    public void saveSession(String tenantId, TokenInfo accessToken, TokenInfo refreshToken) {
+        KsefGovernmentSession session = sessionRepository.findByTenantId(tenantId)
                 .orElse(KsefGovernmentSession.builder()
                         .tenantId(tenantId)
                         .createdAt(LocalDateTime.now())
@@ -39,33 +46,80 @@ public class KsefSessionStore {
 
         session.setActive(true);
         session.setEnvironment(apiProperties.getEnvironment());
-        session.setSessionToken(encryptedToken);
         session.setStatus(KsefGovernmentStatus.CONNECTED);
+        session.setSessionToken(crypto.encryptPassword(accessToken.token()));
         session.setSessionStartedAt(LocalDateTime.now());
-        session.setSessionExpiresAt(LocalDateTime.now().plusHours(SESSION_LIFETIME_HOURS));
+        session.setSessionExpiresAt(parseOrDefault(accessToken.validUntil(),
+                LocalDateTime.now().plusMinutes(ACCESS_FALLBACK_MINUTES)));
+
+        if (refreshToken != null && refreshToken.token() != null) {
+            session.setRefreshToken(crypto.encryptPassword(refreshToken.token()));
+            session.setRefreshTokenExpiresAt(parseOrDefault(refreshToken.validUntil(),
+                    LocalDateTime.now().plusHours(REFRESH_FALLBACK_HOURS)));
+        }
+
         session.setLastSyncTime(LocalDateTime.now());
         session.setUpdatedAt(LocalDateTime.now());
-
-        ksef_government_sessions_repo.save(session);
+        sessionRepository.save(session);
     }
 
-    // Marks the session as inactive and clears the encrypted token.
-    // Called after a successful /Terminate API call, or on forced local cleanup.
-    public void deactivateSession(KsefGovernmentSession session) {
-        session.setActive(false);
-        session.setStatus(KsefGovernmentStatus.DISCONNECTED);
-        session.setSessionToken(null);
-        session.setUpdatedAt(LocalDateTime.now());
-        ksef_government_sessions_repo.save(session);
+    /** Replaces just the accessToken after a successful /auth/token/refresh. */
+    public void updateAccessToken(String tenantId, TokenInfo accessToken) {
+        sessionRepository.findByTenantId(tenantId).ifPresent(session -> {
+            session.setSessionToken(crypto.encryptPassword(accessToken.token()));
+            session.setSessionExpiresAt(parseOrDefault(accessToken.validUntil(),
+                    LocalDateTime.now().plusMinutes(ACCESS_FALLBACK_MINUTES)));
+            session.setLastSyncTime(LocalDateTime.now());
+            session.setUpdatedAt(LocalDateTime.now());
+            sessionRepository.save(session);
+        });
     }
 
-    // Returns the decrypted session token if the session is active and not expired.
-    // Returns an empty Optional if there is no session or it has expired.
-    public java.util.Optional<String> getActiveToken(String tenantId) {
-        return ksef_government_sessions_repo.findByTenantId(tenantId)
+    /** Returns the decrypted accessToken if the session is active and the token is unexpired. */
+    public Optional<String> getActiveAccessToken(String tenantId) {
+        return sessionRepository.findByTenantId(tenantId)
                 .filter(KsefGovernmentSession::isActive)
+                .filter(s -> s.getSessionToken() != null)
                 .filter(s -> s.getSessionExpiresAt() != null
                         && s.getSessionExpiresAt().isAfter(LocalDateTime.now()))
                 .map(s -> crypto.decryptPassword(s.getSessionToken()));
+    }
+
+    /** Returns the decrypted refreshToken if active and the refresh window is still open. */
+    public Optional<String> getValidRefreshToken(String tenantId) {
+        return sessionRepository.findByTenantId(tenantId)
+                .filter(KsefGovernmentSession::isActive)
+                .filter(s -> s.getRefreshToken() != null)
+                .filter(s -> s.getRefreshTokenExpiresAt() != null
+                        && s.getRefreshTokenExpiresAt().isAfter(LocalDateTime.now()))
+                .map(s -> crypto.decryptPassword(s.getRefreshToken()));
+    }
+
+    /** Marks the session inactive and clears both tokens. */
+    public void deactivateSession(String tenantId) {
+        sessionRepository.findByTenantId(tenantId).ifPresent(session -> {
+            session.setActive(false);
+            session.setStatus(KsefGovernmentStatus.DISCONNECTED);
+            session.setSessionToken(null);
+            session.setRefreshToken(null);
+            session.setUpdatedAt(LocalDateTime.now());
+            sessionRepository.save(session);
+        });
+    }
+
+    private static LocalDateTime parseOrDefault(String iso, LocalDateTime fallback) {
+        if (iso == null || iso.isBlank()) {
+            return fallback;
+        }
+        try {
+            // KSeF returns an offset date-time (e.g. 2026-06-08T12:34:56Z); normalise to local.
+            return OffsetDateTime.parse(iso, DateTimeFormatter.ISO_DATE_TIME).toLocalDateTime();
+        } catch (Exception e) {
+            try {
+                return LocalDateTime.parse(iso, DateTimeFormatter.ISO_DATE_TIME);
+            } catch (Exception ignored) {
+                return fallback;
+            }
+        }
     }
 }

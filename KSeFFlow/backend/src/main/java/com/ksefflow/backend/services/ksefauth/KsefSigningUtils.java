@@ -16,25 +16,10 @@ public final class KsefSigningUtils {
 
     private KsefSigningUtils() {}
 
-    // Signs the KSeF challenge string using SHA256withRSA.
-    //
-    // The challenge from the government is a plain UTF-8 string.
-    // Java's Signature.SHA256withRSA hashes and signs in one step —
-    // the result is RSA(SHA-256(challengeBytes)).
-    // The government verifies this using the public certificate submitted alongside it.
-    //
-    //! Returns Base64-encoded signature bytes (no line breaks, standard encoding).
-    public static String signChallenge(String challenge, PrivateKey privateKey) {
-        try {
-            Signature sig = Signature.getInstance("SHA256withRSA");
-            sig.initSign(privateKey);
-            sig.update(challenge.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(sig.sign());
-        } catch (Exception e) {
-            throw new KsefAuthException(
-                    "Failed to sign KSeF challenge with SHA256withRSA: " + e.getMessage(), e);
-        }
-    }
+    // NOTE: KSeF 1.0 raw "SHA256withRSA challenge signing" has been removed. KSeF 2.0
+    // authenticates with a XAdES-signed AuthTokenRequest document — see XAdESSigner.
+    // The methods below are for the offline QR CODE II signature, which is independent
+    // of API authentication.
 
     // Signs the KSeF offline CODE II ("CERTYFIKAT") QR URL path and returns the
     // signature as Base64URL (no padding), per the MF QR-code specification.
