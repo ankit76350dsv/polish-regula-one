@@ -7,7 +7,6 @@ import com.ksefflow.backend.services.ksefauth.KSeFAuthService;
 
 import com.ksefflow.backend.config.KsefApiProperties;
 import com.ksefflow.backend.dto.ksefapi.EncryptionInfo;
-import com.ksefflow.backend.dto.ksefapi.FormCode;
 import com.ksefflow.backend.dto.ksefapi.OpenOnlineSessionRequest;
 import com.ksefflow.backend.dto.ksefapi.OpenOnlineSessionResponse;
 import com.ksefflow.backend.dto.ksefapi.PublicKeyCertificate;
