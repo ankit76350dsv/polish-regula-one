@@ -87,41 +87,52 @@ public class KSeFAuthService {
     }
 
     public Optional<String> getActiveSessionToken(String tenantId) {
+        log.info("[getActiveSessionToken]:1 Reading active accessToken for tenant [{}]", tenantId);
         return sessionStore.getActiveAccessToken(tenantId);
     }
 
     public boolean isSessionActive(String tenantId) {
+        log.info("[isSessionActive]:1 Checking active session for tenant [{}]", tenantId);
         return sessionStore.getActiveAccessToken(tenantId).isPresent();
     }
 
     /** Deactivates the local token session for the tenant. */
     public void closeSession(String tenantId) {
+        log.info("[closeSession]:1 Deactivating local token session for tenant [{}]", tenantId);
         sessionStore.deactivateSession(tenantId);
         writeAuditLog(tenantId, "KSEF_SESSION_CLOSED", "local deactivation");
+        log.info("[closeSession]:2 Session closed for tenant [{}]", tenantId);
     }
 
     // ── Full certificate (XAdES) authentication ──────────────────────────────────
 
     private String authenticateWithCertificate(String tenantId, String nip) {
+        log.info("[authenticateWithCertificate]:1 Starting full XAdES authentication for tenant [{}] nip [{}]",
+                tenantId, nip);
         // Guard: certificate must be active before any network calls.
         certificateService.validateCertificateActive(tenantId);
+        log.info("[authenticateWithCertificate]:2 Certificate is active for tenant [{}]", tenantId);
 
         try {
             // Step 1 — challenge
             AuthChallengeResponse challenge = ksefApiClient.getAuthChallenge();
+            log.info("[authenticateWithCertificate]:3 Auth challenge obtained for tenant [{}]", tenantId);
 
             // Step 2 — build + XAdES-sign the AuthTokenRequest
             String unsignedXml = AuthTokenRequestBuilder.buildForNip(challenge.challenge(), nip);
             PrivateKey privateKey = certificateService.getPrivateKey(tenantId);
             X509Certificate cert = certificateService.getPublicCertificate(tenantId);
             String signedXml = xadesSigner.sign(unsignedXml, privateKey, cert);
+            log.info("[authenticateWithCertificate]:4 AuthTokenRequest built and XAdES-signed for tenant [{}]", tenantId);
 
             // Step 3 — submit signed XML, receive temporary auth operation token
             AuthInitResponse init = ksefApiClient.submitXadesSignature(signedXml);
             String authToken = init.authenticationToken().token();
+            log.info("[authenticateWithCertificate]:5 Signed XML submitted — auth ref [{}]", init.referenceNumber());
 
             // Step 4 — poll until the async auth operation succeeds
             awaitAuthSuccess(init.referenceNumber(), authToken);
+            log.info("[authenticateWithCertificate]:6 Auth operation confirmed for tenant [{}]", tenantId);
 
             // Step 5 — redeem the access + refresh tokens
             AuthTokensResponse tokens = ksefApiClient.redeemTokens(authToken);
@@ -129,11 +140,12 @@ public class KSeFAuthService {
             certificateService.recordAuthSuccess(tenantId);
 
             writeAuditLog(tenantId, "KSEF_SESSION_OPENED", "environment=" + apiProperties.getEnvironment());
-            log.info("[KSeF2 Auth] Authentication complete for tenant [{}]", tenantId);
+            log.info("[authenticateWithCertificate]:7 Authentication complete, tokens stored for tenant [{}]", tenantId);
             return tokens.accessToken().token();
 
         } catch (KsefAuthException e) {
-            log.error("[KSeF2 Auth] Authentication failed for tenant [{}]: {}", tenantId, e.getMessage(), e);
+            log.error("[authenticateWithCertificate]:8 Authentication FAILED for tenant [{}]: {}",
+                    tenantId, e.getMessage(), e);
             certificateService.recordAuthFailure(tenantId);
             writeAuditLog(tenantId, "KSEF_SESSION_FAILED", e.getMessage());
             throw e;
@@ -142,15 +154,19 @@ public class KSeFAuthService {
 
     // Polls GET /auth/{referenceNumber} until the operation reports success or fails.
     private void awaitAuthSuccess(String referenceNumber, String authToken) {
+        log.info("[awaitAuthSuccess]:1 Polling auth status for ref [{}]", referenceNumber);
         for (int attempt = 1; attempt <= AUTH_POLL_MAX_ATTEMPTS; attempt++) {
             AuthStatusResponse status = ksefApiClient.getAuthStatus(referenceNumber, authToken);
             Integer code = status.status() != null ? status.status().code() : null;
+            log.info("[awaitAuthSuccess]:2 Attempt {}/{} for ref [{}] — status code [{}]",
+                    attempt, AUTH_POLL_MAX_ATTEMPTS, referenceNumber, code);
 
             if (code != null && code == AUTH_STATUS_SUCCESS) {
-                log.info("[KSeF2 Auth] Auth operation [{}] succeeded", referenceNumber);
+                log.info("[awaitAuthSuccess]:3 Auth operation [{}] succeeded", referenceNumber);
                 return;
             }
             if (code != null && code >= 400) {
+                log.error("[awaitAuthSuccess]:4 Auth operation [{}] rejected — code [{}]", referenceNumber, code);
                 throw new KsefAuthException("KSeF authentication rejected (code " + code + "): "
                         + (status.status().description() != null ? status.status().description() : ""));
             }
@@ -159,6 +175,8 @@ public class KSeFAuthService {
                 sleepQuietly(AUTH_POLL_INTERVAL_MS);
             }
         }
+        log.error("[awaitAuthSuccess]:5 Auth did not complete after {} attempts for ref [{}]",
+                AUTH_POLL_MAX_ATTEMPTS, referenceNumber);
         throw new KsefAuthException("KSeF authentication did not complete after "
                 + AUTH_POLL_MAX_ATTEMPTS + " status checks for ref " + referenceNumber);
     }
@@ -166,6 +184,7 @@ public class KSeFAuthService {
     // ── Audit ────────────────────────────────────────────────────────────────────
 
     private void writeAuditLog(String tenantId, String action, String newValue) {
+        log.info("[writeAuditLog]:1 Writing audit entry [{}] for tenant [{}]", action, tenantId);
         try {
             auditLogRepository.save(KsefAuditLog.builder()
                     .tenantId(tenantId)
