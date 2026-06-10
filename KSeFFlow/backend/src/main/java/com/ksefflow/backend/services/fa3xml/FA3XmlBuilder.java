@@ -5,6 +5,7 @@ import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefCurrency;
 import com.ksefflow.backend.models.utils.KsefPaymentMethod;
 import com.ksefflow.backend.models.utils.KsefVatRate;
+import lombok.extern.slf4j.Slf4j;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
@@ -32,6 +33,7 @@ import java.util.Map;
 //   Podmiot1   = the seller
 //   Podmiot2   = the buyer
 //   Fa         = the body (money totals, notes, and the lines)
+@Slf4j
 public final class FA3XmlBuilder {
 
     // FA(3) namespace and form info (from the official schema + example).
@@ -46,6 +48,7 @@ public final class FA3XmlBuilder {
     //! ── Entry point ────────────────────────────────────────────────────────────
 
     public static Document build(KsefInvoice invoice) {
+        log.info("[build]:1 Building FA(3) DOM for invoice [{}]", invoice.getInvoiceNumber());
         // First make sure the invoice has the must-have fields.
         validate(invoice);
 

@@ -1,6 +1,7 @@
 package com.ksefflow.backend.services.ksefauth;
 
 import com.ksefflow.backend.exceptions.KsefAuthException;
+import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
@@ -12,6 +13,7 @@ import java.util.Base64;
 
 // Pure static utilities for signing and certificate encoding.
 // No Spring context needed — all methods are stateless.
+@Slf4j
 public final class KsefSigningUtils {
 
     private KsefSigningUtils() {}
@@ -29,6 +31,7 @@ public final class KsefSigningUtils {
     //   - EC   → ECDSA on NIST P-256 with SHA-256
     // The algorithm is chosen from the signing key's type.
     public static String signQrPathBase64Url(String urlPath, PrivateKey privateKey) {
+        log.info("[signQrPathBase64Url]:1 Signing offline QR CODE II path ({} chars)", urlPath.length());
         try {
             String keyAlg = privateKey.getAlgorithm();
             Signature sig;
@@ -58,6 +61,7 @@ public final class KsefSigningUtils {
     // cert.getEncoded() returns the raw ASN.1 DER bytes; Base64 encoding those bytes
     // gives the certificateBase64 field required by the /Authorisation request.
     public static String encodeCertificate(X509Certificate cert) {
+        log.info("[encodeCertificate]:1 Base64(DER)-encoding X509 certificate");
         try {
             return Base64.getEncoder().encodeToString(cert.getEncoded());
         } catch (Exception e) {

@@ -1,6 +1,7 @@
 package com.ksefflow.backend.services.fa3xml;
 
 import com.ksefflow.backend.exceptions.KsefXmlGenerationException;
+import lombok.extern.slf4j.Slf4j;
 import org.w3c.dom.Document;
 
 import javax.xml.transform.OutputKeys;
@@ -19,11 +20,13 @@ import java.io.StringWriter;
 // - No DOCTYPE — KSeF does not use DTD validation
 //
 // All pure static — no Spring context, no I/O side effects.
+@Slf4j
 public final class FA3XmlSerializer {
 
     private FA3XmlSerializer() {}
 
     public static String serialize(Document doc) {
+        log.info("[serialize]:1 Serializing FA(3) DOM to UTF-8 XML string");
         try {
             TransformerFactory factory = TransformerFactory.newInstance();
 

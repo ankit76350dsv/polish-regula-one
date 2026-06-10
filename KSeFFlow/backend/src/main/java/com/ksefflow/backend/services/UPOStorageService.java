@@ -47,7 +47,7 @@ public class UPOStorageService {
                            String ksefReferenceNumber, String upoXml,
                            LocalDateTime upoTimestamp) {
 
-        log.info("[StoreUpo] Storing UPO for invoice [{}] tenant [{}] ksefRef [{}]",
+        log.info("[storeUpo]:1 Storing UPO for invoice [{}] tenant [{}] ksefRef [{}]",
                 invoiceId, tenantId, ksefReferenceNumber);
 
         String hash = sha256Hex(upoXml); //! a91ff82bb3918827c1d1aa || cannot be reversed :  always same input → same output
@@ -67,7 +67,7 @@ public class UPOStorageService {
                 .build();
 
         KsefUpoReceipt saved = ksef_upo_receipts_repo.save(receipt);
-        log.debug("[StoreUpo] UPO stored with id [{}] for invoice [{}]", saved.getId(), invoiceId);
+        log.debug("[storeUpo]:2 UPO stored with id [{}] for invoice [{}]", saved.getId(), invoiceId);
         return saved.getId();
     }
 
@@ -77,6 +77,7 @@ public class UPOStorageService {
      * number and timestamp are needed.
      */
     public Optional<KsefUpoReceipt> findByInvoiceId(String tenantId, String invoiceId) {
+        log.info("[findByInvoiceId]:1 Looking up UPO receipt for invoice [{}] tenant [{}]", invoiceId, tenantId);
         return ksef_upo_receipts_repo.findByTenantIdAndInvoiceId(tenantId, invoiceId);
     }
 
@@ -85,6 +86,7 @@ public class UPOStorageService {
      * Only call this when the full UPO document is required (e.g., auditor export).
      */
     public Optional<String> getUpoXml(String tenantId, String invoiceId) {
+        log.info("[getUpoXml]:1 Decrypting UPO XML for invoice [{}] tenant [{}]", invoiceId, tenantId);
         return ksef_upo_receipts_repo.findByTenantIdAndInvoiceId(tenantId, invoiceId)
                 .map(receipt -> {
                     byte[] encryptedBytes = Base64.getDecoder().decode(receipt.getUpoXmlEncrypted());

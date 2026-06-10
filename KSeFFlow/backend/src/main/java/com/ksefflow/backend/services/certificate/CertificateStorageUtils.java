@@ -56,7 +56,7 @@ public class CertificateStorageUtils {
                     RequestBody.fromBytes(encrypted));
 
             String locator = S3_SCHEME + cfg.getBucket() + "/" + key;
-            log.debug("Wrote encrypted certificate to {}", locator);
+            log.debug("[writePfxEncrypted]:1 Wrote encrypted certificate to {}", locator);
             return locator;
         } catch (S3Exception e) {
             throw new KsefCertificateException(
@@ -67,6 +67,7 @@ public class CertificateStorageUtils {
     //! Downloads the encrypted object from S3 and decrypts it back to the original .pfx bytes.
     // Called when the service needs to load the KeyStore at runtime (e.g. for signing).
     public byte[] readPfxDecrypted(String storagePath) {
+        log.info("[readPfxDecrypted]:1 Reading + decrypting PFX from storage [{}]", storagePath);
         byte[] encrypted = readFromS3(storagePath);
         return crypto.aesDecrypt(encrypted);
     }

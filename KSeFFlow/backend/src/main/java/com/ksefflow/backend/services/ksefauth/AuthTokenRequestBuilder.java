@@ -1,6 +1,7 @@
 package com.ksefflow.backend.services.ksefauth;
 
 import com.ksefflow.backend.exceptions.KsefAuthException;
+import lombok.extern.slf4j.Slf4j;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
@@ -29,6 +30,7 @@ import java.io.StringWriter;
  * The authenticating subject (NIP/PESEL/fingerprint) is read by KSeF from the signing
  * certificate, so {@code certificateSubject} is the default subject-identifier type.
  */
+@Slf4j
 public final class AuthTokenRequestBuilder {
 
     public static final String AUTH_NAMESPACE = "http://ksef.mf.gov.pl/auth/token/2.0";
@@ -54,6 +56,8 @@ public final class AuthTokenRequestBuilder {
     }
 
     public static String buildForNip(String challenge, String nip, String subjectIdentifierType) {
+        log.info("[buildForNip]:1 Building AuthTokenRequest XML for nip [{}] subjectType [{}]",
+                nip, subjectIdentifierType);
         if (challenge == null || challenge.isBlank()) {
             throw new KsefAuthException("Cannot build AuthTokenRequest — challenge is missing");
         }

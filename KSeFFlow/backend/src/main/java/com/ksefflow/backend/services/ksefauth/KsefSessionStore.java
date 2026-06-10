@@ -38,6 +38,7 @@ public class KsefSessionStore {
 
     /** Saves (upserts) both tokens for a tenant, encrypting each at rest. */
     public void saveSession(String tenantId, TokenInfo accessToken, TokenInfo refreshToken) {
+        log.info("[saveSession]:1 Encrypting and upserting access+refresh tokens for tenant [{}]", tenantId);
         KsefGovernmentSession session = sessionRepository.findByTenantId(tenantId)
                 .orElse(KsefGovernmentSession.builder()
                         .tenantId(tenantId)
@@ -65,6 +66,7 @@ public class KsefSessionStore {
 
     /** Replaces just the accessToken after a successful /auth/token/refresh. */
     public void updateAccessToken(String tenantId, TokenInfo accessToken) {
+        log.info("[updateAccessToken]:1 Storing refreshed accessToken for tenant [{}]", tenantId);
         sessionRepository.findByTenantId(tenantId).ifPresent(session -> {
             session.setSessionToken(crypto.encryptPassword(accessToken.token()));
             session.setSessionExpiresAt(parseOrDefault(accessToken.validUntil(),
@@ -77,6 +79,7 @@ public class KsefSessionStore {
 
     /** Returns the decrypted accessToken if the session is active and the token is unexpired. */
     public Optional<String> getActiveAccessToken(String tenantId) {
+        log.info("[getActiveAccessToken]:1 Looking up active accessToken for tenant [{}]", tenantId);
         return sessionRepository.findByTenantId(tenantId)
                 .filter(KsefGovernmentSession::isActive)
                 .filter(s -> s.getSessionToken() != null)
@@ -87,6 +90,7 @@ public class KsefSessionStore {
 
     /** Returns the decrypted refreshToken if active and the refresh window is still open. */
     public Optional<String> getValidRefreshToken(String tenantId) {
+        log.info("[getValidRefreshToken]:1 Looking up valid refreshToken for tenant [{}]", tenantId);
         return sessionRepository.findByTenantId(tenantId)
                 .filter(KsefGovernmentSession::isActive)
                 .filter(s -> s.getRefreshToken() != null)
@@ -97,6 +101,7 @@ public class KsefSessionStore {
 
     /** Marks the session inactive and clears both tokens. */
     public void deactivateSession(String tenantId) {
+        log.info("[deactivateSession]:1 Clearing tokens and deactivating session for tenant [{}]", tenantId);
         sessionRepository.findByTenantId(tenantId).ifPresent(session -> {
             session.setActive(false);
             session.setStatus(KsefGovernmentStatus.DISCONNECTED);

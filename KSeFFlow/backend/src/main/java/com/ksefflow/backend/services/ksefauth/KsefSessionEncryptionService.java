@@ -51,6 +51,7 @@ public class KsefSessionEncryptionService {
 
     /** Generates a fresh AES-256 key and random 16-byte IV for a new online session. */
     public SessionKey generateSessionKey() {
+        log.info("[generateSessionKey]:1 Generating AES-256 session key + 16-byte IV");
         try {
             KeyGenerator kg = KeyGenerator.getInstance("AES");
             kg.init(AES_KEY_BITS, new SecureRandom());
@@ -72,6 +73,7 @@ public class KsefSessionEncryptionService {
      * @param publicKeyId         the publicKeyId of that certificate (echoed back to KSeF)
      */
     public EncryptionInfo buildEncryptionInfo(SessionKey key, String ksefPublicCertB64, String publicKeyId) {
+        log.info("[buildEncryptionInfo]:1 RSA-OAEP wrapping session key with KSeF public key [{}]", publicKeyId);
         try {
             X509Certificate ksefCert = parseCertificate(ksefPublicCertB64);
             PublicKey rsaPublicKey = ksefCert.getPublicKey();
@@ -94,6 +96,7 @@ public class KsefSessionEncryptionService {
 
     /** Encrypts one invoice's plaintext bytes with the session key (AES-256-CBC/PKCS5). */
     public EncryptedInvoice encryptInvoice(byte[] plaintext, SessionKey key) {
+        log.info("[encryptInvoice]:1 AES-256-CBC encrypting invoice ({} plaintext bytes)", plaintext.length);
         try {
             Cipher aes = Cipher.getInstance("AES/CBC/PKCS5Padding");
             aes.init(Cipher.ENCRYPT_MODE, key.aesKey(), new IvParameterSpec(key.iv()));

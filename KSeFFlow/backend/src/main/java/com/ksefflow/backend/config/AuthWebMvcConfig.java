@@ -27,7 +27,7 @@ public class AuthWebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-        log.info("[AuthWebMvcConfig] Registering AuthenticatedUserArgumentResolver "
+        log.info("[addArgumentResolvers]:1 Registering AuthenticatedUserArgumentResolver "
                 + "(startup, one-time) — controllers can now receive AuthenticatedUser params");
         resolvers.add(authenticatedUserArgumentResolver);
     }

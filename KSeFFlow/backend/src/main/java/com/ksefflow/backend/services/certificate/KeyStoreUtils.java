@@ -1,6 +1,7 @@
 package com.ksefflow.backend.services.certificate;
 
 import com.ksefflow.backend.exceptions.KsefCertificateException;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayInputStream;
 import java.security.KeyStore;
@@ -12,6 +13,7 @@ import java.util.Enumeration;
 
 // Pure static helpers for PKCS12 / X509 operations.
 // No Spring context needed — all methods are stateless.
+@Slf4j
 public final class KeyStoreUtils {
 
     private KeyStoreUtils() {
@@ -21,6 +23,7 @@ public final class KeyStoreUtils {
     // Throws KsefCertificateException if the file is invalid or the password is
     // wrong.
     public static KeyStore loadKeyStoreFromBytes(byte[] pfxBytes, String password) {
+        log.info("[loadKeyStoreFromBytes]:1 Loading PKCS12 keystore from {} bytes", pfxBytes != null ? pfxBytes.length : 0);
         try {
             // Inside a .pfx file there is usually:
                 // Public certificate
@@ -40,6 +43,7 @@ public final class KeyStoreUtils {
     // Iterates all aliases — works regardless of what alias name was used when
     // creating the .pfx.
     public static X509Certificate extractX509Certificate(KeyStore keyStore) {
+        log.info("[extractX509Certificate]:1 Extracting X509 certificate from keystore");
         try {
             Enumeration<String> aliases = keyStore.aliases();
             while (aliases.hasMoreElements()) {
@@ -67,6 +71,7 @@ public final class KeyStoreUtils {
     //! Finds and returns the PrivateKey inside the KeyStore.
     // The password is needed a second time here — Java requires it to unlock the key entry.
     public static PrivateKey extractPrivateKey(KeyStore keyStore, String password) {
+        log.info("[extractPrivateKey]:1 Extracting private key from keystore");
         try {
             Enumeration<String> aliases = keyStore.aliases();
             while (aliases.hasMoreElements()) {

@@ -49,7 +49,7 @@ public class KSeFAuditLogController {
             @PageableDefault(size = 20) Pageable pageable) {
 
         String tenantId = caller.tenantId();
-        log.info("Audit log query: tenantId={} from={} to={} role={} search={}",
+        log.info("[listAuditLogs]:1 Audit log query: tenantId={} from={} to={} role={} search={}",
                 tenantId, from, to, role, search != null ? "[present]" : null);
 
         Page<KsefAuditLog> page = auditLogService.listAuditLogs(

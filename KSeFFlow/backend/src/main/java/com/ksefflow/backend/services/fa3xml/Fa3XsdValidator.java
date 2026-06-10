@@ -45,7 +45,7 @@ public class Fa3XsdValidator {
 
     public Fa3XsdValidator() {
         this.fa3Schema = loadFa3Schema();
-        log.info("[Fa3XsdValidator] Official FA(3) schema loaded from {} (offline)", FA3_MAIN_XSD);
+        log.info("[Fa3XsdValidator]:1 Official FA(3) schema loaded from {} (offline)", FA3_MAIN_XSD);
     }
 
     // Build the FA(3) schema using ONLY local files.
@@ -87,7 +87,7 @@ public class Fa3XsdValidator {
             validator.validate(new StreamSource(
                     new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8))));
 
-            log.debug("[Fa3XsdValidator] XML passed the FA(3) check");
+            log.debug("[validate]:1 XML passed the FA(3) check");
         } catch (SAXException e) {
             // The XML broke an FA(3) rule. Stop and say why.
             throw new KsefXmlGenerationException("FA(3) XML is not valid: " + e.getMessage(), e);
@@ -102,12 +102,12 @@ public class Fa3XsdValidator {
     public void warmUp() {
         try (InputStream sample = getClass().getResourceAsStream("/xsd/fa3/warmup-invoice.xml")) {
             if (sample == null) {
-                log.warn("[Fa3XsdValidator] Warm-up sample not found — skipping warm-up");
+                log.warn("[warmUp]:1 Warm-up sample not found — skipping warm-up");
                 return;
             }
             validate(new String(sample.readAllBytes(), StandardCharsets.UTF_8));
         } catch (IOException e) {
-            log.warn("[Fa3XsdValidator] Warm-up could not read the sample: {}", e.getMessage());
+            log.warn("[warmUp]:2 Warm-up could not read the sample: {}", e.getMessage());
         }
     }
 

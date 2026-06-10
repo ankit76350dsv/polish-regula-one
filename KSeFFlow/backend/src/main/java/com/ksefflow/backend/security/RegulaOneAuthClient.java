@@ -36,7 +36,7 @@ public class RegulaOneAuthClient {
     public RegulaOneAuthClient(@Value("${regulaone.api.base-url}") String baseUrl) {
         this.baseUrl = baseUrl;
         this.restClient = RestClient.builder().baseUrl(baseUrl).build();
-        log.info("[RegulaOneAuthClient] Initialised — auth authority base URL: {}", baseUrl);
+        log.info("[RegulaOneAuthClient]:1 Initialised — auth authority base URL: {}", baseUrl);
     }
 
     /**
@@ -48,10 +48,10 @@ public class RegulaOneAuthClient {
         // log.info("[RegulaOneAuthClient] Step 1 — extracting idToken cookie from incoming request");
         String idToken = extractIdToken(request);
         if (idToken == null) {
-            log.warn("[RegulaOneAuthClient] No idToken cookie present → 401");
+            log.warn("[resolve]:1 No idToken cookie present → 401");
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing authentication session");
         }
-        log.info("[RegulaOneAuthClient] idToken cookie found (len={}), calling {}/api/auth/me",
+        log.info("[resolve]:2 idToken cookie found (len={}), calling {}/api/auth/me",
                 idToken.length(), baseUrl);
 
         MeResponse body;
@@ -63,7 +63,7 @@ public class RegulaOneAuthClient {
                     .retrieve()
                     .onStatus(status -> status.value() == 401 || status.value() == 403,
                             (req, res) -> {
-                                log.warn("[RegulaOneAuthClient] RegulaOne /me rejected session — HTTP {} → 401",
+                                log.warn("[resolve]:3 RegulaOne /me rejected session — HTTP {} → 401",
                                         res.getStatusCode().value());
                                 throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
                                         "Session invalid or expired");
@@ -72,25 +72,25 @@ public class RegulaOneAuthClient {
         } catch (ResponseStatusException e) {
             throw e;
         } catch (RestClientException e) {
-            log.error("[RegulaOneAuthClient] /api/auth/me call failed — RegulaOne unreachable? → 503", e);
+            log.error("[resolve]:4 /api/auth/me call failed — RegulaOne unreachable? → 503", e);
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Authentication service is unavailable");
         }
 
-        log.info("[RegulaOneAuthClient] Step 2 — /me responded, parsing identity");
+        log.info("[resolve]:5 Step 2 — /me responded, parsing identity");
         if (body == null || body.data() == null) {
-            log.warn("[RegulaOneAuthClient] /me returned an empty body/data → 401");
+            log.warn("[resolve]:6 /me returned an empty body/data → 401");
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Could not resolve authenticated user");
         }
 
         MeData d = body.data();
         if (d.tenantId() == null || d.tenantId().isBlank()) {
-            log.warn("[RegulaOneAuthClient] User {} has no tenant → 403", d.id());
+            log.warn("[resolve]:7 User {} has no tenant → 403", d.id());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Your account is not associated with an organisation");
         }
 
-        log.info("[RegulaOneAuthClient] Step 3 — resolved userId={} tenantId={} role={} tenantStatus={}",
+        log.info("[resolve]:8 Step 3 — resolved userId={} tenantId={} role={} tenantStatus={}",
                 d.id(), d.tenantId(), d.role(), d.tenantStatus());
         return new AuthenticatedUser(d.id(), d.email(), d.role(), d.tenantId(), d.tenantName(), d.tenantStatus());
     }

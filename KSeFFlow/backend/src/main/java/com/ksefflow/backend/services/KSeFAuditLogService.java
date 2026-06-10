@@ -42,6 +42,7 @@ public class KSeFAuditLogService {
 
     @PostConstruct
     void init() {
+        log.info("[init]:1 Registering static KSeFAuditLogService instance for service-layer audit writes");
         instance = this;
     }
 
@@ -64,6 +65,8 @@ public class KSeFAuditLogService {
             String role,
             String search,
             Pageable pageable) {
+        log.info("[listAuditLogs]:1 Querying audit logs for tenant [{}] (role={} search={})",
+                tenantId, role, search != null ? "[present]" : null);
 
         List<Criteria> criteriaList = new ArrayList<>();
 
@@ -117,7 +120,7 @@ public class KSeFAuditLogService {
         try {
             return LocalDateTime.parse(iso, DateTimeFormatter.ISO_DATE_TIME);
         } catch (DateTimeParseException e) {
-            log.debug("Ignoring unparseable datetime filter value: {}", iso);
+            log.debug("[parseDateTime]:1 Ignoring unparseable datetime filter value: {}", iso);
             return null;
         }
     }
@@ -159,9 +162,10 @@ public class KSeFAuditLogService {
     public static void writeAuditLog(String tenantId, String action, String entityType,
             String entityId, String oldValue, String newValue,
             String userEmail, String ipAddress) {
+        log.info("[writeAuditLog]:1 Audit [{}] on {} [{}]", action, entityType, entityId);
 
         if (instance == null) {
-            log.warn("KSeFAuditLogService bean not yet initialized — skipping log [action={}]", action);
+            log.warn("[writeAuditLog]:2 KSeFAuditLogService bean not yet initialized — skipping log [action={}]", action);
             return;
         }
 
@@ -179,7 +183,7 @@ public class KSeFAuditLogService {
                     .timestamp(LocalDateTime.now())
                     .build());
         } catch (Exception e) {
-            log.error("Failed to write audit log [action={}] {} [{}]: {}",
+            log.error("[writeAuditLog]:3 Failed to write audit log [action={}] {} [{}]: {}",
                     action, entityType, entityId, e.getMessage());
         }
     }

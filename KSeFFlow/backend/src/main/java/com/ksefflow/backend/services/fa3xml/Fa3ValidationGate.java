@@ -40,15 +40,15 @@ public class Fa3ValidationGate {
     // If the switch is OFF: skip our check and let KSeF check it on its side.
     public void validateBeforeSubmission(String xml) {
         if (!xsdValidationEnabled) {
-            log.debug("[Fa3ValidationGate]:1 Local FA(3) XSD check is OFF — KSeF will check the invoice on its side");
+            log.debug("[validateBeforeSubmission]:1 Local FA(3) XSD check is OFF — KSeF will check the invoice on its side");
             return;
         }
         try {
             fa3XsdValidator.validate(xml);
-            log.info("[Fa3ValidationGate]:2 Invoice passed the official FA(3) check");
+            log.info("[validateBeforeSubmission]:2 Invoice passed the official FA(3) check");
         } catch (KsefXmlGenerationException e) {
             // Log the reason clearly, then stop — we never send a bad invoice when the check is ON.
-            log.error("[Fa3ValidationGate]:3 Invoice FAILED the official FA(3) check: {}", e.getMessage());
+            log.error("[validateBeforeSubmission]:3 Invoice FAILED the official FA(3) check: {}", e.getMessage());
             throw e;
         }
     }
@@ -64,13 +64,13 @@ public class Fa3ValidationGate {
         Thread warmer = new Thread(() -> {
             try {
                 long start = System.currentTimeMillis();
-                log.info("[Fa3ValidationGate] Warming up the FA(3) checker in the background…");
+                log.info("[warmUpIfEnabled]:1 Warming up the FA(3) checker in the background…");
                 fa3XsdValidator.warmUp();
-                log.info("[Fa3ValidationGate] FA(3) checker is warm and ready ({} ms)",
+                log.info("[warmUpIfEnabled]:2 FA(3) checker is warm and ready ({} ms)",
                         System.currentTimeMillis() - start);
             } catch (Exception e) {
                 // Warm-up is only for speed. If it fails, real checks still work (just slower once).
-                log.warn("[Fa3ValidationGate] FA(3) warm-up did not finish: {}", e.getMessage());
+                log.warn("[warmUpIfEnabled]:3 FA(3) warm-up did not finish: {}", e.getMessage());
             }
         }, "fa3-xsd-warmup");
         warmer.setDaemon(true); // do not keep the app alive just for this

@@ -81,7 +81,7 @@ public class KSeFCertificateController {
         String tenantId = caller.tenantId();
         String userId = caller.userId();
 
-        log.info("[CertificateController] POST /upload — tenant={} fileName={} size={}",
+        log.info("[uploadCertificate]:1 POST /upload — tenant={} fileName={} size={}",
                 tenantId, file.getOriginalFilename(), file.getSize());
 
         validateFile(file);
@@ -97,12 +97,12 @@ public class KSeFCertificateController {
                 return ResponseEntity.badRequest().build();
             }
             stored = certificateService.storeCertificate(fileBytes, tenantId, fileName, password, userId);
-            log.info("[CertificateController] PFX certificate stored — tenant={} certId={}", tenantId, stored.getId());
+            log.info("[uploadCertificate]:2 PFX certificate stored — tenant={} certId={}", tenantId, stored.getId());
         } else if (isPem(extension)) {
             stored = certificateService.storePemCertificate(fileBytes, tenantId, fileName, userId);
-            log.info("[CertificateController] PEM certificate stored — tenant={} certId={}", tenantId, stored.getId());
+            log.info("[uploadCertificate]:3 PEM certificate stored — tenant={} certId={}", tenantId, stored.getId());
         } else {
-            log.warn("[CertificateController] Rejected unsupported file type: {}", fileName);
+            log.warn("[uploadCertificate]:4 Rejected unsupported file type: {}", fileName);
             return ResponseEntity.badRequest().build();
         }
 
@@ -125,7 +125,7 @@ public class KSeFCertificateController {
             AuthenticatedUser caller) {
 
         String tenantId = caller.tenantId();
-        log.info("[CertificateController] GET /certificates — tenant={}", tenantId);
+        log.info("[listCertificates]:1 GET /certificates — tenant={}", tenantId);
 
         List<CertificateResponse> certs = certificateService.listCertificates(tenantId)
                 .stream()
@@ -157,7 +157,7 @@ public class KSeFCertificateController {
             @PathVariable     String id) {
 
         String tenantId = caller.tenantId();
-        log.info("[CertificateController] PATCH /{}/deactivate — tenant={}", id, tenantId);
+        log.info("[deactivateCertificate]:1 PATCH /{}/deactivate — tenant={}", id, tenantId);
 
         certificateService.deactivateCertificate(tenantId, id);
         return ResponseEntity.ok(Map.of("message", "Certificate deactivated successfully"));

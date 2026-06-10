@@ -50,7 +50,7 @@ public class KSeFInvoiceController {
             @Valid @RequestBody CreateInvoiceRequest request,
             HttpServletRequest httpRequest) {
 
-        log.info("[CreateInvoice] ▶ POST /draft — invoiceNumber={} tenant={} user={}",
+        log.info("[createInvoice]:1 ▶ POST /draft — invoiceNumber={} tenant={} user={}",
                 request.getInvoiceNumber(), caller.tenantId(), caller.userId());
 
         KsefInvoice invoice = invoiceService.createInvoice(
@@ -58,7 +58,7 @@ public class KSeFInvoiceController {
                 caller.email(),
                 extractClientIp(httpRequest));
 
-        log.info("[CreateInvoice] ✔ Draft created — id={} status={} → 201 CREATED",
+        log.info("[createInvoice]:2 ✔ Draft created — id={} status={} → 201 CREATED",
                 invoice.getId(), invoice.getStatus());
         return ResponseEntity.status(HttpStatus.CREATED).body(invoice);
     }
@@ -90,11 +90,11 @@ public class KSeFInvoiceController {
             @RequestParam @NotBlank @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits") String nip,
             HttpServletRequest httpRequest) {
 
-        log.info("[SubmitInvoice]:1 POST /{}/submit — tenant={} nip={}", invoiceId, caller.tenantId(), nip);
+        log.info("[submitInvoice]:1 POST /{}/submit — tenant={} nip={}", invoiceId, caller.tenantId(), nip);
 
         KsefInvoice result = invoiceService.submitInvoice(caller.tenantId(), invoiceId, nip,
                 caller.email(), extractClientIp(httpRequest));
-        log.info("[SubmitInvoice]:2 submit pipeline finished — id={} status={}", result.getId(), result.getStatus());
+        log.info("[submitInvoice]:2 submit pipeline finished — id={} status={}", result.getId(), result.getStatus());
 
         String message = switch (result.getStatus()) {
             case SENT -> "Invoice successfully submitted to KSeF — reference: " + result.getKsefId();
@@ -121,7 +121,7 @@ public class KSeFInvoiceController {
                 ? HttpStatus.OK
                 : HttpStatus.ACCEPTED;
 
-        log.info("[SubmitInvoice]:3 submit response — id={} status={} → {}",
+        log.info("[submitInvoice]:3 submit response — id={} status={} → {}",
                 result.getId(), result.getStatus(), httpStatus);
         return ResponseEntity.status(httpStatus).body(response);
     }
@@ -148,9 +148,9 @@ public class KSeFInvoiceController {
     public ResponseEntity<KsefInvoice> getInvoice(
             AuthenticatedUser caller,
             @PathVariable String invoiceId) {
-        log.info("[GetInvoice] ▶ GET /{} — tenant={}", invoiceId, caller.tenantId());
+        log.info("[getInvoice]:1 ▶ GET /{} — tenant={}", invoiceId, caller.tenantId());
         KsefInvoice invoice = invoiceService.getInvoice(caller.tenantId(), invoiceId);
-        log.info("[GetInvoice] ✔ GET /{} — status={} → 200 OK", invoiceId, invoice.getStatus());
+        log.info("[getInvoice]:2 ✔ GET /{} — status={} → 200 OK", invoiceId, invoice.getStatus());
         return ResponseEntity.ok(invoice);
     }
 
@@ -173,11 +173,11 @@ public class KSeFInvoiceController {
             @RequestParam(required = false) KsefInvoiceStatus status,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
 
-        log.info("[ListInvoices] ▶ GET / (list) — tenant={} status={} page={} size={}",
+        log.info("[listInvoices]:1 ▶ GET / (list) — tenant={} status={} page={} size={}",
                 caller.tenantId(), status, pageable.getPageNumber(), pageable.getPageSize());
 
         Page<KsefInvoice> page = invoiceService.listInvoices(caller.tenantId(), status, pageable);
-        log.info("[ListInvoices] ✔ list — returned {} of {} invoices → 200 OK",
+        log.info("[listInvoices]:2 ✔ list — returned {} of {} invoices → 200 OK",
                 page.getNumberOfElements(), page.getTotalElements());
         return ResponseEntity.ok(page);
     }
@@ -198,13 +198,13 @@ public class KSeFInvoiceController {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> handleBadRequest(IllegalArgumentException e) {
-        log.warn("[HandleBadRequest] ✘ 400 Bad Request — {}", e.getMessage());
+        log.warn("[handleBadRequest]:1 ✘ 400 Bad Request — {}", e.getMessage());
         return ResponseEntity.badRequest().body(e.getMessage());
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<String> handleConflict(IllegalStateException e) {
-        log.warn("[HandleConflict] ✘ 409 Conflict — {}", e.getMessage());
+        log.warn("[handleConflict]:1 ✘ 409 Conflict — {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
     }
 }

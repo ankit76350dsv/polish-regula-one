@@ -70,6 +70,8 @@ public class XAdESSigner {
      * @param certificate the matching public X.509 certificate (placed in KeyInfo)
      */
     public String sign(String unsignedXml, PrivateKey privateKey, X509Certificate certificate) {
+        log.info("[sign]:1 XAdES-signing AuthTokenRequest ({} bytes) with cert subject [{}]",
+                unsignedXml.length(), certificate.getSubjectX500Principal().getName());
         try {
             Document doc = parse(unsignedXml);
             Element root = doc.getDocumentElement();
@@ -112,8 +114,10 @@ public class XAdESSigner {
             // ── Sign ─────────────────────────────────────────────────────────────────
             signature.sign(privateKey);
 
+            log.info("[sign]:2 XAdES signature applied (signatureId [{}])", signatureId);
             return serialize(doc);
         } catch (Exception e) {
+            log.error("[sign]:3 XAdES signing failed: {}", e.getMessage());
             throw new KsefAuthException("Failed to XAdES-sign the AuthTokenRequest: " + e.getMessage(), e);
         }
     }

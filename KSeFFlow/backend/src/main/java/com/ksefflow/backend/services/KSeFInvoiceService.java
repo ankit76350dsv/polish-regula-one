@@ -105,7 +105,7 @@ public class KSeFInvoiceService {
 
             // Already finalized (or in-flight) → re-creating it is a genuine conflict.
             if (existing.getStatus() != KsefInvoiceStatus.DRAFT) {
-                log.error("Invoice number [{}] already exists for tenant [{}] with status [{}] — cannot re-create",
+                log.error("[createInvoice]:1 Invoice number [{}] already exists for tenant [{}] with status [{}] — cannot re-create",
                         invoice.getInvoiceNumber(), invoice.getTenantId(), existing.getStatus());
                 throw new IllegalArgumentException(
                         "Invoice number [" + invoice.getInvoiceNumber() +
@@ -115,7 +115,7 @@ public class KSeFInvoiceService {
 
             // Still a DRAFT → update it in place. Keep the original id + createdAt,
             // overwrite the editable data with the incoming draft, bump updatedAt.
-            log.info("Invoice [{}] already a DRAFT for tenant [{}] — updating existing draft [{}]",
+            log.info("[createInvoice]:2 Invoice [{}] already a DRAFT for tenant [{}] — updating existing draft [{}]",
                     existing.getInvoiceNumber(), existing.getTenantId(), existing.getId());
 
             invoice.setId(existing.getId());
@@ -135,7 +135,7 @@ public class KSeFInvoiceService {
                     userEmail,
                     ipAddress);
 
-            log.info("Invoice [{}] DRAFT updated successfully for tenant [{}]",
+            log.info("[createInvoice]:3 Invoice [{}] DRAFT updated successfully for tenant [{}]",
                     updated.getInvoiceNumber(), updated.getTenantId());
             return updated;
         }
@@ -146,7 +146,7 @@ public class KSeFInvoiceService {
         invoice.setKsefEnvironment(apiProperties.getEnvironment());
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
-        log.info("Writing audit log for invoice creation. Invoice ID [{}]", saved.getId());
+        log.info("[createInvoice]:4 Writing audit log for invoice creation. Invoice ID [{}]", saved.getId());
 
         KSeFAuditLogService.writeAuditLog(
                 saved.getTenantId(),
@@ -157,7 +157,7 @@ public class KSeFInvoiceService {
                 userEmail,
                 ipAddress);
 
-        log.info("Invoice [{}] created successfully as DRAFT for tenant [{}]",
+        log.info("[createInvoice]:5 Invoice [{}] created successfully as DRAFT for tenant [{}]",
                 saved.getInvoiceNumber(), saved.getTenantId());
 
         return saved;
@@ -183,7 +183,7 @@ public class KSeFInvoiceService {
      */
     public KsefInvoice submitInvoice(String tenantId, String invoiceId, String nip, String userEmail, String ipAddress) {
 
-        log.info("[SubmitInvoice]:1 Starting invoice submission process. TenantId=[{}], InvoiceId=[{}], NIP=[{}]", tenantId, invoiceId, nip);
+        log.info("[submitInvoice]:1 Starting invoice submission process. TenantId=[{}], InvoiceId=[{}], NIP=[{}]", tenantId, invoiceId, nip);
 
         //! Step 1 — Load and validate DRAFT invoice
         KsefInvoice invoice = loadAndGuardDraft(tenantId, invoiceId);
@@ -194,12 +194,12 @@ public class KSeFInvoiceService {
         int nextAttempt = invoice.getSubmissionAttempts() + 1;
         invoice.setSubmissionAttempts(nextAttempt);
 
-        log.info("[SubmitInvoice]:2 Submission attempt count updated to [{}] and saving PENDING invoice state into database for invoice [{}]", nextAttempt, invoice.getInvoiceNumber());
+        log.info("[submitInvoice]:2 Submission attempt count updated to [{}] and saving PENDING invoice state into database for invoice [{}]", nextAttempt, invoice.getInvoiceNumber());
 
         ksef_invoices_repository.save(invoice);
 
         // Audit log for submission attempt
-        log.info("[SubmitInvoice]:3 Creating audit log entry for invoice submission attempt. InvoiceId=[{}]", invoiceId);
+        log.info("[submitInvoice]:3 Creating audit log entry for invoice submission attempt. InvoiceId=[{}]", invoiceId);
 
         KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null, "attempt=" + invoice.getSubmissionAttempts(), userEmail, ipAddress);
 
@@ -219,7 +219,7 @@ public class KSeFInvoiceService {
         try {
 
             KsefInvoice submittedInvoice = executeKsefSubmission(invoice, xmlResult.xmlContent(), nip, userEmail, ipAddress);
-            log.info("[SubmitInvoice]:4 Invoice [{}] submitted successfully to KSeF", invoice.getInvoiceNumber());
+            log.info("[submitInvoice]:4 Invoice [{}] submitted successfully to KSeF", invoice.getInvoiceNumber());
             return submittedInvoice;
 
         } catch (KsefSubmissionException | KsefAuthException e) {
@@ -227,7 +227,7 @@ public class KSeFInvoiceService {
             // KSeF was reachable-but-rejected or unreachable at the session/network layer →
             // this is the system-detected "KSeF unavailability" offline mode. (offline24 vs
             // emergency are user/MF-declared and would be passed in explicitly.)
-            log.warn("[SubmitInvoice]:4 KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE", invoice.getInvoiceNumber(), e.getMessage());
+            log.warn("[submitInvoice]:5 KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE", invoice.getInvoiceNumber(), e.getMessage());
             return handleOfflineMode(invoice, KsefOfflineMode.OFFLINE_UNAVAILABILITY, e.getMessage(), userEmail, ipAddress);
         }
     }
@@ -235,6 +235,7 @@ public class KSeFInvoiceService {
     // ── Read ───────────────────────────────────────────────────────────────────
 
     public KsefInvoice getInvoice(String tenantId, String invoiceId) {
+        log.info("[getInvoice]:1 Loading invoice [{}] for tenant [{}]", invoiceId, tenantId);
         return ksef_invoices_repository.findById(invoiceId)
                 .filter(inv -> tenantId.equals(inv.getTenantId()))
                 .filter(inv -> !inv.isSoftDeleted())
@@ -243,6 +244,7 @@ public class KSeFInvoiceService {
     }
 
     public Page<KsefInvoice> listInvoices(String tenantId, KsefInvoiceStatus status, Pageable pageable) {
+        log.info("[listInvoices]:1 Listing invoices for tenant [{}] status [{}]", tenantId, status);
         if (status != null) {
             return ksef_invoices_repository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status, pageable);
         }
@@ -255,7 +257,7 @@ public class KSeFInvoiceService {
             String xmlContent, String nip,
             String userEmail, String ipAddress) {
 
-        log.info("[ExecuteKsefSubmission]:1 Starting KSeF 2.0 invoice submission flow for invoice [{}]",
+        log.info("[executeKsefSubmission]:1 Starting KSeF 2.0 invoice submission flow for invoice [{}]",
                 invoice.getInvoiceNumber());
 
         String tenantId = invoice.getTenantId();
@@ -263,7 +265,7 @@ public class KSeFInvoiceService {
 
         // Step 5 — acquire a KSeF 2.0 accessToken (reuse / refresh / full XAdES auth).
         String accessToken = authService.openSession(tenantId, nip);
-        log.debug("[ExecuteKsefSubmission]:2 accessToken acquired for tenant [{}]", tenantId);
+        log.debug("[executeKsefSubmission]:2 accessToken acquired for tenant [{}]", tenantId);
 
         // Step 6 — fetch the MF public key and open an encrypted online session.
         PublicKeyCertificate symmetricKeyCert = resolveSymmetricKeyCertificate();
@@ -274,7 +276,7 @@ public class KSeFInvoiceService {
         OpenOnlineSessionResponse session = ksefApiClient.openOnlineSession(accessToken,
                 new OpenOnlineSessionRequest(apiProperties.toFormCode(), encryption));
         String sessionRef = session.referenceNumber();
-        log.info("[ExecuteKsefSubmission] Online session [{}] opened for invoice [{}]",
+        log.info("[executeKsefSubmission]:3 Online session [{}] opened for invoice [{}]",
                 sessionRef, invoice.getInvoiceNumber());
 
         LocalDateTime submittedAt = LocalDateTime.now();
@@ -289,14 +291,14 @@ public class KSeFInvoiceService {
                         java.util.Base64.getEncoder().encodeToString(enc.cipherBytes()),
                         Boolean.FALSE));
         String invoiceRef = sendResponse.referenceNumber();
-        log.info("[ExecuteKsefSubmission] Invoice [{}] accepted into session — invoiceRef [{}]",
+        log.info("[executeKsefSubmission]:4 Invoice [{}] accepted into session — invoiceRef [{}]",
                 invoice.getInvoiceNumber(), invoiceRef);
 
         // Step 8 — poll the per-invoice status until KSeF assigns the permanent KSeF number.
         KsefPollResult pollResult = pollForKsefId(accessToken, sessionRef, invoiceRef, invoice.getInvoiceNumber());
         String ksefId = pollResult.ksefReferenceNumber();
         LocalDateTime receivedAt = LocalDateTime.now();
-        log.info("[ExecuteKsefSubmission] Permanent KSeF number received for invoice [{}] — ksefId [{}]",
+        log.info("[executeKsefSubmission]:5 Permanent KSeF number received for invoice [{}] — ksefId [{}]",
                 invoice.getInvoiceNumber(), ksefId);
 
         // Prefer KSeF's own acquisition timestamp; fall back to the local clock.
@@ -305,7 +307,7 @@ public class KSeFInvoiceService {
         // Step 9 — fetch the official per-invoice UPO XML from KSeF.
         String upoXml = ksefApiClient.fetchUpoXml(accessToken, sessionRef, invoiceRef)
                 .orElseGet(() -> {
-                    log.warn("[ExecuteKsefSubmission] KSeF did not return UPO XML yet — storing placeholder for invoice [{}]",
+                    log.warn("[executeKsefSubmission]:6 KSeF did not return UPO XML yet — storing placeholder for invoice [{}]",
                             invoice.getInvoiceNumber());
                     return buildUpoPlaceholder(invoice, ksefId, upoTimestamp);
                 });
@@ -316,7 +318,7 @@ public class KSeFInvoiceService {
 
         // Step 9 — mark invoice as SENT
         //! invoce update...
-        log.info("[ExecuteKsefSubmission] Updating invoice status to SENT for invoice [{}]",
+        log.info("[executeKsefSubmission]:7 Updating invoice status to SENT for invoice [{}]",
                 invoice.getInvoiceNumber());
         invoice.setStatus(KsefInvoiceStatus.SENT);
         invoice.setKsefId(ksefId); // ! ksefReferenceNumber
@@ -335,17 +337,17 @@ public class KSeFInvoiceService {
             invoice.setQrCodeInvoice(qrService.generateInvoiceCode(invoice));
         } catch (Exception qrEx) {
             // Never fail a successful KSeF submission because of QR generation.
-            log.warn("[ExecuteKsefSubmission] CODE I generation failed for SENT invoice [{}]: {}",
+            log.warn("[executeKsefSubmission]:8 CODE I generation failed for SENT invoice [{}]: {}",
                     invoice.getInvoiceNumber(), qrEx.getMessage());
         }
 
         invoice.setUpdatedAt(LocalDateTime.now());
-        log.info("[ExecuteKsefSubmission] Saving updated invoice state into database for invoice [{}]",
+        log.info("[executeKsefSubmission]:9 Saving updated invoice state into database for invoice [{}]",
                 invoice.getInvoiceNumber());
 
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
         KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_SENT_TO_KSEF", invoiceId, null, "ksefId=" + ksefId + " env=" + apiProperties.getEnvironment(), userEmail, ipAddress);
-        log.info("[ExecuteKsefSubmission] Invoice [{}] successfully registered with KSeF and submission flow completed — ksefId: [{}]", invoice.getInvoiceNumber(), ksefId);
+        log.info("[executeKsefSubmission]:10 Invoice [{}] successfully registered with KSeF and submission flow completed — ksefId: [{}]", invoice.getInvoiceNumber(), ksefId);
         return saved;
     }
 
@@ -356,6 +358,8 @@ public class KSeFInvoiceService {
 
     // Picks the MF public-key certificate whose usage allows wrapping the session AES key.
     private PublicKeyCertificate resolveSymmetricKeyCertificate() {
+        log.info("[resolveSymmetricKeyCertificate]:1 Selecting MF public key with usage [{}]",
+                SYMMETRIC_KEY_ENCRYPTION_USAGE);
         return ksefApiClient.getPublicKeyCertificates().stream()
                 .filter(c -> c.usage() != null && c.usage().contains(SYMMETRIC_KEY_ENCRYPTION_USAGE))
                 .findFirst()
@@ -368,13 +372,13 @@ public class KSeFInvoiceService {
     private KsefPollResult pollForKsefId(String accessToken, String sessionRef, String invoiceRef,
                                          String invoiceNumber) {
         int maxAttempts = 5;
-        log.info("[PollForKsefId] Polling KSeF status for invoice [{}] (invoiceRef [{}])", invoiceNumber, invoiceRef);
+        log.info("[pollForKsefId]:1 Polling KSeF status for invoice [{}] (invoiceRef [{}])", invoiceNumber, invoiceRef);
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             SessionInvoiceStatusResponse status = ksefApiClient.getInvoiceStatus(accessToken, sessionRef, invoiceRef);
 
             if (status.ksefNumber() != null && !status.ksefNumber().isBlank()) {
-                log.info("[PollForKsefId] KSeF number assigned for invoice [{}] — [{}]", invoiceNumber, status.ksefNumber());
+                log.info("[pollForKsefId]:2 KSeF number assigned for invoice [{}] — [{}]", invoiceNumber, status.ksefNumber());
                 return new KsefPollResult(status.ksefNumber(), status.acquisitionDate());
             }
             // A terminal failure status (4xx code) means KSeF rejected the invoice — stop early.
@@ -388,7 +392,7 @@ public class KSeFInvoiceService {
             }
         }
 
-        log.error("[PollForKsefId] KSeF did not assign a number after [{}] attempts for invoice [{}]", maxAttempts, invoiceNumber);
+        log.error("[pollForKsefId]:3 KSeF did not assign a number after [{}] attempts for invoice [{}]", maxAttempts, invoiceNumber);
         throw new KsefSubmissionException("KSeF did not assign a number after " + maxAttempts
                 + " polling attempts for invoiceRef: " + invoiceRef);
     }
@@ -430,20 +434,20 @@ public class KSeFInvoiceService {
             String codeOffline     = qrService.generateInvoiceCode(invoice);     // CODE I  "OFFLINE"
             invoice.setQrCodeInvoice(codeOffline);
             invoice.setQrCodeCertificate(codeCertificate);
-            log.info("[HandleOfflineMode] Offline QR codes generated for invoice [{}] (mode={})",
+            log.info("[handleOfflineMode]:1 Offline QR codes generated for invoice [{}] (mode={})",
                     invoice.getInvoiceNumber(), mode);
         } catch (KsefCertificateException ce) {
             // No OFFLINE-type KSeF certificate → a compliant offline invoice cannot be issued.
             invoice.setQrCodeInvoice(null);
             invoice.setQrCodeCertificate(null);
             complianceNote = "OFFLINE_CERT_REQUIRED: " + ce.getMessage();
-            log.error("[HandleOfflineMode] COMPLIANCE BLOCK for invoice [{}] — {}",
+            log.error("[handleOfflineMode]:2 COMPLIANCE BLOCK for invoice [{}] — {}",
                     invoice.getInvoiceNumber(), ce.getMessage());
         } catch (Exception qrEx) {
             invoice.setQrCodeInvoice(null);
             invoice.setQrCodeCertificate(null);
             complianceNote = "QR_GENERATION_FAILED: " + qrEx.getMessage();
-            log.error("[HandleOfflineMode] Failed to generate offline QR codes for invoice [{}]: {}",
+            log.error("[handleOfflineMode]:3 Failed to generate offline QR codes for invoice [{}]: {}",
                     invoice.getInvoiceNumber(), qrEx.getMessage(), qrEx);
         }
 
@@ -458,7 +462,7 @@ public class KSeFInvoiceService {
                 "mode=" + mode + " deadline=" + invoice.getKsefSubmissionDeadline() + " reason=" + errorMessage,
                 userEmail, ipAddress);
 
-        log.warn("[HandleOfflineMode] Invoice [{}] parked OFFLINE (mode={}) — MUST reach KSeF by [{}]",
+        log.warn("[handleOfflineMode]:4 Invoice [{}] parked OFFLINE (mode={}) — MUST reach KSeF by [{}]",
                 invoice.getInvoiceNumber(), mode, invoice.getKsefSubmissionDeadline());
         return saved;
     }
@@ -484,6 +488,7 @@ public class KSeFInvoiceService {
     // ── Private: helpers ───────────────────────────────────────────────────────
 
     private KsefInvoice loadAndGuardDraft(String tenantId, String invoiceId) {
+        log.info("[loadAndGuardDraft]:1 Loading + guarding DRAFT invoice [{}] for tenant [{}]", invoiceId, tenantId);
         KsefInvoice invoice = ksef_invoices_repository.findById(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Invoice [" + invoiceId + "] not found"));

@@ -39,16 +39,16 @@ public class AuthenticatedUserArgumentResolver implements HandlerMethodArgumentR
                                   WebDataBinderFactory binderFactory) {
         HttpServletRequest request = webRequest.getNativeRequest(HttpServletRequest.class);
         if (request == null) {
-            log.warn("[AuthResolver] No HttpServletRequest in context — cannot authenticate");
+            log.warn("[resolveArgument]:1 No HttpServletRequest in context — cannot authenticate");
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "No request context available");
         }
 
-        log.info("[AuthResolver] → Resolving AuthenticatedUser for {} {}",
+        log.info("[resolveArgument]:2 → Resolving AuthenticatedUser for {} {}",
                 request.getMethod(), request.getRequestURI());
 
         AuthenticatedUser caller = authClient.resolve(request);
 
-        log.info("[AuthResolver] ← Authenticated: userId={} tenantId={} role={}",
+        log.info("[resolveArgument]:3 ← Authenticated: userId={} tenantId={} role={}",
                 caller.userId(), caller.tenantId(), caller.role());
         return caller;
     }

@@ -28,7 +28,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         // Runs ONCE at startup while Spring Security builds the filter chain.
-        log.info("[SecurityConfig] Building security filter chain — CSRF disabled, STATELESS sessions, "
+        log.info("[filterChain]:1 Building security filter chain — CSRF disabled, STATELESS sessions, "
                 + "/api/v1/** is permitAll (auth is enforced per-request by AuthenticatedUserArgumentResolver "
                 + "via the RegulaOne /me call)");
         http
@@ -44,7 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/**").permitAll()
                         .anyRequest().authenticated());
 
-        log.info("[SecurityConfig] Security filter chain built successfully");
+        log.info("[filterChain]:2 Security filter chain built successfully");
         return http.build();
     }
 
@@ -59,7 +59,7 @@ public class SecurityConfig {
         for (String origin : allowedOrigins.split(",")) {
             String trimmed = origin.trim();
             config.addAllowedOrigin(trimmed);
-            log.info("[SecurityConfig] CORS allowed origin registered: {}", trimmed);
+            log.info("[corsConfigurationSource]:1 CORS allowed origin registered: {}", trimmed);
         }
 
         config.setAllowCredentials(true);
@@ -69,7 +69,7 @@ public class SecurityConfig {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
-        log.info("[SecurityConfig] CORS source built — allowCredentials=true (cookies forwarded), maxAge=3600s");
+        log.info("[corsConfigurationSource]:2 CORS source built — allowCredentials=true (cookies forwarded), maxAge=3600s");
         return source;
     }
 

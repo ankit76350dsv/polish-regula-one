@@ -63,7 +63,7 @@ public class KsefQrService {
                 + invoice.getSellerNip() + "/"
                 + issueDate + "/"
                 + hash;
-        log.debug("[OfflineQr] CODE I (OFFLINE) built for invoice [{}]", invoice.getInvoiceNumber());
+        log.debug("[generateInvoiceCode]:1 CODE I (OFFLINE) built for invoice [{}]", invoice.getInvoiceNumber());
         return url;
     }
 
@@ -105,7 +105,7 @@ public class KsefQrService {
                 + contextType + "/" + contextValue + "/"
                 + nip + "/" + serial + "/" + hash + "/"
                 + signature;
-        log.debug("[OfflineQr] CODE II (CERTYFIKAT) built for invoice [{}]", invoice.getInvoiceNumber());
+        log.debug("[generateInvoiceCode]:1 CODE II (CERTYFIKAT) built for invoice [{}]", invoice.getInvoiceNumber());
         return url;
     }
 

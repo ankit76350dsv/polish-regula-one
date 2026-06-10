@@ -103,7 +103,7 @@ public class CertificateService {
                                         existing.setActive(false);
                                         existing.setUpdatedAt(LocalDateTime.now());
                                         ksef_certificates_repo.save(existing);
-                                        log.info("Deactivated previous certificate [id={}] for tenant [{}]",
+                                        log.info("[storeCertificate]:1 Deactivated previous certificate [id={}] for tenant [{}]",
                                                         existing.getId(), tenantId);
                                 });
 
@@ -129,7 +129,7 @@ public class CertificateService {
                                 .build();
 
                 KsefCertificate saved = ksef_certificates_repo.save(cert);
-                log.info("Stored certificate [id={}] for tenant [{}], validTo={}",
+                log.info("[storeCertificate]:2 Stored certificate [id={}] for tenant [{}], validTo={}",
                                 saved.getId(), tenantId, saved.getValidTo());
 
                 writeAuditLog(tenantId, "CERTIFICATE_UPLOADED", saved.getId(), uploadedByUserId,
@@ -145,6 +145,7 @@ public class CertificateService {
          *                                  expired, or loading fails
          */
         public PrivateKey getPrivateKey(String tenantId) {
+                log.info("[getPrivateKey]:1 Loading active signing private key for tenant [{}]", tenantId);
                 KsefCertificate certInfo = getActiveCertOrThrow(tenantId);
                 validateNotExpired(certInfo);
 
@@ -179,6 +180,7 @@ public class CertificateService {
          *                                  - or certificate loading/decryption fails
          */
         public X509Certificate getPublicCertificate(String tenantId) {
+                log.info("[getPublicCertificate]:1 Loading active public certificate for tenant [{}]", tenantId);
                 KsefCertificate cert = getActiveCertOrThrow(tenantId);
 
                 byte[] pfxBytes = storage.readPfxDecrypted(cert.getEncryptedStoragePath());
@@ -201,6 +203,7 @@ public class CertificateService {
          * certificateSerialNumber for the QR), or throws an explicit compliance error.
          */
         public KsefCertificate getActiveOfflineCert(String tenantId) {
+                log.info("[getActiveOfflineCert]:1 Loading active OFFLINE certificate for tenant [{}]", tenantId);
                 return getActiveOfflineCertOrThrow(tenantId);
         }
 
@@ -209,6 +212,7 @@ public class CertificateService {
          * used to sign the offline QR Code II. Throws if no OFFLINE certificate is provisioned.
          */
         public PrivateKey getOfflineSealPrivateKey(String tenantId) {
+                log.info("[getOfflineSealPrivateKey]:1 Loading OFFLINE seal private key for tenant [{}]", tenantId);
                 KsefCertificate certInfo = getActiveOfflineCertOrThrow(tenantId);
                 validateNotExpired(certInfo);
 
@@ -257,35 +261,35 @@ public class CertificateService {
          */
         public void validateCertificateActive(String tenantId) {
 
-                log.info("[ValidateCertificateActive] Validating active certificate for tenant [{}]",
+                log.info("[validateCertificateActive]:1 Validating active certificate for tenant [{}]",
                                 tenantId);
 
                 KsefCertificate cert = getActiveCertOrThrow(tenantId);
 
-                log.debug("[ValidateCertificateActive] Active certificate found for tenant [{}] — certificateId [{}]",
+                log.debug("[validateCertificateActive]:2 Active certificate found for tenant [{}] — certificateId [{}]",
                                 tenantId,
                                 cert.getId());
 
                 validateNotExpired(cert);
 
-                log.debug("[ValidateCertificateActive] Certificate expiry validation passed for certificate [{}]",
+                log.debug("[validateCertificateActive]:3 Certificate expiry validation passed for certificate [{}]",
                                 cert.getId());
 
                 if (cert.getVerificationStatus() == KsefCertificateVerificationStatus.REVOKED) {
-                        log.error("[ValidateCertificateActive] Certificate [{}] is revoked and cannot be used",
+                        log.error("[validateCertificateActive]:4 Certificate [{}] is revoked and cannot be used",
                                         cert.getId());
                         throw new KsefCertificateException(
                                         "Certificate [" + cert.getId() + "] has been revoked and cannot be used");
                 }
 
                 if (cert.getVerificationStatus() == KsefCertificateVerificationStatus.EXPIRED) {
-                        log.error("[ValidateCertificateActive] Certificate [{}] is marked as expired",
+                        log.error("[validateCertificateActive]:5 Certificate [{}] is marked as expired",
                                         cert.getId());
                         throw new KsefCertificateException(
                                         "Certificate [" + cert.getId() + "] is marked as expired");
                 }
 
-                log.info("[ValidateCertificateActive] Certificate validation completed successfully for tenant [{}]",
+                log.info("[validateCertificateActive]:6 Certificate validation completed successfully for tenant [{}]",
                                 tenantId);
         }
 
@@ -309,6 +313,7 @@ public class CertificateService {
          * @return list of tenant certificates ordered by latest upload first
          */
         public List<KsefCertificate> listCertificates(String tenantId) {
+                log.info("[listCertificates]:1 Listing certificates for tenant [{}]", tenantId);
                 return ksef_certificates_repo.findByTenantIdOrderByCreatedAtDesc(tenantId);
         }
 
@@ -350,7 +355,7 @@ public class CertificateService {
                 cert.setActive(false);
                 cert.setUpdatedAt(LocalDateTime.now());
                 ksef_certificates_repo.save(cert);
-                log.info("Manually deactivated certificate [id={}] for tenant [{}]", certId, tenantId);
+                log.info("[deactivateCertificate]:1 Manually deactivated certificate [id={}] for tenant [{}]", certId, tenantId);
 
                 writeAuditLog(tenantId, "CERTIFICATE_DEACTIVATED", cert.getId(),
                                 cert.getUploadedByUserId(), describeCertificate(cert));
@@ -382,6 +387,7 @@ public class CertificateService {
          * Called by KSeFAuthService after a session is successfully opened.
          */
         public void recordAuthSuccess(String tenantId) {
+                log.info("[recordAuthSuccess]:1 Recording successful auth on active cert for tenant [{}]", tenantId);
                 ksef_certificates_repo.findByTenantIdAndActiveTrue(tenantId).ifPresent(cert -> {
                         cert.setAuthSuccessCount(cert.getAuthSuccessCount() + 1);
                         cert.setLastAuthTime(LocalDateTime.now());
@@ -397,6 +403,7 @@ public class CertificateService {
          * authFailureCount: 2 → 3
          */
         public void recordAuthFailure(String tenantId) {
+                log.info("[recordAuthFailure]:1 Recording failed auth on active cert for tenant [{}]", tenantId);
                 ksef_certificates_repo.findByTenantIdAndActiveTrue(tenantId).ifPresent(cert -> {
                         cert.setAuthFailureCount(cert.getAuthFailureCount() + 1);
                         cert.setUpdatedAt(LocalDateTime.now());
@@ -457,7 +464,7 @@ public class CertificateService {
                                         existing.setActive(false);
                                         existing.setUpdatedAt(LocalDateTime.now());
                                         ksef_certificates_repo.save(existing);
-                                        log.info("Deactivated previous PEM certificate [id={}] for tenant [{}]",
+                                        log.info("[storePemCertificate]:1 Deactivated previous PEM certificate [id={}] for tenant [{}]",
                                                         existing.getId(), tenantId);
                                 });
 
@@ -483,7 +490,7 @@ public class CertificateService {
                                 .build();
 
                 KsefCertificate saved = ksef_certificates_repo.save(cert);
-                log.info("Stored PEM certificate [id={}] for tenant [{}], validTo={}",
+                log.info("[storePemCertificate]:2 Stored PEM certificate [id={}] for tenant [{}], validTo={}",
                                 saved.getId(), tenantId, saved.getValidTo());
 
                 writeAuditLog(tenantId, "CERTIFICATE_UPLOADED", saved.getId(), uploadedByUserId,

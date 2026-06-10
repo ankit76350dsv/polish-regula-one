@@ -3,6 +3,7 @@ package com.ksefflow.backend.services.certificate;
 import com.ksefflow.backend.config.CertificateStorageProperties;
 import com.ksefflow.backend.exceptions.KsefCertificateException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
@@ -20,6 +21,7 @@ import java.util.Base64;
 //
 // Vault reference format (dev):  "local:<base64(iv + ciphertext + gcm-tag)>"
 // Vault reference format (prod): AWS KMS ARN or HashiCorp Vault path — Phase 2
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class CertificateCryptoUtils {
@@ -82,6 +84,7 @@ public class CertificateCryptoUtils {
     // Dev:  "local:<base64(iv + ciphertext + gcm-tag)>"
     // Prod: Phase 2 will call AWS KMS instead and return an ARN-based reference.
     public String encryptPassword(String password) {
+        log.info("[encryptPassword]:1 AES-256-GCM encrypting secret into a vault reference");
         byte[] encrypted = aesEncrypt(password.getBytes(StandardCharsets.UTF_8));
         return LOCAL_VAULT_PREFIX + Base64.getEncoder().encodeToString(encrypted);
     }
@@ -89,6 +92,8 @@ public class CertificateCryptoUtils {
     // Decrypts a vault reference produced by encryptPassword().
     // Routes by prefix: "local:" = AES decrypt inline; anything else = prod vault (Phase 2).
     public String decryptPassword(String vaultReference) {
+        log.info("[decryptPassword]:1 Decrypting vault reference (prefix [{}])",
+                vaultReference != null ? vaultReference.substring(0, Math.min(6, vaultReference.length())) : "null");
         if (vaultReference != null && vaultReference.startsWith(LOCAL_VAULT_PREFIX)) {
             String b64 = vaultReference.substring(LOCAL_VAULT_PREFIX.length());
             byte[] encrypted = Base64.getDecoder().decode(b64);

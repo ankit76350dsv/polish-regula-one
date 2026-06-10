@@ -45,7 +45,7 @@ public class KsefApiClient {
     /** POST /auth/challenge — fetches a 10-minute challenge (no body, public endpoint). */
     public AuthChallengeResponse getAuthChallenge() {
         String url = base() + "/auth/challenge";
-        log.info("[KSeF2] POST {} — requesting auth challenge", url);
+        log.info("[getAuthChallenge]:1 POST {} — requesting auth challenge", url);
         try {
             ResponseEntity<AuthChallengeResponse> resp = ksefRestTemplate.postForEntity(
                     url, HttpEntity.EMPTY, AuthChallengeResponse.class);
@@ -69,7 +69,7 @@ public class KsefApiClient {
         String url = base() + "/auth/xades-signature";
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_XML);
-        log.info("[KSeF2] POST {} — submitting XAdES-signed AuthTokenRequest ({} bytes)",
+        log.info("[submitXadesSignature]:1 POST {} — submitting XAdES-signed AuthTokenRequest ({} bytes)",
                 url, signedXml.length());
         try {
             ResponseEntity<AuthInitResponse> resp = ksefRestTemplate.postForEntity(
@@ -90,6 +90,7 @@ public class KsefApiClient {
     /** GET /auth/{referenceNumber} — status of the async auth operation (Bearer authenticationToken). */
     public AuthStatusResponse getAuthStatus(String referenceNumber, String authenticationToken) {
         String url = base() + "/auth/" + referenceNumber;
+        log.info("[getAuthStatus]:1 GET {} — checking auth status for ref [{}]", url, referenceNumber);
         try {
             ResponseEntity<AuthStatusResponse> resp = ksefRestTemplate.exchange(
                     url, HttpMethod.GET, bearer(authenticationToken), AuthStatusResponse.class);
@@ -108,6 +109,7 @@ public class KsefApiClient {
     /** POST /auth/token/redeem — exchanges the authenticationToken for access + refresh tokens. */
     public AuthTokensResponse redeemTokens(String authenticationToken) {
         String url = base() + "/auth/token/redeem";
+        log.info("[redeemTokens]:1 POST {} — redeeming access + refresh tokens", url);
         try {
             ResponseEntity<AuthTokensResponse> resp = ksefRestTemplate.exchange(
                     url, HttpMethod.POST, bearer(authenticationToken), AuthTokensResponse.class);
@@ -127,6 +129,7 @@ public class KsefApiClient {
     /** POST /auth/token/refresh — mints a fresh accessToken (Bearer refreshToken). */
     public AuthTokenRefreshResponse refreshAccessToken(String refreshToken) {
         String url = base() + "/auth/token/refresh";
+        log.info("[refreshAccessToken]:1 POST {} — refreshing accessToken", url);
         try {
             ResponseEntity<AuthTokenRefreshResponse> resp = ksefRestTemplate.exchange(
                     url, HttpMethod.POST, bearer(refreshToken), AuthTokenRefreshResponse.class);
@@ -147,6 +150,7 @@ public class KsefApiClient {
     /** GET /security/public-key-certificates — MF public keys used to wrap the session AES key. */
     public List<PublicKeyCertificate> getPublicKeyCertificates() {
         String url = base() + "/security/public-key-certificates";
+        log.info("[getPublicKeyCertificates]:1 GET {} — fetching MF public keys", url);
         try {
             ResponseEntity<List<PublicKeyCertificate>> resp = ksefRestTemplate.exchange(
                     url, HttpMethod.GET, HttpEntity.EMPTY,
@@ -169,6 +173,7 @@ public class KsefApiClient {
     /** POST /sessions/online — opens an encrypted online session (Bearer accessToken). */
     public OpenOnlineSessionResponse openOnlineSession(String accessToken, OpenOnlineSessionRequest request) {
         String url = base() + "/sessions/online";
+        log.info("[openOnlineSession]:1 POST {} — opening encrypted online session", url);
         try {
             ResponseEntity<OpenOnlineSessionResponse> resp = ksefRestTemplate.exchange(
                     url, HttpMethod.POST, bearerJson(accessToken, request), OpenOnlineSessionResponse.class);
@@ -188,6 +193,7 @@ public class KsefApiClient {
     /** POST /sessions/online/{ref}/invoices — sends one encrypted invoice (Bearer accessToken). */
     public SendInvoiceResponse sendInvoice(String accessToken, String sessionReference, SendInvoiceRequest request) {
         String url = base() + "/sessions/online/" + sessionReference + "/invoices";
+        log.info("[sendInvoice]:1 POST {} — sending encrypted invoice", url);
         try {
             ResponseEntity<SendInvoiceResponse> resp = ksefRestTemplate.exchange(
                     url, HttpMethod.POST, bearerJson(accessToken, request), SendInvoiceResponse.class);
@@ -207,6 +213,7 @@ public class KsefApiClient {
     public SessionInvoiceStatusResponse getInvoiceStatus(String accessToken, String sessionReference,
                                                          String invoiceReference) {
         String url = base() + "/sessions/" + sessionReference + "/invoices/" + invoiceReference;
+        log.info("[getInvoiceStatus]:1 GET {} — polling invoice status", url);
         try {
             ResponseEntity<SessionInvoiceStatusResponse> resp = ksefRestTemplate.exchange(
                     url, HttpMethod.GET, bearer(accessToken), SessionInvoiceStatusResponse.class);
@@ -228,20 +235,23 @@ public class KsefApiClient {
      */
     public Optional<String> fetchUpoXml(String accessToken, String sessionReference, String invoiceReference) {
         String url = base() + "/sessions/" + sessionReference + "/invoices/" + invoiceReference + "/upo";
+        log.info("[fetchUpoXml]:1 GET {} — fetching official UPO XML", url);
         try {
             ResponseEntity<String> resp = ksefRestTemplate.exchange(
                     url, HttpMethod.GET, bearer(accessToken), String.class);
             String body = resp.getBody();
             if (body != null && !body.isBlank()) {
+                log.info("[fetchUpoXml]:2 UPO XML received for invoice ref [{}]", invoiceReference);
                 return Optional.of(body);
             }
+            log.warn("[fetchUpoXml]:3 Empty UPO body for invoice ref [{}]", invoiceReference);
             return Optional.empty();
         } catch (HttpStatusCodeException e) {
-            log.warn("[KSeF2] UPO fetch returned [{}] for invoice ref [{}] — UPO not yet available",
+            log.warn("[fetchUpoXml]:4 UPO fetch returned [{}] for invoice ref [{}] — UPO not yet available",
                     e.getStatusCode(), invoiceReference);
             return Optional.empty();
         } catch (ResourceAccessException e) {
-            log.warn("[KSeF2] UPO endpoint unreachable for invoice ref [{}]", invoiceReference);
+            log.warn("[fetchUpoXml]:5 UPO endpoint unreachable for invoice ref [{}]", invoiceReference);
             return Optional.empty();
         }
     }
@@ -249,12 +259,13 @@ public class KsefApiClient {
     /** POST /sessions/online/{ref}/close — closes the online session (Bearer accessToken). */
     public void closeOnlineSession(String accessToken, String sessionReference) {
         String url = base() + "/sessions/online/" + sessionReference + "/close";
+        log.info("[closeOnlineSession]:1 POST {} — closing online session", url);
         try {
             ksefRestTemplate.exchange(url, HttpMethod.POST, bearer(accessToken), Void.class);
-            log.debug("[KSeF2] Online session [{}] closed", sessionReference);
+            log.info("[closeOnlineSession]:2 Online session [{}] closed", sessionReference);
         } catch (HttpStatusCodeException | ResourceAccessException e) {
             // Closing is best-effort; the session expires on its own (validUntil).
-            log.warn("[KSeF2] Failed to close online session [{}]: {}", sessionReference, e.getMessage());
+            log.warn("[closeOnlineSession]:3 Failed to close online session [{}]: {}", sessionReference, e.getMessage());
         }
     }
 

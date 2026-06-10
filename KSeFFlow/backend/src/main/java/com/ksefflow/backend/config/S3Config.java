@@ -50,12 +50,12 @@ public class S3Config {
                 && s3.getSecretKey() != null && !s3.getSecretKey().isBlank();
 
         if (hasStaticKeys) {
-            log.info("[S3Config] Using static credentials for S3 bucket '{}' in region '{}'",
+            log.info("[s3Client]:1 Using static credentials for S3 bucket '{}' in region '{}'",
                     s3.getBucket(), s3.getRegion());
             builder.credentialsProvider(StaticCredentialsProvider.create(
                     AwsBasicCredentials.create(s3.getAccessKey(), s3.getSecretKey())));
         } else {
-            log.info("[S3Config] Using default AWS credential chain for S3 bucket '{}' in region '{}'",
+            log.info("[s3Client]:2 Using default AWS credential chain for S3 bucket '{}' in region '{}'",
                     s3.getBucket(), s3.getRegion());
             builder.credentialsProvider(DefaultCredentialsProvider.create());
         }
