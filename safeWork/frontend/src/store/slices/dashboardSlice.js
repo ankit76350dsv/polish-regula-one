@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
-// SafeWork backend runs on 3001; RegulaOne (auth) runs on 8080
-const SAFEWORK_API = "http://localhost:3001/api";
+// SafeWork backend runs on 8082; RegulaOne (auth) runs on 8080
+const SAFEWORK_API = "http://localhost:8082/api";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("accessToken");
@@ -9,17 +9,26 @@ const getAuthHeaders = () => {
 };
 
 // Fetches compliance dashboard data from the SafeWork backend.
+// tenantId is passed as a query param — consistent with all other SafeWork endpoints
+// that use getState().auth.user?.tenantId rather than relying on req.user.tenant
+// (which may be null if the user record pre-dates tenant assignment).
 export const fetchDashboard = createAsyncThunk(
   "dashboard/fetch",
-  async (_, { rejectWithValue }) => {
+  async (_, { getState, rejectWithValue }) => {
     try {
-      const response = await fetch(`${SAFEWORK_API}/dashboard`, {
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-      });
+      const tenantId = getState().auth.user?.tenantId;
+      if (!tenantId) return rejectWithValue("No tenantId in auth state");
+
+      const response = await fetch(
+        `${SAFEWORK_API}/dashboard/overview?tenantId=${tenantId}`,
+        {
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+        }
+      );
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));

@@ -10,6 +10,8 @@ import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
 import EmployeeList from "../components/EmployeeList";
 import AddEmployee from "../components/AddEmployee";
+import EmployeeProfile from "../components/EmployeeProfile";
+import AuditReport from "../components/AuditReport";
 
 const router = createBrowserRouter([
   {
@@ -31,7 +33,8 @@ const router = createBrowserRouter([
           { index: true, element: <Dashboard /> },
           { path: "dashboard", element: <Home /> },
            { path: "employees", element: <EmployeeList /> },
-             { path: "/employees/add", element: <AddEmployee /> },
+           { path: "/employees/add", element: <AddEmployee /> },
+           { path: "/employees/:id", element: <EmployeeProfile /> },
           { path: "services", element: <Placeholder /> },
           { path: "services/compliance-audits", element: <Placeholder /> },
           { path: "services/risk-assessment", element: <Placeholder /> },
@@ -43,7 +46,8 @@ const router = createBrowserRouter([
           { path: "solutions/smb", element: <Placeholder /> },
           { path: "solutions/construction", element: <Placeholder /> },
 
-          { path: "reports", element: <Placeholder /> },
+          { path: "reports",    element: <Placeholder /> },
+          { path: "audit-logs", element: <AuditReport /> },
           { path: "contact", element: <Placeholder /> },
           { path: "privacy", element: <Placeholder /> },
           { path: "terms", element: <Placeholder /> },

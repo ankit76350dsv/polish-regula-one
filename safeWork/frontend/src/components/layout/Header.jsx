@@ -17,7 +17,7 @@ const NAV_ITEMS = [
   },
   {
     label: "Audit Reports",
-    path: "/employees/compliance-audits",
+    path: "/audit-logs",
   },
   { label: "Dashboard", path: "/dashboard" },
   { label: "Reports", path: "/reports" },

@@ -21,16 +21,18 @@ const employeeProfileSchema = new mongoose.Schema(
       type: Date,
     },
 
-    // Personal identity
+    // Personal identity — denormalised from RegulaOne for quick reads.
+    // Not required: identity is authoritative in RegulaOne (users collection).
+    // Upsert always joins via userId so these are optional cache fields only.
+    // OLD: required: true — removed because upsert never sends identity fields,
+    //      causing Mongoose validation to fail on every save.
     name: {
       type: String,
-      required: true,
       trim: true,
     },
 
     email: {
       type: String,
-      required: true,
       lowercase: true,
       trim: true,
     },
@@ -98,6 +100,24 @@ const employeeProfileSchema = new mongoose.Schema(
       expiryDate: {
         type: Date,
       },
+      // Added to mirror medicalCertificate — stores S3 object key for the uploaded BHP certificate
+      documentPath: {
+        type: String,
+      },
+    },
+
+    // Explicit flags for whether this position requires each compliance document.
+    // Added because using medicalCertificate.status presence as a proxy was
+    // ambiguous — the schema defaults create the sub-object for every employee,
+    // making it impossible to distinguish "not required" from "required but missing".
+    requiresMedicalCertificate: {
+      type: Boolean,
+      default: false,
+    },
+
+    requiresBHPTraining: {
+      type: Boolean,
+      default: false,
     },
 
     complianceStatus: {

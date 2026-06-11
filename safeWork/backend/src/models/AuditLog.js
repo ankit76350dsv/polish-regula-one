@@ -38,4 +38,12 @@ auditLogSchema.pre(['updateOne', 'findOneAndUpdate', 'updateMany'], function () 
   throw new Error('Audit logs are immutable and cannot be updated');
 });
 
+// Compound indexes for the primary query patterns used by the audit report:
+//   - tenant + time       (default list — newest first)
+//   - tenant + action + time  (filter by action type)
+//   - tenant + userId + time  (filter by specific user)
+auditLogSchema.index({ tenantId: 1, createdAt: -1 });
+auditLogSchema.index({ tenantId: 1, action: 1,  createdAt: -1 });
+auditLogSchema.index({ tenantId: 1, userId: 1,  createdAt: -1 });
+
 module.exports = mongoose.model('AuditLog', auditLogSchema);

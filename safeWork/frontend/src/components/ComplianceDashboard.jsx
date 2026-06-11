@@ -317,15 +317,24 @@ function formatRelativeTime(dateStr) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function RecentUploads({ recentUploads = [] }) {
-  const iconStyle = (type = "") =>
-    type.includes("Medical") ? "bg-blue-50 text-blue-600"
-    : type.includes("BHP")   ? "bg-emerald-50 text-emerald-600"
-                              : "bg-violet-50 text-violet-600";
+// Status badge helper local to this component (avoids import dependency)
+const docStatusCls = (status = "") => {
+  switch (status.toUpperCase()) {
+    case "VALID":    return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+    case "EXPIRING": return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
+    case "EXPIRED":  return "bg-red-50 text-red-700 ring-1 ring-red-200";
+    default:         return "bg-slate-100 text-slate-500 ring-1 ring-slate-200";
+  }
+};
+
+function RecentDocumentsTable({ recentDocuments = [] }) {
+  const iconCls = (type = "") =>
+    type === "Medical Certificate" ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600";
+
   return (
     <Card className="p-5 flex flex-col h-full">
       <CardHeader
-        title="Recent Uploads"
+        title="Recently Uploaded Documents"
         subtitle="Latest compliance files"
         action={
           <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
@@ -335,21 +344,33 @@ function RecentUploads({ recentUploads = [] }) {
           </div>
         }
       />
-      {recentUploads.length === 0 ? (
+      {recentDocuments.length === 0 ? (
         <p className="text-sm text-slate-400 text-center py-6">No recent uploads</p>
       ) : (
         <div className="space-y-1 flex-1">
-          {recentUploads.map((upload, idx) => (
-            <div key={upload.id || idx} className="flex items-start gap-3 p-3 rounded-xl hover:bg-emerald-50/50 transition-colors">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconStyle(upload.type)}`}>
+          {recentDocuments.map((doc, idx) => (
+            <div key={doc.id || idx} className="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconCls(doc.documentType)}`}>
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                 </svg>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-slate-900 truncate">{upload.fileName}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{upload.employee} · {upload.type}</p>
-                <p className="text-xs text-slate-400 mt-1">By {upload.uploadedBy} · {formatRelativeTime(upload.uploadedAt)}</p>
+                <p className="text-sm font-semibold text-slate-900 truncate">{doc.employeeName}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{doc.documentType}</p>
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                  <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${docStatusCls(doc.status)}`}>
+                    {doc.status}
+                  </span>
+                  {doc.expiryDate && (
+                    <span className="text-[11px] text-slate-400">
+                      Exp: {new Date(doc.expiryDate).toLocaleDateString("en-GB")}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Uploaded {formatRelativeTime(doc.uploadDate)}
+                </p>
               </div>
             </div>
           ))}
@@ -359,39 +380,49 @@ function RecentUploads({ recentUploads = [] }) {
   );
 }
 
-function AlertHistory({ alertHistory = [] }) {
-  const ChannelIcon = ({ channel }) =>
-    channel === "Email" ? (
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-      </svg>
-    ) : (
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
-      </svg>
-    );
+const avatarColors2 = [
+  "from-sky-500 to-blue-500", "from-violet-500 to-purple-500",
+  "from-rose-500 to-pink-500", "from-amber-500 to-orange-500",
+  "from-emerald-500 to-teal-500", "from-blue-500 to-cyan-500",
+];
+
+function RecentEmployeesTable({ recentEmployees = [] }) {
   return (
     <Card className="p-5 flex flex-col h-full">
-      <CardHeader title="Alert History" subtitle="Automated warning records" />
-      {alertHistory.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-6">No alert history</p>
+      <CardHeader
+        title="Recently Added Employees"
+        subtitle="Newest compliance profiles"
+        action={
+          <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center">
+            <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+            </svg>
+          </div>
+        }
+      />
+      {recentEmployees.length === 0 ? (
+        <p className="text-sm text-slate-400 text-center py-6">No recent employees</p>
       ) : (
-        <div className="space-y-3 flex-1">
-          {alertHistory.map((alert, idx) => (
-            <div key={alert.id || idx} className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <p className="text-sm font-semibold text-slate-800">{alert.employee}</p>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
-                  {alert.status}
-                </span>
+        <div className="space-y-1 flex-1">
+          {recentEmployees.map((emp, idx) => {
+            const initials = (emp.name || "").split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+            return (
+              <div key={emp.id || idx} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors">
+                <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${avatarColors2[idx % avatarColors2.length]} flex items-center justify-center text-xs font-bold text-white shrink-0`}>
+                  {initials || "?"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-900 truncate">{emp.name}</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                    {emp.employeeId} · {emp.department}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Added {formatRelativeTime(emp.createdAt)}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <ChannelIcon channel={alert.channel} />
-                <span>{alert.document} · {alert.channel}</span>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1.5">{formatRelativeTime(alert.sentAt)}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </Card>
@@ -400,10 +431,11 @@ function AlertHistory({ alertHistory = [] }) {
 
 function AuditActivity({ auditActivity = [] }) {
   const actionMeta = {
-    DOCUMENT_UPLOADED: { dot: "bg-blue-500",    ring: "ring-blue-100",    label: "Upload"  },
-    CLOCK_IN_BLOCKED:  { dot: "bg-red-500",     ring: "ring-red-100",     label: "Blocked" },
-    ALERT_SENT:        { dot: "bg-amber-400",   ring: "ring-amber-100",   label: "Alert"   },
-    EMPLOYEE_CREATED:  { dot: "bg-emerald-500", ring: "ring-emerald-100", label: "Created" },
+    DOCUMENT_UPLOADED:        { dot: "bg-blue-500",    ring: "ring-blue-100",    label: "Upload"  },
+    EMPLOYEE_PROFILE_CREATED: { dot: "bg-emerald-500", ring: "ring-emerald-100", label: "Created" },
+    EMPLOYEE_PROFILE_UPDATED: { dot: "bg-sky-500",     ring: "ring-sky-100",     label: "Updated" },
+    COMPLIANCE_UPDATED:       { dot: "bg-amber-400",   ring: "ring-amber-100",   label: "Compliance" },
+    CLOCK_IN_BLOCKED:         { dot: "bg-red-500",     ring: "ring-red-100",     label: "Blocked" },
   };
   return (
     <Card className="p-5 flex flex-col h-full">
@@ -429,7 +461,11 @@ function AuditActivity({ auditActivity = [] }) {
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold text-white ${meta.dot}`}>{meta.label}</span>
                     </div>
                     <p className="text-sm text-slate-600 mt-0.5 leading-snug">{activity.description}</p>
-                    <p className="text-xs text-slate-400 mt-1">{activity.user} · {formatRelativeTime(activity.time)}</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      <span className="font-medium text-slate-500">{activity.user}</span>
+                      {" · "}
+                      {formatRelativeTime(activity.time)}
+                    </p>
                   </div>
                 </div>
               );
@@ -465,13 +501,13 @@ export default function ComplianceDashboard() {
     dispatch(fetchDashboard());
   }, [dispatch]);
 
-  const metrics = data?.metrics || {};
-  const employees = data?.employees || [];
-  const health = data?.complianceHealth || null;
+  const metrics          = data?.metrics            || {};
+  const employees        = data?.employees          || [];
+  const health           = data?.complianceHealth   || null;
   const expiringDocuments = data?.expiringDocuments || [];
-  const recentUploads = data?.recentUploads || [];
-  const alertHistory = data?.alertHistory || [];
-  const auditActivity = data?.auditActivity || [];
+  const recentDocuments  = data?.recentDocuments    || [];
+  const recentEmployees  = data?.recentEmployees    || [];
+  const auditActivity    = data?.recentAuditLogs    || data?.auditActivity || [];
 
   const metricCards = [
     {
@@ -537,7 +573,7 @@ export default function ComplianceDashboard() {
 
         {error && (
           <div className="rounded-2xl bg-red-50 border border-red-200 p-4 text-sm text-red-700">
-            Failed to load dashboard: {error}. Make sure the backend is running on port 5000.
+            Failed to load dashboard: {error}. Make sure the backend is running on port 8082.
           </div>
         )}
 
@@ -562,10 +598,10 @@ export default function ComplianceDashboard() {
               <div className="xl:col-span-4"><BlockedEmployees employees={employees} /></div>
             </div>
 
-            {/* Bottom 3-col */}
+            {/* Bottom 3-col: Recently Uploaded Docs · Recently Added Employees · Audit Log */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <RecentUploads recentUploads={recentUploads} />
-              <AlertHistory alertHistory={alertHistory} />
+              <RecentDocumentsTable recentDocuments={recentDocuments} />
+              <RecentEmployeesTable recentEmployees={recentEmployees} />
               <AuditActivity auditActivity={auditActivity} />
             </div>
           </>

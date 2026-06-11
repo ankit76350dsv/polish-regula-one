@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchEmployees } from "../store/slices/employeeSlice";
@@ -71,48 +71,65 @@ function resolveBlockReason(e) {
   return e.blockReason || "Compliance block active";
 }
 
+// Static option lists — match the values used in AddEmployee and EmployeeProfile.
+// Kept here so filter dropdowns work even before any data is loaded.
+const DEPARTMENTS = [
+  "All", "Warehouse", "Operations", "Manufacturing", "Logistics",
+  "Admin", "HR", "IT", "Finance", "Security",
+];
+const SITES = [
+  "All", "Warsaw Site", "Krakow Site", "Gdansk Site",
+  "Poznan Site", "Warsaw HQ", "Wroclaw Site",
+];
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 function EmployeeList() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { list: employees, loading, error } = useSelector((s) => s.employees);
+  const { list: employees, pagination, summary, loading, error } = useSelector((s) => s.employees);
 
-  const [searchTerm, setSearchTerm]               = useState("");
+  const [searchTerm, setSearchTerm]                 = useState("");
+  const [debouncedSearch, setDebouncedSearch]       = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("All");
-  const [selectedSite, setSelectedSite]           = useState("All");
-  const [selectedStatus, setSelectedStatus]       = useState("All");
+  const [selectedSite, setSelectedSite]             = useState("All");
+  const [selectedStatus, setSelectedStatus]         = useState("All");
+  const [currentPage, setCurrentPage]               = useState(1);
+  const [itemsPerPage, setItemsPerPage]             = useState(10);
 
+  // Debounce the search input — waits 350 ms after the user stops typing.
   useEffect(() => {
-    dispatch(fetchEmployees());
-  }, [dispatch]);
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 350);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
-  // Ensure employees is always an array (guard against bad state shape)
+  // Re-fetch whenever any filter OR page value changes.
+  // All filtering and pagination is done by the backend.
+  useEffect(() => {
+    dispatch(fetchEmployees({
+      search:           debouncedSearch   || undefined,
+      department:       selectedDepartment !== "All" ? selectedDepartment : undefined,
+      site:             selectedSite       !== "All" ? selectedSite       : undefined,
+      complianceStatus: selectedStatus     !== "All" ? selectedStatus     : undefined,
+      page:  currentPage,
+      limit: itemsPerPage,
+    }));
+  }, [debouncedSearch, selectedDepartment, selectedSite, selectedStatus, currentPage, itemsPerPage, dispatch]);
+
   const safeList = Array.isArray(employees) ? employees : [];
 
-  const departments = useMemo(
-    () => ["All", ...new Set(safeList.map((e) => e.department).filter(Boolean))],
-    [safeList]
-  );
-  const sites = useMemo(
-    () => ["All", ...new Set(safeList.map((e) => e.site).filter(Boolean))],
-    [safeList]
-  );
+  // Cards use summary from the backend — counts across ALL filtered employees,
+  // not just the current page — so the numbers stay correct when paginating.
+  const totalCount     = summary?.total     ?? 0;
+  const compliantCount = summary?.compliant ?? 0;
+  const expiringCount  = summary?.expiring  ?? 0;
+  const blockedCount   = summary?.blocked   ?? 0;
 
-  const filteredEmployees = useMemo(() => {
-    return safeList.filter((e) => {
-      const text = `${displayName(e)} ${e.user?.email ?? ""} ${e.department ?? ""} ${e.position ?? ""} ${e.site ?? ""}`.toLowerCase();
-      const matchSearch = !searchTerm || text.includes(searchTerm.toLowerCase());
-      const matchDept   = selectedDepartment === "All" || e.department === selectedDepartment;
-      const matchSite   = selectedSite === "All" || e.site === selectedSite;
-      const matchStatus = selectedStatus === "All" || overallStatus(e) === selectedStatus;
-      return matchSearch && matchDept && matchSite && matchStatus;
-    });
-  }, [safeList, searchTerm, selectedDepartment, selectedSite, selectedStatus]);
-
-  const totalCount     = safeList.length;
-  const compliantCount = safeList.filter((e) => e.complianceStatus === "COMPLIANT").length;
-  const expiringCount  = safeList.filter((e) => e.complianceStatus === "EXPIRING").length;
-  const blockedCount   = safeList.filter((e) => e.isBlocked === true).length;
+  // Helpers to reset the page when a filter changes.
+  function handleDepartmentChange(val) { setSelectedDepartment(val); setCurrentPage(1); }
+  function handleSiteChange(val)       { setSelectedSite(val);       setCurrentPage(1); }
+  function handleStatusChange(val)     { setSelectedStatus(val);     setCurrentPage(1); }
+  function handleSearchChange(val)     { setSearchTerm(val);         setCurrentPage(1); }
+  function handleLimitChange(val)      { setItemsPerPage(Number(val)); setCurrentPage(1); }
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 sm:p-6 lg:p-8">
@@ -170,37 +187,37 @@ function EmployeeList() {
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Filters — values are sent to the backend as query params */}
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <input
               type="text"
               placeholder="Search name, email, position, site…"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
             />
             <select
               value={selectedDepartment}
-              onChange={(e) => setSelectedDepartment(e.target.value)}
+              onChange={(e) => handleDepartmentChange(e.target.value)}
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
             >
-              {departments.map((d) => (
+              {DEPARTMENTS.map((d) => (
                 <option key={d} value={d}>{d === "All" ? "All Departments" : d}</option>
               ))}
             </select>
             <select
               value={selectedSite}
-              onChange={(e) => setSelectedSite(e.target.value)}
+              onChange={(e) => handleSiteChange(e.target.value)}
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
             >
-              {sites.map((s) => (
+              {SITES.map((s) => (
                 <option key={s} value={s}>{s === "All" ? "All Sites" : s}</option>
               ))}
             </select>
             <select
               value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
+              onChange={(e) => handleStatusChange(e.target.value)}
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
             >
               <option value="All">All Compliance Status</option>
@@ -218,12 +235,31 @@ function EmployeeList() {
             <div>
               <h2 className="text-lg font-bold text-slate-900">Employee List</h2>
               <p className="text-sm text-slate-500">
-                {loading ? "Loading…" : `Showing ${filteredEmployees.length} employee records`}
+                {loading ? "Loading…" : (() => {
+                  const from = totalCount === 0 ? 0 : (pagination?.page - 1) * pagination?.limit + 1;
+                  const to   = Math.min(pagination?.page * pagination?.limit, totalCount);
+                  return `Showing ${from}–${to} of ${totalCount} employee${totalCount !== 1 ? "s" : ""}`;
+                })()}
               </p>
             </div>
-            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-              Export Register
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Rows per page selector */}
+              <label className="flex items-center gap-2 text-sm text-slate-500">
+                Rows per page
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => handleLimitChange(e.target.value)}
+                  className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </label>
+              <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                Export Register
+              </button>
+            </div>
           </div>
 
           {loading ? (
@@ -248,7 +284,7 @@ function EmployeeList() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEmployees.map((employee) => (
+                  {safeList.map((employee) => (
                     <tr
                       key={employee._id}
                       className="cursor-pointer bg-slate-50 text-sm transition hover:bg-blue-50"
@@ -320,17 +356,19 @@ function EmployeeList() {
                 </tbody>
               </table>
 
-              {filteredEmployees.length === 0 && (
+              {safeList.length === 0 && !loading && (
                 <div className="py-12 text-center">
                   <p className="font-semibold text-slate-700">
-                    {safeList.length === 0 ? "No employees in the system" : "No employees match your filters"}
+                    {!searchTerm && selectedDepartment === "All" && selectedSite === "All" && selectedStatus === "All"
+                      ? "No employees in the system"
+                      : "No employees match your filters"}
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    {safeList.length === 0
+                    {!searchTerm && selectedDepartment === "All" && selectedSite === "All" && selectedStatus === "All"
                       ? "Add your first employee to get started."
                       : "Try changing your filters or search keyword."}
                   </p>
-                  {safeList.length === 0 && (
+                  {!searchTerm && selectedDepartment === "All" && selectedSite === "All" && selectedStatus === "All" && (
                     <button
                       onClick={() => navigate("/employees/add")}
                       className="mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"
@@ -339,6 +377,102 @@ function EmployeeList() {
                     </button>
                   )}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Pagination controls ─────────────────────────────────────────── */}
+          {/* OLD: only rendered when totalPages > 1 — hid the bar when all records fit on one page.
+              NEW: always show when there is data so the user can see the page info and
+              row-count selector. Prev/Next buttons are disabled at the boundaries. */}
+          {!loading && totalCount > 0 && (
+            <div className="mt-5 flex flex-col items-center gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-between">
+              {/* Left: range info */}
+              <p className="text-sm text-slate-500">
+                Page {pagination.page} of {pagination.totalPages}
+              </p>
+
+              {/* Centre: page buttons */}
+              <div className="flex items-center gap-1">
+                {/* Previous */}
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ←
+                </button>
+
+                {/* Page number buttons — show a window around the current page */}
+                {(() => {
+                  const total = pagination.totalPages;
+                  const cur   = currentPage;
+                  const pages = [];
+
+                  // Build the set of page numbers to show
+                  const showPage = (n) => n >= 1 && n <= total;
+                  const nums = new Set([1, total]);
+                  for (let i = cur - 2; i <= cur + 2; i++) if (showPage(i)) nums.add(i);
+                  const sorted = [...nums].sort((a, b) => a - b);
+
+                  sorted.forEach((n, idx) => {
+                    // Insert ellipsis when there's a gap
+                    if (idx > 0 && n - sorted[idx - 1] > 1) {
+                      pages.push(
+                        <span key={`gap-${n}`} className="px-1 text-sm text-slate-400">…</span>
+                      );
+                    }
+                    pages.push(
+                      <button
+                        key={n}
+                        onClick={() => setCurrentPage(n)}
+                        className={`min-w-[2rem] rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+                          n === cur
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    );
+                  });
+
+                  return pages;
+                })()}
+
+                {/* Next */}
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(pagination.totalPages, p + 1))}
+                  disabled={currentPage === pagination.totalPages}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  →
+                </button>
+              </div>
+
+              {/* Right: jump-to input — only useful when there are multiple pages */}
+              {pagination?.totalPages > 1 && (
+                <label className="flex items-center gap-2 text-sm text-slate-500">
+                  Go to page
+                  <input
+                    type="number"
+                    min={1}
+                    max={pagination.totalPages}
+                    defaultValue={currentPage}
+                    key={currentPage}
+                    onBlur={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (v >= 1 && v <= pagination.totalPages) setCurrentPage(v);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const v = parseInt(e.target.value, 10);
+                        if (v >= 1 && v <= pagination.totalPages) setCurrentPage(v);
+                      }
+                    }}
+                    className="w-14 rounded-lg border border-slate-200 px-2 py-1.5 text-center text-sm text-slate-700 outline-none focus:border-blue-500"
+                  />
+                </label>
               )}
             </div>
           )}
