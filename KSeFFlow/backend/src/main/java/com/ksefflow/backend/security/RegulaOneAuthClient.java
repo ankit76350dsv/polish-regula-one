@@ -84,7 +84,8 @@ public class RegulaOneAuthClient {
         }
 
         MeData d = body.data();
-        if (d.tenantId() == null || d.tenantId().isBlank()) {
+        boolean isSuperAdmin = "ROLE_SUPER_ADMIN".equals(d.role());
+        if (!isSuperAdmin && (d.tenantId() == null || d.tenantId().isBlank())) {
             log.warn("[resolve]:7 User {} has no tenant → 403", d.id());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Your account is not associated with an organisation");

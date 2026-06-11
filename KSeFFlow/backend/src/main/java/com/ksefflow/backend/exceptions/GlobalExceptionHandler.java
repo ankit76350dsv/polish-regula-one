@@ -26,11 +26,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(errorBody(400, "CERTIFICATE_ERROR", e.getMessage()));
     }
 
-    // 401 — KSeF authentication failed (bad session token, invalid signature, etc.)
+    // 400 — KSeF authentication failed (bad session token, invalid signature, etc.)
     @ExceptionHandler(KsefAuthException.class)
     public ResponseEntity<Map<String, Object>> handleAuth(KsefAuthException e) {
         log.warn("[handleAuth]:1 Auth error: {}", e.getMessage());
-        return ResponseEntity.status(401).body(errorBody(401, "AUTH_ERROR", e.getMessage()));
+        return ResponseEntity.status(400).body(errorBody(400, "AUTH_ERROR", e.getMessage()));
     }
 
     // 422 — invoice validation or submission rejected by KSeF

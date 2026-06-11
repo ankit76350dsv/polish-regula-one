@@ -64,18 +64,28 @@ public class SSOService {
      * otherwise the browser will not match and delete it.
      */
     public void clearCookie(HttpServletResponse response, String name) {
-        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, "")
+        // Clear host-only cookie (no domain attribute)
+        ResponseCookie hostOnly = ResponseCookie.from(name, "")
                 .httpOnly(true)
                 .secure(ssoConfig.isCookieSecure())
                 .path("/")
                 .maxAge(0)
-                .sameSite(ssoConfig.getCookieSameSite());
+                .sameSite(ssoConfig.getCookieSameSite())
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, hostOnly.toString());
 
+        // Clear domain-scoped cookie (if shared domain is enabled)
         if (ssoConfig.hasSharedDomain()) {
-            builder.domain(ssoConfig.getCookieDomain());
+            ResponseCookie domainCookie = ResponseCookie.from(name, "")
+                    .httpOnly(true)
+                    .secure(ssoConfig.isCookieSecure())
+                    .path("/")
+                    .maxAge(0)
+                    .sameSite(ssoConfig.getCookieSameSite())
+                    .domain(ssoConfig.getCookieDomain())
+                    .build();
+            response.addHeader(HttpHeaders.SET_COOKIE, domainCookie.toString());
         }
-
-        response.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
     }
 
     // ── Central login redirect ────────────────────────────────────────────────

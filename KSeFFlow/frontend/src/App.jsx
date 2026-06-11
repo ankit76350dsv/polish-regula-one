@@ -5,7 +5,7 @@ import {
   INITIAL_NOTIFICATIONS
 } from './data/mockData';
 import { listInvoices, getMyTenant } from './api/ksefApi';
-import { SSO_CALLBACK_URL } from './lib/api';
+import { SSO_CALLBACK_URL, clearSsoRedirectGuard, tryRefreshSession } from './lib/api';
 
 const API_URL       = import.meta.env.VITE_API_URL          ?? 'http://localhost:8080';
 const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
@@ -82,7 +82,26 @@ export default function App() {
   // render the app. If no (401) — Login.jsx will redirect to the central
   // login page with ?redirect_uri pointing back to /auth/sso-callback here.
   useEffect(() => {
-    fetch(`${API_URL}/api/auth/me`, { credentials: 'include' })
+    // Guard against a dead / slow / wrong-IP backend. If /api/auth/me does not answer within a
+    // few seconds, we abort it and fall through to the Login redirect — otherwise the app would
+    // sit on the "Verifying session…" spinner forever (which is exactly what happens when
+    // VITE_API_URL points at an old/unreachable host, e.g. after the local IP changes).
+    const authAbort = new AbortController();
+    const authTimeout = setTimeout(() => authAbort.abort(), 8000);
+
+    const fetchMe = () =>
+      fetch(`${API_URL}/api/auth/me`, { credentials: 'include', signal: authAbort.signal });
+
+    fetchMe()
+      .then(async res => {
+        // If the login token expired while the tab was open, /me comes back 401/403.
+        // Try ONE silent refresh and re-check before falling back to the login redirect,
+        // so a still-valid session is not bounced out to the login page and back.
+        if ((res.status === 401 || res.status === 403) && await tryRefreshSession()) {
+          return fetchMe();
+        }
+        return res;
+      })
       .then(res => {
         if (!res.ok) throw new Error('not authenticated');
         return res.json();
@@ -94,6 +113,7 @@ export default function App() {
 
         const mappedRole = mapRole(user.role);
         const tenantId   = user.tenantId ?? '';
+        const isSuperAdmin = mappedRole === 'Super Admin';
 
         setCurrentUser({ name: user.name, email: user.email, role: mappedRole, tenantId });
         setActiveRole(mappedRole);
@@ -104,6 +124,11 @@ export default function App() {
           subscriptionPlan: 'Active',
         });
         setIsAuthenticated(true);
+        // NOTE: we deliberately do NOT clear the SSO redirect-loop guard here.
+        // /api/auth/me (RegulaOne :8080) succeeds on EVERY turn of the reload loop, so
+        // clearing the counter here would reset it every cycle and hide the loop forever.
+        // The guard is cleared only once a real KSeFFlow data call succeeds — see the
+        // listInvoices() effect below (that proves the :8081 cookie works too).
 
         // Enrich the tenant with full organisation details (name, NIP, plan).
         // The tenant id is derived server-side from the authenticated JWT —
@@ -124,6 +149,13 @@ export default function App() {
               }));
             })
             .catch(() => { /* non-fatal — keep the values seeded from /me */ });
+        } else if (isSuperAdmin && urlTenantId) {
+          // For Super Admin, set the active tenant from the URL
+          setActiveTenant(prev => ({
+            ...prev,
+            id: urlTenantId,
+            name: 'Super Admin Mode',
+          }));
         }
 
         // ── URL tenant-ID correction ──────────────────────────────────────────
@@ -138,8 +170,14 @@ export default function App() {
           location.pathname === '/login';
 
         if (isEntryPath) {
-          navigate(`/company/${tenantId}/dashboard`, { replace: true });
-        } else if (urlTenantId && urlTenantId !== tenantId) {
+          const params = new URLSearchParams(location.search);
+          const returnPath = params.get('returnPath');
+          if (returnPath) {
+            navigate(returnPath, { replace: true });
+          } else {
+            navigate(`/company/${tenantId}/dashboard`, { replace: true });
+          }
+        } else if (urlTenantId && urlTenantId !== tenantId && !isSuperAdmin) {
           // The URL was built for a different tenant (stale bookmark, previous session,
           // or the "default" fallback). Swap the segment without losing the page.
           const correctedPath = location.pathname.replace(
@@ -150,26 +188,69 @@ export default function App() {
         }
       })
       .catch(() => {
-        // No valid session — Login.jsx will handle the SSO redirect
+        // No valid session, or the request timed out / host was unreachable — Login.jsx
+        // handles the SSO redirect. Either way we never stay stuck on the loading spinner.
         setIsAuthenticated(false);
       })
-      .finally(() => setIsAuthLoading(false));
+      .finally(() => {
+        clearTimeout(authTimeout);
+        setIsAuthLoading(false);
+      });
   }, []);
+
+  // ── Proactive SSO session refresh ───────────────────────────────────────────
+  // Cognito idToken and accessToken expire after 1 hour. Set a timer to silently
+  // refresh them every 55 minutes, so active users never hit a 401 response.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const COGNITO_TOKEN_TTL_MS  = 60 * 60 * 1000; // 1 hour
+    const REFRESH_BEFORE_EXPIRY = 5  * 60 * 1000; // 5 min
+    const REFRESH_INTERVAL_MS   = COGNITO_TOKEN_TTL_MS - REFRESH_BEFORE_EXPIRY; // 55 min
+
+    const refreshTimer = setInterval(async () => {
+      console.log('[App] Proactively refreshing SSO session...');
+      const success = await tryRefreshSession();
+      if (!success) {
+        console.warn('[App] Proactive session refresh failed.');
+      }
+    }, REFRESH_INTERVAL_MS);
+
+    return () => clearInterval(refreshTimer);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated && activeTenant.id && (location.pathname === '/' || location.pathname === '/login')) {
       navigate(`/company/${activeTenant.id}/dashboard`, { replace: true });
     }
-  }, [isAuthenticated, location.pathname]);
+  }, [isAuthenticated, location.pathname, activeTenant.id]);
 
   useEffect(() => {
     const tenantId = urlTenantId ?? activeTenant.id;
     if (!isAuthenticated || !tenantId) return;
     setIsLoadingInvoices(true);
     listInvoices(tenantId)
-      .then(fetched => { setInvoices(fetched); setIsLoadingInvoices(false); })
+      .then(fetched => {
+        setInvoices(fetched);
+        setIsLoadingInvoices(false);
+        // A real KSeFFlow (:8081) call just succeeded — the session cookie works for
+        // BOTH backends, so we are genuinely healthy. Reset the redirect-loop counter
+        // so a real logout/expiry much later starts counting from zero again.
+        clearSsoRedirectGuard();
+      })
       .catch(() => { setIsLoadingInvoices(false); });
-  }, [urlTenantId, isAuthenticated]);
+  }, [urlTenantId, isAuthenticated, activeTenant.id]);
+
+  // ── SSO loop detector ───────────────────────────────────────────────────────
+  // lib/api.js fires "ksef:sso-loop" when a 401 keeps redirecting us in circles
+  // (e.g. the :8080 auth check passes but the :8081 cookie is rejected). When that
+  // happens we stop reloading and show the Login screen's loop explanation instead.
+  const [ssoLoop, setSsoLoop] = useState(false);
+  useEffect(() => {
+    const onLoop = () => setSsoLoop(true);
+    window.addEventListener('ksef:sso-loop', onLoop);
+    return () => window.removeEventListener('ksef:sso-loop', onLoop);
+  }, []);
 
   const currentInvoiceObj = currentInvoiceId
     ? invoices.find(inv => inv.id === currentInvoiceId) ?? null
@@ -266,8 +347,12 @@ export default function App() {
     );
   }
 
-  // Not authenticated — Login.jsx redirects to central login with SSO redirect_uri
-  if (!isAuthenticated) {
+  // Not authenticated — Login.jsx redirects to central login with SSO redirect_uri.
+  // ssoLoop covers the trickier case: /api/auth/me (:8080) passes so we LOOK logged in,
+  // but a :8081 call keeps returning 401 and bouncing us through login. Rendering <Login />
+  // here shows its loop explanation (the shared guard is already tripped) instead of
+  // reloading the page over and over.
+  if (!isAuthenticated || ssoLoop) {
     return <Login />;
   }
 
