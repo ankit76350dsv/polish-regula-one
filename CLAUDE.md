@@ -715,4 +715,70 @@ Database
 
 ---
 
+# 24. POLAND COMPLIANCE & SECURITY INSTRUCTION
+
+This project is being developed specifically for the Polish market. Therefore, all features, modules, workflows, data processing activities, and integrations must be designed and implemented with a strong focus on security, compliance, and regulatory requirements applicable in Poland and the European Union.
+
+Before implementing any feature, verify the requirements against the official Polish government websites, regulatory authorities, and relevant legal documentation to ensure the implementation is compliant with current laws, standards, and best practices.
+
+## Key Requirements
+
+- Security must be a primary consideration for every feature.
+- Ensure compliance with all applicable Polish regulations and EU regulations, including GDPR where relevant.
+- Validate business processes, document formats, tax requirements, invoicing requirements, and reporting obligations using official government sources before development.
+- Do not assume compliance based on third-party articles or unofficial sources.
+- Any feature that handles personal data, financial information, tax information, or government reporting must be verified against official documentation before implementation.
+- Follow secure coding practices, data encryption standards, access control policies, audit logging requirements, and data retention policies.
+- If there is any uncertainty regarding legal or compliance requirements, research and confirm the requirements from official Polish government portals before proceeding with development.
+- Document the official source and compliance reference for each major feature implementation.
+
+All implementations should be production-ready, secure, scalable, auditable, and fully aligned with Polish market requirements.
+
+---
+
+# 25. CODE DOCUMENTATION & CHANGE MANAGEMENT REQUIREMENTS
+
+In addition to security and compliance requirements, follow these coding standards for every implementation:
+
+## Code Comments
+
+- Add clear comments for all new code, functions, classes, and complex logic.
+- Write comments in very simple English that can be understood by a 5th-grade student.
+- Explain what the code is doing and why it is needed.
+- Avoid technical jargon whenever possible.
+- Ensure comments help future developers quickly understand the purpose of the code.
+
+Example:
+
+```java
+// Check if the package will expire in 7 days.
+// If yes, send an email to remind the admin.
+```
+
+## Code Changes & Refactoring
+
+- Whenever modifying existing code, clearly explain:
+  - What was changed.
+  - Why the change was necessary.
+  - Why the old code was removed, replaced, or modified.
+  - What problem the new implementation solves.
+  - Any benefits gained from the change (security, performance, readability, compliance, maintainability, etc.).
+
+## Change Report Format
+
+For every code update, provide a summary in the following format:
+
+1. Files Modified
+2. Old Behavior
+3. New Behavior
+4. Reason for Removing/Changing the Old Code
+5. Security Impact
+6. Compliance Impact
+7. Testing Performed
+8. Potential Risks or Side Effects
+
+Never remove existing code without explaining the reason. Always document why the previous implementation was not suitable and why the new implementation is a better solution.
+
+---
+
 # END OF CLAUDE.MD
