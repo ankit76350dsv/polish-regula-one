@@ -1,17 +1,67 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Network,
   Terminal,
   CheckCircle2,
   RefreshCw,
   Cpu,
-  Workflow
+  ShieldAlert,
+  ShieldCheck,
+  Power,
+  Loader2,
 } from 'lucide-react';
+import {
+  getKsefStatus,
+  declareKsefEmergency,
+  declareKsefUnavailability,
+  declareKsefOnline,
+} from '../api/ksefApi';
 
 export default function IntegrationCenter({ tenant, role, govStatus, onSetGovStatus, onAddNotification }) {
   const [selectedEnv, setSelectedEnv] = useState('SANDBOX');
   const [isTesting, setIsTesting] = useState(false);
   const [pingSpeed, setPingSpeed] = useState(342);
+
+  const isAdmin = role === 'Super Admin' || role === 'Company Admin';
+
+  // ── Real KSeF availability state (C7) ─────────────────────────────────────────
+  // This is the AUTHORITATIVE state from the backend (auto health-check + admin override),
+  // unlike the simulation panel below. It decides which legal deadline applies to offline
+  // invoices, so admins declare a Ministry "tryb awaryjny" here based on the official MF notice.
+  const [ksefStatus, setKsefStatus]   = useState(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [actionBusy, setActionBusy]   = useState(false);
+
+  const loadKsefStatus = useCallback(() => {
+    setStatusLoading(true);
+    getKsefStatus()
+      .then(setKsefStatus)
+      .catch(() => { /* non-fatal — leave the card in its "unknown" state */ })
+      .finally(() => setStatusLoading(false));
+  }, []);
+
+  useEffect(() => { loadKsefStatus(); }, [loadKsefStatus]);
+
+  // Declare a state change. action is the API function; it needs a reason for the audit trail.
+  const runDeclare = async (action, label, needReason) => {
+    let reason = `${label} (przez panel integracji)`;
+    if (needReason) {
+      const input = window.prompt(`Podaj powód — ${label}:`);
+      if (input == null) return;            // user cancelled
+      if (!input.trim()) { onAddNotification('Błąd', 'Powód jest wymagany.', 'error'); return; }
+      reason = input.trim();
+    }
+    setActionBusy(true);
+    try {
+      const status = await action(reason);
+      setKsefStatus(status);
+      onAddNotification('Status KSeF zaktualizowany', `Nowy stan: ${status.mode}.`, 'info');
+    } catch (err) {
+      onAddNotification('Błąd zmiany statusu', err.message || 'Operacja nie powiodła się.', 'error');
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const [apiLogs, setApiLogs] = useState([
     {
@@ -89,6 +139,77 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
           Government Integration Center
         </h2>
         <p className="text-zinc-500 text-xs mt-0.5">Control gateway parameters, verify REST API schema definitions, and configure emergency offline toggles.</p>
+      </div>
+
+      {/* ── LIVE KSeF availability (authoritative, from the backend) ─────────────── */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+              <ShieldCheck size={15} className="text-red-650" /> Stan KSeF (tryb pracy)
+            </h3>
+            <p className="text-slate-500 text-xs mt-0.5">
+              Rzeczywisty stan wykrywany przez system. Decyduje o terminie wysyłki faktur offline.
+            </p>
+          </div>
+          <button
+            onClick={loadKsefStatus}
+            disabled={statusLoading}
+            className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer disabled:opacity-60"
+          >
+            {statusLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Odśwież
+          </button>
+        </div>
+
+        {(() => {
+          const mode = ksefStatus?.mode ?? 'UNKNOWN';
+          // Pick the badge colour + Polish label from the current mode.
+          const badge = mode === 'ONLINE'
+            ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', text: 'ONLINE — KSeF dostępny' }
+            : mode === 'EMERGENCY'
+              ? { cls: 'bg-red-50 text-red-700 border-red-200', text: 'TRYB AWARYJNY (7 dni roboczych)' }
+              : mode === 'OFFLINE_UNAVAILABILITY'
+                ? { cls: 'bg-orange-50 text-orange-700 border-orange-200', text: 'NIEDOSTĘPNOŚĆ — tryb offline (następny dzień roboczy)' }
+                : { cls: 'bg-slate-100 text-slate-500 border-slate-200', text: 'Nieznany' };
+          return (
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${badge.cls}`}>{badge.text}</span>
+              {ksefStatus?.reason && <span className="text-slate-500">Powód: <strong className="text-slate-700">{ksefStatus.reason}</strong></span>}
+              {ksefStatus?.declaredBy && <span className="text-slate-400">Ustawił: <span className="font-mono">{ksefStatus.declaredBy}</span></span>}
+              {ksefStatus?.since && <span className="text-slate-400">Od: {new Date(ksefStatus.since).toLocaleString('pl-PL')}</span>}
+            </div>
+          );
+        })()}
+
+        {/* Admin controls — declaring an emergency is a legal decision based on the MF notice. */}
+        {isAdmin ? (
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              onClick={() => runDeclare(declareKsefEmergency, 'Tryb awaryjny (ogłoszony przez MF)', true)}
+              disabled={actionBusy}
+              className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white font-bold py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer disabled:opacity-60"
+            >
+              <ShieldAlert size={13} /> Zgłoś tryb awaryjny
+            </button>
+            <button
+              onClick={() => runDeclare(declareKsefUnavailability, 'Niedostępność KSeF', true)}
+              disabled={actionBusy}
+              className="inline-flex items-center gap-1.5 bg-white hover:bg-orange-50 border border-orange-200 text-orange-700 font-semibold py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer disabled:opacity-60"
+            >
+              <Power size={13} /> Zgłoś niedostępność
+            </button>
+            <button
+              onClick={() => runDeclare(declareKsefOnline, 'Przywrócenie ONLINE', false)}
+              disabled={actionBusy}
+              className="inline-flex items-center gap-1.5 bg-white hover:bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer disabled:opacity-60"
+            >
+              <ShieldCheck size={13} /> Przywróć ONLINE
+            </button>
+            {actionBusy && <Loader2 size={14} className="animate-spin text-slate-400 self-center" />}
+          </div>
+        ) : (
+          <p className="text-[11px] text-slate-400">Tylko administrator może zmienić tryb pracy KSeF.</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

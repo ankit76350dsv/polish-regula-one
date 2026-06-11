@@ -12,13 +12,19 @@ import {
   XCircle,
   Info,
   Layers,
-  ArrowRight
+  ArrowRight,
+  FileWarning
 } from 'lucide-react';
+import CorrectionModal from './CorrectionModal';
 
-export default function InvoiceList({ tenant, role, invoices, onAddNotification, onViewInvoiceDetail }) {
+export default function InvoiceList({ tenant, role, invoices, onAddNotification, onViewInvoiceDetail, onAddInvoice }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  // The SENT invoice currently being corrected (opens the correction modal). null = closed.
+  const [correctionFor, setCorrectionFor] = useState(null);
+  // Only roles that can issue invoices may issue a correction.
+  const canCorrect = role === 'Super Admin' || role === 'Company Admin' || role === 'Accountant';
 
   const tenantInvoices = invoices.filter(inv => inv.tenantId === tenant.id);
 
@@ -253,6 +259,16 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
                         <FileText size={11} /> Export XML
                       </button>
                     </div>
+
+                    {/* Issue a correction (faktura korygująca) — only for invoices already in KSeF. */}
+                    {canCorrect && (
+                      <button
+                        onClick={() => setCorrectionFor(selectedInvoice)}
+                        className="w-full mt-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold py-1.5 px-3 rounded-lg text-[10px] inline-flex items-center justify-center gap-1 transition"
+                      >
+                        <FileWarning size={11} /> Wystaw korektę
+                      </button>
+                    )}
                   </div>
                 ) : selectedInvoice.status === 'OFFLINE_MODE' ? (
                   <div className="bg-orange-50/50 border border-orange-200 p-4 rounded-xl space-y-3">
@@ -389,6 +405,17 @@ export default function InvoiceList({ tenant, role, invoices, onAddNotification,
           )}
         </div>
       </div>
+
+      {/* Correction modal — opens when the user clicks "Wystaw korektę" on a SENT invoice. */}
+      {correctionFor && (
+        <CorrectionModal
+          original={correctionFor}
+          tenant={tenant}
+          onAddNotification={onAddNotification}
+          onClose={() => setCorrectionFor(null)}
+          onCreated={(draft) => { onAddInvoice?.(draft); }}
+        />
+      )}
     </div>
   );
 }

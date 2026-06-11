@@ -25,6 +25,8 @@ import CertificateManager from './components/CertificateManager';
 import OfflineQueue from './components/OfflineQueue';
 import AuditCenter from './components/AuditCenter';
 import ArchitectureDocs from './components/ArchitectureDocs';
+import ReceivedInvoices from './components/ReceivedInvoices';
+import PermissionsManager from './components/PermissionsManager';
 import Login from './components/Login';
 
 import {
@@ -41,7 +43,9 @@ import {
   LogOut,
   LayoutDashboard,
   Lock,
-  UserCheck
+  UserCheck,
+  Inbox,
+  KeyRound
 } from 'lucide-react';
 
 export default function App() {
@@ -241,6 +245,8 @@ export default function App() {
     create:          ['Super Admin', 'Company Admin', 'Accountant'],
     invoices:        ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
     'invoice-detail':['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
+    received:        ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
+    permissions:     ['Super Admin', 'Company Admin'],
     offline:         ['Super Admin', 'Company Admin', 'Accountant'],
     integration:     ['Super Admin', 'Company Admin'],
     certificates:    ['Super Admin', 'Company Admin', 'Accountant'],
@@ -415,6 +421,8 @@ export default function App() {
               {navItem('dashboard', 'Dashboard Summary', LayoutDashboard)}
               {navItem('create', 'Create FA(3) Invoice', FileEdit)}
               {navItem('invoices', 'Document Repository', FolderSearch)}
+              {navItem('received', 'Faktury otrzymane', Inbox)}
+              {navItem('permissions', 'Uprawnienia KSeF', KeyRound)}
               {navItem('offline', 'Offline Queue & Retries', AlertTriangle,
                 invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length > 0 ? (
                   <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
@@ -491,6 +499,7 @@ export default function App() {
                   role={activeRole}
                   invoices={invoices}
                   onAddNotification={addNotification}
+                  onAddInvoice={addInvoice}
                   onViewInvoiceDetail={(inv) =>
                     navigate(`/company/${activeTenant.id}/invoices/${inv.id}`)
                   }
@@ -520,6 +529,22 @@ export default function App() {
                     </button>
                   </div>
                 )
+              )}
+
+              {currentSection === 'received' && (
+                <ReceivedInvoices
+                  tenant={activeTenant}
+                  role={activeRole}
+                  onAddNotification={addNotification}
+                />
+              )}
+
+              {currentSection === 'permissions' && (
+                <PermissionsManager
+                  tenant={activeTenant}
+                  role={activeRole}
+                  onAddNotification={addNotification}
+                />
               )}
 
               {currentSection === 'offline' && (

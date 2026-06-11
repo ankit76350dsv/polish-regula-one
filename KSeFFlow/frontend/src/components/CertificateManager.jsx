@@ -9,8 +9,9 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
+  BadgePlus,
 } from 'lucide-react';
-import { uploadCertificate, listCertificates, deactivateCertificate } from '../api/ksefApi';
+import { uploadCertificate, listCertificates, deactivateCertificate, enrollCertificate } from '../api/ksefApi';
 
 export default function CertificateManager({ tenant, role, onAddNotification }) {
   const canModify = role === 'Super Admin' || role === 'Company Admin' || role === 'Accountant';
@@ -30,6 +31,13 @@ export default function CertificateManager({ tenant, role, onAddNotification }) 
   // ── Deactivation confirmation state ───────────────────────────────────────────
   const [confirmCert,     setConfirmCert]     = useState(null);
   const [isDeactivating,  setIsDeactivating]  = useState(false);
+
+  // ── KSeF certificate enrollment state (C3) ────────────────────────────────────
+  // Instead of uploading a file, the backend can ask KSeF to ISSUE a certificate for us.
+  const [enrollName,    setEnrollName]    = useState('');
+  const [enrollPurpose, setEnrollPurpose] = useState('AUTHENTICATION');
+  const [isEnrolling,   setIsEnrolling]   = useState(false);
+  const [enrollError,   setEnrollError]   = useState('');
 
   // ── Load certificates from backend on mount / when tenant changes ─────────────
   const fetchCerts = useCallback(async () => {
@@ -106,6 +114,48 @@ export default function CertificateManager({ tenant, role, onAddNotification }) 
       onAddNotification('Upload Failed', msg, 'error');
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  // ── Enroll a KSeF-issued certificate ───────────────────────────────────────────
+  // The backend generates the key pair, asks KSeF to issue the certificate, and stores it
+  // encrypted. We only need the tenant NIP (sent as the auth context), a friendly name, and
+  // the purpose (AUTHENTICATION to log in, OFFLINE to seal offline-invoice QR codes).
+  const handleEnroll = async (e) => {
+    e.preventDefault();
+    setEnrollError('');
+
+    if (!canModify) {
+      onAddNotification('RBAC Access Denied', 'Your role does not have permission to enroll certificates.', 'error');
+      return;
+    }
+    if (!tenant?.nip) {
+      setEnrollError('Brak numeru NIP organizacji — nie można wystąpić o certyfikat KSeF.');
+      return;
+    }
+    if (!enrollName.trim()) {
+      setEnrollError('Podaj nazwę certyfikatu.');
+      return;
+    }
+
+    setIsEnrolling(true);
+    try {
+      const cert = await enrollCertificate(tenant.nip, enrollPurpose, enrollName.trim());
+      // A new active cert of this purpose replaces the previous active one of the SAME purpose.
+      setCerts(prev => [cert, ...prev]);
+      setEnrollName('');
+      onAddNotification(
+        'Certyfikat KSeF wydany',
+        `${cert.fileName} został wydany przez KSeF i zaszyfrowany. Ważny do ${cert.validTo}.`,
+        'success',
+      );
+      fetchCerts();
+    } catch (err) {
+      const msg = err.message ?? 'Wydanie certyfikatu KSeF nie powiodło się.';
+      setEnrollError(msg);
+      onAddNotification('Enrollment Failed', msg, 'error');
+    } finally {
+      setIsEnrolling(false);
     }
   };
 
@@ -253,6 +303,61 @@ export default function CertificateManager({ tenant, role, onAddNotification }) 
             <p className="leading-relaxed font-sans">
               <strong>Certificate compliance notice:</strong> Production endpoints enforce strict qualified KIR certificates issued under EU eIDAS regulations.
             </p>
+          </div>
+
+          {/* ── Enroll a KSeF-issued certificate (Certyfikat KSeF) ─────────────── */}
+          <div className="mt-5 border-t border-slate-100 pt-5 space-y-4">
+            <div>
+              <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                <BadgePlus size={15} className="text-red-650" /> Wystąp o certyfikat KSeF
+              </h3>
+              <p className="text-slate-500 text-xs leading-normal mt-1">
+                Zamiast wgrywać plik, system wygeneruje klucz i poprosi KSeF o wydanie certyfikatu
+                (typ <strong>Uwierzytelnianie</strong> — logowanie, lub <strong>Offline</strong> — pieczętowanie faktur offline).
+              </p>
+            </div>
+
+            <form onSubmit={handleEnroll} className="space-y-3 text-xs font-sans">
+              <div className="space-y-1">
+                <label className="text-slate-500 font-medium block">Nazwa certyfikatu</label>
+                <input
+                  type="text"
+                  placeholder="np. Certyfikat firmowy 2026"
+                  value={enrollName}
+                  onChange={e => { setEnrollName(e.target.value); setEnrollError(''); }}
+                  disabled={!canModify || isEnrolling}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50/50"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-slate-500 font-medium block">Typ certyfikatu</label>
+                <select
+                  value={enrollPurpose}
+                  onChange={e => setEnrollPurpose(e.target.value)}
+                  disabled={!canModify || isEnrolling}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50/50"
+                >
+                  <option value="AUTHENTICATION">Uwierzytelnianie (logowanie do KSeF)</option>
+                  <option value="OFFLINE">Offline (pieczęć faktur w trybie offline)</option>
+                </select>
+              </div>
+
+              {enrollError && (
+                <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  <XCircle size={13} className="shrink-0" /><span>{enrollError}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={!canModify || isEnrolling}
+                className="w-full bg-white border border-slate-300 text-slate-800 hover:bg-slate-50 font-bold py-2.5 px-4 rounded-xl text-center transition tracking-tight flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isEnrolling
+                  ? <><Loader2 size={14} className="animate-spin" /> Wydawanie certyfikatu…</>
+                  : <><BadgePlus size={14} /> Wystąp o certyfikat KSeF</>}
+              </button>
+            </form>
           </div>
         </div>
 

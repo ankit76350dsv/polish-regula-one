@@ -130,52 +130,80 @@ export const getInvoice = async (_tenantId, invoiceId) => {
 };
 
 /**
+ * Builds the backend CreateInvoiceRequest DTO from this frontend's invoice shape.
+ * Shared by createInvoice() and correctInvoice() so the field mapping lives in one place.
+ */
+const toCreateInvoiceBody = (payload) => ({
+  invoiceNumber:    payload.invoiceNumber,
+  issueDate:        payload.issueDate,
+  dueDate:          payload.dueDate || undefined,
+
+  sellerName:       payload.sellerName,
+  sellerNip:        payload.sellerNip,
+  sellerAddress:    payload.sellerAddress,
+  sellerPostalCode: payload.sellerPostalCode,
+  sellerCity:       payload.sellerCity,
+
+  buyerName:        payload.buyerName,
+  buyerNip:         payload.buyerNip,
+  buyerAddress:     payload.buyerAddress,
+  buyerPostalCode:  payload.buyerPostalCode,
+  buyerCity:        payload.buyerCity,
+
+  currency:         toCurrencyEnum(payload.currency),
+  totalNet:         payload.totalNet,
+  totalVat:         payload.totalVat,
+  totalGross:       payload.totalGross,
+  paymentMethod:    toPaymentMethodEnum(payload.paymentMethod),
+  bankAccount:      payload.bankAccount || undefined,
+  notes:            payload.notes || undefined,
+
+  items: (payload.items ?? []).map(i => ({
+    itemId:      i.id,
+    productName: i.productName,
+    unit:        i.unit ?? 'szt.',
+    quantity:    i.quantity,
+    unitPrice:   i.unitPrice,
+    vatRate:     toVatRateEnum(i.vatRate),
+    netAmount:   i.netAmount,
+    vatAmount:   i.vatAmount,
+    grossAmount: i.grossAmount,
+  })),
+});
+
+/**
  * Create a new DRAFT invoice (POST /api/v1/invoices/draft).
  * Maps the KSeFFlow frontend invoice shape onto the backend CreateInvoiceRequest DTO.
  */
 export const createInvoice = async (payload) => {
-  const body = {
-    invoiceNumber:    payload.invoiceNumber,
-    issueDate:        payload.issueDate,
-    dueDate:          payload.dueDate || undefined,
-
-    sellerName:       payload.sellerName,
-    sellerNip:        payload.sellerNip,
-    sellerAddress:    payload.sellerAddress,
-    sellerPostalCode: payload.sellerPostalCode,
-    sellerCity:       payload.sellerCity,
-
-    buyerName:        payload.buyerName,
-    buyerNip:         payload.buyerNip,
-    buyerAddress:     payload.buyerAddress,
-    buyerPostalCode:  payload.buyerPostalCode,
-    buyerCity:        payload.buyerCity,
-
-    currency:         toCurrencyEnum(payload.currency),
-    totalNet:         payload.totalNet,
-    totalVat:         payload.totalVat,
-    totalGross:       payload.totalGross,
-    paymentMethod:    toPaymentMethodEnum(payload.paymentMethod),
-    bankAccount:      payload.bankAccount || undefined,
-    notes:            payload.notes || undefined,
-
-    items: (payload.items ?? []).map(i => ({
-      itemId:      i.id,
-      productName: i.productName,
-      unit:        i.unit ?? 'szt.',
-      quantity:    i.quantity,
-      unitPrice:   i.unitPrice,
-      vatRate:     toVatRateEnum(i.vatRate),
-      netAmount:   i.netAmount,
-      vatAmount:   i.vatAmount,
-      grossAmount: i.grossAmount,
-    })),
-  };
-
   const created = await ksefFetch(`${INVOICE_PATH}/draft`, {
     method: 'POST',
-    body:   JSON.stringify(body),
+    body:   JSON.stringify(toCreateInvoiceBody(payload)),
   });
+  return mapBackendInvoice(created);
+};
+
+/**
+ * Create a CORRECTION invoice (faktura korygująca) for an invoice already in KSeF.
+ * POST /api/v1/invoices/{originalId}/correct?reason=...&correctionType=...
+ * The body is the corrected invoice content (same shape as a normal invoice). The new
+ * correction is saved as a DRAFT; submit it afterwards with submitInvoice() like any invoice.
+ *
+ * @param {string} originalInvoiceId  id of the SENT invoice being corrected
+ * @param {object} payload            corrected invoice content (frontend invoice shape)
+ * @param {string} reason             why the correction is needed (FA(3) PrzyczynaKorekty)
+ * @param {number} [correctionType]   optional KSeF correction type 1/2/3 (FA(3) TypKorekty)
+ */
+export const correctInvoice = async (originalInvoiceId, payload, reason, correctionType) => {
+  const params = new URLSearchParams();
+  params.set('reason', reason ?? '');
+  if (correctionType != null && correctionType !== '') {
+    params.set('correctionType', String(correctionType));
+  }
+  const created = await ksefFetch(
+    `${INVOICE_PATH}/${originalInvoiceId}/correct?${params.toString()}`,
+    { method: 'POST', body: JSON.stringify(toCreateInvoiceBody(payload)) },
+  );
   return mapBackendInvoice(created);
 };
 
@@ -296,3 +324,159 @@ export const listCertificates = async () => {
 export const deactivateCertificate = async (_tenantId, certId) => {
   return ksefFetch(`/api/v1/certificates/${certId}/deactivate`, { method: 'PATCH' });
 };
+
+/**
+ * Enroll a brand-new KSeF-issued certificate (the backend generates the key pair, asks KSeF
+ * to issue the certificate, and stores it encrypted). POST /api/v1/certificates/enroll.
+ *
+ * @param {string} nip      the tenant's own 10-digit NIP (KSeF authentication context)
+ * @param {string} purpose  'AUTHENTICATION' (log in) or 'OFFLINE' (seal offline invoices)
+ * @param {string} name     a friendly name for the certificate
+ * @returns {Promise<CertificateResponse>} the stored certificate's safe metadata
+ */
+export const enrollCertificate = async (nip, purpose, name) => {
+  const params = new URLSearchParams();
+  params.set('nip', nip ?? '');
+  params.set('purpose', purpose || 'AUTHENTICATION');
+  params.set('name', name ?? '');
+  return ksefFetch(`/api/v1/certificates/enroll?${params.toString()}`, { method: 'POST' });
+};
+
+// ── Received (purchase) invoices — faktury otrzymane (KSeFFlow backend :8081) ───
+// Invoices OTHER companies issued to this tenant, pulled from KSeF. Mandatory from 1 Feb 2026.
+
+const RECEIVED_PATH = '/api/v1/received-invoices';
+
+/**
+ * Pull purchase invoices from KSeF for a date window (default: backend uses last 30 days).
+ * POST /api/v1/received-invoices/sync — stores any new ones and reports counts.
+ *
+ * @param {string} nip       the tenant's own 10-digit NIP (buyer context)
+ * @param {string} [from]    optional ISO window start (e.g. 2026-06-01T00:00:00)
+ * @param {string} [to]      optional ISO window end (KSeF allows at most a 3-month span)
+ * @returns {Promise<{fetched:number, created:number, skipped:number}>}
+ */
+export const syncReceivedInvoices = async (nip, from, to) => {
+  const params = new URLSearchParams();
+  params.set('nip', nip ?? '');
+  if (from) params.set('from', from);
+  if (to)   params.set('to', to);
+  return ksefFetch(`${RECEIVED_PATH}/sync?${params.toString()}`, { method: 'POST' });
+};
+
+/**
+ * List stored received invoices (metadata only), newest issue date first.
+ * Returns a normalised page so the UI always has the fields it reads.
+ */
+export const listReceivedInvoices = async (opts = {}) => {
+  const { page = 0, size = 20 } = opts;
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('size', String(size));
+  const json = await ksefFetch(`${RECEIVED_PATH}?${params.toString()}`);
+  return {
+    content:       Array.isArray(json?.content) ? json.content : (Array.isArray(json) ? json : []),
+    totalElements: json?.totalElements ?? 0,
+    totalPages:    json?.totalPages    ?? 0,
+    size:          json?.size          ?? size,
+    number:        json?.number        ?? page,
+  };
+};
+
+/**
+ * Download the full FA(3) XML of one received invoice (fetched from KSeF on first request,
+ * then served from encrypted storage). GET /api/v1/received-invoices/{ksefNumber}/xml.
+ */
+export const getReceivedInvoiceXml = async (ksefNumber, nip) => {
+  return ksefFetch(
+    `${RECEIVED_PATH}/${encodeURIComponent(ksefNumber)}/xml?nip=${encodeURIComponent(nip ?? '')}`,
+  );
+};
+
+// ── KSeF permissions — uprawnienia (KSeFFlow backend :8081) ─────────────────────
+
+const PERMISSIONS_PATH = '/api/v1/permissions';
+
+/**
+ * Grant a person one or more KSeF permissions in this tenant's context (admin only).
+ * POST /api/v1/permissions/persons/grants?nip=...
+ *
+ * @param {string}   nip          the tenant's own NIP (the context we grant within)
+ * @param {object}   body         { subjectType, subjectValue, permissions[], description, subjectDetailsType? }
+ * @returns {Promise<{referenceNumber:string}>} async operation reference
+ */
+export const grantPersonPermissions = async (nip, body) => {
+  return ksefFetch(`${PERMISSIONS_PATH}/persons/grants?nip=${encodeURIComponent(nip ?? '')}`, {
+    method: 'POST',
+    body:   JSON.stringify(body),
+  });
+};
+
+/**
+ * List person permissions in the current context (paged).
+ * POST /api/v1/permissions/query?nip=...&pageOffset=&pageSize=
+ *
+ * @returns {Promise<{permissions: object[], hasMore: boolean}>}
+ */
+export const queryPersonPermissions = async (nip, body = {}, opts = {}) => {
+  const { pageOffset = 0, pageSize = 50 } = opts;
+  const params = new URLSearchParams();
+  params.set('nip', nip ?? '');
+  params.set('pageOffset', String(pageOffset));
+  params.set('pageSize', String(pageSize));
+  const json = await ksefFetch(`${PERMISSIONS_PATH}/query?${params.toString()}`, {
+    method: 'POST',
+    body:   JSON.stringify(body),
+  });
+  return {
+    permissions: Array.isArray(json?.permissions) ? json.permissions : [],
+    hasMore:     json?.hasMore ?? false,
+  };
+};
+
+/**
+ * Revoke one granted permission by its id (admin only).
+ * DELETE /api/v1/permissions/{permissionId}?nip=...
+ */
+export const revokePermission = async (nip, permissionId) => {
+  return ksefFetch(
+    `${PERMISSIONS_PATH}/${encodeURIComponent(permissionId)}?nip=${encodeURIComponent(nip ?? '')}`,
+    { method: 'DELETE' },
+  );
+};
+
+/**
+ * Check how an async grant/revoke operation finished.
+ * GET /api/v1/permissions/operations/{referenceNumber}?nip=...
+ */
+export const getPermissionOperationStatus = async (nip, referenceNumber) => {
+  return ksefFetch(
+    `${PERMISSIONS_PATH}/operations/${encodeURIComponent(referenceNumber)}?nip=${encodeURIComponent(nip ?? '')}`,
+  );
+};
+
+// ── KSeF availability status — failure mode / tryb awaryjny (KSeFFlow :8081) ────
+
+const KSEF_STATUS_PATH = '/api/v1/ksef-status';
+
+/**
+ * Read the current KSeF availability state (any signed-in user).
+ * GET /api/v1/ksef-status → { mode, manual, reason, declaredBy, since }
+ *   mode = 'ONLINE' | 'OFFLINE_UNAVAILABILITY' | 'EMERGENCY'
+ */
+export const getKsefStatus = async () => ksefFetch(KSEF_STATUS_PATH);
+
+/**
+ * Declare a Ministry-announced emergency ("tryb awaryjny", 7-business-day window) — admin only.
+ * POST /api/v1/ksef-status/emergency  body { reason }
+ */
+export const declareKsefEmergency = async (reason) =>
+  ksefFetch(`${KSEF_STATUS_PATH}/emergency`, { method: 'POST', body: JSON.stringify({ reason }) });
+
+/** Manually declare unavailability (next-business-day window) — admin only. */
+export const declareKsefUnavailability = async (reason) =>
+  ksefFetch(`${KSEF_STATUS_PATH}/unavailability`, { method: 'POST', body: JSON.stringify({ reason }) });
+
+/** Clear a manual declaration and hand control back to the automatic monitor — admin only. */
+export const declareKsefOnline = async (reason) =>
+  ksefFetch(`${KSEF_STATUS_PATH}/online`, { method: 'POST', body: JSON.stringify({ reason }) });
