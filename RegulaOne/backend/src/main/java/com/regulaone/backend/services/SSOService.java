@@ -64,27 +64,20 @@ public class SSOService {
      * otherwise the browser will not match and delete it.
      */
     public void clearCookie(HttpServletResponse response, String name) {
-        // Clear host-only cookie (no domain attribute)
-        ResponseCookie hostOnly = ResponseCookie.from(name, "")
+        // Build base cookie configuration to expire the cookie (MaxAge=0)
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, "")
                 .httpOnly(true)
                 .secure(ssoConfig.isCookieSecure())
                 .path("/")
                 .maxAge(0)
-                .sameSite(ssoConfig.getCookieSameSite())
-                .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, hostOnly.toString());
+                .sameSite(ssoConfig.getCookieSameSite());
+
+        // Clear host-only cookie (no domain attribute)
+        response.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
 
         // Clear domain-scoped cookie (if shared domain is enabled)
         if (ssoConfig.hasSharedDomain()) {
-            ResponseCookie domainCookie = ResponseCookie.from(name, "")
-                    .httpOnly(true)
-                    .secure(ssoConfig.isCookieSecure())
-                    .path("/")
-                    .maxAge(0)
-                    .sameSite(ssoConfig.getCookieSameSite())
-                    .domain(ssoConfig.getCookieDomain())
-                    .build();
-            response.addHeader(HttpHeaders.SET_COOKIE, domainCookie.toString());
+            response.addHeader(HttpHeaders.SET_COOKIE, builder.domain(ssoConfig.getCookieDomain()).build().toString());
         }
     }
 

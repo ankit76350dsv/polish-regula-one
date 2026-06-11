@@ -30,7 +30,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(KsefAuthException.class)
     public ResponseEntity<Map<String, Object>> handleAuth(KsefAuthException e) {
         log.warn("[handleAuth]:1 Auth error: {}", e.getMessage());
-        return ResponseEntity.status(400).body(errorBody(400, "AUTH_ERROR", e.getMessage()));
+        return ResponseEntity.badRequest().body(errorBody(400, "AUTH_ERROR", e.getMessage()));
     }
 
     // 422 — invoice validation or submission rejected by KSeF
