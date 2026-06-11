@@ -27,6 +27,23 @@ As of today (**2026-06-11**), mandatory KSeF is **in force**:
 
 ---
 
+## ⏱️ Remediation status (updated 2026-06-11)
+
+The critical gaps below have since been implemented in the backend (all compiling; unit tests for the new modules still to be written):
+
+| # | Gap | Status | Key new/changed code |
+|---|---|---|---|
+| C1 | Receiving purchase invoices | ✅ implemented | `KsefReceivedInvoiceService/Controller`, `/invoices/query/metadata` + `/invoices/ksef/{nr}` client calls |
+| C2 | Permissions (uprawnienia) | ✅ implemented (core: grant/query/revoke person perms) | `KsefPermissionsService/Controller`, `/permissions/*` client calls |
+| C3 | KSeF certificate enrollment | ✅ implemented | `KsefCertificateEnrollmentService`, `KsefCsrGenerator` (BouncyCastle), `/certificates/enroll` |
+| C4 | Offline/retry scheduler | ✅ implemented | `KsefRetryQueueService`, `KSeFInvoiceService.resubmitOffline`, `@EnableScheduling` |
+| C5 | Correction invoices (KOR) | ✅ implemented | `FA3XmlBuilder` KOR block, `KSeFInvoiceService.createCorrection`, `POST /{id}/correct` |
+| C6 | Committed secrets | ⛔ **NOT done — owner action** | purge git history + rotate Atlas creds + real encryption key |
+| C7 | Failure-mode (awaria) detection | ✅ implemented | `KsefAvailabilityService/Controller`, pipeline mode wiring |
+| C8 | FA(3) XSD validation | ✅ implemented | enabled in prod + warm-up gate in `Fa3ValidationGate` |
+
+**Still outstanding:** unit/integration tests for the new modules; C6 (secrets — your action); Phase-2 items (batch sessions, email/push reminders, attachments, reports). See roadmap below.
+
 ## Legend
 
 | Symbol | Meaning |

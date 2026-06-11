@@ -168,6 +168,35 @@ public class KsefApiClient {
         }
     }
 
+    // ── Health probe ─────────────────────────────────────────────────────────────
+
+    /**
+     * Lightweight "is KSeF up?" check used by the availability monitor (C7).
+     *
+     * It does a cheap, UNAUTHENTICATED GET to the public-key endpoint (the same one the
+     * submit pipeline already uses) and simply reports reachable / not reachable. It NEVER
+     * throws — a failure here is a normal, expected signal, not an error to propagate.
+     *
+     * @return true if KSeF answered with a 2xx; false if it was unreachable or returned an error.
+     */
+    public boolean isApiReachable() {
+        String url = base() + "/security/public-key-certificates";
+        try {
+            ResponseEntity<Void> resp = ksefRestTemplate.exchange(
+                    url, HttpMethod.GET, HttpEntity.EMPTY, Void.class);
+            return resp.getStatusCode().is2xxSuccessful();
+        } catch (HttpStatusCodeException e) {
+            // KSeF answered, but with an error code — treat 5xx as "down", other codes as "up
+            // enough to talk to" (e.g. a 4xx still means the service itself is responding).
+            boolean reachable = !e.getStatusCode().is5xxServerError();
+            log.debug("[isApiReachable]:1 KSeF returned [{}] — reachable={}", e.getStatusCode(), reachable);
+            return reachable;
+        } catch (ResourceAccessException e) {
+            log.debug("[isApiReachable]:2 KSeF not reachable at {}: {}", url, e.getMessage());
+            return false;
+        }
+    }
+
     // ── Online session + invoice ───────────────────────────────────────────────────
 
     /** POST /sessions/online — opens an encrypted online session (Bearer accessToken). */
@@ -266,6 +295,221 @@ public class KsefApiClient {
         } catch (HttpStatusCodeException | ResourceAccessException e) {
             // Closing is best-effort; the session expires on its own (validUntil).
             log.warn("[closeOnlineSession]:3 Failed to close online session [{}]: {}", sessionReference, e.getMessage());
+        }
+    }
+
+    // ── Receiving invoices (faktury otrzymane) ───────────────────────────────────
+
+    /**
+     * POST /invoices/query/metadata — lists invoice metadata for the authenticated subject.
+     * For RECEIVING (purchase) invoices the caller passes subjectType "Subject2" (= buyer).
+     * Paging is via the query parameters pageOffset (0-based) and pageSize.
+     */
+    public QueryInvoicesMetadataResponse queryInvoiceMetadata(String accessToken,
+                                                              QueryInvoicesMetadataRequest request,
+                                                              int pageOffset, int pageSize) {
+        String url = base() + "/invoices/query/metadata?pageOffset=" + pageOffset + "&pageSize=" + pageSize;
+        log.info("[queryInvoiceMetadata]:1 POST {} — subjectType={}", url, request.subjectType());
+        try {
+            ResponseEntity<QueryInvoicesMetadataResponse> resp = ksefRestTemplate.exchange(
+                    url, HttpMethod.POST, bearerJson(accessToken, request), QueryInvoicesMetadataResponse.class);
+            QueryInvoicesMetadataResponse body = resp.getBody();
+            if (body == null) {
+                throw new KsefSubmissionException("KSeF returned an empty invoice metadata page from " + url);
+            }
+            return body;
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException("KSeF invoice metadata query failed [" + e.getStatusCode() + "]: "
+                    + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException("KSeF API unreachable at " + url, e);
+        }
+    }
+
+    /**
+     * GET /invoices/ksef/{ksefNumber} — downloads the full invoice XML by its KSeF number.
+     * Returns the raw FA(3) XML the seller submitted. Used to fetch the body of a received invoice.
+     */
+    public String getInvoiceByKsefNumber(String accessToken, String ksefNumber) {
+        String url = base() + "/invoices/ksef/" + ksefNumber;
+        log.info("[getInvoiceByKsefNumber]:1 GET {} — fetching received invoice XML", url);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        headers.setAccept(List.of(MediaType.APPLICATION_XML, MediaType.TEXT_XML));
+        try {
+            ResponseEntity<String> resp = ksefRestTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+            String body = resp.getBody();
+            if (body == null || body.isBlank()) {
+                throw new KsefSubmissionException("KSeF returned an empty invoice body for ksefNumber " + ksefNumber);
+            }
+            return body;
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException("KSeF invoice download failed [" + e.getStatusCode() + "]: "
+                    + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException("KSeF API unreachable at " + url, e);
+        }
+    }
+
+    // ── KSeF certificate enrollment (C3) ─────────────────────────────────────────
+
+    /** GET /certificates/enrollments/data — the subject fields KSeF wants inside the CSR. */
+    public CertificateEnrollmentDataResponse getCertificateEnrollmentData(String accessToken) {
+        String url = base() + "/certificates/enrollments/data";
+        log.info("[getCertificateEnrollmentData]:1 GET {} — fetching enrollment subject data", url);
+        try {
+            ResponseEntity<CertificateEnrollmentDataResponse> resp = ksefRestTemplate.exchange(
+                    url, HttpMethod.GET, bearer(accessToken), CertificateEnrollmentDataResponse.class);
+            if (resp.getBody() == null || resp.getBody().commonName() == null) {
+                throw new KsefSubmissionException("KSeF returned empty certificate enrollment data from " + url);
+            }
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException("KSeF enrollment-data fetch failed [" + e.getStatusCode() + "]: "
+                    + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException("KSeF API unreachable at " + url, e);
+        }
+    }
+
+    /** POST /certificates/enrollments — submits the CSR; returns the request referenceNumber (202). */
+    public EnrollCertificateResponse enrollCertificate(String accessToken, EnrollCertificateRequest request) {
+        String url = base() + "/certificates/enrollments";
+        log.info("[enrollCertificate]:1 POST {} — enrolling certificate [{}] type [{}]",
+                url, request.certificateName(), request.certificateType());
+        try {
+            ResponseEntity<EnrollCertificateResponse> resp = ksefRestTemplate.exchange(
+                    url, HttpMethod.POST, bearerJson(accessToken, request), EnrollCertificateResponse.class);
+            if (resp.getBody() == null || resp.getBody().referenceNumber() == null) {
+                throw new KsefSubmissionException("KSeF certificate enrollment returned no referenceNumber from " + url);
+            }
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException("KSeF certificate enrollment failed [" + e.getStatusCode() + "]: "
+                    + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException("KSeF API unreachable at " + url, e);
+        }
+    }
+
+    /** GET /certificates/enrollments/{referenceNumber} — polls the enrollment status. */
+    public CertificateEnrollmentStatusResponse getCertificateEnrollmentStatus(String accessToken, String referenceNumber) {
+        String url = base() + "/certificates/enrollments/" + referenceNumber;
+        log.info("[getCertificateEnrollmentStatus]:1 GET {} — polling enrollment status", url);
+        try {
+            ResponseEntity<CertificateEnrollmentStatusResponse> resp = ksefRestTemplate.exchange(
+                    url, HttpMethod.GET, bearer(accessToken), CertificateEnrollmentStatusResponse.class);
+            if (resp.getBody() == null || resp.getBody().status() == null) {
+                throw new KsefSubmissionException("KSeF returned empty enrollment status for ref " + referenceNumber);
+            }
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException("KSeF enrollment-status check failed [" + e.getStatusCode() + "]: "
+                    + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException("KSeF API unreachable at " + url, e);
+        }
+    }
+
+    /** POST /certificates/retrieve — downloads the issued certificate(s) by serial number. */
+    public RetrieveCertificatesResponse retrieveCertificates(String accessToken, RetrieveCertificatesRequest request) {
+        String url = base() + "/certificates/retrieve";
+        log.info("[retrieveCertificates]:1 POST {} — retrieving {} certificate(s)",
+                url, request.certificateSerialNumbers() != null ? request.certificateSerialNumbers().size() : 0);
+        try {
+            ResponseEntity<RetrieveCertificatesResponse> resp = ksefRestTemplate.exchange(
+                    url, HttpMethod.POST, bearerJson(accessToken, request), RetrieveCertificatesResponse.class);
+            if (resp.getBody() == null || resp.getBody().certificates() == null) {
+                throw new KsefSubmissionException("KSeF certificate retrieve returned nothing from " + url);
+            }
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException("KSeF certificate retrieve failed [" + e.getStatusCode() + "]: "
+                    + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException("KSeF API unreachable at " + url, e);
+        }
+    }
+
+    // ── Permissions / authorizations (uprawnienia, C2) ───────────────────────────
+
+    /** POST /permissions/persons/grants — grants permissions to a person (async, 202). */
+    public PermissionsOperationResponse grantPersonPermissions(String accessToken, PersonPermissionsGrantRequest request) {
+        String url = base() + "/permissions/persons/grants";
+        log.info("[grantPersonPermissions]:1 POST {} — granting {} permission(s)",
+                url, request.permissions() != null ? request.permissions().size() : 0);
+        try {
+            ResponseEntity<PermissionsOperationResponse> resp = ksefRestTemplate.exchange(
+                    url, HttpMethod.POST, bearerJson(accessToken, request), PermissionsOperationResponse.class);
+            if (resp.getBody() == null || resp.getBody().referenceNumber() == null) {
+                throw new KsefSubmissionException("KSeF permission grant returned no referenceNumber from " + url);
+            }
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException("KSeF permission grant failed [" + e.getStatusCode() + "]: "
+                    + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException("KSeF API unreachable at " + url, e);
+        }
+    }
+
+    /** POST /permissions/query/persons/grants — lists person permissions (paged). */
+    public QueryPersonPermissionsResponse queryPersonPermissions(String accessToken,
+                                                                 PersonPermissionsQueryRequest request,
+                                                                 int pageOffset, int pageSize) {
+        String url = base() + "/permissions/query/persons/grants?pageOffset=" + pageOffset + "&pageSize=" + pageSize;
+        log.info("[queryPersonPermissions]:1 POST {} — queryType={}", url, request.queryType());
+        try {
+            ResponseEntity<QueryPersonPermissionsResponse> resp = ksefRestTemplate.exchange(
+                    url, HttpMethod.POST, bearerJson(accessToken, request), QueryPersonPermissionsResponse.class);
+            if (resp.getBody() == null) {
+                throw new KsefSubmissionException("KSeF returned an empty permissions page from " + url);
+            }
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException("KSeF permission query failed [" + e.getStatusCode() + "]: "
+                    + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException("KSeF API unreachable at " + url, e);
+        }
+    }
+
+    /** DELETE /permissions/common/grants/{permissionId} — revokes one granted permission (async, 202). */
+    public PermissionsOperationResponse revokePermission(String accessToken, String permissionId) {
+        String url = base() + "/permissions/common/grants/" + permissionId;
+        log.info("[revokePermission]:1 DELETE {} — revoking permission", url);
+        try {
+            ResponseEntity<PermissionsOperationResponse> resp = ksefRestTemplate.exchange(
+                    url, HttpMethod.DELETE, bearer(accessToken), PermissionsOperationResponse.class);
+            if (resp.getBody() == null || resp.getBody().referenceNumber() == null) {
+                throw new KsefSubmissionException("KSeF permission revoke returned no referenceNumber from " + url);
+            }
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException("KSeF permission revoke failed [" + e.getStatusCode() + "]: "
+                    + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException("KSeF API unreachable at " + url, e);
+        }
+    }
+
+    /** GET /permissions/operations/{referenceNumber} — status of an async grant/revoke. */
+    public PermissionsOperationStatusResponse getPermissionsOperationStatus(String accessToken, String referenceNumber) {
+        String url = base() + "/permissions/operations/" + referenceNumber;
+        log.info("[getPermissionsOperationStatus]:1 GET {} — polling permission operation", url);
+        try {
+            ResponseEntity<PermissionsOperationStatusResponse> resp = ksefRestTemplate.exchange(
+                    url, HttpMethod.GET, bearer(accessToken), PermissionsOperationStatusResponse.class);
+            if (resp.getBody() == null || resp.getBody().status() == null) {
+                throw new KsefSubmissionException("KSeF returned empty permission operation status for ref " + referenceNumber);
+            }
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            throw new KsefSubmissionException("KSeF permission operation status failed [" + e.getStatusCode() + "]: "
+                    + e.getResponseBodyAsString(), e);
+        } catch (ResourceAccessException e) {
+            throw new KsefSubmissionException("KSeF API unreachable at " + url, e);
         }
     }
 

@@ -138,6 +138,85 @@ public class CertificateService {
         }
 
         /**
+         * Stores a KSeF-ISSUED certificate (gap C3) that we obtained via the enrollment API.
+         *
+         * Unlike {@link #storeCertificate} (which takes a .pfx the user uploaded), this method is
+         * for a certificate KSeF generated for us: the caller has already packaged our locally
+         * generated private key together with the issued public certificate into a PKCS12 (.p12)
+         * byte array. We then store it through the exact same encrypted pipeline (S3 + AES-256-GCM
+         * file, encrypted password) so there is ONE storage path for all certificates.
+         *
+         * Differences from a user upload:
+         *   - we record the certificate PURPOSE (AUTHENTICATION vs OFFLINE), because KSeF issues
+         *     a distinct certificate for each, and a tenant may hold one active certificate of
+         *     EACH purpose at the same time — so we only deactivate the previous active cert of
+         *     the SAME purpose, not all of them;
+         *   - we record the KSeF certificate serial number returned by enrollment.
+         *
+         * @param pfxBytes         PKCS12 bytes = our private key + the issued public certificate
+         * @param purpose          AUTHENTICATION (log in) or OFFLINE (seal offline invoices)
+         * @param ksefSerialNumber the certificate serial number KSeF assigned
+         */
+        public KsefCertificate storeEnrolledCertificate(
+                        byte[] pfxBytes,
+                        String tenantId,
+                        String fileName,
+                        String password,
+                        String uploadedByUserId,
+                        KsefCertificatePurpose purpose,
+                        String ksefSerialNumber) {
+
+                if (pfxBytes.length > props.getMaxFileSize()) {
+                        throw new KsefCertificateException(
+                                        "Certificate file exceeds maximum allowed size of " + props.getMaxFileSize()
+                                                        + " bytes");
+                }
+
+                // Validate the package and read identity details before writing any stored state.
+                KeyStore keyStore = KeyStoreUtils.loadKeyStoreFromBytes(pfxBytes, password);
+                X509Certificate x509 = KeyStoreUtils.extractX509Certificate(keyStore);
+
+                // Deactivate the previous active certificate of the SAME purpose only.
+                ksef_certificates_repo.findByTenantIdAndPurposeAndActiveTrue(tenantId, purpose)
+                                .ifPresent(existing -> {
+                                        existing.setActive(false);
+                                        existing.setUpdatedAt(LocalDateTime.now());
+                                        ksef_certificates_repo.save(existing);
+                                        log.info("[storeEnrolledCertificate]:1 Deactivated previous [{}] certificate [id={}] for tenant [{}]",
+                                                        purpose, existing.getId(), tenantId);
+                                });
+
+                String storagePath = storage.writePfxEncrypted(tenantId, pfxBytes, fileName);
+                String vaultRef = crypto.encryptPassword(password);
+
+                KsefCertificate cert = KsefCertificate.builder()
+                                .tenantId(tenantId)
+                                .fileName(fileName)
+                                .type(KsefCertificateType.PFX)
+                                .purpose(purpose)
+                                .certificateSerialNumber(ksefSerialNumber)
+                                .issuedTo(x509.getSubjectX500Principal().getName())
+                                .issuer(x509.getIssuerX500Principal().getName())
+                                .validFrom(KeyStoreUtils.toLocalDate(x509.getNotBefore()))
+                                .validTo(KeyStoreUtils.toLocalDate(x509.getNotAfter()))
+                                .verificationStatus(KsefCertificateVerificationStatus.VERIFIED)
+                                .vaultPasswordReference(vaultRef)
+                                .encryptedStoragePath(storagePath)
+                                .uploadedByUserId(uploadedByUserId)
+                                .active(true)
+                                .createdAt(LocalDateTime.now())
+                                .build();
+
+                KsefCertificate saved = ksef_certificates_repo.save(cert);
+                log.info("[storeEnrolledCertificate]:2 Stored KSeF-issued [{}] certificate [id={}] serial [{}] for tenant [{}]",
+                                purpose, saved.getId(), ksefSerialNumber, tenantId);
+
+                writeAuditLog(tenantId, "CERTIFICATE_ENROLLED", saved.getId(), uploadedByUserId,
+                                describeCertificate(saved));
+                return saved;
+        }
+
+        /**
          * Returns the private key from the tenant's active certificate.
          * Decrypts the .pfx file and password temporarily in memory.
          *

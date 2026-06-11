@@ -2,10 +2,15 @@ package com.ksefflow.backend.controllers;
 
 import com.ksefflow.backend.dto.certificate.CertificateResponse;
 import com.ksefflow.backend.models.KsefCertificate;
+import com.ksefflow.backend.models.utils.KsefCertificatePurpose;
 import com.ksefflow.backend.security.AuthenticatedUser;
 import com.ksefflow.backend.services.certificate.CertificateService;
+import com.ksefflow.backend.services.certificate.KsefCertificateEnrollmentService;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -46,6 +51,37 @@ public class KSeFCertificateController {
     private static final long MAX_FILE_SIZE_BYTES = 1_048_576L; // 1 MB hard limit (controller-level guard)
 
     private final CertificateService certificateService;
+    private final KsefCertificateEnrollmentService enrollmentService;
+
+    // ── POST /api/v1/certificates/enroll ─────────────────────────────────────
+    /**
+     * Requests a brand-new KSeF-issued certificate (gap C3) instead of uploading one.
+     *
+     * KSeFFlow generates the key pair locally, asks KSeF to issue a certificate for it, waits
+     * for it, downloads it, and stores it encrypted — all server-side. The private key never
+     * leaves the server in the clear.
+     *
+     * @param nip     the tenant's own 10-digit NIP (authentication context)
+     * @param purpose AUTHENTICATION (default — log in to KSeF) or OFFLINE (seal offline invoices)
+     * @param name    a friendly name for the certificate
+     *
+     * Response 201: CertificateResponse (safe metadata only)
+     * Response 400: enrollment failed / rejected by KSeF
+     */
+    @PostMapping("/enroll")
+    public ResponseEntity<CertificateResponse> enroll(
+            AuthenticatedUser caller,
+            @RequestParam @NotBlank @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits") String nip,
+            @RequestParam(defaultValue = "AUTHENTICATION") KsefCertificatePurpose purpose,
+            @RequestParam @NotBlank String name) {
+
+        log.info("[enroll]:1 POST /certificates/enroll — tenant={} purpose={} name={}",
+                caller.tenantId(), purpose, name);
+        KsefCertificate cert = enrollmentService.enrollAndStore(
+                caller.tenantId(), nip, name, purpose, caller.userId());
+        log.info("[enroll]:2 Certificate enrolled — id={} serial={}", cert.getId(), cert.getCertificateSerialNumber());
+        return ResponseEntity.status(HttpStatus.CREATED).body(CertificateResponse.from(cert));
+    }
 
     // ── POST /api/v1/certificates/upload ─────────────────────────────────────
     /**

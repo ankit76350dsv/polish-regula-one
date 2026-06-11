@@ -78,6 +78,9 @@ public class KSeFInvoiceService {
     private final UPOStorageService upoStorageService;
     private final KsefQrService qrService;
     private final KsefApiProperties apiProperties;
+    // Tells us the current KSeF state (online / unavailable / Ministry-declared emergency) so
+    // a parked invoice gets the legally correct deadline. See KsefAvailabilityService (C7).
+    private final KsefAvailabilityService availabilityService;
 
     // KSeF 2.0 usage flag identifying the MF public key that wraps the session AES key.
     private static final String SYMMETRIC_KEY_ENCRYPTION_USAGE = "SymmetricKeyEncryption";
@@ -163,6 +166,51 @@ public class KSeFInvoiceService {
         return saved;
     }
 
+    //! ── Create a correction (faktura korygująca) ────────────────────────────────
+
+    /**
+     * Creates a CORRECTION invoice (FA(3) RodzajFaktury = KOR) for an already-sent invoice.
+     *
+     * SIMPLE EXPLANATION: if a invoice we already sent to KSeF was wrong, we cannot edit it —
+     * KSeF invoices are permanent. Instead we issue a NEW invoice that says "this corrects that
+     * one", points back to the original by its KSeF number, and explains why. This method builds
+     * that correction as a DRAFT; the normal submit pipeline then sends it like any other invoice.
+     *
+     * @param originalInvoiceId our id of the invoice being corrected (must be SENT, with a KSeF number)
+     * @param correction        the corrected invoice content (built from the request like a normal invoice)
+     * @param reason            why the correction is needed (FA(3) PrzyczynaKorekty)
+     * @param type              optional KSeF correction type 1/2/3 (FA(3) TypKorekty)
+     */
+    public KsefInvoice createCorrection(String tenantId, String originalInvoiceId, KsefInvoice correction,
+                                        String reason, Integer type, String userEmail, String ipAddress) {
+        // The original must exist, belong to this tenant, and already be in KSeF (have a KSeF number).
+        KsefInvoice original = getInvoice(tenantId, originalInvoiceId);
+        if (original.getStatus() != KsefInvoiceStatus.SENT
+                || original.getKsefId() == null || original.getKsefId().isBlank()) {
+            throw new IllegalStateException("Only an invoice that is already in KSeF (status SENT with a KSeF number) "
+                    + "can be corrected. Invoice [" + originalInvoiceId + "] status=" + original.getStatus());
+        }
+
+        // Link the new invoice back to the original and mark it as a correction.
+        correction.setCorrection(true);
+        correction.setCorrectedInvoiceId(original.getId());
+        correction.setCorrectedKsefNumber(original.getKsefId());
+        correction.setCorrectedInvoiceNumber(original.getInvoiceNumber());
+        correction.setCorrectedIssueDate(original.getIssueDate());
+        correction.setCorrectionReason(reason);
+        correction.setCorrectionType(type);
+
+        // Persist it as a DRAFT through the normal create path (handles idempotency + audit).
+        KsefInvoice saved = createInvoice(correction, userEmail, ipAddress);
+
+        KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_CORRECTION_CREATED", saved.getId(), null,
+                "corrects=" + original.getInvoiceNumber() + " ksefId=" + original.getKsefId()
+                        + " reason=" + reason, userEmail, ipAddress);
+        log.info("[createCorrection]:1 Correction [{}] created for original [{}] (ksefId [{}]) tenant [{}]",
+                saved.getInvoiceNumber(), original.getInvoiceNumber(), original.getKsefId(), tenantId);
+        return saved;
+    }
+
     //! ── Submit Pipeline ────────────────────────────────────────────────────────
 
     /**
@@ -225,10 +273,80 @@ public class KSeFInvoiceService {
         } catch (KsefSubmissionException | KsefAuthException e) {
 
             // KSeF was reachable-but-rejected or unreachable at the session/network layer →
-            // this is the system-detected "KSeF unavailability" offline mode. (offline24 vs
-            // emergency are user/MF-declared and would be passed in explicitly.)
-            log.warn("[submitInvoice]:5 KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE", invoice.getInvoiceNumber(), e.getMessage());
-            return handleOfflineMode(invoice, KsefOfflineMode.OFFLINE_UNAVAILABILITY, e.getMessage(), userEmail, ipAddress);
+            // park the invoice offline. The MODE (and therefore the legal deadline) comes from
+            // the availability monitor: EMERGENCY (7 business days) when the Ministry has
+            // declared "tryb awaryjny", otherwise OFFLINE_UNAVAILABILITY (next business day).
+            KsefOfflineMode mode = availabilityService.currentOfflineMode();
+            log.warn("[submitInvoice]:5 KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE (mode={})",
+                    invoice.getInvoiceNumber(), e.getMessage(), mode);
+            return handleOfflineMode(invoice, mode, e.getMessage(), userEmail, ipAddress);
+        }
+    }
+
+    //! ── Retry an offline-parked invoice ─────────────────────────────────────────
+
+    /**
+     * Re-attempts KSeF submission for an invoice that is parked OFFLINE_MODE (or already
+     * RETRYING). Called by the background retry scheduler (KsefRetryQueueService), NOT by a
+     * user request — so it derives everything it needs from the stored invoice itself:
+     *   - the issuer NIP comes from the invoice's sellerNip (the company that issued it);
+     *   - the FA(3) XML is regenerated from the stored invoice fields (deterministic), so we
+     *     always send exactly what the invoice currently says.
+     *
+     * IMPORTANT (legal): this method does NOT change offlineIssuedAt or the original
+     * ksefSubmissionDeadline. handleOfflineMode() sets offlineIssuedAt only once and always
+     * recomputes the deadline from that same first moment, so retrying never extends the legal
+     * window. On success the invoice becomes SENT and the offline fields are RETAINED for audit.
+     *
+     * @return the invoice after the attempt: SENT on success, or back in OFFLINE_MODE on failure.
+     */
+    public KsefInvoice resubmitOffline(KsefInvoice invoice, String userEmail, String ipAddress) {
+        String tenantId = invoice.getTenantId();
+        String invoiceId = invoice.getId();
+
+        // Only invoices that are waiting offline (or mid-retry) can be retried here.
+        if (invoice.getStatus() != KsefInvoiceStatus.OFFLINE_MODE
+                && invoice.getStatus() != KsefInvoiceStatus.RETRYING) {
+            throw new IllegalStateException("Invoice [" + invoiceId + "] is not retryable (status "
+                    + invoice.getStatus() + ")");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        invoice.setStatus(KsefInvoiceStatus.RETRYING);
+        int nextAttempt = invoice.getSubmissionAttempts() + 1;
+        invoice.setSubmissionAttempts(nextAttempt);
+        invoice.setLastRetryAt(now);
+        invoice.setUpdatedAt(now);
+        ksef_invoices_repository.save(invoice);
+
+        KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_RETRY_STARTED", invoiceId, null,
+                "attempt=" + nextAttempt + " deadline=" + invoice.getKsefSubmissionDeadline(),
+                userEmail, ipAddress);
+
+        log.info("[resubmitOffline]:1 Retry attempt [{}] for offline invoice [{}] (tenant [{}], deadline [{}])",
+                nextAttempt, invoice.getInvoiceNumber(), tenantId, invoice.getKsefSubmissionDeadline());
+
+        // Regenerate the FA(3) XML from the stored invoice and re-validate before sending.
+        FA3XmlGeneratorService.FA3XmlResult xmlResult = xmlGeneratorService.generateXml(invoice);
+        fa3ValidationGate.validateBeforeSubmission(xmlResult.xmlContent());
+        invoice.setFa3XmlHash(xmlResult.sha256Hash());
+
+        try {
+            KsefInvoice sent = executeKsefSubmission(invoice, xmlResult.xmlContent(),
+                    invoice.getSellerNip(), userEmail, ipAddress);
+            log.info("[resubmitOffline]:2 Offline invoice [{}] successfully submitted to KSeF on retry [{}]",
+                    invoice.getInvoiceNumber(), nextAttempt);
+            return sent;
+        } catch (KsefSubmissionException | KsefAuthException e) {
+            // Still cannot reach / be accepted by KSeF → re-park OFFLINE, keeping the SAME mode
+            // (do not downgrade a Ministry-declared emergency to a generic unavailability) and
+            // the SAME original deadline (handleOfflineMode preserves offlineIssuedAt).
+            KsefOfflineMode mode = invoice.getOfflineMode() != null
+                    ? invoice.getOfflineMode()
+                    : KsefOfflineMode.OFFLINE_UNAVAILABILITY;
+            log.warn("[resubmitOffline]:3 Retry [{}] failed for invoice [{}]: {} — staying OFFLINE (mode={})",
+                    nextAttempt, invoice.getInvoiceNumber(), e.getMessage(), mode);
+            return handleOfflineMode(invoice, mode, e.getMessage(), userEmail, ipAddress);
         }
     }
 

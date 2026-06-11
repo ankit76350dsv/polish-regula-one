@@ -170,6 +170,32 @@ public class KsefInvoice {
     // Timestamp of the most recent retry attempt — used for backoff calculations
     private LocalDateTime lastRetryAt;
 
+    // ── Correction (faktura korygująca, FA(3) RodzajFaktury = KOR) ──────────────
+    // When true, this invoice CORRECTS an earlier invoice. The fields below point at the
+    // original invoice and explain the correction — they fill the FA(3) DaneFaKorygowanej
+    // block (DataWystFaKorygowanej / NrFaKorygowanej / NrKSeFFaKorygowanej), PrzyczynaKorekty
+    // and TypKorekty. A normal invoice leaves correction=false and these fields null.
+    @Builder.Default
+    private boolean correction = false;
+
+    // Our own id of the original invoice being corrected (internal link, not sent to KSeF).
+    private String correctedInvoiceId;
+
+    // The KSeF number of the original invoice (FA(3) NrKSeFFaKorygowanej).
+    private String correctedKsefNumber;
+
+    // The original invoice's number / P_2 (FA(3) NrFaKorygowanej).
+    private String correctedInvoiceNumber;
+
+    // The original invoice's issue date (FA(3) DataWystFaKorygowanej).
+    private LocalDate correctedIssueDate;
+
+    // Why the invoice is being corrected (FA(3) PrzyczynaKorekty).
+    private String correctionReason;
+
+    // KSeF correction type: 1, 2 or 3 (FA(3) TypKorekty). Optional.
+    private Integer correctionType;
+
     // ── XML compliance ─────────────────────────────────────────────────────────
 
     // SHA-256 of the FA(3) XML submitted to KSeF — stored for tamper-evidence audit.

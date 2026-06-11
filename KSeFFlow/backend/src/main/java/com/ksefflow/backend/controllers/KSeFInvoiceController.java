@@ -126,10 +126,44 @@ public class KSeFInvoiceController {
         return ResponseEntity.status(httpStatus).body(response);
     }
 
+    // ── Correction (faktura korygująca) ──────────────────────────────────────────
+
+    /**
+     * Create a CORRECTION invoice for an invoice that is already in KSeF.
+     *
+     * The request body is the corrected invoice content (same shape as creating a normal
+     * invoice). The new invoice is linked to the original (by its KSeF number) and saved as a
+     * DRAFT — submit it afterwards with POST /{id}/submit like any other invoice.
+     *
+     * @param invoiceId      the original invoice being corrected (must be SENT)
+     * @param reason         why the correction is needed (FA(3) PrzyczynaKorekty)
+     * @param correctionType optional KSeF correction type 1/2/3 (FA(3) TypKorekty)
+     */
+    @PostMapping("/{invoiceId}/correct")
+    public ResponseEntity<KsefInvoice> correctInvoice(
+            AuthenticatedUser caller,
+            @PathVariable String invoiceId,
+            @Valid @RequestBody CreateInvoiceRequest request,
+            @RequestParam @NotBlank(message = "A correction reason is required") String reason,
+            @RequestParam(required = false) Integer correctionType,
+            HttpServletRequest httpRequest) {
+
+        log.info("[correctInvoice]:1 POST /{}/correct — tenant={} newNumber={}",
+                invoiceId, caller.tenantId(), request.getInvoiceNumber());
+        KsefInvoice correction = invoiceService.createCorrection(
+                caller.tenantId(), invoiceId,
+                request.toEntity(caller.tenantId(), caller.userId()),
+                reason, correctionType,
+                caller.email(), extractClientIp(httpRequest));
+        log.info("[correctInvoice]:2 Correction draft created — id={} corrects={}",
+                correction.getId(), correction.getCorrectedKsefNumber());
+        return ResponseEntity.status(HttpStatus.CREATED).body(correction);
+    }
+
     // ── Read ───────────────────────────────────────────────────────────────────
 
     /**
-     * 
+     *
      * Get invoice details.
      * 
      * 

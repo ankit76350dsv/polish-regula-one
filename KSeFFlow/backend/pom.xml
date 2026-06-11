@@ -88,6 +88,16 @@
 			<version>3.0.4</version>
 		</dependency>
 
+		<!-- BouncyCastle — used to build the PKCS#10 certificate signing request (CSR) that
+		     KSeF requires when enrolling a KSeF certificate (POST /certificates/enrollments).
+		     The Java standard library cannot build a CSR; bcpkix is the standard tool and is
+		     what the official KSeF SDK examples use. bcprov is its provider dependency. -->
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcpkix-jdk18on</artifactId>
+			<version>1.78.1</version>
+		</dependency>
+
 		<!-- Configuration metadata — IDE autocomplete for application.properties -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

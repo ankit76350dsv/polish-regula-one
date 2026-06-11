@@ -155,8 +155,21 @@ public final class FA3XmlBuilder {
         // The required note flags (split payment, exemption, etc.).
         fa.appendChild(buildAdnotacje(doc, invoice));
 
-        // The kind of invoice. A normal one is "VAT".
-        fa.appendChild(element(doc, "RodzajFaktury", "VAT"));
+        // The kind of invoice. A normal one is "VAT"; a correction is "KOR" and must also carry
+        // the details of the invoice it corrects, in this exact schema order:
+        //   RodzajFaktury → PrzyczynaKorekty? → TypKorekty? → DaneFaKorygowanej.
+        if (invoice.isCorrection()) {
+            fa.appendChild(element(doc, "RodzajFaktury", "KOR"));
+            if (invoice.getCorrectionReason() != null && !invoice.getCorrectionReason().isBlank()) {
+                fa.appendChild(element(doc, "PrzyczynaKorekty", invoice.getCorrectionReason()));
+            }
+            if (invoice.getCorrectionType() != null) {
+                fa.appendChild(element(doc, "TypKorekty", String.valueOf(invoice.getCorrectionType())));
+            }
+            fa.appendChild(buildDaneFaKorygowanej(doc, invoice));
+        } else {
+            fa.appendChild(element(doc, "RodzajFaktury", "VAT"));
+        }
 
         // The invoice lines (one per product/service).
         List<KsefInvoice.InvoiceItem> items = invoice.getItems();
@@ -241,6 +254,20 @@ public final class FA3XmlBuilder {
         ann.appendChild(marza);
 
         return ann;
+    }
+
+    // ── DaneFaKorygowanej (DETAILS OF THE CORRECTED INVOICE) ────────────────────
+    // Required when RodzajFaktury = KOR. Tells KSeF exactly which earlier invoice this one
+    // corrects. The original was issued through KSeF, so we use the "NrKSeF = 1" branch and
+    // give its KSeF number in NrKSeFFaKorygowanej (per the FA(3) schema choice).
+    private static Element buildDaneFaKorygowanej(Document doc, KsefInvoice invoice) {
+        Element dane = element(doc, "DaneFaKorygowanej");
+        dane.appendChild(element(doc, "DataWystFaKorygowanej", invoice.getCorrectedIssueDate().toString()));
+        dane.appendChild(element(doc, "NrFaKorygowanej", invoice.getCorrectedInvoiceNumber()));
+        // "NrKSeF = 1" = the corrected invoice has a KSeF number; then give that number.
+        dane.appendChild(element(doc, "NrKSeF", "1"));
+        dane.appendChild(element(doc, "NrKSeFFaKorygowanej", invoice.getCorrectedKsefNumber()));
+        return dane;
     }
 
     // ── FaWiersz (ONE INVOICE LINE) ─────────────────────────────────────────────
@@ -382,6 +409,23 @@ public final class FA3XmlBuilder {
                 && invoice.getExchangeRate() == null) {
             throw new KsefXmlGenerationException("A non-PLN invoice needs an exchange rate (exchangeRate) "
                     + "for FA(3) field KursWalutyZ — invoice [" + invoice.getInvoiceNumber() + "]");
+        }
+
+        // A correction (KOR) MUST identify the original invoice it corrects — without these we
+        // cannot build a valid DaneFaKorygowanej block.
+        if (invoice.isCorrection()) {
+            if (invoice.getCorrectedKsefNumber() == null || invoice.getCorrectedKsefNumber().isBlank()) {
+                throw new KsefXmlGenerationException("A correction invoice needs the corrected invoice's KSeF number "
+                        + "(correctedKsefNumber) — invoice [" + invoice.getInvoiceNumber() + "]");
+            }
+            if (invoice.getCorrectedInvoiceNumber() == null || invoice.getCorrectedInvoiceNumber().isBlank()) {
+                throw new KsefXmlGenerationException("A correction invoice needs the corrected invoice's number "
+                        + "(correctedInvoiceNumber) — invoice [" + invoice.getInvoiceNumber() + "]");
+            }
+            if (invoice.getCorrectedIssueDate() == null) {
+                throw new KsefXmlGenerationException("A correction invoice needs the corrected invoice's issue date "
+                        + "(correctedIssueDate) — invoice [" + invoice.getInvoiceNumber() + "]");
+            }
         }
     }
 }
