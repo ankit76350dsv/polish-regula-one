@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SSO_CALLBACK_URL, registerSsoRedirect, clearSsoRedirectGuard } from '../lib/api';
+import { useLanguage } from '../context/LanguageContext';
 
 const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
 
@@ -17,6 +18,7 @@ const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhos
 
 export default function Login() {
   const [looped, setLooped] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
     // registerSsoRedirect() returns false when we have already redirected too many
@@ -48,33 +50,30 @@ export default function Login() {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-          <h1 className="text-base font-bold text-slate-800">Nie udało się zalogować (pętla logowania)</h1>
+          <h1 className="text-base font-bold text-slate-800">{t('login.failed')}</h1>
           <p className="text-xs text-slate-600 leading-relaxed">
-            Przeglądarka kilka razy z rzędu wróciła tu bez ważnej sesji, więc zatrzymaliśmy
-            przekierowania, aby strona nie odświeżała się w kółko.
+            {t('login.desc1')}
           </p>
           <p className="text-xs text-slate-600 leading-relaxed">
-            Najczęstsza przyczyna: ciasteczko sesji nie jest ważne dla tego adresu
-            (<span className="font-mono">{window.location.host}</span>). Zwykle dzieje się tak po
-            zmianie adresu IP komputera — stara sesja była przypisana do poprzedniego adresu.
+            {t('login.desc2', { host: window.location.host })}
           </p>
           <ul className="text-[11px] text-slate-500 list-disc pl-4 space-y-1">
-            <li>Zaloguj się ponownie na centralnej stronie logowania pod <strong>tym samym adresem</strong>.</li>
-            <li>Upewnij się, że backend RegulaOne ustawia ciasteczko dla hosta <span className="font-mono">{window.location.hostname}</span> (nie „localhost”).</li>
-            <li>Wyczyść ciasteczka tej witryny, jeśli problem się powtarza.</li>
+            <li>{t('login.solution1')}</li>
+            <li>{t('login.solution2', { host: window.location.hostname })}</li>
+            <li>{t('login.solution3')}</li>
           </ul>
           <div className="flex gap-2 pt-1">
             <button
               onClick={retry}
               className="flex-1 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2 px-4 rounded-xl transition cursor-pointer"
             >
-              Spróbuj ponownie
+              {t('login.retryBtn')}
             </button>
             <a
               href={CENTRAL_LOGIN}
               className="flex-1 text-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold py-2 px-4 rounded-xl transition"
             >
-              Otwórz logowanie
+              {t('login.openBtn')}
             </a>
           </div>
         </div>
@@ -87,10 +86,10 @@ export default function Login() {
       <div className="text-center space-y-4">
         <div className="w-10 h-10 mx-auto border-4 border-red-700 border-t-transparent rounded-full animate-spin" />
         <p className="text-slate-400 text-sm font-medium">
-          Redirecting to RegulaOne login…
+          {t('login.redirecting')}
         </p>
         <p className="text-slate-600 text-xs">
-          You will be returned to KSeFFlow automatically after signing in.
+          {t('login.returnDesc')}
         </p>
       </div>
     </div>

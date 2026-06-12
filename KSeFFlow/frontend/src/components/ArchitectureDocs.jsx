@@ -4,8 +4,10 @@ import {
   Terminal,
   Cpu
 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function ArchitectureDocs() {
+  const { language, t } = useLanguage();
   const [activeTab, setActiveTab] = useState('java');
 
   const javaCode = `/**
@@ -48,6 +50,8 @@ public class Invoice {
     @Column(name = "total_gross", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalGross;
 
+    @Getter
+    @Setter
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private InvoiceStatus status; // DRAFT, SENT, OFFLINE_MODE, RETRYING, FAILED
@@ -205,9 +209,9 @@ public class AuthController {
       <div className="bg-stone-900 rounded-xl p-5 border border-stone-850 font-mono text-stone-300 text-xs space-y-3">
         <div className="flex justify-between items-center bg-stone-850 px-3 py-2 rounded border border-stone-800 text-[10.5px]">
           <span className="flex items-center gap-1.5 text-red-400 font-semibold uppercase">
-            <Terminal size={13} /> production-blueprint-source
+            <Terminal size={13} /> {t('architecture.blueprintSource')}
           </span>
-          <span className="text-stone-500 font-mono">UTF-8 Encoded</span>
+          <span className="text-stone-500 font-mono">{t('architecture.utf8Encoded')}</span>
         </div>
         <pre className="overflow-x-auto max-h-96 text-stone-200 p-3 bg-stone-950 rounded border border-stone-900 leading-relaxed font-sans text-xs">
           <code className="font-mono text-[11px] block whitespace-pre">
@@ -224,18 +228,18 @@ public class AuthController {
         <div>
           <h2 className="text-xl font-bold text-stone-900 tracking-tight flex items-center gap-2">
             <Layers className="text-red-700" size={20} />
-            RegulaOne Architecture Blueprints
+            {t('architecture.title')}
           </h2>
-          <p className="text-zinc-505 text-xs mt-0.5">Explore Spring Boot, JWT credentials auth, RabbitMQ retry queue pipelines, and microservice mesh API endpoints.</p>
+          <p className="text-zinc-505 text-xs mt-0.5">{t('architecture.desc')}</p>
         </div>
 
         <div className="bg-stone-100 p-1 rounded-lg inline-flex flex-wrap gap-1 text-xs font-semibold mt-3 sm:mt-0 font-sans">
           {[
-            { key: 'java', label: 'Spring Boot JPA Models' },
-            { key: 'security', label: 'Spring Security & JWT' },
-            { key: 'queues', label: 'RabbitMQ Retry Topology' },
-            { key: 'devops', label: 'Docker & DevOps Stack' },
-            { key: 'microservices', label: 'Microservice Integration APIs' },
+            { key: 'java', label: t('architecture.tabJava') },
+            { key: 'security', label: t('architecture.tabSecurity') },
+            { key: 'queues', label: t('architecture.tabQueues') },
+            { key: 'devops', label: t('architecture.tabDevops') },
+            { key: 'microservices', label: t('architecture.tabMicroservices') },
           ].map(tab => (
             <button
               key={tab.key}
@@ -248,12 +252,12 @@ public class AuthController {
         </div>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 text-amber-950 rounded-xl p-4 text-xs space-y-2 font-sans">
+      <div className="bg-amber-50 border border-amber-200 text-amber-955 rounded-xl p-4 text-xs space-y-2 font-sans">
         <h4 className="font-bold flex items-center gap-1 text-amber-900">
-          <Cpu size={14} /> SaaS Engineering & Infrastructure Briefing
+          <Cpu size={14} /> {t('architecture.briefingTitle')}
         </h4>
         <p className="leading-relaxed">
-          KSeFFlow leverages a multi-tenant shared database strategy using **PostgreSQL schemas** for rigorous tenancy partitioning. All Qualified Signature files (PKCS#12 keystores) undergo **AES-256 symmetric encryption and digital validation**, with security handshakes managed using **JWT bearer certificates in Spring Security state models**.
+          {t('architecture.briefingDesc')}
         </p>
       </div>
 

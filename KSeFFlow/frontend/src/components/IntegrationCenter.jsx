@@ -16,8 +16,10 @@ import {
   declareKsefUnavailability,
   declareKsefOnline,
 } from '../api/ksefApi';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function IntegrationCenter({ tenant, role, govStatus, onSetGovStatus, onAddNotification }) {
+  const { language, t } = useLanguage();
   const [selectedEnv, setSelectedEnv] = useState('SANDBOX');
   const [isTesting, setIsTesting] = useState(false);
   const [pingSpeed, setPingSpeed] = useState(342);
@@ -25,9 +27,6 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
   const isAdmin = role === 'Super Admin' || role === 'Company Admin';
 
   // ── Real KSeF availability state (C7) ─────────────────────────────────────────
-  // This is the AUTHORITATIVE state from the backend (auto health-check + admin override),
-  // unlike the simulation panel below. It decides which legal deadline applies to offline
-  // invoices, so admins declare a Ministry "tryb awaryjny" here based on the official MF notice.
   const [ksefStatus, setKsefStatus]   = useState(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const [actionBusy, setActionBusy]   = useState(false);
@@ -46,18 +45,18 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
   const runDeclare = async (action, label, needReason) => {
     let reason = `${label} (przez panel integracji)`;
     if (needReason) {
-      const input = window.prompt(`Podaj powód — ${label}:`);
+      const input = window.prompt(t('integration.promptReason', { action: label }));
       if (input == null) return;            // user cancelled
-      if (!input.trim()) { onAddNotification('Błąd', 'Powód jest wymagany.', 'error'); return; }
+      if (!input.trim()) { onAddNotification(t('common.error'), t('integration.reasonRequired'), 'error'); return; }
       reason = input.trim();
     }
     setActionBusy(true);
     try {
       const status = await action(reason);
       setKsefStatus(status);
-      onAddNotification('Status KSeF zaktualizowany', `Nowy stan: ${status.mode}.`, 'info');
+      onAddNotification(t('integration.statusUpdatedTitle'), t('integration.statusUpdatedDesc', { mode: status.mode }), 'info');
     } catch (err) {
-      onAddNotification('Błąd zmiany statusu', err.message || 'Operacja nie powiodła się.', 'error');
+      onAddNotification(t('integration.statusUpdateError'), err.message || (language === 'pl' ? 'Operacja nie powiodła się.' : 'Operation failed.'), 'error');
     } finally {
       setActionBusy(false);
     }
@@ -101,8 +100,8 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
         setApiLogs([failLog, ...apiLogs]);
         setPingSpeed(null);
         onAddNotification(
-          'Tunnel Diagnostics FAILED',
-          'Government server returned HTTP 504. System automatically redirected all outbound payloads to the local RabbitMQ queue.',
+          t('integration.testFailTitle'),
+          t('integration.testFailDesc'),
           'error'
         );
       } else {
@@ -118,8 +117,8 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
         setApiLogs([successLog, ...apiLogs]);
         setPingSpeed(Math.floor(Math.random() * 120) + 200);
         onAddNotification(
-          'API Gateway Status: Excellent',
-          'Secure tunnel test completed successfully. Cryptographic session verified. Latency: 245ms',
+          t('integration.testSuccessTitle'),
+          t('integration.testSuccessDesc'),
           'success'
         );
       }
@@ -128,7 +127,7 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
 
   const clearLogs = () => {
     setApiLogs([]);
-    onAddNotification('Logs Cleared', 'Integration RAW terminal logs wiped.', 'info');
+    onAddNotification(t('integration.logsClearedTitle'), t('integration.logsClearedDesc'), 'info');
   };
 
   return (
@@ -136,9 +135,9 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
       <div>
         <h2 className="text-xl font-bold text-stone-900 tracking-tight flex items-center gap-2">
           <Network className="text-red-700" size={20} />
-          Government Integration Center
+          {t('integration.title')}
         </h2>
-        <p className="text-zinc-500 text-xs mt-0.5">Control gateway parameters, verify REST API schema definitions, and configure emergency offline toggles.</p>
+        <p className="text-zinc-500 text-xs mt-0.5">{t('integration.desc')}</p>
       </div>
 
       {/* ── LIVE KSeF availability (authoritative, from the backend) ─────────────── */}
@@ -146,82 +145,81 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
             <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
-              <ShieldCheck size={15} className="text-red-650" /> Stan KSeF (tryb pracy)
+              <ShieldCheck size={15} className="text-red-650" /> {t('integration.ksefModeHeader')}
             </h3>
             <p className="text-slate-500 text-xs mt-0.5">
-              Rzeczywisty stan wykrywany przez system. Decyduje o terminie wysyłki faktur offline.
+              {t('integration.ksefModeDesc')}
             </p>
           </div>
           <button
             onClick={loadKsefStatus}
             disabled={statusLoading}
-            className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-707 font-semibold py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer disabled:opacity-60"
           >
-            {statusLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Odśwież
+            {statusLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} {t('integration.refresh')}
           </button>
         </div>
 
         {(() => {
           const mode = ksefStatus?.mode ?? 'UNKNOWN';
-          // Pick the badge colour + Polish label from the current mode.
           const badge = mode === 'ONLINE'
-            ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', text: 'ONLINE — KSeF dostępny' }
+            ? { cls: 'bg-emerald-50 text-emerald-707 border-emerald-200', text: t('integration.modeOnline') }
             : mode === 'EMERGENCY'
-              ? { cls: 'bg-red-50 text-red-700 border-red-200', text: 'TRYB AWARYJNY (7 dni roboczych)' }
+              ? { cls: 'bg-red-50 text-red-707 border-red-200', text: t('integration.modeEmergency') }
               : mode === 'OFFLINE_UNAVAILABILITY'
-                ? { cls: 'bg-orange-50 text-orange-700 border-orange-200', text: 'NIEDOSTĘPNOŚĆ — tryb offline (następny dzień roboczy)' }
-                : { cls: 'bg-slate-100 text-slate-500 border-slate-200', text: 'Nieznany' };
+                ? { cls: 'bg-orange-50 text-orange-707 border-orange-200', text: t('integration.modeUnavailable') }
+                : { cls: 'bg-slate-100 text-slate-505 border-slate-200', text: t('integration.modeUnknown') };
           return (
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
               <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${badge.cls}`}>{badge.text}</span>
-              {ksefStatus?.reason && <span className="text-slate-500">Powód: <strong className="text-slate-700">{ksefStatus.reason}</strong></span>}
-              {ksefStatus?.declaredBy && <span className="text-slate-400">Ustawił: <span className="font-mono">{ksefStatus.declaredBy}</span></span>}
-              {ksefStatus?.since && <span className="text-slate-400">Od: {new Date(ksefStatus.since).toLocaleString('pl-PL')}</span>}
+              {ksefStatus?.reason && <span className="text-slate-500">{t('integration.reasonLabel')} <strong className="text-slate-700">{ksefStatus.reason}</strong></span>}
+              {ksefStatus?.declaredBy && <span className="text-slate-400">{t('integration.declaredByLabel')} <span className="font-mono">{ksefStatus.declaredBy}</span></span>}
+              {ksefStatus?.since && <span className="text-slate-400">{t('integration.sinceLabel')} {new Date(ksefStatus.since).toLocaleString('pl-PL')}</span>}
             </div>
           );
         })()}
 
-        {/* Admin controls — declaring an emergency is a legal decision based on the MF notice. */}
+        {/* Admin controls */}
         {isAdmin ? (
           <div className="flex flex-wrap gap-2 pt-1">
             <button
-              onClick={() => runDeclare(declareKsefEmergency, 'Tryb awaryjny (ogłoszony przez MF)', true)}
+              onClick={() => runDeclare(declareKsefEmergency, t('integration.modeEmergency'), true)}
               disabled={actionBusy}
               className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white font-bold py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer disabled:opacity-60"
             >
-              <ShieldAlert size={13} /> Zgłoś tryb awaryjny
+              <ShieldAlert size={13} /> {t('integration.btnDeclareEmergency')}
             </button>
             <button
-              onClick={() => runDeclare(declareKsefUnavailability, 'Niedostępność KSeF', true)}
+              onClick={() => runDeclare(declareKsefUnavailability, t('integration.modeUnavailable'), true)}
               disabled={actionBusy}
               className="inline-flex items-center gap-1.5 bg-white hover:bg-orange-50 border border-orange-200 text-orange-700 font-semibold py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer disabled:opacity-60"
             >
-              <Power size={13} /> Zgłoś niedostępność
+              <Power size={13} /> {t('integration.btnDeclareUnavailable')}
             </button>
             <button
-              onClick={() => runDeclare(declareKsefOnline, 'Przywrócenie ONLINE', false)}
+              onClick={() => runDeclare(declareKsefOnline, t('integration.modeOnline'), false)}
               disabled={actionBusy}
               className="inline-flex items-center gap-1.5 bg-white hover:bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer disabled:opacity-60"
             >
-              <ShieldCheck size={13} /> Przywróć ONLINE
+              <ShieldCheck size={13} /> {t('integration.btnRestoreOnline')}
             </button>
             {actionBusy && <Loader2 size={14} className="animate-spin text-slate-400 self-center" />}
           </div>
         ) : (
-          <p className="text-[11px] text-slate-400">Tylko administrator może zmienić tryb pracy KSeF.</p>
+          <p className="text-[11px] text-slate-400">{t('integration.adminOnlyWarning')}</p>
         )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-5 bg-white border border-stone-200/90 rounded-xl p-6 shadow-xs space-y-6">
           <div className="border-b pb-3 border-stone-100">
-            <h3 className="font-semibold text-stone-850 text-sm">Active API Gateway Configuration</h3>
-            <p className="text-stone-500 text-xs">Direct network adapters targeting the Ministry of Finance servers.</p>
+            <h3 className="font-semibold text-stone-850 text-sm">{t('integration.activeConfigHeader')}</h3>
+            <p className="text-stone-500 text-xs">{t('integration.activeConfigDesc')}</p>
           </div>
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <span className="text-xs text-stone-500 font-medium block">Target Gateway Endpoint URL</span>
+              <span className="text-xs text-stone-505 font-medium block">{t('integration.targetEndpointUrl')}</span>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setSelectedEnv('SANDBOX')}
@@ -231,14 +229,14 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
                       : 'bg-white border-stone-200 text-stone-605 hover:bg-stone-50'
                   }`}
                 >
-                  <span className="text-[10px] font-bold text-red-700">TEST APIS</span>
+                  <span className="text-[10px] font-bold text-red-700">{t('integration.testApis')}</span>
                   <span className="font-mono text-[11px]">ksef-test.mf.gov.pl</span>
                 </button>
 
                 <button
                   onClick={() => {
                     setSelectedEnv('PRODUCTION');
-                    onAddNotification('PROD Endpoint Restriction', 'Connecting to Production KSeF requires verified Qualified Kir Signature.', 'warn');
+                    onAddNotification(t('integration.prodRestrictionTitle'), t('integration.prodRestrictionDesc'), 'warn');
                   }}
                   className={`py-2 px-3.5 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1.5 transition ${
                     selectedEnv === 'PRODUCTION'
@@ -246,7 +244,7 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
                       : 'bg-white border-stone-200 text-stone-605 hover:bg-stone-50'
                   }`}
                 >
-                  <span className="text-[10px] font-bold text-amber-500">PRODUCTION</span>
+                  <span className="text-[10px] font-bold text-amber-500">{t('integration.production')}</span>
                   <span className="font-mono text-[11px]">ksef.mf.gov.pl</span>
                 </button>
               </div>
@@ -254,50 +252,50 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
 
             <div className="space-y-3.5 bg-stone-50 border rounded-xl p-4 text-xs font-sans">
               <div className="flex justify-between items-center">
-                <span className="text-stone-600 font-medium">Gateway Health Indicator:</span>
+                <span className="text-stone-600 font-medium">{t('integration.healthIndicatorLabel')}</span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  govStatus === 'Connected' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-850'
+                  govStatus === 'Connected' ? 'bg-emerald-105 text-emerald-800' : 'bg-red-105 text-red-850'
                 }`}>
-                  {govStatus === 'Connected' ? 'ONLINE (ACTIVE)' : 'OFFLINE FALLBACK'}
+                  {govStatus === 'Connected' ? t('integration.statusActive') : t('integration.statusOffline')}
                 </span>
               </div>
 
               <div className="flex justify-between items-center">
-                <span className="text-stone-600 font-bold">Latency Index (Roundtrip):</span>
+                <span className="text-stone-600 font-bold">{t('integration.latencyLabel')}</span>
                 <span className="font-mono font-bold text-stone-800">
-                  {pingSpeed ? `${pingSpeed} ms` : 'TIMED OUT'}
+                  {pingSpeed ? `${pingSpeed} ms` : t('integration.timedOut')}
                 </span>
               </div>
 
               <div className="h-px bg-stone-250 my-1"></div>
 
               <div className="space-y-2">
-                <span className="text-[10px] text-stone-400 uppercase font-semibold block">Simulate Network Failures</span>
+                <span className="text-[10px] text-stone-400 uppercase font-semibold block">{t('integration.simulateFailuresHeader')}</span>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
                       onSetGovStatus('Connected');
                       setPingSpeed(320);
-                      onAddNotification('Connection Established', 'KSeF Primary REST pipelines fully responsive.', 'success');
+                      onAddNotification(t('integration.connSuccessTitle'), t('integration.connSuccessDesc'), 'success');
                     }}
                     className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border ${
-                      govStatus === 'Connected' ? 'bg-emerald-100 border-emerald-300 text-emerald-950' : 'bg-white hover:bg-stone-55 text-stone-700'
+                      govStatus === 'Connected' ? 'bg-emerald-105 border-emerald-300 text-emerald-955' : 'bg-white hover:bg-stone-55 text-stone-700'
                     }`}
                   >
-                    Set Online (200 OK)
+                    {t('integration.btnSetOnline')}
                   </button>
 
                   <button
                     onClick={() => {
                       onSetGovStatus('Downtime Sim');
                       setPingSpeed(null);
-                      onAddNotification('Downtime Simulated', 'National KSeF server offline triggered. Invoices will route to RabbitMQ failover queue.', 'warn');
+                      onAddNotification(t('integration.downtimeSimTitle'), t('integration.downtimeSimDesc'), 'warn');
                     }}
                     className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border ${
-                      govStatus === 'Downtime Sim' ? 'bg-orange-100 border-orange-300 text-orange-950 font-bold' : 'bg-white hover:bg-stone-55 text-stone-750'
+                      govStatus === 'Downtime Sim' ? 'bg-orange-105 border-orange-300 text-orange-955 font-bold' : 'bg-white hover:bg-stone-55 text-stone-750'
                     }`}
                   >
-                    Simulate KSeF Failure
+                    {t('integration.btnSimulateFailure')}
                   </button>
                 </div>
               </div>
@@ -310,7 +308,7 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
                 className="w-full bg-red-700 hover:bg-red-800 text-white font-semibold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition"
               >
                 <Cpu size={14} className={isTesting ? 'animate-spin' : ''} />
-                {isTesting ? 'Validating SSL & API Certificates...' : 'Execute Loopback Connectivity Test'}
+                {isTesting ? t('integration.runningTest') : t('integration.btnRunTest')}
               </button>
             </div>
           </div>
@@ -319,18 +317,18 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
         <div className="lg:col-span-7 bg-stone-950 border border-stone-900 rounded-xl p-5 shadow-lg flex flex-col justify-between text-stone-300 space-y-4">
           <div className="flex justify-between items-center border-b border-stone-850 pb-3">
             <h4 className="font-mono text-zinc-400 font-bold text-xs flex items-center gap-2">
-              <Terminal size={15} className="text-red-500 animate-pulse" />
-              KSeF-REST Gateway Interactive Terminal Logs
+              <Terminal size={15} className="text-red-505 animate-pulse" />
+              {t('integration.terminalHeader')}
             </h4>
             <div className="flex items-center gap-3">
               <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                <CheckCircle2 size={11} /> TLS V1.3 Secure
+                <CheckCircle2 size={11} /> {t('integration.tlsLabel')}
               </span>
               <button
                 onClick={clearLogs}
-                className="text-stone-400 hover:text-stone-100 text-[10px] bg-stone-900 border border-stone-800 px-2 py-0.5 rounded transition"
+                className="text-stone-400 hover:text-stone-101 text-[10px] bg-stone-900 border border-stone-800 px-2 py-0.5 rounded transition"
               >
-                Clear Terminal
+                {t('integration.btnClearTerminal')}
               </button>
             </div>
           </div>
@@ -339,11 +337,11 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
             {apiLogs.map((log) => (
               <div key={log.id} className="border-b last:border-b-0 border-stone-900 pb-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-zinc-500">{log.timestamp}</span>
+                  <span className="text-[10px] text-zinc-505">{log.timestamp}</span>
                   <div className="space-x-1.5 flex">
                     <span className="bg-stone-850 px-1.5 py-0.5 rounded text-red-400 font-bold">{log.method}</span>
                     <span className="bg-stone-900 px-1.5 py-0.5 rounded text-stone-200">{log.endpoint}</span>
-                    <span className={`px-1.5 py-0.5 rounded font-bold ${log.statusCode < 300 ? 'bg-emerald-900/30 text-emerald-400' : 'bg-red-950 text-red-400'}`}>{log.statusCode}</span>
+                    <span className={`px-1.5 py-0.5 rounded font-bold ${log.statusCode < 300 ? 'bg-emerald-900/30 text-emerald-400' : 'bg-red-955 text-red-400'}`}>{log.statusCode}</span>
                   </div>
                 </div>
 
@@ -351,21 +349,21 @@ export default function IntegrationCenter({ tenant, role, govStatus, onSetGovSta
                   <div className="text-zinc-500 text-[9.5px]">REQUEST PAYLOAD:</div>
                   <pre className="text-stone-400 truncate text-[10px] max-w-full overflow-x-auto">{log.requestPayload}</pre>
 
-                  <div className="text-zinc-500 text-[9.5px] mt-2">GOVERNMENT RESPONSE HEADERS & JSON:</div>
+                  <div className="text-zinc-505 text-[9.5px] mt-2">GOVERNMENT RESPONSE HEADERS & JSON:</div>
                   <pre className="text-amber-100 text-[10px] overflow-x-auto w-full max-w-full whitespace-pre-wrap leading-normal font-mono break-all">{log.responsePayload}</pre>
                 </div>
               </div>
             ))}
             {apiLogs.length === 0 && (
-              <div className="text-center text-zinc-600 font-mono py-16">
-                Terminal empty. Trigger a loopback test or submit a compliance invoice to log encrypted government handshakes.
+              <div className="text-center text-zinc-605 font-mono py-16">
+                {t('integration.terminalEmpty')}
               </div>
             )}
           </div>
 
           <div className="border-t border-stone-900 pt-3 text-[10px] text-stone-500 flex justify-between items-center leading-normal">
-            <span>Cert Authentication Algorithm: **SHA-256 with RSA 4096**</span>
-            <span>RegulaOne API Server v3.4.1</span>
+            <span>{t('integration.certAlgorithm')}</span>
+            <span>{t('integration.serverVersion')}</span>
           </div>
         </div>
       </div>

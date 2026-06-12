@@ -11,8 +11,11 @@ import {
   ArrowUpRight,
   ExternalLink
 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function Dashboard({ tenant, invoices, certificates, onNavigate, govStatus, role }) {
+  const { t, language } = useLanguage();
+  
   const tenantInvoices = invoices.filter(inv => inv.tenantId === tenant.id);
   const totalInvoices = tenantInvoices.length;
   const sentInvoices = tenantInvoices.filter(inv => inv.status === 'SENT').length;
@@ -46,23 +49,23 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
           <span className="text-xs font-bold uppercase tracking-widest text-slate-400 block mb-1">
-            Poland e-Invoicing Compliance Hub (KSeF FA(3) Protocol)
+            {t('dashboard.title')}
           </span>
           <h1 className="text-3xl font-light text-slate-800 tracking-tight">
             {tenant.name}
           </h1>
           <p className="text-slate-500 text-xs mt-1.5 font-sans flex items-center gap-2">
-            Workspace Tax NIP ID: <strong className="font-mono text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[11px] font-bold">{tenant.nip}</strong>
+            {t('sidebar.nip')}: <strong className="font-mono text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[11px] font-bold">{tenant.nip}</strong>
           </p>
         </div>
         <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs text-xs shrink-0">
           <div className="px-1 text-center">
-            <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Verification Role</div>
+            <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">{t('dashboard.role')}</div>
             <div className="text-xs font-bold font-mono text-slate-700 mt-0.5">{role}</div>
           </div>
           <div className="h-8 w-px bg-slate-200"></div>
           <div className="px-1 text-center">
-            <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Subscribed Tier</div>
+            <div className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">{t('dashboard.tier')}</div>
             <div className="text-xs font-bold text-slate-700 mt-0.5">{tenant.subscriptionPlan}</div>
           </div>
         </div>
@@ -71,13 +74,13 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-201 rounded-xl p-5 hover:border-slate-300 transition-all shadow-xs flex items-start justify-between">
           <div className="space-y-2">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">Total Financial Volume</span>
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">{t('dashboard.volume')}</span>
             <div className="text-2xl font-semibold font-sans text-slate-800 tracking-tight">
               {totalGrossPLN.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN', maximumFractionDigits: 0 })}
             </div>
             <p className="text-xs text-slate-500 flex items-center gap-1">
               <span className="text-emerald-600 font-semibold flex items-center">
-                Net: {totalNetPLN.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN', maximumFractionDigits: 0 })}
+                {t('dashboard.net')}: {totalNetPLN.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN', maximumFractionDigits: 0 })}
               </span>
             </p>
           </div>
@@ -88,13 +91,13 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
 
         <div className="bg-white border border-slate-201 rounded-xl p-5 hover:border-slate-300 transition-all shadow-xs flex items-start justify-between">
           <div className="space-y-2">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">KSeF Sent / Drafts</span>
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">{t('dashboard.sentDrafts')}</span>
             <div className="text-2xl font-semibold font-sans text-slate-800 tracking-tight">
               {sentInvoices} <span className="text-slate-300 font-light text-xl">/</span> {draftInvoices}
             </div>
             <p className="text-xs text-slate-500 flex items-center gap-1.5">
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              {sentInvoices} declared in Krajowy System
+              {sentInvoices} {t('dashboard.declared')}
             </p>
           </div>
           <div className="p-2.5 bg-red-50 text-red-600 rounded-lg">
@@ -104,13 +107,13 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
 
         <div className="bg-white border border-slate-201 rounded-xl p-5 hover:border-slate-300 transition-all shadow-xs flex items-start justify-between">
           <div className="space-y-2">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">Government Success Rate</span>
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">{t('dashboard.successRate')}</span>
             <div className="text-2xl font-semibold font-sans text-slate-800 tracking-tight">
               {successRate}%
             </div>
             <p className="text-xs text-slate-550 flex items-center gap-1">
               <Activity size={12} className="text-emerald-500" />
-              Realtime submission KPI
+              {t('dashboard.kpi')}
             </p>
           </div>
           <div className="p-2.5 bg-red-50 text-red-600 rounded-lg">
@@ -120,18 +123,18 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
 
         <div className="bg-white border border-slate-201 rounded-xl p-5 hover:border-slate-300 transition-all shadow-xs flex items-start justify-between">
           <div className="space-y-2">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">Offline Fallback Queue</span>
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest block">{t('dashboard.fallbackQueue')}</span>
             <div className="text-2xl font-semibold font-sans text-emerald-650 tracking-tight">
-              {offlineInvoices} <span className="text-xs text-slate-400 font-normal">Pending</span>
+              {offlineInvoices} <span className="text-xs text-slate-400 font-normal">{t('dashboard.pending')}</span>
             </div>
             <p className="text-xs text-orange-650 font-medium flex items-center gap-1">
               {offlineInvoices > 0 ? (
                 <>
                   <AlertTriangle size={12} />
-                  Automatic RabbitMQ retry active
+                  {t('dashboard.rabbitmqActive')}
                 </>
               ) : (
-                "No backlogged local cache"
+                t('dashboard.noBacklog')
               )}
             </p>
           </div>
@@ -146,44 +149,44 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-lg text-slate-800 tracking-tight">Government Integration Center</h3>
-                <p className="text-slate-400 text-xs">Direct encrypted tunnel with Ministry of Finance (Krajowy System e-Faktur)</p>
+                <h3 className="font-semibold text-lg text-slate-800 tracking-tight">{t('dashboard.apiCenterTitle')}</h3>
+                <p className="text-slate-400 text-xs">{t('dashboard.apiCenterDesc')}</p>
               </div>
               <button
                 onClick={() => onNavigate('integration')}
-                className="text-red-600 font-semibold text-xs hover:text-red-700 flex items-center gap-1 bg-red-50/55 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 transition"
+                className="text-red-600 font-semibold text-xs hover:text-red-700 flex items-center gap-1 bg-red-50/55 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 transition cursor-pointer"
               >
-                Access Center <ArrowUpRight size={14} />
+                {t('dashboard.accessCenter')} <ArrowUpRight size={14} />
               </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 border border-slate-150 p-4 rounded-xl">
               <div>
-                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Government System</span>
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t('dashboard.govSystem')}</span>
                 <p className="font-semibold text-slate-700 text-xs flex items-center gap-1.5 mt-1">
                   <span className={`inline-block w-2.5 h-2.5 rounded-full ${govStatus === 'Connected' ? 'bg-emerald-550 animation-pulse' : 'bg-amber-500'}`}></span>
                   Poland KSeF Sandbox
                 </p>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">API Connection Status</span>
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t('dashboard.apiConnection')}</span>
                 <p className="font-mono text-slate-700 text-xs font-semibold mt-1">
                   {govStatus === 'Connected' ? 'HTTP 200 OK' : 'LOCAL FALLBACK'}
                 </p>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Active Sec Key Authority</span>
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t('dashboard.keyAuthority')}</span>
                 <p className="font-medium text-slate-700 text-xs mt-1 flex items-center gap-1.5">
                   <Database size={13} className="text-slate-400" />
-                  {activeCerts.length > 0 ? activeCerts[0].fileName : "No Active Key"}
+                  {activeCerts.length > 0 ? activeCerts[0].fileName : t('dashboard.noKey')}
                 </p>
               </div>
             </div>
 
             <div className="space-y-1">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">Submission Volume & SLA Latency</span>
-                <span className="text-slate-400 font-mono text-[11px]">Daily Average (PLN Thousands)</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">{t('dashboard.volumeChart')}</span>
+                <span className="text-slate-400 font-mono text-[11px]">{t('dashboard.chartDesc')}</span>
               </div>
               <div className="w-full bg-slate-50 border border-slate-150 rounded-xl p-4">
                 <svg viewBox="0 0 500 120" className="w-full h-28">
@@ -204,23 +207,23 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
                   <rect x="390" y="85" width="30" height="15" rx="4" fill="#cbd5e1" />
                   <text x="405" y="115" fontSize="8" fontFamily="sans-serif" textAnchor="middle" fill="#94a3b8">19/05</text>
                   <rect x="460" y="65" width="30" height="35" rx="4" fill="#DC2626" opacity="0.9" />
-                  <text x="475" y="115" fontSize="8" fontFamily="sans-serif" textAnchor="middle" fill="#94a3b8">Today</text>
+                  <text x="475" y="115" fontSize="8" fontFamily="sans-serif" textAnchor="middle" fill="#94a3b8">{language === 'pl' ? 'Dzisiaj' : 'Today'}</text>
                 </svg>
                 <div className="flex justify-between items-center text-[11px] text-slate-500 mt-2 border-t pt-2 border-slate-200">
                   <div className="flex items-center gap-2">
-                    <span className="inline-block w-2.5 h-2.5 bg-red-600 rounded-sm"></span> Successful KSeF Upload
-                    <span className="inline-block w-2.5 h-2.5 bg-slate-200 rounded-sm"></span> Offline Queue Fallback
+                    <span className="inline-block w-2.5 h-2.5 bg-red-600 rounded-sm"></span> {t('dashboard.chartUpload')}
+                    <span className="inline-block w-2.5 h-2.5 bg-slate-200 rounded-sm"></span> {t('dashboard.chartFallback')}
                   </div>
-                  <div>Average Government API Ack Latency: <span className="font-mono font-semibold text-slate-600">345ms</span></div>
+                  <div>{t('dashboard.ackLatency')} <span className="font-mono font-semibold text-slate-600">345ms</span></div>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-            <span>UPO encryption key: <strong>ECC-Secp256k1</strong> (Government Compliance Certified)</span>
-            <span className="flex items-center gap-1 text-red-600 font-semibold cursor-pointer hover:underline">
-              System Health Check OK <RefreshCw size={11} className="animate-spin-slow" />
+            <span>{t('dashboard.upoEncryption')}</span>
+            <span className="flex items-center gap-1 text-red-650 font-semibold cursor-pointer hover:underline">
+              {t('dashboard.healthCheck')} <RefreshCw size={11} className="animate-spin-slow" />
             </span>
           </div>
         </div>
@@ -229,7 +232,7 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
             <h4 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2 border-b pb-2.5 border-slate-100">
               <ShieldCheck size={16} className="text-red-600" />
-              Qualified Signatures
+              {t('dashboard.qualifiedSigs')}
             </h4>
             <div className="space-y-4">
               {activeCerts.map((cert) => {
@@ -242,19 +245,19 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold font-mono ${
                         isNearExpiry ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-800'
                       }`}>
-                        {isNearExpiry ? 'Expiring Soon' : 'ACTIVE'}
+                        {isNearExpiry ? t('dashboard.expiringSoon') : 'ACTIVE'}
                       </span>
                     </div>
                     <div className="flex justify-between text-[11px] text-slate-400">
-                      <span>Valid to: <strong>{cert.validTo}</strong></span>
-                      <span>Type: <strong>{cert.type}</strong></span>
+                      <span>{t('dashboard.validTo')}: <strong>{cert.validTo}</strong></span>
+                      <span>{t('dashboard.type')}: <strong>{cert.type}</strong></span>
                     </div>
                   </div>
                 );
               })}
               {activeCerts.length === 0 && (
                 <div className="text-xs text-slate-400 py-2 text-center bg-slate-50 rounded-lg">
-                  No active certificates loaded for this company. Upload verification credentials to enable digital sealing.
+                  {t('dashboard.noCerts')}
                 </div>
               )}
             </div>
@@ -263,8 +266,8 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
           <div className="bg-slate-900 text-slate-100 rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="font-semibold text-red-400 text-[10px] uppercase tracking-widest">RegulaOne Suite Sync</h4>
-                <h5 className="font-semibold text-white text-sm">Centralized Microservices</h5>
+                <h4 className="font-semibold text-red-400 text-[10px] uppercase tracking-widest">{t('dashboard.suiteSync')}</h4>
+                <h5 className="font-semibold text-white text-sm">{t('dashboard.microservices')}</h5>
               </div>
               <Activity size={16} className="text-slate-400 animate-pulse" />
             </div>
@@ -272,31 +275,31 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
             <div className="space-y-2 text-xs text-slate-300">
               <div className="flex items-center justify-between bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/50">
                 <div className="flex flex-col">
-                  <span className="font-medium text-white">WorkPulse ERP</span>
-                  <span className="text-[10px] text-slate-400 leading-normal">Payroll and expense stream mapping</span>
+                  <span className="font-medium text-white">{t('dashboard.workpulseTitle')}</span>
+                  <span className="text-[10px] text-slate-400 leading-normal">{t('dashboard.workpulseDesc')}</span>
                 </div>
                 <span className="text-[9px] bg-red-950 text-red-300 border border-red-900/50 font-semibold px-2 py-0.5 rounded">REST LINK</span>
               </div>
 
               <div className="flex items-center justify-between bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/50">
                 <div className="flex flex-col">
-                  <span className="font-medium text-white">SafeWork Audit</span>
-                  <span className="text-[10px] text-slate-400 leading-normal">Contractor NIP whitelist sync</span>
+                  <span className="font-medium text-white">{t('dashboard.safeworkTitle')}</span>
+                  <span className="text-[10px] text-slate-400 leading-normal">{t('dashboard.safeworkDesc')}</span>
                 </div>
                 <span className="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-900/50 font-semibold px-2 py-0.5 rounded">R-MQ QUEUE</span>
               </div>
 
               <div className="flex items-center justify-between bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/50">
                 <div className="flex flex-col">
-                  <span className="font-medium text-white">PrivacyPilot GDPR</span>
-                  <span className="text-[10px] text-slate-400 leading-normal">10-Yr invoice crypto retention</span>
+                  <span className="font-medium text-white">{t('dashboard.privacypilotTitle')}</span>
+                  <span className="text-[10px] text-slate-400 leading-normal">{t('dashboard.privacypilotDesc')}</span>
                 </div>
                 <span className="text-[9px] bg-sky-950 text-sky-400 border border-sky-900/50 font-semibold px-2 py-0.5 rounded">CRYPTO LOCK</span>
               </div>
             </div>
 
             <div className="text-[10px] text-slate-400 text-center flex items-center justify-center gap-1">
-              <span>GDPR / RODO Legally Bound Compliance</span>
+              <span>{t('dashboard.gdprBound')}</span>
               <ExternalLink size={10} />
             </div>
           </div>
@@ -304,7 +307,7 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-        <h4 className="font-semibold text-slate-800 text-sm mb-4">Enterprise Daily Compliance Checklist</h4>
+        <h4 className="font-semibold text-slate-800 text-sm mb-4">{t('dashboard.checklistTitle')}</h4>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div
             onClick={() => onNavigate('create')}
@@ -312,8 +315,8 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
           >
             <div className="bg-red-50 text-red-650 p-2 rounded-lg font-bold text-xs">01</div>
             <div>
-              <p className="font-semibold text-sm text-slate-700">Issue New Invoice</p>
-              <p className="text-slate-400 text-xs">Dynamic form with XML validation</p>
+              <p className="font-semibold text-sm text-slate-700">{t('dashboard.issueInvoice')}</p>
+              <p className="text-slate-400 text-xs">{t('dashboard.issueInvoiceDesc')}</p>
             </div>
           </div>
 
@@ -323,8 +326,8 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
           >
             <div className="bg-red-50 text-red-650 p-2 rounded-lg font-bold text-xs">02</div>
             <div>
-              <p className="font-semibold text-sm text-slate-700">Track Validations</p>
-              <p className="text-slate-400 text-xs">Download receipts & UPO PDFs</p>
+              <p className="font-semibold text-sm text-slate-700">{t('dashboard.trackValidations')}</p>
+              <p className="text-slate-400 text-xs">{t('dashboard.trackValidationsDesc')}</p>
             </div>
           </div>
 
@@ -334,8 +337,8 @@ export default function Dashboard({ tenant, invoices, certificates, onNavigate, 
           >
             <div className="bg-red-50 text-red-650 p-2 rounded-lg font-bold text-xs">03</div>
             <div>
-              <p className="font-semibold text-sm text-slate-700">Qualified Signature</p>
-              <p className="text-slate-400 text-xs">Inspect keys & token times</p>
+              <p className="font-semibold text-sm text-slate-700">{t('dashboard.qualifiedSigCard')}</p>
+              <p className="text-slate-400 text-xs">{t('dashboard.qualifiedSigCardDesc')}</p>
             </div>
           </div>
         </div>

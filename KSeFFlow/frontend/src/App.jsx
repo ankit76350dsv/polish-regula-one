@@ -6,6 +6,7 @@ import {
 } from './data/mockData';
 import { listInvoices, getMyTenant } from './api/ksefApi';
 import { SSO_CALLBACK_URL, clearSsoRedirectGuard, tryRefreshSession } from './lib/api';
+import { useLanguage } from './context/LanguageContext';
 
 const API_URL       = import.meta.env.VITE_API_URL          ?? 'http://localhost:8080';
 const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
@@ -45,12 +46,14 @@ import {
   Lock,
   UserCheck,
   Inbox,
-  KeyRound
+  KeyRound,
+  Languages
 } from 'lucide-react';
 
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { language, setLanguage, t } = useLanguage();
 
   const pathParts = location.pathname.split('/').filter(Boolean);
   const urlTenantId   = pathParts[1] ?? null;
@@ -341,7 +344,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="w-10 h-10 mx-auto border-4 border-red-700 border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-400 text-sm font-medium">Verifying session…</p>
+          <p className="text-slate-400 text-sm font-medium">{t('header.verifying')}</p>
         </div>
       </div>
     );
@@ -398,7 +401,7 @@ export default function App() {
 
           <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
             <Building2 size={13} className="text-slate-400" />
-            <span className="text-slate-500">Corporate Tenant:</span>
+            <span className="text-slate-500 font-medium">{t('header.tenant')}:</span>
             <select
               value={activeTenant.id}
               disabled
@@ -411,7 +414,7 @@ export default function App() {
           <div className="hidden sm:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
             <UserSquare size={13} className="text-slate-400" />
             {activeRole !== 'Super Admin' && <Lock size={12} className="text-red-550 shrink-0" />}
-            <span className="text-slate-500 font-medium">Session Role (RBAC):</span>
+            <span className="text-slate-500 font-medium">{t('header.sessionRole')}:</span>
             <select
               value={activeRole}
               disabled={activeRole !== 'Super Admin'}
@@ -423,13 +426,23 @@ export default function App() {
               }}
               className={`bg-transparent border-0 font-bold text-red-650 focus:ring-0 focus:outline-none leading-tight pr-1 ${activeRole !== 'Super Admin' ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
             >
-              <option value="Company Admin">Company Admin (All permissions)</option>
-              <option value="Accountant">Accountant (Issue invoices, certs)</option>
-              <option value="Finance User">Finance User (Issue invoices, files)</option>
-              <option value="Auditor">Auditor (View Only compliance)</option>
-              <option value="Super Admin">Super Admin (Universal Root)</option>
+              <option value="Company Admin">{language === 'pl' ? 'Administrator firmy (Wszystkie uprawnienia)' : 'Company Admin (All permissions)'}</option>
+              <option value="Accountant">{language === 'pl' ? 'Księgowy (Wystawianie faktur, certyfikaty)' : 'Accountant (Issue invoices, certs)'}</option>
+              <option value="Finance User">{language === 'pl' ? 'Użytkownik finansowy (Wystawianie faktur, pliki)' : 'Finance User (Issue invoices, files)'}</option>
+              <option value="Auditor">{language === 'pl' ? 'Audytor (Tylko podgląd zgodności)' : 'Auditor (View Only compliance)'}</option>
+              <option value="Super Admin">{language === 'pl' ? 'Super Administrator (Uniwersalny Root)' : 'Super Admin (Universal Root)'}</option>
             </select>
           </div>
+
+          {/* Language Switcher */}
+          <button
+            onClick={() => setLanguage(language === 'en' ? 'pl' : 'en')}
+            className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition text-slate-500 border border-slate-200 flex items-center justify-center gap-1.5 cursor-pointer font-bold text-xs shadow-xs"
+            title={language === 'en' ? 'Przełącz na język polski' : 'Switch to English'}
+          >
+            <Languages size={14} className="text-slate-400" />
+            <span className="text-[10px] text-slate-650 tracking-wide font-mono font-bold">{language.toUpperCase()}</span>
+          </button>
 
           <div className="relative">
             <button
@@ -446,21 +459,21 @@ export default function App() {
             {showNotifications && (
               <div className="absolute right-0 mt-2.5 w-85 bg-white border border-slate-200 rounded-xl shadow-lg z-50 p-4 space-y-3 font-sans text-xs">
                 <div className="flex justify-between items-center border-b pb-2 border-slate-100">
-                  <strong className="text-slate-800 font-bold text-xs uppercase tracking-wide">Compliance Signals</strong>
-                  <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer">Close</button>
+                  <strong className="text-slate-800 font-bold text-xs uppercase tracking-wide">{t('header.signals')}</strong>
+                  <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer">{t('common.close')}</button>
                 </div>
                 <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
                   {notifications.filter(n => n.tenantId === activeTenant.id).map((notif) => (
                     <div key={notif.id} className="p-2.5 bg-slate-50 rounded-lg border border-slate-150 leading-relaxed">
                       <div className="flex justify-between font-semibold text-[11px]">
-                        <span className={notif.type === 'error' ? 'text-red-600' : 'text-slate-705'}>{notif.title}</span>
+                        <span className={notif.type === 'error' ? 'text-red-650' : 'text-slate-705'}>{notif.title}</span>
                         <span className="text-[9px] text-slate-400">{new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       <p className="text-[10px] text-slate-500 mt-1 leading-snug">{notif.message}</p>
                     </div>
                   ))}
                   {notifications.filter(n => n.tenantId === activeTenant.id).length === 0 && (
-                    <p className="text-center text-slate-400 py-6">All compliant channels clear.</p>
+                    <p className="text-center text-slate-400 py-6">{t('header.clearSignals')}</p>
                   )}
                 </div>
               </div>
@@ -478,7 +491,7 @@ export default function App() {
               </div>
               <button
                 onClick={handleLogout}
-                title="Secure Sign Out"
+                title={t('header.signOut')}
                 className="p-2 hover:bg-red-50 hover:text-red-700 text-slate-500 rounded-xl transition border border-slate-200 bg-slate-50 flex items-center justify-center cursor-pointer"
               >
                 <LogOut size={15} />
@@ -494,38 +507,38 @@ export default function App() {
           <div className="space-y-6">
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs md:block hidden shadow-xs">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Active Tenant Vault</span>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">{t('sidebar.tenantVault')}</span>
               <p className="font-semibold text-slate-700 truncate text-[11.5px] mt-1">{activeTenant.name}</p>
               <div className="flex justify-between text-[10px] text-slate-400 mt-1.5 pt-1 border-t border-slate-100">
-                <span>NIP: <strong className="text-slate-600">{activeTenant.nip}</strong></span>
+                <span>{t('sidebar.nip')}: <strong className="text-slate-600">{activeTenant.nip}</strong></span>
                 <span className="text-emerald-600 font-bold">{activeTenant.subscriptionPlan}</span>
               </div>
             </div>
 
             <nav className="space-y-1">
-              {navItem('dashboard', 'Dashboard Summary', LayoutDashboard)}
-              {navItem('create', 'Create FA(3) Invoice', FileEdit)}
-              {navItem('invoices', 'Document Repository', FolderSearch)}
-              {navItem('received', 'Faktury otrzymane', Inbox)}
-              {navItem('permissions', 'Uprawnienia KSeF', KeyRound)}
-              {navItem('offline', 'Offline Queue & Retries', AlertTriangle,
+              {navItem('dashboard', t('sidebar.dashboard'), LayoutDashboard)}
+              {navItem('create', t('sidebar.createInvoice'), FileEdit)}
+              {navItem('invoices', t('sidebar.repository'), FolderSearch)}
+              {navItem('received', t('sidebar.receivedInvoices'), Inbox)}
+              {navItem('permissions', t('sidebar.permissions'), KeyRound)}
+              {navItem('offline', t('sidebar.offlineQueue'), AlertTriangle,
                 invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length > 0 ? (
                   <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
                     {invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length}
                   </span>
                 ) : undefined
               )}
-              {navItem('integration', 'Government API Center', Cpu)}
-              {navItem('certificates', 'HSM Certificates Key', ShieldCheck)}
-              {navItem('audit', 'Compliance Audit Center', BookOpen)}
-              {navItem('architecture', 'Developer Blueprints', FileClock)}
+              {navItem('integration', t('sidebar.apiCenter'), Cpu)}
+              {navItem('certificates', t('sidebar.certificates'), ShieldCheck)}
+              {navItem('audit', t('sidebar.auditCenter'), BookOpen)}
+              {navItem('architecture', t('sidebar.blueprints'), FileClock)}
             </nav>
           </div>
 
           <div className="pt-4 border-t border-slate-100 hidden md:block text-[10.5px] text-slate-400 space-y-1">
-            <p>Platform status: <strong>SECURE RODO_OK</strong></p>
-            <p>Database: <strong>Postgres schemas</strong></p>
-            <p className="truncate">SLA Handshake: <strong>Frankfurt AWS</strong></p>
+            <p>{t('header.platformStatus')}: <strong>SECURE RODO_OK</strong></p>
+            <p>{t('header.database')}: <strong>Postgres schemas</strong></p>
+            <p className="truncate">{t('header.sla')}: <strong>Frankfurt AWS</strong></p>
           </div>
         </aside>
 
@@ -537,9 +550,9 @@ export default function App() {
                 <Lock size={20} />
               </div>
               <div className="space-y-1 border-slate-100 border-b pb-4">
-                <h3 className="text-base font-bold text-slate-800 font-sans tracking-tight">RBAC Access Restricted</h3>
+                <h3 className="text-base font-bold text-slate-800 font-sans tracking-tight">{t('header.restrictedTitle')}</h3>
                 <p className="text-xs text-slate-500 leading-normal">
-                  Your active security clearance (<strong className="font-mono text-[11px] text-red-650 font-bold">{activeRole}</strong>) is insufficient for the <strong>{activeTenant.name}</strong> namespace.
+                  {t('header.restrictedDesc', { role: activeRole })} <strong>{activeTenant.name}</strong>
                 </p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3 text-[11px] text-slate-450 font-mono text-left leading-normal border border-slate-150">
@@ -551,7 +564,7 @@ export default function App() {
                 onClick={() => navigateTo('dashboard')}
                 className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-xl text-xs transition cursor-pointer"
               >
-                Return to Active Portal Directory
+                {t('header.restrictedReturn')}
               </button>
             </div>
           ) : (
@@ -594,7 +607,7 @@ export default function App() {
               {currentSection === 'invoices' && currentInvoiceId && (
                 isLoadingInvoices ? (
                   <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
-                    Loading invoice…
+                    {t('dashboard.loadingInvoice')}
                   </div>
                 ) : currentInvoiceObj ? (
                   <InvoiceForm
@@ -608,9 +621,9 @@ export default function App() {
                   />
                 ) : (
                   <div className="bg-white border border-slate-200 rounded-xl p-8 max-w-lg mx-auto mt-12 text-center space-y-4 shadow-xs">
-                    <p className="text-slate-500 text-sm">Invoice <strong className="font-mono">{currentInvoiceId}</strong> not found.</p>
+                    <p className="text-slate-500 text-sm">{t('dashboard.invoiceNotFound', { id: currentInvoiceId })}</p>
                     <button onClick={() => navigateTo('invoices')} className="bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-slate-800 transition">
-                      Back to Repository
+                      {t('dashboard.backToRepo')}
                     </button>
                   </div>
                 )

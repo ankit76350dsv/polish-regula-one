@@ -14,10 +14,12 @@ import {
   RefreshCw,
   Calendar,
 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 const PAGE_SIZE = 20;
 
 export default function AuditCenter({ tenant, role, onAddNotification }) {
+  const { language, t } = useLanguage();
   const { pathname } = useLocation();
   const tenantIdFromUrl = pathname.split('/').filter(Boolean)[1] ?? tenant.id;
 
@@ -60,18 +62,18 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
       setTotalPages(result.totalPages);
       setTotalElements(result.totalElements);
     } catch (err) {
-      setError(err?.message ?? 'Failed to load audit logs');
+      setError(err?.message ?? (language === 'pl' ? 'Nie udało się wczytać logów audytu.' : 'Failed to load audit logs'));
     } finally {
       setLoading(false);
     }
-  }, [tenantIdFromUrl, currentPage, debouncedSearch, roleFilter, fromDate, toDate]);
+  }, [tenantIdFromUrl, currentPage, debouncedSearch, roleFilter, fromDate, toDate, language]);
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
   const triggerLogExport = () => {
     onAddNotification(
-      'Audit Logs Exported',
-      'Immutable compliance CSV exported. Generated legally binding RODO audit hashes for inspection teams.',
+      t('audit.exportSuccessTitle'),
+      t('audit.exportSuccessDesc'),
       'success',
     );
   };
@@ -89,10 +91,10 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
       <div>
         <h2 className="text-xl font-bold text-stone-900 tracking-tight flex items-center gap-2">
           <BookOpen className="text-red-700" size={20} />
-          Enterprise Audit Center
+          {t('audit.title')}
         </h2>
-        <p className="text-zinc-500 text-xs mt-0.5">
-          RODO / GDPR compliant immutable transaction auditing — KSeF payloads, qualified signature handshakes, and corporate keystores.
+        <p className="text-zinc-505 text-xs mt-0.5">
+          {t('audit.desc')}
         </p>
       </div>
 
@@ -105,7 +107,7 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
               </span>
               <input
                 type="text"
-                placeholder="Search action, email, IP, detail..."
+                placeholder={t('audit.searchPlaceholder')}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full pl-9 pr-4 py-1.5 border border-stone-200/95 bg-stone-50/50 rounded-xl text-xs font-medium text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400"
@@ -119,18 +121,18 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
                 onChange={(e) => setRoleFilter(e.target.value)}
                 className="bg-white border rounded-lg px-2.5 py-1.5 font-semibold text-stone-700 text-xs"
               >
-                <option value="ALL">All Roles</option>
-                <option value="Super Admin">Super Admin</option>
-                <option value="Company Admin">Company Admin</option>
-                <option value="Accountant">Accountant</option>
-                <option value="Finance User">Finance User</option>
-                <option value="Auditor">Auditor</option>
+                <option value="ALL">{t('audit.allRoles')}</option>
+                <option value="Super Admin">{t('audit.superAdmin')}</option>
+                <option value="Company Admin">{t('audit.companyAdmin')}</option>
+                <option value="Accountant">{t('audit.accountant')}</option>
+                <option value="Finance User">{t('audit.financeUser')}</option>
+                <option value="Auditor">{t('audit.auditor')}</option>
               </select>
 
               <button
                 onClick={fetchLogs}
                 disabled={loading}
-                title="Refresh"
+                title={language === 'pl' ? 'Odśwież' : 'Refresh'}
                 className="p-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 text-stone-500 transition"
               >
                 <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
@@ -140,7 +142,7 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
                 onClick={triggerLogExport}
                 className="bg-stone-900 text-stone-100 hover:bg-stone-800 px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
               >
-                <Download size={13} /> Export (CSV)
+                <Download size={13} /> {t('audit.exportCsv')}
               </button>
             </div>
           </div>
@@ -148,7 +150,7 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
           <div className="flex flex-wrap items-center gap-3">
             <Calendar size={13} className="text-stone-400 shrink-0" />
             <label className="flex items-center gap-2 text-xs text-stone-600">
-              From
+              {t('audit.filterFrom')}
               <input
                 type="datetime-local"
                 value={fromDate}
@@ -157,7 +159,7 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
               />
             </label>
             <label className="flex items-center gap-2 text-xs text-stone-600">
-              To
+              {t('audit.filterTo')}
               <input
                 type="datetime-local"
                 value={toDate}
@@ -170,17 +172,17 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
                 onClick={() => { setFromDate(''); setToDate(''); }}
                 className="text-xs text-stone-400 hover:text-stone-600 underline"
               >
-                Clear dates
+                {t('audit.clearDates')}
               </button>
             )}
           </div>
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-xs text-red-800">
+          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-xs text-red-805">
             <AlertCircle size={14} className="shrink-0" />
             <span>{error}</span>
-            <button onClick={fetchLogs} className="ml-auto underline font-semibold">Retry</button>
+            <button onClick={fetchLogs} className="ml-auto underline font-semibold">{t('common.retry')}</button>
           </div>
         )}
 
@@ -188,13 +190,13 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
           <table className="w-full text-left text-xs align-middle font-sans">
             <thead>
               <tr className="border-b border-stone-100 text-stone-500 uppercase tracking-wider font-semibold text-[10px]">
-                <th className="py-3 px-2">Timestamp (Warsaw)</th>
-                <th className="py-3 px-2">Account Executed</th>
-                <th className="py-3 px-2">Role</th>
-                <th className="py-3 px-2">Action</th>
-                <th className="py-3 px-2">Network IP</th>
-                <th className="py-3 px-2">Detail / Change</th>
-                <th className="py-3 px-2">Compliance</th>
+                <th className="py-3 px-2">{t('audit.tableTime')}</th>
+                <th className="py-3 px-2">{t('audit.tableAccount')}</th>
+                <th className="py-3 px-2">{t('audit.tableRole')}</th>
+                <th className="py-3 px-2">{t('audit.tableAction')}</th>
+                <th className="py-3 px-2">{t('audit.tableIp')}</th>
+                <th className="py-3 px-2">{t('audit.tableDetail')}</th>
+                <th className="py-3 px-2">{t('audit.colChecked')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100 text-stone-700 font-mono text-[11px]">
@@ -203,7 +205,7 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
                   <td colSpan={7} className="text-center py-10 text-zinc-400 font-sans text-xs">
                     <span className="inline-flex items-center gap-2">
                       <RefreshCw size={13} className="animate-spin" />
-                      Loading audit records…
+                      {t('audit.loadingLogs')}
                     </span>
                   </td>
                 </tr>
@@ -213,11 +215,11 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
                   <td className="py-3 px-2 text-stone-500 whitespace-nowrap">
                     {formatTimestamp(log.timestamp)}
                   </td>
-                  <td className="py-3 px-2 font-sans font-medium text-stone-800">
+                  <td className="py-3 px-2 font-sans font-medium text-stone-850">
                     {log.userEmail || '—'}
                   </td>
                   <td className="py-3 px-2 font-sans">
-                    <span className="px-2 py-0.5 bg-stone-100 rounded text-[10px] text-stone-600 font-bold whitespace-nowrap">
+                    <span className="px-2 py-0.5 bg-stone-100 rounded text-[10px] text-stone-605 font-bold whitespace-nowrap">
                       {log.userRole || '—'}
                     </span>
                   </td>
@@ -227,11 +229,11 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
                   <td className="py-3 px-2 text-zinc-500">
                     {log.ipAddress || '—'}
                   </td>
-                  <td className="py-3 px-2 font-sans text-stone-700 min-w-[200px] leading-normal">
+                  <td className="py-3 px-2 font-sans text-stone-707 min-w-[200px] leading-normal">
                     {log.newValue ?? log.oldValue ?? '—'}
                   </td>
                   <td className="py-3 px-2">
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-707">
                       <ShieldCheck size={11} /> SECURE
                     </span>
                   </td>
@@ -240,7 +242,7 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
               {!loading && !error && logs.length === 0 && (
                 <tr>
                   <td colSpan={7} className="text-center py-10 text-zinc-400 font-sans text-xs">
-                    No matching audit traces found for the current filters.
+                    {t('audit.noLogs')}
                   </td>
                 </tr>
               )}
@@ -251,7 +253,7 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
         {!loading && totalElements > 0 && (
           <div className="pt-3 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500 font-sans">
             <span>
-              Showing <strong>{startEntry}–{endEntry}</strong> of <strong>{totalElements}</strong> entries
+              {t('audit.showingEntries', { start: startEntry, end: endEntry, total: totalElements })}
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -276,7 +278,7 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
                     className={`w-7 h-7 rounded-lg text-xs font-semibold transition ${
                       pageNum === currentPage
                         ? 'bg-stone-900 text-white'
-                        : 'border border-stone-200 hover:bg-stone-50 text-stone-600'
+                        : 'border border-stone-200 hover:bg-stone-50 text-stone-605'
                     }`}
                   >
                     {pageNum + 1}
@@ -297,9 +299,9 @@ export default function AuditCenter({ tenant, role, onAddNotification }) {
         <div className="pt-3 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500 font-sans leading-normal">
           <div className="flex items-center gap-1.5">
             <FileLock size={13} className="text-stone-400" />
-            <span>Immutable audit log — SHA-256 chained records, 10-year retention (KSeF compliance)</span>
+            <span>{t('audit.footerText')}</span>
           </div>
-          <span>GDPR / RODO Compliant</span>
+          <span>{t('audit.gdprCompliant')}</span>
         </div>
       </div>
     </div>

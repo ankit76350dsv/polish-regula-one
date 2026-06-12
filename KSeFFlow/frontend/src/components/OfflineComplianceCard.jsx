@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, ShieldCheck, FileWarning, Clock } from 'lucide-react';
 import { qrDataUrl, openInvoicePrint } from '../lib/offlineInvoice';
+import { useLanguage } from '../context/LanguageContext';
 
 // Shows the KSeF offline-compliance state of an invoice: the two mandatory QR codes
 // (CODE I "OFFLINE" + CODE II "CERTYFIKAT"), the offline mode, the legal submission
@@ -10,6 +11,7 @@ import { qrDataUrl, openInvoicePrint } from '../lib/offlineInvoice';
 // tenant's certificate). This component only RENDERS them locally — it never recomputes
 // the seal and never sends them to a third-party QR service.
 export default function OfflineComplianceCard({ invoice, onAddNotification }) {
+  const { language, t } = useLanguage();
   const [offlineQr, setOfflineQr] = useState(null);
   const [certQr, setCertQr] = useState(null);
   const [printing, setPrinting] = useState(false);
@@ -39,7 +41,11 @@ export default function OfflineComplianceCard({ invoice, onAddNotification }) {
     try {
       await openInvoicePrint(invoice);
     } catch (err) {
-      onAddNotification?.('PDF Generation Failed', err?.message ?? 'Could not open the print view', 'error');
+      onAddNotification?.(
+        t('offline.pdfGenFailed'),
+        err?.message ?? t('offline.pdfGenErrorDesc'),
+        'error'
+      );
     } finally {
       setPrinting(false);
     }
@@ -51,7 +57,7 @@ export default function OfflineComplianceCard({ invoice, onAddNotification }) {
         <img src={src} alt={`${label} QR`} className="w-[120px] h-[120px] border border-stone-200 rounded bg-white p-1" />
       ) : (
         <div className="w-[120px] h-[120px] border border-dashed border-stone-300 rounded flex items-center justify-center text-[10px] text-stone-400 px-2">
-          {missingPayload ? 'Brak danych QR (oczekuje)' : 'Renderowanie…'}
+          {missingPayload ? t('offline.qrMissingData') : t('offline.qrRendering')}
         </div>
       )}
       <span className="mt-1.5 text-[11px] font-bold text-stone-700">{label}</span>
@@ -63,9 +69,9 @@ export default function OfflineComplianceCard({ invoice, onAddNotification }) {
     <div className="border border-amber-200 bg-amber-50/40 rounded-xl p-3.5 space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-800">
-          <FileWarning size={14} /> Tryb offline — wymagane dwa kody QR
+          <FileWarning size={14} /> {t('offline.twoQrRequired')}
         </div>
-        <span className="text-[10px] font-mono font-bold bg-white border border-amber-200 text-amber-800 px-2 py-0.5 rounded">
+        <span className="text-[10px] font-mono font-bold bg-white border border-amber-200 text-amber-805 px-2 py-0.5 rounded">
           {invoice.offlineMode ?? 'OFFLINE'}
         </span>
       </div>
@@ -74,17 +80,18 @@ export default function OfflineComplianceCard({ invoice, onAddNotification }) {
         className={`flex items-center gap-1.5 text-[11px] rounded-lg px-2.5 py-1.5 border ${
           overdue
             ? 'bg-red-50 border-red-200 text-red-700 font-semibold'
-            : 'bg-white border-stone-200 text-stone-600'
+            : 'bg-white border-stone-200 text-stone-605'
         }`}
       >
         <Clock size={13} />
         {deadline ? (
           <span>
-            Termin przesłania do KSeF: <strong>{deadline.toLocaleString('pl-PL')}</strong>
-            {overdue && ' — PRZEKROCZONY (eskalacja wymagana)'}
+            {t('offline.submissionDeadline')}{' '}
+            <strong>{deadline.toLocaleString(language === 'pl' ? 'pl-PL' : 'en-US')}</strong>
+            {overdue && t('offline.deadlineOverdue')}
           </span>
         ) : (
-          <span>Termin przesłania do KSeF: —</span>
+          <span>{t('offline.submissionDeadline')} —</span>
         )}
       </div>
 
@@ -92,31 +99,29 @@ export default function OfflineComplianceCard({ invoice, onAddNotification }) {
         <div className="flex items-start gap-2 p-2.5 rounded-lg border border-red-300 bg-red-50 text-red-800 text-[11px]">
           <FileWarning size={14} className="mt-0.5 shrink-0" />
           <span>
-            <strong>Brak certyfikatu OFFLINE (KSeF) — blokada zgodności.</strong> Kod QR „CERTYFIKAT” może być
-            wygenerowany wyłącznie certyfikatem KSeF typu <em>Offline</em> (Non-Repudiation). Wdróż certyfikat
-            offline w KSeF, aby wystawiać faktury w trybie offline. Faktura oczekuje na przesłanie do KSeF.
+            <strong>{t('offline.noOfflineCertTitle')}</strong> {t('offline.noOfflineCertDesc')}
           </span>
         </div>
       ) : (
         <div className="flex gap-6 justify-center py-1">
-          {qrTile(offlineQr, 'OFFLINE', 'Weryfikacja treści faktury w KSeF po przesłaniu', !invoice.qrCodeInvoice)}
-          {qrTile(certQr, 'CERTYFIKAT', 'Potwierdzenie tożsamości wystawcy (pieczęć)', !invoice.qrCodeCertificate)}
+          {qrTile(offlineQr, t('offline.code1Label'), t('offline.code1Desc'), !invoice.qrCodeInvoice)}
+          {qrTile(certQr, t('offline.code2Label'), t('offline.code2Desc'), !invoice.qrCodeCertificate)}
         </div>
       )}
 
       <button
         onClick={handleDownload}
         disabled={printing || certMissing}
-        title={certMissing ? 'Niedostępne — brak certyfikatu OFFLINE (kod QR CERTYFIKAT)' : undefined}
-        className="w-full flex items-center justify-center gap-2 text-[11px] font-semibold border border-stone-300 hover:border-stone-400 hover:bg-white text-stone-700 rounded-lg py-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        title={certMissing ? (language === 'pl' ? 'Niedostępne — brak certyfikatu OFFLINE (kod QR CERTYFIKAT)' : 'Unavailable — missing OFFLINE certificate (CERTIFICATE QR code)') : undefined}
+        className="w-full flex items-center justify-center gap-2 text-[11px] font-semibold border border-stone-300 hover:border-stone-400 hover:bg-white text-stone-705 rounded-lg py-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Download size={13} />
-        {printing ? 'Przygotowywanie…' : 'Pobierz fakturę offline (PDF)'}
+        {printing ? t('offline.preparing') : t('offline.downloadOfflinePdf')}
       </button>
 
       <p className="flex items-start gap-1 text-[9.5px] text-stone-500 leading-snug">
         <ShieldCheck size={11} className="text-emerald-600 mt-0.5 shrink-0" />
-        Kody QR generowane lokalnie; pieczęć CERTYFIKAT podpisana po stronie serwera certyfikatem KSeF. PDF to wyłącznie wizualizacja — dokumentem prawnym jest faktura FA(3) w KSeF.
+        {t('offline.complianceFooter')}
       </p>
     </div>
   );

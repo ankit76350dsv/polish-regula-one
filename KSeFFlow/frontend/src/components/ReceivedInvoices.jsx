@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Inbox, RefreshCw, FileText, Download, Loader2, Paperclip } from 'lucide-react';
 import { listReceivedInvoices, syncReceivedInvoices, getReceivedInvoiceXml } from '../api/ksefApi';
+import { useLanguage } from '../context/LanguageContext';
 
 // ── Received (purchase) invoices — faktury otrzymane ──────────────────────────
 // SIMPLE EXPLANATION:
@@ -9,6 +10,7 @@ import { listReceivedInvoices, syncReceivedInvoices, getReceivedInvoiceXml } fro
 // This screen pulls those purchase invoices down from KSeF and lets the user browse them and
 // open the full XML. The tenant's own NIP is the "I am the buyer" context for the backend.
 export default function ReceivedInvoices({ tenant, onAddNotification }) {
+  const { language, t } = useLanguage();
   const [invoices, setInvoices]   = useState([]);
   const [isLoading, setIsLoading] = useState(false); // loading the saved list
   const [isSyncing, setIsSyncing] = useState(false); // pulling fresh data from KSeF
@@ -25,16 +27,20 @@ export default function ReceivedInvoices({ tenant, onAddNotification }) {
     setError(null);
     listReceivedInvoices({ page: 0, size: 100 })
       .then(res => setInvoices(res.content))
-      .catch(err => setError(err.message || 'Nie udało się wczytać faktur otrzymanych.'))
+      .catch(err => setError(err.message || (language === 'pl' ? 'Nie udało się wczytać faktur otrzymanych.' : 'Failed to load received invoices.')))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [language]);
 
   useEffect(() => { loadList(); }, [loadList]);
 
   // Ask KSeF for any new purchase invoices, then refresh the list.
   const handleSync = async () => {
     if (!nip) {
-      onAddNotification?.('Brak NIP', 'Brak numeru NIP organizacji — nie można pobrać faktur z KSeF.', 'error');
+      onAddNotification?.(
+        language === 'pl' ? 'Brak NIP' : 'No NIP', 
+        language === 'pl' ? 'Brak numeru NIP organizacji — nie można pobrać faktur z KSeF.' : 'No corporate NIP found - cannot fetch invoices from KSeF.', 
+        'error'
+      );
       return;
     }
     setIsSyncing(true);
@@ -42,15 +48,17 @@ export default function ReceivedInvoices({ tenant, onAddNotification }) {
     try {
       const res = await syncReceivedInvoices(nip);
       onAddNotification?.(
-        'Synchronizacja zakończona',
-        `Pobrano ${res.fetched ?? 0}, dodano ${res.created ?? 0} nowych faktur otrzymanych.`,
+        language === 'pl' ? 'Synchronizacja zakończona' : 'Sync Completed',
+        language === 'pl'
+          ? `Pobrano ${res.fetched ?? 0}, dodano ${res.created ?? 0} nowych faktur otrzymanych.`
+          : `Fetched ${res.fetched ?? 0}, added ${res.created ?? 0} new received invoices.`,
         'success',
       );
       loadList();
     } catch (err) {
-      const msg = err.message || 'Synchronizacja z KSeF nie powiodła się.';
+      const msg = err.message || (language === 'pl' ? 'Synchronizacja z KSeF nie powiodła się.' : 'Synchronization with KSeF failed.');
       setError(msg);
-      onAddNotification?.('Błąd synchronizacji', msg, 'error');
+      onAddNotification?.(language === 'pl' ? 'Błąd synchronizacji' : 'Sync Error', msg, 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -64,7 +72,11 @@ export default function ReceivedInvoices({ tenant, onAddNotification }) {
       setXmlModal({ ksefNumber, xml: typeof xml === 'string' ? xml : JSON.stringify(xml, null, 2) });
     } catch (err) {
       setXmlModal(null);
-      onAddNotification?.('Błąd pobierania XML', err.message || 'Nie udało się pobrać XML faktury.', 'error');
+      onAddNotification?.(
+        language === 'pl' ? 'Błąd pobierania XML' : 'XML Retrieval Error', 
+        err.message || (language === 'pl' ? 'Nie udało się pobrać XML faktury.' : 'Failed to fetch invoice XML.'), 
+        'error'
+      );
     }
   };
 
@@ -91,70 +103,70 @@ export default function ReceivedInvoices({ tenant, onAddNotification }) {
         <div className="flex items-center gap-3">
           <div className="bg-slate-900 text-white rounded-xl p-2"><Inbox size={18} /></div>
           <div>
-            <h2 className="text-lg font-bold text-slate-800 tracking-tight">Faktury otrzymane</h2>
-            <p className="text-xs text-slate-500">Faktury zakupowe wystawione na Twoją firmę w KSeF.</p>
+            <h2 className="text-lg font-bold text-slate-800 tracking-tight">{language === 'pl' ? 'Faktury otrzymane' : 'Received invoices'}</h2>
+            <p className="text-xs text-slate-500">{language === 'pl' ? 'Faktury zakupowe wystawione na Twoją firmę w KSeF.' : 'Purchase invoices issued to your company in KSeF.'}</p>
           </div>
         </div>
         <button
           onClick={handleSync}
           disabled={isSyncing}
-          className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-bold py-2 px-4 rounded-xl text-xs transition cursor-pointer"
+          className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-bold py-2 px-4 rounded-xl text-xs transition cursor-pointer font-sans"
         >
           {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          {isSyncing ? 'Pobieranie z KSeF…' : 'Pobierz z KSeF'}
+          {isSyncing ? (language === 'pl' ? 'Pobieranie z KSeF…' : 'Downloading from KSeF…') : (language === 'pl' ? 'Pobierz z KSeF' : 'Download from KSeF')}
         </button>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3">{error}</div>
+        <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3 font-sans font-medium">{error}</div>
       )}
 
       {/* The table of received invoices */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden font-sans">
         {isLoading ? (
           <div className="flex items-center justify-center h-48 text-slate-400 text-sm gap-2">
-            <Loader2 size={16} className="animate-spin" /> Wczytywanie…
+            <Loader2 size={16} className="animate-spin" /> {t('common.loading')}
           </div>
         ) : invoices.length === 0 ? (
           <div className="text-center py-16 px-6 space-y-2">
             <Inbox size={28} className="mx-auto text-slate-300" />
-            <p className="text-sm text-slate-500">Brak faktur otrzymanych.</p>
-            <p className="text-xs text-slate-400">Kliknij „Pobierz z KSeF”, aby pobrać faktury zakupowe.</p>
+            <p className="text-sm text-slate-500 font-bold">{language === 'pl' ? 'Brak faktur otrzymanych.' : 'No received invoices found.'}</p>
+            <p className="text-xs text-slate-400">{language === 'pl' ? 'Kliknij „Pobierz z KSeF”, aby pobrać faktury zakupowe.' : 'Click "Download from KSeF" to pull purchase invoices.'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wide text-[10px]">
+            <table className="w-full text-left text-xs align-middle">
+              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wide text-[10px] font-semibold border-b border-slate-100">
                 <tr>
-                  <th className="text-left font-bold px-4 py-3">Numer KSeF</th>
-                  <th className="text-left font-bold px-4 py-3">Nr faktury</th>
-                  <th className="text-left font-bold px-4 py-3">Sprzedawca</th>
-                  <th className="text-left font-bold px-4 py-3">Data</th>
-                  <th className="text-right font-bold px-4 py-3">Brutto</th>
-                  <th className="text-center font-bold px-4 py-3">Zał.</th>
-                  <th className="text-right font-bold px-4 py-3">Akcja</th>
+                  <th className="font-bold px-4 py-3">{language === 'pl' ? 'Numer KSeF' : 'KSeF Number'}</th>
+                  <th className="font-bold px-4 py-3">{language === 'pl' ? 'Nr faktury' : 'Invoice #'}</th>
+                  <th className="font-bold px-4 py-3">{language === 'pl' ? 'Sprzedawca' : 'Seller'}</th>
+                  <th className="font-bold px-4 py-3">{language === 'pl' ? 'Data' : 'Date'}</th>
+                  <th className="text-right font-bold px-4 py-3">{language === 'pl' ? 'Brutto' : 'Gross'}</th>
+                  <th className="text-center font-bold px-4 py-3">{language === 'pl' ? 'Zał.' : 'Att.'}</th>
+                  <th className="text-right font-bold px-4 py-3">{language === 'pl' ? 'Akcja' : 'Action'}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 text-slate-700">
                 {invoices.map((inv) => (
-                  <tr key={inv.id || inv.ksefNumber} className="hover:bg-slate-50 transition">
-                    <td className="px-4 py-3 font-mono text-[11px] text-slate-600 break-all max-w-[220px]">{inv.ksefNumber}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-700">{inv.invoiceNumber || '—'}</td>
-                    <td className="px-4 py-3 text-slate-600">
-                      <span className="block font-medium">{inv.sellerName || '—'}</span>
-                      <span className="block text-[10px] text-slate-400 font-mono">{inv.sellerNip || ''}</span>
+                  <tr key={inv.id || inv.ksefNumber} className="hover:bg-slate-50/70 transition cursor-pointer">
+                    <td className="px-4 py-3 font-mono text-[11px] text-slate-655 break-all max-w-[220px]">{inv.ksefNumber}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-800">{inv.invoiceNumber || '—'}</td>
+                    <td className="px-4 py-3">
+                      <span className="block font-semibold text-slate-800">{inv.sellerName || '—'}</span>
+                      <span className="block text-[10px] text-slate-400 font-mono">NIP: {inv.sellerNip || ''}</span>
                     </td>
-                    <td className="px-4 py-3 text-slate-500">{shortDate(inv.issueDate)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-700">{money(inv.grossAmount, inv.currency)}</td>
+                    <td className="px-4 py-3 text-slate-400 font-mono">{shortDate(inv.issueDate)}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-slate-750">{money(inv.grossAmount, inv.currency)}</td>
                     <td className="px-4 py-3 text-center">
-                      {inv.hasAttachment ? <Paperclip size={13} className="inline text-slate-500" /> : <span className="text-slate-300">—</span>}
+                      {inv.hasAttachment ? <Paperclip size={13} className="inline text-slate-450" /> : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => handleViewXml(inv.ksefNumber)}
-                        className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer"
+                        className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-707 font-semibold py-1.5 px-3 rounded-lg text-[11px] transition cursor-pointer"
                       >
-                        <FileText size={12} /> Pokaż XML
+                        <FileText size={12} /> {language === 'pl' ? 'Pokaż XML' : 'Show XML'}
                       </button>
                     </td>
                   </tr>
@@ -168,7 +180,7 @@ export default function ReceivedInvoices({ tenant, onAddNotification }) {
       {/* XML viewer modal */}
       {xmlModal && (
         <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4" onClick={() => setXmlModal(null)}>
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-3xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-3xl max-h-[85vh] flex flex-col font-sans" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
               <div className="flex items-center gap-2 min-w-0">
                 <FileText size={15} className="text-slate-500 shrink-0" />
@@ -177,19 +189,19 @@ export default function ReceivedInvoices({ tenant, onAddNotification }) {
               <div className="flex items-center gap-2">
                 {xmlModal.xml && (
                   <button onClick={downloadXml} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 hover:text-slate-900 cursor-pointer">
-                    <Download size={13} /> Pobierz
+                    <Download size={13} /> {language === 'pl' ? 'Pobierz' : 'Download'}
                   </button>
                 )}
-                <button onClick={() => setXmlModal(null)} className="text-slate-400 hover:text-slate-700 text-xs cursor-pointer">Zamknij</button>
+                <button onClick={() => setXmlModal(null)} className="text-slate-400 hover:text-slate-700 text-xs cursor-pointer">{t('common.close')}</button>
               </div>
             </div>
             <div className="overflow-auto p-4">
               {xmlModal.loading ? (
                 <div className="flex items-center justify-center h-40 text-slate-400 text-sm gap-2">
-                  <Loader2 size={16} className="animate-spin" /> Pobieranie XML z KSeF…
+                  <Loader2 size={16} className="animate-spin" /> {language === 'pl' ? 'Pobieranie XML z KSeF…' : 'Downloading XML from KSeF…'}
                 </div>
               ) : (
-                <pre className="text-[10.5px] leading-relaxed text-slate-700 whitespace-pre-wrap break-all font-mono">{xmlModal.xml}</pre>
+                <pre className="text-[10.5px] leading-relaxed text-slate-700 whitespace-pre-wrap break-all font-mono bg-slate-50 p-3 rounded-lg border border-slate-150">{xmlModal.xml}</pre>
               )}
             </div>
           </div>

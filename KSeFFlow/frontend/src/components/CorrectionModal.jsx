@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FileWarning, Plus, Trash2, Loader2, X } from 'lucide-react';
 import { correctInvoice } from '../api/ksefApi';
+import { useLanguage } from '../context/LanguageContext';
 
 // ── Correction invoice (faktura korygująca) ───────────────────────────────────
 // SIMPLE EXPLANATION:
@@ -16,6 +17,8 @@ const VAT_MULTIPLIER = { '23': 0.23, '8': 0.08, '5': 0.05, '0': 0, exempt: 0, re
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 export default function CorrectionModal({ original, tenant, onClose, onCreated, onAddNotification }) {
+  const { language, t } = useLanguage();
+  
   // Start the corrected lines as a copy of the original invoice's lines.
   const [items, setItems] = useState(
     (original.items ?? []).map((it, idx) => ({
@@ -62,9 +65,9 @@ export default function CorrectionModal({ original, tenant, onClose, onCreated, 
     e.preventDefault();
     setError('');
 
-    if (!invoiceNumber.trim())   { setError('Podaj numer faktury korygującej (np. FV/2026/06/0007).'); return; }
-    if (!reason.trim())          { setError('Podaj powód korekty (wymagany przez KSeF).'); return; }
-    if (items.length === 0)      { setError('Korekta musi mieć co najmniej jedną pozycję.'); return; }
+    if (!invoiceNumber.trim())   { setError(language === 'pl' ? 'Podaj numer faktury korygującej (np. FV/2026/06/0007).' : 'Provide correction invoice number (e.g. FV/2026/06/0007).'); return; }
+    if (!reason.trim())          { setError(language === 'pl' ? 'Podaj powód korekty (wymagany przez KSeF).' : 'Provide correction reason (required by KSeF).'); return; }
+    if (items.length === 0)      { setError(language === 'pl' ? 'Korekta musi mieć co najmniej jedną pozycję.' : 'Correction must have at least one line item.'); return; }
 
     // Build the corrected invoice payload. Seller/buyer are copied from the original (they do not
     // change in a correction); only the lines/amounts and the correction reason differ.
@@ -92,16 +95,18 @@ export default function CorrectionModal({ original, tenant, onClose, onCreated, 
         original.id, payload, reason.trim(), correctionType === '' ? undefined : Number(correctionType),
       );
       onAddNotification?.(
-        'Korekta utworzona',
-        `Utworzono fakturę korygującą ${created.invoiceNumber} (do ${original.invoiceNumber}). Wyślij ją do KSeF z repozytorium.`,
+        language === 'pl' ? 'Korekta utworzona' : 'Correction Created',
+        language === 'pl' 
+          ? `Utworzono fakturę korygującą ${created.invoiceNumber} (do ${original.invoiceNumber}). Wyślij ją do KSeF z repozytorium.` 
+          : `Created correction invoice ${created.invoiceNumber} (for ${original.invoiceNumber}). Submit it to KSeF from the repository.`,
         'success',
       );
       onCreated?.(created);
       onClose?.();
     } catch (err) {
-      const msg = err.message || 'Nie udało się utworzyć korekty.';
+      const msg = err.message || (language === 'pl' ? 'Nie udało się utworzyć korekty.' : 'Failed to create correction.');
       setError(msg);
-      onAddNotification?.('Błąd korekty', msg, 'error');
+      onAddNotification?.(language === 'pl' ? 'Błąd korekty' : 'Correction Error', msg, 'error');
     } finally {
       setBusy(false);
     }
@@ -117,8 +122,8 @@ export default function CorrectionModal({ original, tenant, onClose, onCreated, 
           <div className="flex items-center gap-2">
             <div className="bg-amber-100 text-amber-700 rounded-lg p-1.5"><FileWarning size={16} /></div>
             <div>
-              <h3 className="font-bold text-slate-800 text-sm tracking-tight">Wystaw korektę (faktura korygująca)</h3>
-              <p className="text-[11px] text-slate-500">Koryguje fakturę <strong className="font-mono">{original.invoiceNumber}</strong> · KSeF: <span className="font-mono">{original.ksefId || '—'}</span></p>
+              <h3 className="font-bold text-slate-800 text-sm tracking-tight">{language === 'pl' ? 'Wystaw korektę (faktura korygująca)' : 'Issue correction (correction invoice)'}</h3>
+              <p className="text-[11px] text-slate-500">{language === 'pl' ? 'Koryguje fakturę' : 'Corrects invoice'} <strong className="font-mono">{original.invoiceNumber}</strong> · KSeF: <span className="font-mono">{original.ksefId || '—'}</span></p>
             </div>
           </div>
           <button onClick={() => !busy && onClose?.()} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
@@ -128,53 +133,53 @@ export default function CorrectionModal({ original, tenant, onClose, onCreated, 
         <form onSubmit={handleSubmit} className="overflow-y-auto p-5 space-y-5 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="font-semibold text-slate-600 space-y-1 block">
-              <span>Numer korekty</span>
+              <span>{language === 'pl' ? 'Numer korekty' : 'Correction number'}</span>
               <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)}
                 placeholder="FV/2026/06/0007"
                 className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2 text-sm" />
             </label>
             <label className="font-semibold text-slate-600 space-y-1 block">
-              <span>Data wystawienia</span>
+              <span>{language === 'pl' ? 'Data wystawienia' : 'Date of issue'}</span>
               <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)}
                 className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2 text-sm" />
             </label>
             <label className="font-semibold text-slate-600 space-y-1 block">
-              <span>Typ korekty (opcjonalnie)</span>
+              <span>{language === 'pl' ? 'Typ korekty (opcjonalnie)' : 'Correction type (optional)'}</span>
               <select value={correctionType} onChange={(e) => setCorrectionType(e.target.value)}
-                className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2 text-sm">
+                className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2 text-sm cursor-pointer">
                 <option value="">—</option>
-                <option value="1">1 — korekta pozycji</option>
-                <option value="2">2 — korekta podstawy/stawki</option>
-                <option value="3">3 — inna</option>
+                <option value="1">{language === 'pl' ? '1 — korekta pozycji' : '1 — line item correction'}</option>
+                <option value="2">{language === 'pl' ? '2 — korekta podstawy/stawki' : '2 — tax base/rate correction'}</option>
+                <option value="3">{language === 'pl' ? '3 — inna' : '3 — other'}</option>
               </select>
             </label>
           </div>
 
           <label className="font-semibold text-slate-600 space-y-1 block">
-            <span>Powód korekty (wymagany)</span>
+            <span>{language === 'pl' ? 'Powód korekty (wymagany)' : 'Correction reason (required)'}</span>
             <input value={reason} onChange={(e) => setReason(e.target.value)}
-              placeholder="np. Błędna ilość w pozycji 1"
+              placeholder={language === 'pl' ? 'np. Błędna ilość w pozycji 1' : 'e.g. Incorrect quantity in item 1'}
               className="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2 text-sm" />
           </label>
 
           {/* Corrected line items */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-600">Pozycje po korekcie</span>
+              <span className="font-semibold text-slate-600">{language === 'pl' ? 'Pozycje po korekcie' : 'Items after correction'}</span>
               <button type="button" onClick={addItem}
                 className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 hover:text-slate-900 cursor-pointer">
-                <Plus size={13} /> Dodaj pozycję
+                <Plus size={13} /> {language === 'pl' ? 'Dodaj pozycję' : 'Add Item'}
               </button>
             </div>
             <div className="border border-slate-200 rounded-xl overflow-hidden">
               <table className="w-full text-[11px]">
                 <thead className="bg-slate-50 text-slate-500 uppercase text-[9px]">
                   <tr>
-                    <th className="text-left font-bold px-2 py-2">Nazwa</th>
-                    <th className="text-right font-bold px-2 py-2">Ilość</th>
-                    <th className="text-right font-bold px-2 py-2">Cena netto</th>
+                    <th className="text-left font-bold px-2 py-2">{language === 'pl' ? 'Nazwa' : 'Name'}</th>
+                    <th className="text-right font-bold px-2 py-2">{language === 'pl' ? 'Ilość' : 'Qty'}</th>
+                    <th className="text-right font-bold px-2 py-2">{language === 'pl' ? 'Cena netto' : 'Net Price'}</th>
                     <th className="text-center font-bold px-2 py-2">VAT</th>
-                    <th className="text-right font-bold px-2 py-2">Brutto</th>
+                    <th className="text-right font-bold px-2 py-2">{language === 'pl' ? 'Brutto' : 'Gross'}</th>
                     <th className="px-2 py-2"></th>
                   </tr>
                 </thead>
@@ -199,7 +204,7 @@ export default function CorrectionModal({ original, tenant, onClose, onCreated, 
                         </td>
                         <td className="px-2 py-1.5 text-center">
                           <select value={it.vatRate} onChange={(e) => updateItem(it.id, 'vatRate', e.target.value)}
-                            className="border border-slate-200 rounded-lg px-1 py-1">
+                            className="border border-slate-200 rounded-lg px-1 py-1 cursor-pointer">
                             <option value="23">23%</option>
                             <option value="8">8%</option>
                             <option value="5">5%</option>
@@ -220,9 +225,9 @@ export default function CorrectionModal({ original, tenant, onClose, onCreated, 
               </table>
             </div>
             <div className="flex justify-end gap-6 text-[11px] font-mono text-slate-600 pt-1">
-              <span>Netto: <strong>{money(totals.net)}</strong></span>
+              <span>{language === 'pl' ? 'Netto:' : 'Net:'} <strong>{money(totals.net)}</strong></span>
               <span>VAT: <strong>{money(totals.vat)}</strong></span>
-              <span className="text-slate-900">Brutto: <strong className="text-red-650">{money(totals.gross)} {original.currency}</strong></span>
+              <span className="text-slate-900">{language === 'pl' ? 'Brutto:' : 'Gross:'} <strong className="text-red-650">{money(totals.gross)} {original.currency}</strong></span>
             </div>
           </div>
 
@@ -231,11 +236,11 @@ export default function CorrectionModal({ original, tenant, onClose, onCreated, 
           <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
             <button type="button" onClick={() => !busy && onClose?.()} disabled={busy}
               className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition disabled:opacity-50 cursor-pointer">
-              Anuluj
+              {t('common.cancel')}
             </button>
             <button type="submit" disabled={busy}
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition disabled:opacity-60 cursor-pointer">
-              {busy ? <Loader2 size={14} className="animate-spin" /> : <FileWarning size={14} />} Utwórz korektę (DRAFT)
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <FileWarning size={14} />} {language === 'pl' ? 'Utworz korektę (DRAFT)' : 'Create Correction (DRAFT)'}
             </button>
           </div>
         </form>
