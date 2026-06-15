@@ -1,23 +1,52 @@
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { useForm }                   from 'react-hook-form';
+import { z }                          from 'zod';
+import { zodResolver }                from '@hookform/resolvers/zod';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Button }                     from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { LogIn, Loader2 } from 'lucide-react';
-import { motion } from 'motion/react';
-import { useLogin } from '../../hooks/useAuth';
+import { Input }                      from '@/components/ui/input';
+import { Label }                      from '@/components/ui/label';
+import { LogIn, Loader2, ArrowRight } from 'lucide-react';
+import { motion }                     from 'motion/react';
+import { useLogin }                   from '../../hooks/useAuth';
 
 const schema = z.object({
   email:    z.email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
 });
 
+// Maps a path prefix to a friendly module name for the SSO context banner.
+const MODULE_LABELS = {
+  '/modules/ksef':         'KSeFFlow',
+  '/modules/workpulse':    'WorkPulse',
+  '/modules/safework':     'SafeWork',
+  '/modules/safevoice':    'SafeVoice',
+  '/modules/wastesync':    'WasteSync',
+  '/modules/privacypilot': 'PrivacyPilot',
+};
+
+function resolveModuleLabel(redirectUri) {
+  if (!redirectUri) return null;
+  try {
+    // redirectUri can be a full URL or a plain path
+    const path = redirectUri.startsWith('http')
+      ? new URL(decodeURIComponent(redirectUri)).pathname
+      : decodeURIComponent(redirectUri);
+
+    for (const [prefix, label] of Object.entries(MODULE_LABELS)) {
+      if (path.startsWith(prefix)) return label;
+    }
+  } catch { /* ignore malformed URIs */ }
+  return null;
+}
+
 export default function LoginPage() {
-  const navigate = useNavigate();
-  const login    = useLogin();
+  const navigate              = useNavigate();
+  const [searchParams]        = useSearchParams();
+  const login                 = useLogin();
+
+  const redirectUri   = searchParams.get('redirect_uri');
+  const moduleLabel   = resolveModuleLabel(redirectUri);
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
@@ -36,22 +65,55 @@ export default function LoginPage() {
         animate={{ opacity: 1, y: 0 }}
         className="z-10 w-full max-w-md"
       >
+        {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-600 shadow-xl shadow-red-200 border border-red-500 text-white font-bold text-2xl">R</div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-600 shadow-xl shadow-red-200 border border-red-500 text-white font-bold text-2xl">
+            R
+          </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">RegulaOne</h1>
-          <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">Enterprise Compliance OS</p>
+          <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">
+            Enterprise Compliance OS
+          </p>
         </div>
+
+        {/* SSO context banner — shown when another module redirected here */}
+        {moduleLabel && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3"
+          >
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-red-600 text-white text-[10px] font-bold">
+              R
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-red-700">
+                Sign in to access {moduleLabel}
+              </p>
+              <p className="text-[10px] text-red-400 mt-0.5">
+                You'll be returned there automatically after signing in.
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-red-400 flex-shrink-0" />
+          </motion.div>
+        )}
 
         <Card className="border-slate-200 bg-white shadow-xl shadow-slate-200/50 rounded-2xl overflow-hidden">
           <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-6">
             <CardTitle className="text-slate-900 text-xl">Sign In</CardTitle>
-            <CardDescription className="text-slate-500 font-medium">Access your enterprise compliance dashboard</CardDescription>
+            <CardDescription className="text-slate-500 font-medium">
+              {moduleLabel
+                ? `Authenticate to continue to ${moduleLabel}`
+                : 'Access your enterprise compliance dashboard'}
+            </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-6 pt-8">
             <form onSubmit={onSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Email</Label>
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Email
+                </Label>
                 <Input
                   type="email"
                   placeholder="name@company.com"
@@ -64,7 +126,9 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Password</Label>
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Password
+                </Label>
                 <Input
                   type="password"
                   autoComplete="current-password"
@@ -81,9 +145,13 @@ export default function LoginPage() {
                 disabled={login.isPending}
                 className="w-full bg-red-600 text-white hover:bg-red-700 h-11 font-bold shadow-lg shadow-red-100"
               >
-                {login.isPending
-                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in…</>
-                  : <><LogIn className="mr-2 h-4 w-4" />Sign In</>}
+                {login.isPending ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in…</>
+                ) : (
+                  <><LogIn className="mr-2 h-4 w-4" />
+                    {moduleLabel ? `Sign In & Continue to ${moduleLabel}` : 'Sign In'}
+                  </>
+                )}
               </Button>
             </form>
 

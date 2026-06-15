@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 // Invoice number format: INV-YYYY-NNNN (global sequence, padded to 4 digits)
 // Currency: ISO 4217 code stored with each record so historical invoices are
 //           unaffected if the platform later supports multiple currencies.
-@Document(collection = "invoices")
+@Document(collection = "plan_invoices")
 @Data
 @Builder
 @NoArgsConstructor

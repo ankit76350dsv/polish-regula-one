@@ -1,0 +1,72 @@
+package com.ksefflow.backend.services.ksefauth;
+
+import com.ksefflow.backend.exceptions.KsefAuthException;
+import lombok.extern.slf4j.Slf4j;
+
+import java.nio.charset.StandardCharsets;
+import java.security.PrivateKey;
+import java.security.Signature;
+import java.security.cert.X509Certificate;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.PSSParameterSpec;
+import java.util.Base64;
+
+// Pure static utilities for signing and certificate encoding.
+// No Spring context needed — all methods are stateless.
+@Slf4j
+public final class KsefSigningUtils {
+
+    private KsefSigningUtils() {}
+
+    // NOTE: KSeF 1.0 raw "SHA256withRSA challenge signing" has been removed. KSeF 2.0
+    // authenticates with a XAdES-signed AuthTokenRequest document — see XAdESSigner.
+    // The methods below are for the offline QR CODE II signature, which is independent
+    // of API authentication.
+
+    // Signs the KSeF offline CODE II ("CERTYFIKAT") QR URL path and returns the
+    // signature as Base64URL (no padding), per the MF QR-code specification.
+    //
+    // The spec mandates one of:
+    //   - RSA  → RSASSA-PSS (SHA-256, MGF1-SHA256, 32-byte salt, ≥2048-bit key)
+    //   - EC   → ECDSA on NIST P-256 with SHA-256
+    // The algorithm is chosen from the signing key's type.
+    public static String signQrPathBase64Url(String urlPath, PrivateKey privateKey) {
+        log.info("[signQrPathBase64Url]:1 Signing offline QR CODE II path ({} chars)", urlPath.length());
+        try {
+            String keyAlg = privateKey.getAlgorithm();
+            Signature sig;
+            if ("RSA".equalsIgnoreCase(keyAlg) || "RSASSA-PSS".equalsIgnoreCase(keyAlg)) {
+                sig = Signature.getInstance("RSASSA-PSS");
+                sig.setParameter(new PSSParameterSpec(
+                        "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1));
+            } else if ("EC".equalsIgnoreCase(keyAlg) || "ECDSA".equalsIgnoreCase(keyAlg)) {
+                sig = Signature.getInstance("SHA256withECDSA");
+            } else {
+                throw new KsefAuthException("Unsupported QR signing key algorithm: " + keyAlg);
+            }
+            sig.initSign(privateKey);
+            sig.update(urlPath.getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(sig.sign());
+        } catch (KsefAuthException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new KsefAuthException(
+                    "Failed to sign KSeF offline QR path: " + e.getMessage(), e);
+        }
+    }
+
+    // DER-encodes the X509 certificate and Base64-encodes the result.
+    //
+    // KSeF expects the certificate in Base64(DER) format — no PEM "BEGIN CERTIFICATE" headers.
+    // cert.getEncoded() returns the raw ASN.1 DER bytes; Base64 encoding those bytes
+    // gives the certificateBase64 field required by the /Authorisation request.
+    public static String encodeCertificate(X509Certificate cert) {
+        log.info("[encodeCertificate]:1 Base64(DER)-encoding X509 certificate");
+        try {
+            return Base64.getEncoder().encodeToString(cert.getEncoded());
+        } catch (Exception e) {
+            throw new KsefAuthException(
+                    "Failed to DER-encode X509 certificate: " + e.getMessage(), e);
+        }
+    }
+}

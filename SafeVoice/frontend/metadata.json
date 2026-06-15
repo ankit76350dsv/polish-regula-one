@@ -1,0 +1,6 @@
+{
+  "name": "SafeVoice Whistleblower Platform",
+  "description": "An anonymous whistleblower reporting platform ensuring compliance with Polish and EU Whistleblower Protection Laws (Ustawa o ochronie sygnalistów), featuring end-to-end PIN case-tracking and enterprise audit logs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

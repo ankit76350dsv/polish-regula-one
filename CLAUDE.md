@@ -1,599 +1,784 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# RegulaOne SuperApp
+Enterprise Compliance SaaS Platform for Poland & EU
 
-## Project Overview
-
-**RegulaOne** is a monorepo compliance platform for Polish businesses. It contains 7 modules, each with a `backend/` and `frontend/` directory:
-
-| Module | Purpose | Backend Status |
-|---|---|---|
-| `RegulaOne` | Auth gateway + user management | Fully implemented |
-| `KSeFFlow` | E-invoicing (Polish KSeF mandate) | Skeleton |
-| `SafeVoice` | Whistleblower reporting (AES-256 encrypted) | Skeleton |
-| `WasteSync` | BDO waste reporting | Skeleton |
-| `PrivacyPilot` | GDPR/RODO compliance | Empty |
-| `SafeWork` | HR / BHP workplace safety | Empty |
-| `WorkPulse` | Time tracking / attendance | Empty |
-
-Each backend is a Spring Boot 4.0.6 / Java 17 / Maven project. Frontends are not yet scaffolded.
-
----
-
-## IMPORTANT DEVELOPMENT RULES
-
-### Code Modification Rules
-
-1. **NEVER remove existing code directly**
-   - If code is incorrect, outdated, or replaced, COMMENT IT OUT instead of deleting it
-   - Preserve old implementation for reference and debugging history
-
-2. **Always explain newly added code**
-   - Every new logic block, class, method, or configuration MUST include comments explaining:
-     - Why it was added
-     - What problem it solves
-     - Important implementation details if needed
-
-3. **When replacing logic**
-   - Keep old code commented
-   - Add the new implementation below it
-   - Clearly mention why the old implementation was replaced
-
-Example:
-
-```java
-// OLD IMPLEMENTATION - Commented out because JWT parsing
-// is now handled directly by Spring Security OAuth2 Resource Server
-// and CognitoJwtConverter.
-//
-// String token = Jwts.parser()
-//      .setSigningKey(secret)
-//      .parseClaimsJws(jwt)
-//      .getBody();
-
-
-// NEW IMPLEMENTATION
-// Added to use AWS Cognito JWT validation via Spring Security.
-// This ensures automatic signature validation using Cognito JWKS.
-Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-
-
-
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) and all AI coding agents when working on the RegulaOne platform.
+Author: DSV Corporation Pty Ltd
+Platform: RegulaOne 
+Primary Region: Poland / European Union
+Compliance Target:
+- KSeF (National e-Invoice System)
+- GDPR / RODO
+- Polish Labour Code
+- BHP Safety Regulations
+- Polish Whistleblower Protection Act
+- BDO Environmental Reporting
+- EU Cybersecurity Standards
+- OWASP ASVS Level 2+
+- ISO 27001 Alignment
+- SOC2 Ready Architecture
 
 ---
 
-# Project Overview
+# 1. GLOBAL ENGINEERING RULES
 
-## Platform Name
-# RegulaOne
+## Core Principles
 
-RegulaOne is a multi-module SaaS compliance platform for Polish businesses.
+The application MUST be designed as:
+- enterprise-grade
+- audit-ready
+- government-compliant
+- zero-trust secure
+- GDPR compliant
+- scalable multi-tenant SaaS
+- legally defensible during government audits
 
-The platform combines multiple legally required compliance systems into one unified application.
-
-All modules share:
-- Authentication
-- Organization management
-- Role-based access control
-- Audit logging
-- Notification system
-- File storage
-- Compliance infrastructure
-- Encryption standards
-- Reporting engine
-
----
-
-# Core Philosophy
-
-This is a:
-- Compliance-first platform
-- Security-first platform
-- Enterprise SaaS architecture
-- Multi-tenant application
-- Modular monorepo system
-
-The system must prioritize:
-1. Legal compliance
-2. Data integrity
+Every feature MUST prioritize:
+1. Security
+2. Compliance
 3. Auditability
-4. Security
-5. Reliability
-6. Scalability
-7. Maintainability
+4. Data integrity
+5. Legal traceability
 
 ---
 
-# IMPORTANT AI AGENT RULES
+# 2. MANDATORY SECURITY STANDARDS
 
-## NEVER
-- Never delete existing code directly
-- Never rewrite large sections unnecessarily
-- Never remove APIs without comment
-- Never break backward compatibility without explanation
+## Encryption
+
+ALL sensitive data MUST use:
+
+### At Rest
+- AES-256-GCM encryption
+- Database-level encryption
+- S3 bucket encryption
+- Encrypted backups
+- Encrypted certificates
+- Encrypted uploaded documents
+
+### In Transit
+- TLS 1.3 only
+- HSTS enabled
+- Secure cookies
+- Perfect Forward Secrecy
+
+### Key Management
+- AWS KMS or HashiCorp Vault
+- Automatic key rotation
+- Separate encryption keys per tenant
 - Never hardcode secrets
-- Never store sensitive data unencrypted
-- Never bypass validation
-- Never bypass audit logging
-- Never ignore compliance requirements
-- Never use mock implementations in production code
-- Never create duplicate business logic
-- Never directly access database from controllers
-- Never place business logic inside controllers
-- Never skip error handling
-- Never use insecure encryption methods
-- Never use non-EU hosting references
-- Never expose internal stack traces to users
 
 ---
 
-## ALWAYS
-- Always comment why new code is added
-- Always comment deprecated or replaced code
-- Always use clean architecture
-- Always follow modular design
-- Always use DTO validation
-- Always use centralized exception handling
-- Always use audit logs
-- Always write scalable code
-- Always consider GDPR/RODO compliance
-- Always use encryption for sensitive data
-- Always write production-ready code
-- Always think about multi-tenancy
-- Always use environment variables
-- Always write reusable services
-- Always separate infrastructure/business/domain layers
-- Always create meaningful logs
-- Always add retry handling for external APIs
-- Always add proper API documentation
-- Always implement rate limiting for public APIs
-- Always write defensive code
+# 3. DATA HOSTING RULES
 
----
+## EEA Hosting Requirement
 
-# Architecture
-
-## Application Type
-Multi-tenant SaaS platform.
-
-## Primary Regions
-- Poland
-- European Union (EEA only)
-
-## Hosting Rules
-ALL infrastructure MUST remain inside EEA regions.
+ALL production data MUST remain inside the EEA.
 
 Allowed:
 - AWS Frankfurt
 - AWS Ireland
-- Azure Europe
-- EU Datacenters
+- Azure EU Regions
 
-Not Allowed:
+Forbidden:
 - US-only hosting
-- Non-EU storage providers
+- Non-EU storage
+- Cross-border transfer without SCCs
+
+Infrastructure MUST support:
+- GDPR
+- RODO
+- Data residency
+- Data processing agreements
 
 ---
 
-# Tech Stack
+# 4. AUTHENTICATION & ACCESS CONTROL
 
-## Backend
-- Java Spring Boot
-- Spring Security
-- JWT / OAuth2 / Cognito
-- MongoDB
-- PostgreSQL
-- Redis
-- RabbitMQ / Kafka
-- Docker
-- Kubernetes
+## Authentication
 
-## Frontend
-- React / Next.js
-- TailwindCSS
-- TypeScript
+MANDATORY:
+- OAuth2/OIDC
+- MFA/TOTP support
+- Session expiration
+- Device tracking
+- Refresh token rotation
 
-## Mobile
-- Flutter
+## RBAC (Role-Based Access Control)
 
-## Cloud
-- AWS EU Regions only
-
-## Storage
-- S3-compatible encrypted storage
-
----
-
-# Multi-Tenant Architecture
-
-Every organization/company must be isolated.
-
-All tables/documents must support:
-- tenant_id
-- audit metadata
-- timestamps
-
-Tenant isolation is mandatory.
-
----
-
-# Shared Platform Modules
-
-## Shared Authentication
-Supports:
+Minimum roles:
+- Super Admin
 - Company Admin
 - HR Manager
-- Employee
 - Accountant
-- Auditor
 - Compliance Officer
+- Auditor
+- Employee
+- Whistleblower Reviewer
 
-Features:
-- Login
-- Signup
-- MFA
-- RBAC
-- Session management
-- Audit logs
-
----
-
-# Shared Security Rules
-
-## Encryption
-Use:
-- AES-256 encryption at rest
-- TLS 1.3 in transit
-
-## Sensitive Data
-Must always be encrypted:
-- Certificates
-- Personal data
-- Medical documents
-- Whistleblower reports
-- GDPR records
-- Tokens
-- Secrets
+Rules:
+- Least privilege principle
+- Tenant isolation mandatory
+- Cross-company access forbidden
 
 ---
 
-# Audit Logging
+# 5. AUDIT LOGGING REQUIREMENTS
 
-Every important action MUST generate audit logs.
+EVERY critical action MUST generate immutable audit logs.
 
-Example:
-- User login
-- Invoice submission
-- Document upload
-- Status change
-- Data export
-- Record modification
-
-Audit logs must contain:
+Audit log fields:
 - user_id
 - tenant_id
-- action
+- IP address
+- user agent
 - timestamp
-- old_value
-- new_value
-- ip_address
+- old value
+- new value
+- action type
 
-Audit logs are immutable.
+Audit logs MUST:
+- be tamper resistant
+- be exportable
+- retain minimum 10 years
+- support forensic investigation
 
 ---
 
-# Shared File Storage Rules
+# 6. API SECURITY
 
-Supported files:
+MANDATORY:
+- Rate limiting
+- CSRF protection
+- XSS protection
+- SQL injection prevention
+- Request validation
+- JWT validation
+- Input sanitization
+- API schema validation
+- WAF protection
+
+Framework rules:
+- Never trust frontend validation
+- Validate ALL payloads server-side
+- Use DTO validation
+- Reject malformed XML
+- Reject oversized uploads
+
+---
+
+# 7. FILE STORAGE SECURITY
+
+Allowed uploads:
 - PDF
-- DOCX
+- PNG
+- JPG
 - XML
-- Images
-- CSV
+- DOCX
 
-All uploads must:
-- be virus scanned
+All uploads MUST:
+- undergo antivirus scanning
+- use signed URLs
+- have MIME validation
+- use size limits
+- have malware detection
 - be encrypted
-- support audit logs
-- support retention policies
+
+Forbidden:
+- executable files
+- scripts
+- ZIP bombs
 
 ---
 
-# Notification System
+# 8. BACKUP & DISASTER RECOVERY
 
-Support:
-- Email
-- Push notifications
-- In-app notifications
+MANDATORY:
+- Daily encrypted backups
+- Point-in-time recovery
+- Multi-region replication
+- Disaster recovery testing
+- Automated restore validation
 
-Use queues for async processing.
-
----
-
-# Background Jobs
-
-Use scheduled jobs/cron workers for:
-- Expiry alerts
-- Retry queues
-- Report generation
-- Cleanup
-- Compliance checks
-- Offline sync
+Retention:
+- minimum 10 years for legal records
 
 ---
 
-# Application Modules
+# 9. MULTI-TENANCY REQUIREMENTS
 
-# 1. KSeFFlow — E-Invoice System
+Platform MUST support:
+- isolated tenants
+- isolated encryption keys
+- isolated audit logs
+- isolated file storage
 
-## Purpose
-Polish government e-invoice integration.
+Cross-tenant access MUST NEVER happen.
 
-Mandatory from April 2026.
+All queries MUST filter by:
+- tenant_id
+- company_id
 
-## Core Requirements
-- FA(3) XML generation
+---
+
+# 10. APPLICATION MODULES
+
+---
+
+# MODULE 1 — KSeFFlow (KSeF E-Invoice System)
+
+## Compliance Requirements
+
+MANDATORY:
+- FA(3) XML schema support
 - KSeF API integration
 - Digital certificate authentication
+- XML validation
 - UPO storage
-- Offline queue support
-- QR code generation
+- Offline fallback mode
 
-## Features
-- Create invoice
-- Send invoice
-- Receive KSeF-ID
-- Store UPO
-- Retry failed invoices
-- Sandbox/Production support
+## Legal Requirements
 
-## Compliance
-Mandatory:
-- 10-year invoice retention
-- Certificate encryption
-- FA(3) XML compliance
+Invoices MUST:
+- follow official FA(3) schema
+- receive KSeF-ID
+- store UPO for 10 years
+- support audit export
 
-## Important Rules
-- XML schema must follow official FA(3)
-- Never allow custom invoice schema
-- Always validate before submission
-- Offline mode is legally required
+## Security Requirements
 
----
+Certificates MUST:
+- use AES-256 encryption
+- never store plaintext passwords
+- use secure vault storage
 
-# 2. WorkPulse — Time Tracking System
+## Offline Mode
 
-## Purpose
-Employee attendance and work tracking.
+If KSeF unavailable:
+1. Generate PDF
+2. Add QR verification
+3. Queue XML
+4. Retry with exponential backoff
 
-## Features
-- Clock in
-- Clock out
-- Break tracking
-- GPS tracking
-- Overtime calculation
-- Monthly reports
-- Push notifications
+## XML Rules
 
-## Compliance
-Polish Labour Code.
+Backend MUST:
+- validate schema before submission
+- reject invalid VAT values
+- reject malformed XML
+- support sandbox + production environments
 
-## Important Rules
-- Attendance records are immutable
-- Overtime must be auto-calculated
-- Break tracking is mandatory
-- Reports exportable to PDF/CSV
+## Backend Requirements
 
-## Integrations
-Connected with:
-- SafeWork module
-
-If employee compliance expires:
-- block clock-in
+Required services:
+- InvoiceService
+- XMLGeneratorService
+- KSeFIntegrationService
+- CertificateService
+- UPOStorageService
+- RetryQueueService
 
 ---
 
-# 3. SafeWork — HR Compliance System
+# MODULE 2 — WorkPulse (Time Tracking)
 
-## Purpose
-Employee compliance and safety tracking.
+## Labour Law Requirements
 
-## Features
-- Employee compliance dashboard
-- Medical certificate tracking
-- BHP training tracking
-- Expiry alerts
-- Document uploads
-- Work-blocking system
+MUST track:
+- clock-in
+- clock-out
+- break time
+- overtime
+- absences
 
-## Background Jobs
-Daily midnight cron:
-- check expiry dates
-- send notifications
+## Mobile Security
 
-## Compliance
-- BHP regulations
-- Labour safety law
-- GDPR
+MANDATORY:
+- device authentication
+- GPS validation
+- anti-spoofing checks
+- push notifications
 
-## Important Rules
-Expired compliance:
-- must block employee shifts
+## Overtime Rules
 
-Medical documents:
-- encrypted storage mandatory
+Automatically flag:
+- shifts > legal thresholds
+- missed breaks
+- abnormal working patterns
+
+## Cron Jobs
+
+Required:
+- daily attendance reconciliation
+- overtime calculations
+- shift anomaly detection
+
+## Reports
+
+Generate:
+- PDF
+- CSV
+- payroll exports
 
 ---
 
-# 4. SafeVoice — Whistleblower System
+# MODULE 3 — SafeWork (HR Compliance)
 
-## Purpose
-Anonymous reporting platform.
+## Required Features
 
-## Features
-- Anonymous reports
-- End-to-end encryption
-- Tracking PIN
-- Status tracking
-- Admin dashboard
+Track:
+- medical certificates
+- BHP training
+- expiry dates
+- uploaded documents
+
+## Automatic Enforcement
+
+Employees MUST NOT:
+- clock-in with expired certificates
+- bypass compliance checks
+
+## Scheduled Jobs
+
+Daily cron MUST:
+- detect expiring documents
+- send 30-day alerts
+- send 7-day alerts
+
+## Storage Rules
+
+Documents MUST:
+- remain encrypted
+- have access logging
+- support audit retrieval
+
+---
+
+# MODULE 4 — SafeVoice (Whistleblower)
+
+## Legal Requirements
+
+MUST support:
+- anonymous reporting
+- anti-retaliation compliance
+- encrypted storage
+- secure communication
 
 ## Encryption
-Use:
-- AES-256-GCM
 
-## Special Legal Rule
-If category == labour_dispute:
+Reports MUST use:
+- AES-256-GCM
+- encrypted attachments
+- secure PIN tracking
+
+## Special Labour Dispute Rule
+
+IF category = labour_dispute:
 - notify HR
 - DO NOT encrypt
 - DO NOT generate PIN
 
-## Important Rules
-Admins must NOT read encrypted reports directly.
+## Security Rules
+
+Admins MUST NOT:
+- identify anonymous users
+- access metadata revealing identity
 
 ---
 
-# 5. WasteSync — BDO Waste Reporting
+# MODULE 5 — WasteSync (BDO Waste Reporting)
 
-## Purpose
-Environmental waste reporting system.
+## Compliance Requirements
 
-## Features
-- Monthly waste entry
-- Annual totals
-- XML generation
-- PDF reports
-- Historical logs
-- Audit exports
+MUST support:
+- annual reporting
+- XML export
+- PDF export
+- historical logs
 
-## Required Data
-- BDO Number
-- Waste totals
-- Reporting year
-- Company identity
+## Data Retention
 
-## Compliance
-- BDO regulations
-- GDPR
-- 10-year retention
+Minimum:
+- 10 years
 
 ## XML Rules
-Generated XML must follow government reporting structure.
+
+Reports MUST include:
+- BDO number
+- reporting year
+- company identity
+- waste totals
+
+## Validation
+
+Reject:
+- negative weights
+- malformed reports
+- missing BDO number
 
 ---
 
-# 6. PrivacyPilot — GDPR / RODO System
+# MODULE 6 — PrivacyPilot (GDPR/RODO)
 
-## Purpose
-GDPR compliance automation platform.
+## Compliance Requirements
 
-## Features
-- Processing activity wizard
-- GDPR register generation
-- Privacy policy generation
+MUST support:
+- ROPA generation
 - DPIA detection
-- PDF/DOCX exports
+- privacy policy generation
+- audit exports
 
-## Compliance
-- GDPR / RODO
-- EEA hosting mandatory
-- AES-256 encryption mandatory
+## GDPR Rules
 
-## Roles
-- Admin
-- Compliance Officer
-- Auditor
+Sensitive data MUST:
+- remain encrypted
+- remain in EEA
+- support right-to-erasure
+- support export requests
 
-## Important Rules
-All changes must generate audit logs.
+## DPIA Detection
 
----
+Automatically flag:
+- health data
+- biometric data
+- large-scale monitoring
+- sensitive processing
 
-# Coding Standards
+## Audit Requirements
 
-## Backend Rules
-- Use layered architecture
-- Controllers must stay thin
-- Services contain business logic
-- Repositories contain persistence logic
-- DTOs for API communication
-- Never expose entities directly
-
-## API Standards
-- RESTful APIs
-- Versioned APIs
-- OpenAPI/Swagger docs
-- Consistent response structure
-
-## Exception Handling
-Use centralized exception handling.
-
-Never return raw exceptions.
+Track:
+- who changed records
+- timestamps
+- old/new values
 
 ---
 
-# Database Standards
+# 11. FRONTEND REQUIREMENTS
 
-## Required Common Fields
+Frontend MUST:
+- use CSP headers
+- sanitize HTML
+- prevent XSS
+- support accessibility
+- support i18n
+- support Polish language
 
-Every entity should contain:
-- id
-- tenant_id
+MANDATORY:
+- dark mode
+- responsive UI
+- WCAG 2.1 compliance
+
+---
+
+# 12. BACKEND REQUIREMENTS
+
+Preferred stack:
+- Spring Boot (recommended)
+- PostgreSQL
+- Redis
+- Kafka/SQS
+- Docker
+- Kubernetes
+
+Architecture:
+- modular monolith OR microservices
+- event-driven integrations
+- queue-based retry systems
+
+---
+
+# 13. DATABASE RULES
+
+MANDATORY:
+- UUID primary keys
+- soft delete support
 - created_at
 - updated_at
-- created_by
-- updated_by
-- audit metadata
+- deleted_at
+- audit columns
+
+Sensitive columns MUST be encrypted.
 
 ---
 
-# Queue & Retry Standards
+# 14. DEVSECOPS REQUIREMENTS
 
-Use queues for:
-- Notifications
-- KSeF retries
-- Report generation
-- Background processing
+CI/CD MUST include:
+- SAST scanning
+- dependency scanning
+- secret scanning
+- container scanning
+- IaC scanning
 
-Retry strategy:
-- exponential backoff
-
----
-
-# Offline Support Rules
-
-Critical modules must support offline fallback:
-- KSeFFlow
-- WorkPulse mobile
-
-Offline data must:
-- sync safely
-- avoid duplication
-- maintain audit history
+Mandatory tools:
+- SonarQube
+- Trivy
+- OWASP Dependency Check
 
 ---
 
-# AI Agent Development Rules
+# 15. OBSERVABILITY
 
-## Before Writing Code
-AI agent must:
-1. Understand module boundaries
-2. Check compliance impact
-3. Check tenant impact
-4. Check security implications
-5. Check audit logging requirements
+MANDATORY:
+- centralized logging
+- metrics
+- distributed tracing
+- uptime monitoring
+- alerting
+
+Use:
+- Prometheus
+- Grafana
+- OpenTelemetry
 
 ---
 
-## When Modifying Code
-ALWAYS:
-- Comment old logic instead of deleting immediately
-- Add explanation comments for new code
-- Preserve backward compatibility when possible
+# 16. LEGAL RETENTION POLICY
+
+| Data Type | Retention |
+|---|---|
+| Invoices | 10 years |
+| Audit Logs | 10 years |
+| Attendance Records | 10 years |
+| BDO Reports | 10 years |
+| GDPR Records | 10 years |
+| Whistleblower Reports | Based on legal policy |
+
+---
+
+# 17. PROHIBITED PRACTICES
+
+NEVER:
+- store plaintext passwords
+- store unencrypted certificates
+- expose tenant data
+- log sensitive PII
+- bypass audit logging
+- disable encryption
+- trust frontend validation
+- use hardcoded secrets
+
+---
+
+# 18. TESTING REQUIREMENTS
+
+MANDATORY:
+- unit testing
+- integration testing
+- penetration testing
+- security testing
+- XML validation testing
+- API contract testing
+- load testing
+
+Minimum coverage:
+- 80% backend coverage
+
+---
+
+# 19. COMPLIANCE CHECKLIST
+
+Before release ensure:
+- GDPR compliant
+- KSeF schema validated
+- OWASP checks passed
+- Penetration test completed
+- Audit logging verified
+- Data residency verified
+- Backups tested
+- Encryption validated
+- Retention policies active
+
+---
+
+# 20. AI DEVELOPMENT RULES
+
+When generating code:
+- ALWAYS prioritize security
+- ALWAYS include validation
+- ALWAYS include audit logging
+- ALWAYS include error handling
+- ALWAYS include tenant isolation
+- ALWAYS include DTO validation
+- ALWAYS include encryption where required
+- NEVER generate insecure examples
+
+Generated code MUST:
+- be production ready
+- follow SOLID principles
+- support scaling
+- support compliance audits
+
+---
+
+# 21. FUTURE CERTIFICATIONS TARGET
+
+Architecture should remain compatible with:
+- ISO 27001
+- SOC2
+- NIS2
+- DORA
+- GDPR
+- EU AI Act
+
+
+
+
+
+
+
+# ADDITIONAL ENTERPRISE RULES FOR REGULAONE
+
+---
+
+# 22. AI CODING AGENT GOVERNANCE
+
+This repository may be modified by:
+- Claude Code
+- Cursor AI
+- OpenAI Codex
+- GitHub Copilot
+- Internal AI agents
+
+All AI coding agents MUST follow the rules below.
+
+---
+
+## AI AGENT SAFETY RULES
+
+### NEVER
+- Never delete code immediately
+- Never overwrite business-critical logic blindly
+- Never bypass compliance requirements
+- Never expose secrets
+- Never hardcode credentials
+- Never expose stack traces
+- Never disable encryption
+- Never disable audit logging
+- Never access databases directly from controllers
+- Never create circular dependencies
+- Never duplicate business logic
+- Never skip validation
+- Never skip authorization checks
+- Never trust frontend inputs
+- Never use deprecated cryptography
+- Never use MD5/SHA1
+- Never create insecure JWT handling
+- Never store tokens in plaintext
+- Never store certificates unencrypted
+- Never commit `.env` files
+- Never disable rate limiting on public endpoints
+- Never generate fake compliance logic
+- Never create mock production implementations
+
+---
+
+## ALWAYS
+- Always write production-ready code
+- Always add explanatory comments
+- Always validate DTOs
+- Always add retry handling
+- Always use centralized exception handling
+- Always use immutable audit logs
+- Always use environment variables
+- Always implement tenant isolation
+- Always sanitize inputs
+- Always implement logging
+- Always implement authorization
+- Always think about GDPR
+- Always think about auditability
+- Always write scalable code
+- Always use queues for async jobs
+- Always use transactions where needed
+- Always preserve backward compatibility
+- Always implement API versioning
+- Always consider legal impact
+
+---
+
+# 23. CLEAN ARCHITECTURE STANDARDS
+
+Backend architecture MUST follow:
+
+```text
+Controller Layer
+↓
+Service Layer
+↓
+Domain Layer
+↓
+Repository Layer
+↓
+Database
+
+
+---
+
+# 24. POLAND COMPLIANCE & SECURITY INSTRUCTION
+
+This project is being developed specifically for the Polish market. Therefore, all features, modules, workflows, data processing activities, and integrations must be designed and implemented with a strong focus on security, compliance, and regulatory requirements applicable in Poland and the European Union.
+
+Before implementing any feature, verify the requirements against the official Polish government websites, regulatory authorities, and relevant legal documentation to ensure the implementation is compliant with current laws, standards, and best practices.
+
+## Key Requirements
+
+- Security must be a primary consideration for every feature.
+- Ensure compliance with all applicable Polish regulations and EU regulations, including GDPR where relevant.
+- Validate business processes, document formats, tax requirements, invoicing requirements, and reporting obligations using official government sources before development.
+- Do not assume compliance based on third-party articles or unofficial sources.
+- Any feature that handles personal data, financial information, tax information, or government reporting must be verified against official documentation before implementation.
+- Follow secure coding practices, data encryption standards, access control policies, audit logging requirements, and data retention policies.
+- If there is any uncertainty regarding legal or compliance requirements, research and confirm the requirements from official Polish government portals before proceeding with development.
+- Document the official source and compliance reference for each major feature implementation.
+
+All implementations should be production-ready, secure, scalable, auditable, and fully aligned with Polish market requirements.
+
+---
+
+# 25. CODE DOCUMENTATION & CHANGE MANAGEMENT REQUIREMENTS
+
+In addition to security and compliance requirements, follow these coding standards for every implementation:
+
+## Code Comments
+
+- Add clear comments for all new code, functions, classes, and complex logic.
+- Write comments in very simple English that can be understood by a 5th-grade student.
+- Explain what the code is doing and why it is needed.
+- Avoid technical jargon whenever possible.
+- Ensure comments help future developers quickly understand the purpose of the code.
 
 Example:
+
 ```java
-// OLD IMPLEMENTATION - kept for backward compatibility
+// Check if the package will expire in 7 days.
+// If yes, send an email to remind the admin.
+```
+
+## Code Changes & Refactoring
+
+- Whenever modifying existing code, clearly explain:
+  - What was changed.
+  - Why the change was necessary.
+  - Why the old code was removed, replaced, or modified.
+  - What problem the new implementation solves.
+  - Any benefits gained from the change (security, performance, readability, compliance, maintainability, etc.).
+
+## Change Report Format
+
+For every code update, provide a summary in the following format:
+
+1. Files Modified
+2. Old Behavior
+3. New Behavior
+4. Reason for Removing/Changing the Old Code
+5. Security Impact
+6. Compliance Impact
+7. Testing Performed
+8. Potential Risks or Side Effects
+
+Never remove existing code without explaining the reason. Always document why the previous implementation was not suitable and why the new implementation is a better solution.
+
+---
+
+# END OF CLAUDE.MD

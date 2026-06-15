@@ -2,7 +2,7 @@
 //
 // useMyProfile()       — GET /api/auth/me  (shared query key ['me'] with the store)
 // useUpdateMyProfile() — PATCH /api/auth/me  (any role: updates own name)
-// useMyOrg()          — GET /api/tenant/{tenantId}  (admin + user: view company info)
+// useMyOrg()          — GET /api/tenant/info  (admin + user: view own company info)
 // useUpdateMyOrg()    — PUT /api/admin/org  (admin only: edit company info)
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -49,7 +49,7 @@ export function useMyOrg() {
   const tenantId = useAuthStore((s) => s.user?.tenantId);
   return useQuery({
     queryKey: ['org', tenantId],
-    queryFn:  () => tenantService.getById(tenantId),
+    queryFn:  () => tenantService.getMyTenant(),
     enabled:  !!tenantId,
   });
 }

@@ -1,5 +1,6 @@
-import { create } from 'zustand';
-import { authService } from '../services/authService';
+import { create }           from 'zustand';
+import { authService }      from '../services/authService';
+import { triggerSSOLogout } from '../services/ssoService';
 
 // ── Proactive token refresh ───────────────────────────────────────────────────
 //
@@ -94,6 +95,17 @@ export const useAuthStore = create((set) => ({
 
   setLoading:        (isLoading)      => set({ isLoading }),
   setChallengeState: (challengeState) => set({ challengeState }),
+
+  // ssoLogout: centralized logout.
+  // Clears local state first (stops the refresh cycle immediately), then triggers
+  // the browser redirect to the central login page via triggerSSOLogout().
+  // Accepts an optional logoutUrl returned by POST /api/sso/logout so the
+  // redirect target comes from server config, not a hardcoded frontend value.
+  ssoLogout: (logoutUrl = null) => {
+    set({ user: null });
+    _stopRefreshCycle();
+    triggerSSOLogout(logoutUrl); // redirects browser; no return value needed
+  },
 
   // initAuth: restores session from the idToken HTTP-only cookie on every page
   // load. If the cookie has already expired, api.js intercepts the 401, calls

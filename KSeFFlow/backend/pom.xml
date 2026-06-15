@@ -28,11 +28,36 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
+		<aws.sdk.version>2.29.51</aws.sdk.version>
+		<!-- Test groups (JUnit tags) skipped in the normal "mvn test" run.
+		     "slow" = the FA(3) XSD validation tests (one-time multi-minute rule-table build).
+		     The integration-tests profile clears this so they run. -->
+		<surefire.excludedGroups>slow</surefire.excludedGroups>
 	</properties>
+
+	<!-- AWS SDK v2 BOM — keeps all software.amazon.awssdk:* artifacts on one version -->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>${aws.sdk.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-mongodb</artifactId>
+		</dependency>
+
+		<!-- AWS S3 — encrypted certificate storage (qualified-seal PFX/PEM files) -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -48,6 +73,56 @@
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
 		</dependency>
+
+		<!-- Bean Validation — for @Validated on @ConfigurationProperties and DTO constraints -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+
+		<!-- Apache Santuario (XML Security) — XAdES/XML-DSig enveloped signature over the
+		     KSeF 2.0 AuthTokenRequest document (POST /auth/xades-signature). -->
+		<dependency>
+			<groupId>org.apache.santuario</groupId>
+			<artifactId>xmlsec</artifactId>
+			<version>3.0.4</version>
+		</dependency>
+
+		<!-- BouncyCastle — used to build the PKCS#10 certificate signing request (CSR) that
+		     KSeF requires when enrolling a KSeF certificate (POST /certificates/enrollments).
+		     The Java standard library cannot build a CSR; bcpkix is the standard tool and is
+		     what the official KSeF SDK examples use. bcprov is its provider dependency. -->
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcpkix-jdk18on</artifactId>
+			<version>1.78.1</version>
+		</dependency>
+
+		<!-- Configuration metadata — IDE autocomplete for application.properties -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-configuration-processor</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<!-- Apache PDFBox — offline fallback PDF generation -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>3.0.3</version>
+		</dependency>
+
+		<!-- ZXing — QR code generation embedded in offline PDFs -->
+		<dependency>
+			<groupId>com.google.zxing</groupId>
+			<artifactId>core</artifactId>
+			<version>3.5.3</version>
+		</dependency>
+		<dependency>
+			<groupId>com.google.zxing</groupId>
+			<artifactId>javase</artifactId>
+			<version>3.5.3</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-mongodb-test</artifactId>
@@ -115,7 +190,29 @@
 					</execution>
 				</executions>
 			</plugin>
+
+			<!-- Normal test run (mvn test): skip tests tagged "slow" so the build stays fast.
+			     The FA(3) XSD validation tests build a big rule table (a few minutes once),
+			     so they are kept out of the everyday unit-test run. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludedGroups>${surefire.excludedGroups}</excludedGroups>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!-- Run the slow integration tests too:  mvn test -Pintegration-tests
+		     This clears the excluded group so the FA(3) XSD tests (tagged "slow") run. -->
+		<profile>
+			<id>integration-tests</id>
+			<properties>
+				<surefire.excludedGroups></surefire.excludedGroups>
+			</properties>
+		</profile>
+	</profiles>
 
 </project>

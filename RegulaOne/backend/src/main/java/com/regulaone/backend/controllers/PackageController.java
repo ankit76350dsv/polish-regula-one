@@ -1,5 +1,6 @@
 package com.regulaone.backend.controllers;
 
+import com.regulaone.backend.dto.AppResponse;
 import com.regulaone.backend.dto.Package.PackagePageResponse;
 import com.regulaone.backend.dto.Package.PackageRequest;
 import com.regulaone.backend.dto.Package.PackageResponse;
@@ -7,10 +8,6 @@ import com.regulaone.backend.dto.Package.PackageTierStatsResponse;
 import com.regulaone.backend.dto.Package.TierChangeResponse;
 import com.regulaone.backend.models.PackageStatus;
 import com.regulaone.backend.services.PackageService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -20,175 +17,84 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.net.URI;
-// OLD: List import removed — getPackagesForTenant now returns TenantPackagesResponse (not a List)
-// import java.util.List;
-// Re-added: List is now used by getTierChanges() which returns List<TierChangeResponse>.
 import java.util.List;
 
-/**
- * REST controller for Package management and Tenant-Package assignments.
- *
- * All endpoints are under /api/superadmin and require ROLE_SUPER_ADMIN.
- *
- * Package CRUD:
- *   POST   /api/superadmin/packages
- *   PUT    /api/superadmin/packages/{id}
- *   DELETE /api/superadmin/packages/{id}
- *   GET    /api/superadmin/packages/{id}
- *   GET    /api/superadmin/packages?search=&status=&page=&size=&sortBy=&sortDir=
- *
- * Tenant–Package assignment:
- *   POST   /api/superadmin/tenants/{tenantId}/packages/{packageId}
- *   DELETE /api/superadmin/tenants/{tenantId}/packages/{packageId}
- *   GET    /api/superadmin/tenants/{tenantId}/packages
- */
 @RestController
 @RequestMapping("/api/superadmin")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
-@Tag(name = "Package Management", description = "APIs for managing subscription packages and tenant app access")
 public class PackageController {
 
     private final PackageService packageService;
 
     // ── Package CRUD ──────────────────────────────────────────────────────────
 
-    @Operation(summary = "Create a new subscription package")
-    @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Package created successfully"),
-        @ApiResponse(responseCode = "400", description = "Validation error or duplicate package name"),
-        @ApiResponse(responseCode = "403", description = "Requires ROLE_SUPER_ADMIN")
-    })
-
-    //!create
     @PostMapping("/packages")
-    public ResponseEntity<PackageResponse> createPackage(@Valid @RequestBody PackageRequest request) {
-       
+    public ResponseEntity<AppResponse<PackageResponse>> createPackage(
+            @Valid @RequestBody PackageRequest request) {
         PackageResponse created = packageService.createPackage(request);
-
-        // Return 201 Created with Location header pointing to the new resource
-        URI location = URI.create("/api/superadmin/packages/" + created.getId());
-        return ResponseEntity.created(location).body(created);
+        return ResponseEntity.status(201)
+                .body(AppResponse.created("Package created successfully", created));
     }
 
-    //! update
-    @Operation(summary = "Update an existing package by ID")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Package updated successfully"),
-        @ApiResponse(responseCode = "400", description = "Validation error or duplicate package name"),
-        @ApiResponse(responseCode = "404", description = "Package not found")
-    })
     @PutMapping("/packages/{id}")
-    public ResponseEntity<PackageResponse> updatePackage(
+    public ResponseEntity<AppResponse<PackageResponse>> updatePackage(
             @PathVariable String id,
             @Valid @RequestBody PackageRequest request) {
-        return ResponseEntity.ok(packageService.updatePackage(id, request));
+        return ResponseEntity.ok(AppResponse.success(
+                "Package updated successfully",
+                packageService.updatePackage(id, request)));
     }
 
-    //!delete
-    @Operation(summary = "Delete a package by ID — also removes all tenant assignments")
-    @ApiResponses({
-        @ApiResponse(responseCode = "204", description = "Package deleted"),
-        @ApiResponse(responseCode = "404", description = "Package not found")
-    })
     @DeleteMapping("/packages/{id}")
-    public ResponseEntity<Void> deletePackage(@PathVariable String id) {
+    public ResponseEntity<AppResponse<Void>> deletePackage(@PathVariable String id) {
         packageService.deletePackage(id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(AppResponse.success("Package deleted successfully."));
     }
 
-
-    //! get package using package id
-    @Operation(summary = "Get a single package by ID")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Package found"),
-        @ApiResponse(responseCode = "404", description = "Package not found")
-    })
     @GetMapping("/packages/{id}")
-    public ResponseEntity<PackageResponse> getPackageById(@PathVariable String id) {
-        return ResponseEntity.ok(packageService.getPackageById(id));
+    public ResponseEntity<AppResponse<PackageResponse>> getPackageById(@PathVariable String id) {
+        return ResponseEntity.ok(AppResponse.success(
+                "Package loaded",
+                packageService.getPackageById(id)));
     }
 
-    /**
-     * GET /api/superadmin/packages
-     *
-     * Paginated package list with optional filters.
-     *
-     * Query params:
-     *   search  — partial name match (case-insensitive)
-     *   status  — ACTIVE / INACTIVE / EXPIRED
-     *   page    — zero-based index (default 0)
-     *   size    — items per page (default 10, max 100)
-     *   sortBy  — field to sort by (default: createdAt)
-     *   sortDir — asc or desc (default: desc)
-     *
-     * Example: GET /api/superadmin/packages?search=basic&status=ACTIVE&page=0&size=5
-     */
-    @Operation(summary = "Get all packages with pagination, search, and status filter")
     @GetMapping("/packages")
-    public ResponseEntity<PackagePageResponse> getAllPackages(
+    public ResponseEntity<AppResponse<PackagePageResponse>> getAllPackages(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) PackageStatus status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "0")    int page,
+            @RequestParam(defaultValue = "10")   int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
 
-        // Cap at 100 to prevent accidentally dumping the entire collection
         int safeSize = Math.min(size, 100);
-
         Sort.Direction direction = sortDir.equalsIgnoreCase("asc")
                 ? Sort.Direction.ASC : Sort.Direction.DESC;
-
         Pageable pageable = PageRequest.of(page, safeSize, Sort.by(direction, sortBy));
 
-        return ResponseEntity.ok(packageService.getAllPackages(search, status, pageable));
+        return ResponseEntity.ok(AppResponse.success(
+                "Packages loaded",
+                packageService.getAllPackages(search, status, pageable)));
     }
 
-    // ── License Tiers dashboard endpoints ────────────────────────────────────
+    // ── License Tiers dashboard ───────────────────────────────────────────────
 
-    /**
-     * GET /api/superadmin/packages/tier-stats
-     *
-     * Returns platform-wide MRR, paying tenant count, the most popular tier,
-     * and per-tier stats (tenantCount, tierMrr, usersCapacity, appIds).
-     * Consumed by the License Tiers page stats cards and package tier cards.
-     */
-    @Operation(summary = "Get MRR and per-tier tenant stats for the License Tiers dashboard")
     @GetMapping("/packages/tier-stats")
-    public ResponseEntity<PackageTierStatsResponse> getPackageTierStats() {
-        return ResponseEntity.ok(packageService.getPackageTierStats());
+    public ResponseEntity<AppResponse<PackageTierStatsResponse>> getPackageTierStats() {
+        return ResponseEntity.ok(AppResponse.success(
+                "Tier stats loaded",
+                packageService.getPackageTierStats()));
     }
 
-    /**
-     * GET /api/superadmin/tier-changes
-     *
-     * Returns a list of plan upgrade/downgrade events across all tenants,
-     * sorted newest first.
-     *
-     * Optional query params:
-     *   limit — max results to return; omit or set 0 for full history
-     *
-     * Examples:
-     *   GET /api/superadmin/tier-changes?limit=4   → recent 4 changes
-     *   GET /api/superadmin/tier-changes            → full history
-     */
-    @Operation(summary = "Get recent or full tier-change history across all tenants")
     @GetMapping("/tier-changes")
-    public ResponseEntity<List<TierChangeResponse>> getTierChanges(
+    public ResponseEntity<AppResponse<List<TierChangeResponse>>> getTierChanges(
             @RequestParam(required = false) Integer limit) {
-        return ResponseEntity.ok(packageService.getTierChanges(limit));
+        return ResponseEntity.ok(AppResponse.success(
+                "Tier changes loaded",
+                packageService.getTierChanges(limit)));
     }
 
-    /**
-     * GET /api/superadmin/tier-changes/export
-     *
-     * Streams a CSV file containing one row per active tenant with their
-     * current package, price, currency, plan start/expiry, and status.
-     * The browser receives it as a downloadable file.
-     */
-    @Operation(summary = "Export billing data for all active tenants as a CSV file")
     @GetMapping("/tier-changes/export")
     public ResponseEntity<String> exportBillingCsv() {
         String csv = packageService.exportBillingCsv();
@@ -197,5 +103,4 @@ public class PackageController {
                 .header("Content-Disposition", "attachment; filename=\"billing-export.csv\"")
                 .body(csv);
     }
-
 }

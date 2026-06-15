@@ -1,5 +1,18 @@
 // Central HTTP client — wraps fetch with baseURL, credentials (HTTP-only cookie forwarding),
 // JSON content-type, unified error handling, and silent token refresh on 401.
+//
+// Response envelope: every endpoint returns AppResponse<T>:
+//   { success, message, data, errorCode, status }
+//
+// This module transparently unwraps the envelope so callers receive `data` on success
+// and a thrown Error (with .message and .errorCode) on failure.
+//
+// Session expiry strategy:
+//   1. Any request returns 401 → try POST /api/sso/refresh (silent token refresh)
+//   2. If refresh succeeds    → retry the original request once
+//   3. If refresh also fails  → redirectToSSO() sends user to central login
+
+import { redirectToSSO } from '../services/ssoService';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 
@@ -9,24 +22,22 @@ let refreshInProgress = null;
 async function request(method, path, body, _retry = false) {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
-    // credentials: 'include' — browser attaches HTTP-only cookies (idToken, accessToken, refreshToken)
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     ...(body !== undefined && { body: JSON.stringify(body) }),
   });
 
-  // Silent token refresh on 401 (idToken/accessToken expired after 1 hour).
+  // Silent token refresh on 401.
   // Skip for the refresh and login endpoints themselves to avoid infinite loops.
   if (
     res.status === 401 &&
     !_retry &&
-    path !== '/api/auth/refresh' &&
-    path !== '/api/auth/login'
+    path !== '/api/sso/refresh' &&
+    path !== '/api/sso/login'
   ) {
     try {
-      // Deduplicate: if multiple requests got 401 simultaneously, only one refresh fires.
       if (!refreshInProgress) {
-        refreshInProgress = fetch(`${BASE_URL}/api/auth/refresh`, {
+        refreshInProgress = fetch(`${BASE_URL}/api/sso/refresh`, {
           method: 'POST',
           credentials: 'include',
         }).finally(() => { refreshInProgress = null; });
@@ -34,26 +45,44 @@ async function request(method, path, body, _retry = false) {
       const refreshRes = await refreshInProgress;
 
       if (refreshRes.ok) {
-        // New idToken + accessToken cookies are now set — retry the original request once.
         return request(method, path, body, true);
       }
     } catch {
       // Network error during refresh — fall through to redirect
     }
 
-    // Refresh failed (expired refresh token) — clear state and force re-login.
-    window.location.href = '/login';
+    redirectToSSO(window.location.pathname);
     throw new Error('Session expired. Please log in again.');
   }
 
+  // Parse body — safe even for 4xx/5xx since the backend always returns JSON
+  const json = await res.json().catch(() => null);
+
   if (!res.ok) {
-    const payload = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(payload.message ?? 'Request failed');
+    // Extract message and errorCode from AppResponse envelope if present
+    const message   = json?.message   ?? res.statusText ?? 'Request failed';
+    const errorCode = json?.errorCode ?? 'UNKNOWN_ERROR';
+    const err = new Error(message);
+    err.errorCode  = errorCode;
+    err.httpStatus = json?.status ?? res.status;
+    throw err;
   }
 
-  if (res.status === 204) return undefined;
+  if (res.status === 204 || json === null) return undefined;
 
-  return res.json();
+  // Unwrap AppResponse envelope: { success, message, data, errorCode, status }
+  if (json && typeof json === 'object' && 'success' in json) {
+    if (!json.success) {
+      const err = new Error(json.message ?? 'Request failed');
+      err.errorCode  = json.errorCode;
+      err.httpStatus = json.status;
+      throw err;
+    }
+    return json.data;
+  }
+
+  // Fallback for any endpoint not using the envelope (e.g. CSV export)
+  return json;
 }
 
 export const api = {
