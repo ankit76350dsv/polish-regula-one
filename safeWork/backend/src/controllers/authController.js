@@ -1,32 +1,13 @@
-const { validationResult } = require('express-validator');
 const authService = require('../services/authService');
 const { sendSuccess, sendError } = require('../utils/responseHelper');
 
 
 // Thin controller — only parses request, delegates to service, formats response.
 // Business logic lives in authService.
-
-const login = async (req, res, next) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return sendError(res, 'Validation failed', 400, errors.array());
-    }
-
-    const { email, password } = req.body;
-    const result = await authService.login({
-      email,
-      password,
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent'],
-    });
-
-    return sendSuccess(res, result, 'Login successful');
-  } catch (err) {
-    if (err.status) return sendError(res, err.message, err.status);
-    next(err);
-  }
-};
+//
+// NOTE: The local login() handler was removed. SafeWork does not log users in
+// itself anymore — the RegulaOne SSO service owns login and sets the shared
+// auth cookie. This controller now only exposes profile (getMe) and logout.
 
 const getMe = async (req, res, next) => {
   console.log('AuthController.getMe called with user:', req.user);
@@ -54,4 +35,4 @@ const logout = async (req, res, next) => {
   }
 };
 
-module.exports = { login, getMe, logout };
+module.exports = { getMe, logout };

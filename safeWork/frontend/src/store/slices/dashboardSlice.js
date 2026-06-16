@@ -3,10 +3,9 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 // SafeWork backend runs on 8082; RegulaOne (auth) runs on 8080
 const SAFEWORK_API = "http://localhost:8082/api";
 
-const getAuthHeaders = () => {
-  const token = localStorage.getItem("accessToken");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+// We no longer read a token from localStorage or send an Authorization header.
+// The auth token travels in an HttpOnly cookie, which the browser attaches
+// automatically when we set `credentials: "include"` on the request below.
 
 // Fetches compliance dashboard data from the SafeWork backend.
 // tenantId is passed as a query param — consistent with all other SafeWork endpoints
@@ -22,10 +21,10 @@ export const fetchDashboard = createAsyncThunk(
       const response = await fetch(
         `${SAFEWORK_API}/dashboard/overview?tenantId=${tenantId}`,
         {
+          // Send the auth cookie with the request.
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
-            ...getAuthHeaders(),
           },
         }
       );

@@ -9,22 +9,39 @@ const cognitoVerifier = CognitoJwtVerifier.create({
   clientId: config.cognito.clientId
 });
 
+// Find the login token for this request.
+// We look in TWO places, in this exact order:
+//   1. The browser cookies (preferred — the token is sent automatically and
+//      is never read by frontend JavaScript, so it cannot be stolen by XSS).
+//   2. The "Authorization: Bearer <token>" header (only used as a backup).
+// If we cannot find a token in either place, we return null and the caller
+// will send back a "please login" error.
 function getTokenFromRequest(req) {
-  const { idToken, accessToken } = req.cookies || {};
+  const cookies = req.cookies || {};
 
-  let token = null;
+  // List of cookie names we will accept, in order of preference.
+  // Cognito can use either an "id" token or an "access" token, so we put the
+  // configured one first. We also accept a few common generic names so the
+  // token is still found no matter what the login service named the cookie.
+  const cookieOrder =
+    config.cognito.tokenUse === 'access'
+      ? ['accessToken', 'idToken', 'token', 'authToken']
+      : ['idToken', 'accessToken', 'token', 'authToken'];
 
-  if (config.cognito.tokenUse === 'access') {
-    token = accessToken || idToken;
-  } else {
-    token = idToken || accessToken;
+  // Step 1: try to read the token from the cookies first.
+  for (const name of cookieOrder) {
+    if (cookies[name]) {
+      return cookies[name];
+    }
   }
 
-  if (!token && req.headers.authorization?.startsWith('Bearer ')) {
-    token = req.headers.authorization.split(' ')[1];
+  // Step 2: no cookie found — fall back to the Authorization Bearer header.
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    return req.headers.authorization.split(' ')[1];
   }
 
-  return token;
+  // Step 3: nothing found in cookies or header.
+  return null;
 }
 
 exports.isAuthenticatedUser = catchAsyncError(async (req, res, next) => {

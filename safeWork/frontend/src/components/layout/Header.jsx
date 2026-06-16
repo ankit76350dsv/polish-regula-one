@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { NavLink, Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 const NAV_ITEMS = [
   { label: "Home", path: "/" },
@@ -29,6 +30,11 @@ export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(null);
   const [mobileExpanded, setMobileExpanded] = useState(null);
+
+  // Auth state for the Sign In / Sign Out button.
+  // login() sends the user to the central RegulaOne login page.
+  // logout() clears the shared cookie and returns to the central login page.
+  const { isAuthenticated, login, logout } = useAuth();
 
   const dropdownRef = useRef(null);
 
@@ -196,8 +202,11 @@ export default function Header() {
 
           {/* Desktop CTA */}
           <div className="hidden lg:flex items-center gap-3">
-            <button className="text-sm font-medium text-slate-600 hover:text-emerald-700 transition-colors duration-200 px-3 py-2 rounded-lg hover:bg-emerald-50/70">
-              Sign In
+            <button
+              onClick={() => (isAuthenticated ? logout() : login())}
+              className="text-sm font-medium text-slate-600 hover:text-emerald-700 transition-colors duration-200 px-3 py-2 rounded-lg hover:bg-emerald-50/70"
+            >
+              {isAuthenticated ? "Sign Out" : "Sign In"}
             </button>
 
             <Link
@@ -333,8 +342,14 @@ export default function Header() {
           )}
 
           <div className="mt-5 flex flex-col gap-3">
-            <button className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50 transition-colors">
-              Sign In
+            <button
+              onClick={() => {
+                setMobileOpen(false);
+                isAuthenticated ? logout() : login();
+              }}
+              className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+            >
+              {isAuthenticated ? "Sign Out" : "Sign In"}
             </button>
 
             <Link

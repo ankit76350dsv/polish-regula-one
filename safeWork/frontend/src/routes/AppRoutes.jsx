@@ -5,6 +5,7 @@ import Home from "../pages/Home";
 import Dashboard from "../pages/Dashboard";
 import Placeholder from "../pages/Placeholder";
 import Login from "../components/Login";
+import SsoCallback from "../components/SsoCallback";
 
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
@@ -22,6 +23,13 @@ const router = createBrowserRouter([
         element: <Login />,
       },
     ],
+  },
+  {
+    // SSO callback — where the central RegulaOne login sends the user back to.
+    // It is a standalone route (not Public/Protected) because the component
+    // itself decides where to go once the session check finishes.
+    path: "/auth/sso-callback",
+    element: <SsoCallback />,
   },
   {
     element: <ProtectedRoute />,

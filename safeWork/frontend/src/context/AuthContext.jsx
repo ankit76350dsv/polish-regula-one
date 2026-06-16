@@ -1,15 +1,23 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
-import { getMe, loginUser, logoutUser } from "../api/authApi";
+import {
+  getMe,
+  logoutUser,
+  redirectToCentralLogin,
+} from "../api/authApi";
 import { setAuthUser, clearAuthUser } from "../store/slices/authSlice";
 
 const AuthContext = createContext(null);
 
+// AuthProvider now uses the SSO (single sign-on) model — same as KSeFFlow.
+// There is no email/password login here. We only:
+//   - check the shared auth cookie by calling /api/auth/me (checkAuth)
+//   - send the user to the central RegulaOne login page (login)
+//   - clear the cookie and return to the central login page (logout)
 export const AuthProvider = ({ children }) => {
   const dispatch = useDispatch();
   const [user, setUser] = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
-  const [loginLoading, setLoginLoading] = useState(false);
   const [error, setError] = useState("");
 
   const checkAuth = async () => {
@@ -33,35 +41,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async ({ email, password }) => {
-    try {
-      setLoginLoading(true);
-      setError("");
-
-      await loginUser({ email, password });
-
-      // Important: after login, call /me again to get actual user data
-      const userData = await getMe();
-
-      setUser(userData);
-      // Mirror user into Redux after successful login
-      dispatch(setAuthUser(userData));
-      return userData;
-    } catch (err) {
-      setUser(null);
-      dispatch(clearAuthUser());
-      setError(err.message || "Login failed");
-      throw err;
-    } finally {
-      setLoginLoading(false);
-    }
+  // Start the SSO login flow by redirecting to the central RegulaOne login page.
+  // The actual password check happens there, not in SafeWork.
+  const login = () => {
+    redirectToCentralLogin();
   };
 
-  const logout = () => {
-    logoutUser();
+  const logout = async () => {
+    // Ask the RegulaOne backend to clear the shared auth cookie, then clear
+    // our local UI state and send the user to the central login page.
+    const logoutUrl = await logoutUser();
     setUser(null);
-    // Clear user from Redux on logout
     dispatch(clearAuthUser());
+    window.location.href = logoutUrl;
   };
 
   useEffect(() => {
@@ -72,7 +64,6 @@ export const AuthProvider = ({ children }) => {
     user,
     isAuthenticated: Boolean(user),
     authChecking,
-    loginLoading,
     error,
     setError,
     checkAuth,

@@ -3,10 +3,9 @@ import axios from "axios";
 
 const API_BASE_URL = "http://localhost:8082/api";
 
-const authHeaders = () => {
-  const token = localStorage.getItem("accessToken");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+// We no longer read a token from localStorage or send an Authorization header.
+// The auth token travels in an HttpOnly cookie, which axios attaches
+// automatically when we set `withCredentials: true` on each request.
 
 // Fetches all SafeWork employees for the tenant (merged with RegulaOne user data).
 //
@@ -36,8 +35,8 @@ export const fetchEmployees = createAsyncThunk(
       const url = `${API_BASE_URL}/admin/users/${tenantId}${qs ? `?${qs}` : ""}`;
 
       const response = await axios.get(url, {
+        // Send the auth cookie with the request.
         withCredentials: true,
-        headers: authHeaders(),
       });
 
       // Backend wraps in { success, message, data: { count, employees, summary } }
@@ -55,8 +54,8 @@ export const fetchEmployee = createAsyncThunk(
   async (profileId, { rejectWithValue }) => {
     try {
       const response = await axios.get(`${API_BASE_URL}/admin/employees/${profileId}`, {
+        // Send the auth cookie with the request.
         withCredentials: true,
-        headers: authHeaders(),
       });
       return response.data?.data ?? response.data;
     } catch (err) {
@@ -78,7 +77,8 @@ export const upsertProfile = createAsyncThunk(
       const response = await axios.put(
         `${API_BASE_URL}/admin/employees/${employeeId}`,
         { ...profileData, tenantId },
-        { withCredentials: true, headers: authHeaders() }
+        // Send the auth cookie with the request.
+        { withCredentials: true }
       );
       return response.data?.data ?? response.data;
     } catch (err) {
@@ -127,8 +127,8 @@ export const uploadDocument = createAsyncThunk(
             fileName: file.name,
             contentType,
           },
+          // Send the auth cookie with the request.
           withCredentials: true,
-          headers: authHeaders(),
         }
       );
 
@@ -161,8 +161,8 @@ export const uploadDocument = createAsyncThunk(
           tenantId,
         },
         {
+          // Send the auth cookie with the request.
           withCredentials: true,
-          headers: authHeaders(),
         }
       );
 

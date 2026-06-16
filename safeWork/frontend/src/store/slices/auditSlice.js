@@ -3,10 +3,9 @@ import axios from "axios";
 
 const API_BASE_URL = "http://localhost:8082/api";
 
-const authHeaders = () => {
-  const token = localStorage.getItem("accessToken");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+// We no longer read a token from localStorage or send an Authorization header.
+// The auth token travels in an HttpOnly cookie, which axios attaches
+// automatically when we set `withCredentials: true` on the request.
 
 // Fetches a paginated, filtered audit log for the current tenant.
 //
@@ -33,8 +32,8 @@ export const fetchAuditLogs = createAsyncThunk(
       const url = `${API_BASE_URL}/admin/audit-logs${qs ? `?${qs}` : ""}`;
 
       const response = await axios.get(url, {
+        // Send the auth cookie with the request.
         withCredentials: true,
-        headers: authHeaders(),
       });
 
       // Backend wraps in { success, message, data: { count, logs, pagination } }
