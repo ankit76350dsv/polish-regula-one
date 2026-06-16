@@ -17,7 +17,21 @@ const config = {
 
   cognito: {
     userPoolId: process.env.AWS_COGNITO_USER_POOL_ID,
-    clientId: process.env.AWS_COGNITO_CLIENT_ID,
+    // The web app and the Flutter mobile app log in through DIFFERENT Cognito
+    // "app clients" (each has its own client id), even though they share the
+    // same user pool. Every token carries its app client id in the "aud" field,
+    // and aws-jwt-verify rejects the token if that id is not in our allow-list.
+    // So we accept a COMMA-SEPARATED list of client ids here. Example:
+    //   AWS_COGNITO_CLIENT_ID=webClientId,mobileClientId
+    // We turn that text into a clean list. If only one id is given we pass a
+    // plain string (what the library expected before), so nothing else breaks.
+    clientId: (() => {
+      const ids = (process.env.AWS_COGNITO_CLIENT_ID || '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean);
+      return ids.length > 1 ? ids : ids[0];
+    })(),
     tokenUse: process.env.AWS_COGNITO_TOKEN_USE || 'id'
   },
 

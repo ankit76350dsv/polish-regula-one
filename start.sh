@@ -17,6 +17,32 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+# Free a port before we use it.
+# Sometimes an old server from a previous run is still alive and is still
+# holding the port. If we try to start a new server on the same port, it
+# crashes with "EADDRINUSE: address already in use". To avoid this, we find
+# any process listening on the port and stop it first. This makes the
+# launcher safe to run again and again without leftover servers piling up.
+free_port() {
+  local port="$1"
+  # lsof lists the process IDs (PIDs) listening on this TCP port.
+  # If we find any, we send them a kill signal so the port becomes free.
+  local pids
+  pids="$(lsof -ti tcp:"${port}" -sTCP:LISTEN 2>/dev/null)"
+  if [ -n "$pids" ]; then
+    echo "  [port] freeing :${port} (stopping old process ${pids})"
+    # shellcheck disable=SC2086
+    kill $pids 2>/dev/null
+    sleep 0.5
+    # If something refused to stop, force it so the new server can start.
+    pids="$(lsof -ti tcp:"${port}" -sTCP:LISTEN 2>/dev/null)"
+    if [ -n "$pids" ]; then
+      # shellcheck disable=SC2086
+      kill -9 $pids 2>/dev/null
+    fi
+  fi
+}
+
 # Open a new Terminal tab and run a command in it
 open_tab() {
   local label="$1"
@@ -66,6 +92,8 @@ start_backend() {
     return
   fi
 
+  # Stop any old server still holding this port before we start a new one.
+  free_port "${port}"
   open_tab "${module} Backend :${port}" "$cmd"
   echo "  [✓] ${module} backend  → http://localhost:${port}"
 }
@@ -90,6 +118,8 @@ start_frontend() {
   # "npm run dev" can find the vite command and start without crashing.
   # Pass PORT env var; Vite reads it, Express/tsx server reads it too.
   local cmd="cd '${dir}' && echo '▶ Starting ${module} frontend on :${port}' && { [ -d node_modules ] || npm install ; } && PORT=${port} npm run dev ; exec \$SHELL"
+  # Stop any old dev server still holding this port before we start a new one.
+  free_port "${port}"
   open_tab "${module} Frontend :${port}" "$cmd"
   echo "  [✓] ${module} frontend → http://localhost:${port}"
 }

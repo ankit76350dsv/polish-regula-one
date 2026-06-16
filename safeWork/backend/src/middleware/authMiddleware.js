@@ -77,6 +77,7 @@ function getTokenFromRequest(req) {
     }
   }
 
+  console.log("Hii.... ", req.headers.authorization.split(' ')[1]);
   // Step 2: no cookie found — fall back to the Authorization Bearer header.
   if (req.headers.authorization?.startsWith('Bearer ')) {
     return req.headers.authorization.split(' ')[1];
