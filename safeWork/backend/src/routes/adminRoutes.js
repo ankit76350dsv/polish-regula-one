@@ -43,11 +43,13 @@ router.patch(
   employeeController.saveDocumentReference
 );
 
-// GET /api/admin/users/:tenantId
-// Returns all RegulaOne users for the tenant merged with their EmployeeProfile data.
+// GET /api/admin/users
+// Returns all RegulaOne users for the CURRENT tenant merged with their
+// EmployeeProfile data. The tenant is taken from the authenticated session
+// (req.tenantId) — it is no longer part of the URL.
 // Users with no profile are flagged as profileMissing: true.
 router.get(
-  '/users/:tenantId',
+  '/users',
   authorizeRoles('ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_USER', 'COMPLIANCE_OFFICER'),
   employeeController.getEmployees
 );

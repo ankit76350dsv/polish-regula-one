@@ -8,18 +8,14 @@ const SAFEWORK_API = "http://localhost:8082/api";
 // automatically when we set `credentials: "include"` on the request below.
 
 // Fetches compliance dashboard data from the SafeWork backend.
-// tenantId is passed as a query param — consistent with all other SafeWork endpoints
-// that use getState().auth.user?.tenantId rather than relying on req.user.tenant
-// (which may be null if the user record pre-dates tenant assignment).
+// We no longer send a tenantId — the backend reads it from the logged-in user's
+// session (RegulaOne /api/auth/me) and only ever returns this tenant's data.
 export const fetchDashboard = createAsyncThunk(
   "dashboard/fetch",
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const tenantId = getState().auth.user?.tenantId;
-      if (!tenantId) return rejectWithValue("No tenantId in auth state");
-
       const response = await fetch(
-        `${SAFEWORK_API}/dashboard/overview?tenantId=${tenantId}`,
+        `${SAFEWORK_API}/dashboard/overview`,
         {
           // Send the auth cookie with the request.
           credentials: "include",

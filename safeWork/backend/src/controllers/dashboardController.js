@@ -4,17 +4,12 @@ const { sendSuccess, sendError } = require('../utils/responseHelper');
 // GET /api/dashboard/overview
 // Returns all dashboard data for the authenticated user's tenant in one response.
 //
-// OLD: getDashboard called getDashboardStats(req.user.tenantId) — bug because
-//   1. req.user.tenantId does not exist; the field is req.user.tenant (ObjectId).
-//   2. getDashboardStats queried Employee.find({ tenantId }) but Employee has no
-//      tenantId field — tenant is on the linked User document.
-// NEW: calls getDashboardOverview(tenantId) which joins through users collection.
+// Tenant is taken from req.tenantId, which the auth middleware derived from the
+// logged-in user's RegulaOne session (/api/auth/me). The frontend does NOT send
+// a tenantId — the backend always uses the authenticated user's own tenant.
 const getDashboardOverview = async (req, res, next) => {
   try {
-    // Primary: tenantId passed as a query param by the frontend (auth.user.tenantId from Redux).
-    // Fallback: req.user.tenant from the JWT-resolved User document.
-    // This pattern is consistent with getAuditLogs and getEmployees in this codebase.
-    const tenantId = req.query.tenantId || req.user?.tenant?.toString();
+    const tenantId = req.tenantId;
 
     if (!tenantId) {
       return sendError(res, 'Tenant context required — ensure you are authenticated', 400);

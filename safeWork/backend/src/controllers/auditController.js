@@ -16,7 +16,6 @@ const { sendSuccess, sendError } = require('../utils/responseHelper');
 const getAuditLogs = async (req, res, next) => {
   try {
     const {
-      tenantId: tenantIdParam,
       action,
       userId,
       resource,
@@ -27,9 +26,10 @@ const getAuditLogs = async (req, res, next) => {
       limit,
     } = req.query;
 
-    // tenantId comes from the frontend as a query param (auth.user.tenantId).
-    // Fall back to user.tenant on the SafeWork User document if absent.
-    const tenantId = tenantIdParam || req.user?.tenant?.toString();
+    // Tenant comes from the authenticated session (set by the auth middleware
+    // from RegulaOne /api/auth/me), never from the client. This stops a user
+    // from reading another tenant's audit logs by passing a different id.
+    const tenantId = req.tenantId;
 
     if (!tenantId) {
       return sendError(res, 'Tenant context required — ensure you are authenticated', 400);

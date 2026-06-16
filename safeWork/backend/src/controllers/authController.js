@@ -24,7 +24,7 @@ const logout = async (req, res, next) => {
   try {
     await authService.logout({
       userId: req.user._id.toString(),
-      tenantId: req.user.tenantId,
+      tenantId: req.tenantId,
       userEmail: req.user.email,
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],

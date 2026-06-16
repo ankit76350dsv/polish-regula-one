@@ -4,18 +4,9 @@ const { generateUploadUrl } = require('../utils/s3');
 const { sendSuccess, sendError } = require('../utils/responseHelper');
 const { logAudit } = require('../middleware/auditLogger');
 
-// Safely extracts the tenant ObjectId string from req.user.tenant.
-// The Java RegulaOne backend stores tenant as a MongoDB DBRef:
-//   { "$ref": "tenants", "$id": ObjectId("...") }
-// Calling plain .toString() on that object returns "[object Object]" — not the
-// actual ID.  This helper resolves all three possible shapes so every logAudit
-// call in this controller stores the correct tenantId value.
-const resolveTenantId = (tenant) => {
-  if (!tenant) return undefined;
-  if (tenant.$id)  return tenant.$id.toString();   // DBRef — Java RegulaOne path
-  if (tenant._id)  return tenant._id.toString();   // populated Mongoose document
-  return tenant.toString();                         // plain ObjectId or string
-};
+// The tenant id is resolved once by the auth middleware (from the logged-in
+// user's RegulaOne session) and exposed as req.tenantId. Controllers ALWAYS use
+// req.tenantId and never accept a tenant id from the client (query/body/params).
 
 // Returns all tenant users merged with their EmployeeProfile compliance data.
 // Guards against cross-tenant access before delegating to the service.
@@ -27,7 +18,8 @@ const resolveTenantId = (tenant) => {
 //   ?complianceStatus=<key>  — one of: compliant | expiring | warning | blocked
 const getEmployees = async (req, res, next) => {
   try {
-    const tenantId = req.params.tenantId || req.user?.tenant;
+    // Tenant comes from the authenticated session, never from the request.
+    const tenantId = req.tenantId;
 
     // Extract filter + pagination params from the query string.
     // Strip "All" values — the frontend sends "All" when no filter is selected.
@@ -48,7 +40,7 @@ const getEmployees = async (req, res, next) => {
     // Fire-and-forget VIEW audit — read operations must not block the response,
     // so we do NOT await this.  logAudit never throws (catches internally).
     logAudit({
-      tenantId: resolveTenantId(req.user?.tenant),
+      tenantId:  req.tenantId,
       userId:    req.user?._id?.toString(),
       userEmail: req.user?.email,
       action:    'EMPLOYEE_LIST_VIEWED',
@@ -89,19 +81,16 @@ const upsertEmployeeProfile = async (req, res, next) => {
 
     const { employeeId } = req.params;
 
-    // Extract tenantId from the body before passing profileData to the service.
-    // This prevents tenantId from being spread into the employee document by the
-    // service's { ...complianceData } spread, and gives us a clean string for the
-    // audit log.  Body value takes priority over DBRef extraction (same pattern
-    // as saveDocumentReference).
-    const { tenantId: bodyTenantId, ...profileData } = req.body;
-    const resolvedTenantId = bodyTenantId || resolveTenantId(req.user?.tenant);
+    // Strip any tenantId the client may have sent — we ignore it and use the
+    // tenant from the authenticated session. Stripping it also stops it being
+    // spread into the employee document by the service's { ...profileData } spread.
+    const { tenantId: _ignoredTenantId, ...profileData } = req.body;
 
     const { profile, isNew } = await employeeService.upsertEmployeeProfile(
       employeeId,
       profileData,
       {
-        tenantId:  resolvedTenantId,
+        tenantId:  req.tenantId,
         userId:    req.user._id.toString(),
         userEmail: req.user.email,
         ipAddress: req.ip,
@@ -127,7 +116,7 @@ const getEmployeeById = async (req, res, next) => {
 
     // Fire-and-forget — log who viewed which employee profile.
     logAudit({
-      tenantId:  resolveTenantId(req.user?.tenant),
+      tenantId:  req.tenantId,
       userId:    req.user?._id?.toString(),
       userEmail: req.user?.email,
       action:    'EMPLOYEE_PROFILE_VIEWED',
@@ -175,7 +164,7 @@ const getDocumentViewUrl = async (req, res, next) => {
 
     // Fire-and-forget — log who opened which document and for which profile.
     logAudit({
-      tenantId:   resolveTenantId(req.user?.tenant),
+      tenantId:   req.tenantId,
       userId:     req.user?._id?.toString(),
       userEmail:  req.user?.email,
       action:     'DOCUMENT_VIEWED',
@@ -220,27 +209,21 @@ const getDocumentUploadUrl = async (req, res, next) => {
   }
 };
 // Saves the S3 key + metadata for a compliance document after a successful S3 upload.
-// tenantId priority: req.body.tenantId (sent by frontend Redux state) → resolveTenantId
-// from req.user.tenant (DBRef helper).  The body value is preferred because it is always
-// the plain ObjectId string, which is what AuditLog.find({ tenantId }) queries against.
+// The tenant id comes from the authenticated session (req.tenantId) — any tenantId
+// in the request body is ignored. This guarantees the audit log is stored against
+// the user's real tenant, which is what the dashboard's AuditLog.find({ tenantId })
+// query expects.
 const saveDocumentReference = async (req, res, next) => {
   try {
     const { profileId } = req.params;
-    const { docType, s3Key, expiryDate, completedDate, status, tenantId: bodyTenantId } = req.body;
-
-    // OLD: tenantId: resolveTenantId(req.user?.tenant)
-    // NEW: prefer the tenantId the frontend sends in the body, fall back to DBRef extraction.
-    // Reason: the frontend reads tenantId from auth.user.tenantId (a clean ObjectId string),
-    // so passing it in the body guarantees the audit log is stored with the correct value,
-    // which is what the dashboard's AuditLog.find({ tenantId }) query expects.
-    const resolvedTenantId = bodyTenantId || resolveTenantId(req.user?.tenant);
+    const { docType, s3Key, expiryDate, completedDate, status } = req.body;
 
     const updated = await employeeService.updateDocumentReference(
       profileId,
       docType,
       { s3Key, expiryDate, completedDate, status },
       {
-        tenantId:  resolvedTenantId,
+        tenantId:  req.tenantId,
         userId:    req.user._id.toString(),
         userEmail: req.user.email,
         ipAddress: req.ip,
@@ -260,7 +243,7 @@ const updateEmployeeCompliance = async (req, res, next) => {
     const { employeeId } = req.params;
     const updated = await employeeService.updateEmployeeCompliance(
       employeeId,
-      resolveTenantId(req.user?.tenant),
+      req.tenantId,
       req.body,
       {
         userId: req.user._id.toString(),

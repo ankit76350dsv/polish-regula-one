@@ -12,13 +12,12 @@ const API_BASE_URL = "http://localhost:8082/api";
 // filters: { action?, userId?, resource?, search?, startDate?, endDate?, page?, limit? }
 export const fetchAuditLogs = createAsyncThunk(
   "audit/fetchLogs",
-  async (filters = {}, { getState, rejectWithValue }) => {
+  async (filters = {}, { rejectWithValue }) => {
     try {
-      const tenantId = getState().auth.user?.tenantId;
-      if (!tenantId) return rejectWithValue("No tenantId found in auth state");
-
+      // No tenantId is sent — the backend scopes logs to the logged-in user's
+      // tenant (from their RegulaOne session). A user can only ever read their
+      // own tenant's audit trail.
       const params = new URLSearchParams();
-      params.set("tenantId", tenantId);
       if (filters.action)    params.set("action",    filters.action);
       if (filters.userId)    params.set("userId",    filters.userId);
       if (filters.resource)  params.set("resource",  filters.resource);

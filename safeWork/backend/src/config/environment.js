@@ -21,6 +21,13 @@ const config = {
     tokenUse: process.env.AWS_COGNITO_TOKEN_USE || 'id'
   },
 
+  // RegulaOne is the central auth service. SafeWork asks it "who is this user?"
+  // by calling GET /api/auth/me, which returns the user's tenantId. We use that
+  // as the single source of truth for tenant isolation.
+  regulaOne: {
+    baseUrl: process.env.REGULAONE_API_URL || 'http://localhost:8080',
+  },
+
   cors: {
     // Accept comma-separated origins for multi-frontend support
     origins: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(','),

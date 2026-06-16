@@ -17,11 +17,10 @@ const API_BASE_URL = "http://localhost:8082/api";
 // filters shape: { search?, department?, site?, complianceStatus?, page?, limit? }
 export const fetchEmployees = createAsyncThunk(
   "employees/fetchAll",
-  async (filters = {}, { getState, rejectWithValue }) => {
+  async (filters = {}, { rejectWithValue }) => {
     try {
-      const tenantId = getState().auth.user?.tenantId;
-      if (!tenantId) return rejectWithValue("No tenantId found in auth state");
-
+      // No tenantId is sent — the backend reads it from the logged-in user's
+      // session and returns only that tenant's employees.
       // Build the query string — only include params that have a real value.
       const params = new URLSearchParams();
       if (filters.search)           params.set("search",           filters.search);
@@ -32,7 +31,7 @@ export const fetchEmployees = createAsyncThunk(
       if (filters.limit)            params.set("limit",            String(filters.limit));
 
       const qs = params.toString();
-      const url = `${API_BASE_URL}/admin/users/${tenantId}${qs ? `?${qs}` : ""}`;
+      const url = `${API_BASE_URL}/admin/users${qs ? `?${qs}` : ""}`;
 
       const response = await axios.get(url, {
         // Send the auth cookie with the request.
@@ -66,17 +65,15 @@ export const fetchEmployee = createAsyncThunk(
 
 // Creates or updates the compliance profile for a RegulaOne user.
 // employeeId is the RegulaOne user _id (used as the SafeWork employeeId field).
-// Added getState so tenantId can be included in the body — the backend needs it
-// to write a correct audit log (req.user.tenant is a Java DBRef and .toString()
-// returns "[object Object]", so the body value is the safe primary source).
+// tenantId is no longer sent — the backend derives it from the logged-in user's
+// session and uses it for the audit log and tenant scoping.
 export const upsertProfile = createAsyncThunk(
   "employees/upsertProfile",
-  async ({ employeeId, profileData }, { getState, rejectWithValue }) => {
+  async ({ employeeId, profileData }, { rejectWithValue }) => {
     try {
-      const tenantId = getState().auth.user?.tenantId;
       const response = await axios.put(
         `${API_BASE_URL}/admin/employees/${employeeId}`,
-        { ...profileData, tenantId },
+        profileData,
         // Send the auth cookie with the request.
         { withCredentials: true }
       );
@@ -94,11 +91,7 @@ export const uploadDocument = createAsyncThunk(
   "employees/uploadDocument",
   async (
     { profileId, docType, file, expiryDate, completedDate },
-    // Added getState so we can pass tenantId in the PATCH body.
-    // The backend needs the correct tenantId string to store in AuditLog so the
-    // dashboard's recentDocuments query can find it.  Using getState avoids relying
-    // on req.user.tenant (which is a Java DBRef object and breaks plain .toString()).
-    { getState, rejectWithValue }
+    { rejectWithValue }
   ) => {
     try {
       if (!profileId) {
@@ -112,9 +105,6 @@ export const uploadDocument = createAsyncThunk(
       if (!file) {
         return rejectWithValue("File is required");
       }
-
-      // Read tenantId from Redux auth state — this is always the clean ObjectId string.
-      const tenantId = getState().auth.user?.tenantId;
 
       const contentType = file.type || "application/octet-stream";
 
@@ -149,8 +139,8 @@ export const uploadDocument = createAsyncThunk(
 
       // Step 3: save S3 key reference in backend.
       // status is omitted — the backend derives it automatically from expiryDate.
-      // tenantId is included so the backend logAudit call stores the correct value
-      // regardless of the DBRef shape on req.user.tenant.
+      // tenantId is NOT sent — the backend uses the logged-in user's tenant for
+      // the audit log and tenant scoping.
       const patchRes = await axios.patch(
         `${API_BASE_URL}/admin/employees/${profileId}/document`,
         {
@@ -158,7 +148,6 @@ export const uploadDocument = createAsyncThunk(
           s3Key,
           expiryDate,
           completedDate,
-          tenantId,
         },
         {
           // Send the auth cookie with the request.
