@@ -31,7 +31,10 @@ open_tab() {
     > /dev/null 2>&1
 }
 
-# Start a Spring Boot backend if the directory exists
+# Start a backend if the directory exists.
+# Some backends are Spring Boot (Java) and some are Node.js (like SafeWork).
+# We look at the files inside the folder to figure out which kind it is,
+# then run the correct command. This way one launcher handles both types.
 start_backend() {
   local module="$1"   # e.g. RegulaOne
   local port="$2"
@@ -42,14 +45,27 @@ start_backend() {
     return
   fi
 
-  local mvn_cmd
-  if [ -f "${dir}/mvnw" ]; then
-    mvn_cmd="./mvnw"
+  local cmd
+
+  if [ -f "${dir}/pom.xml" ] || [ -f "${dir}/mvnw" ]; then
+    # This is a Spring Boot (Java/Maven) backend.
+    # Use the project's own Maven wrapper if it has one, else the system mvn.
+    local mvn_cmd="mvn"
+    [ -f "${dir}/mvnw" ] && mvn_cmd="./mvnw"
+    cmd="cd '${dir}' && echo '▶ Starting ${module} backend on :${port}' && ${mvn_cmd} spring-boot:run -Dspring-boot.run.arguments=--server.port=${port} ; exec \$SHELL"
+
+  elif [ -f "${dir}/package.json" ]; then
+    # This is a Node.js backend (for example SafeWork).
+    # If the dependencies were never installed, install them first so the
+    # server does not crash with "command not found". Then start the server.
+    # We pass PORT so the Node app listens on the right port.
+    cmd="cd '${dir}' && echo '▶ Starting ${module} backend on :${port}' && { [ -d node_modules ] || npm install ; } && PORT=${port} npm start ; exec \$SHELL"
+
   else
-    mvn_cmd="mvn"
+    echo "  [skip] ${module} backend — no pom.xml or package.json"
+    return
   fi
 
-  local cmd="cd '${dir}' && echo '▶ Starting ${module} backend on :${port}' && ${mvn_cmd} spring-boot:run -Dspring-boot.run.arguments=--server.port=${port} ; exec \$SHELL"
   open_tab "${module} Backend :${port}" "$cmd"
   echo "  [✓] ${module} backend  → http://localhost:${port}"
 }
@@ -70,8 +86,10 @@ start_frontend() {
     return
   fi
 
-  # Pass PORT env var; Vite reads it, Express/tsx server reads it too
-  local cmd="cd '${dir}' && echo '▶ Starting ${module} frontend on :${port}' && PORT=${port} npm run dev ; exec \$SHELL"
+  # If the dependencies were never installed, install them first so that
+  # "npm run dev" can find the vite command and start without crashing.
+  # Pass PORT env var; Vite reads it, Express/tsx server reads it too.
+  local cmd="cd '${dir}' && echo '▶ Starting ${module} frontend on :${port}' && { [ -d node_modules ] || npm install ; } && PORT=${port} npm run dev ; exec \$SHELL"
   open_tab "${module} Frontend :${port}" "$cmd"
   echo "  [✓] ${module} frontend → http://localhost:${port}"
 }
