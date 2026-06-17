@@ -48,7 +48,8 @@ public class Fa3XsdValidator {
         log.info("[Fa3XsdValidator]:1 Official FA(3) schema loaded from {} (offline)", FA3_MAIN_XSD);
     }
 
-    // Build the FA(3) schema using ONLY local files.
+    //! Build the FA(3) schema using ONLY local files.
+    //TODO: this file KSeFFlow/backend/src/main/resources/xsd/fa3/schemat.xsd
     private Schema loadFa3Schema() {
         try (InputStream mainXsd = getClass().getResourceAsStream(FA3_MAIN_XSD)) {
             if (mainXsd == null) {
@@ -70,7 +71,8 @@ public class Fa3XsdValidator {
         }
     }
 
-    // Check one invoice XML against the FA(3) rules.
+    //! Automatic before this will runloadFa3Schema
+    //! Check one invoice XML against the FA(3) rules.
     // If the XML is good, this method returns quietly.
     // If the XML is bad, it throws KsefXmlGenerationException with the reason.
     public void validate(String xml) {
