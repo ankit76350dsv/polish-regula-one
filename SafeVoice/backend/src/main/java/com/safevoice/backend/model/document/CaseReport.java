@@ -3,7 +3,7 @@ package com.safevoice.backend.model.document;
 import com.safevoice.backend.model.annotation.Encrypted;
 import com.safevoice.backend.model.base.BaseDocument;
 import com.safevoice.backend.model.embedded.*;
-import com.safevoice.backend.model.enums.*;
+import com.safevoice.backend.model.enums.case_report.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.mongodb.core.index.Indexed;

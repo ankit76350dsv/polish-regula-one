@@ -1,4 +1,4 @@
-package com.safevoice.backend.model.enums;
+package com.safevoice.backend.model.enums.case_report;
 
 import lombok.Getter;
 

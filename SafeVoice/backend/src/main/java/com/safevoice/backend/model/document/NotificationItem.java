@@ -1,7 +1,7 @@
 package com.safevoice.backend.model.document;
 
 import com.safevoice.backend.model.base.BaseDocument;
-import com.safevoice.backend.model.enums.NotificationType;
+import com.safevoice.backend.model.enums.notification.NotificationType;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.mongodb.core.mapping.Document;

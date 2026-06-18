@@ -1,6 +1,6 @@
 package com.safevoice.backend.model.embedded;
 
-import com.safevoice.backend.model.enums.EvidenceStatus;
+import com.safevoice.backend.model.enums.evidence.EvidenceStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

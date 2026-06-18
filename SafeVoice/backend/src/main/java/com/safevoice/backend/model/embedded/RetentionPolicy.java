@@ -1,6 +1,6 @@
 package com.safevoice.backend.model.embedded;
 
-import com.safevoice.backend.model.enums.RetentionState;
+import com.safevoice.backend.model.enums.retention.RetentionState;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

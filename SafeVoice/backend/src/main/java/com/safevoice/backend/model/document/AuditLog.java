@@ -1,7 +1,7 @@
 package com.safevoice.backend.model.document;
 
 import com.safevoice.backend.model.base.BaseDocument;
-import com.safevoice.backend.model.enums.AuditActionType;
+import com.safevoice.backend.model.enums.audit.AuditActionType;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.mongodb.core.mapping.Document;

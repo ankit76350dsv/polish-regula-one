@@ -1,4 +1,4 @@
-package com.safevoice.backend.model.enums;
+package com.safevoice.backend.model.enums.retention;
 
 /**
  * Data retention state flags for compliance-driven auto-deletion.
