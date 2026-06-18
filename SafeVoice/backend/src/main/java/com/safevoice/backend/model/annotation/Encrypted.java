@@ -1,4 +1,4 @@
-package com.safevoice.backend.model;
+package com.safevoice.backend.model.annotation;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

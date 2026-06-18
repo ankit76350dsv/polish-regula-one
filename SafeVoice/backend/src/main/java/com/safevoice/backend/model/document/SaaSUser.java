@@ -1,5 +1,7 @@
-package com.safevoice.backend.model;
+package com.safevoice.backend.model.document;
 
+import com.safevoice.backend.model.annotation.Encrypted;
+import com.safevoice.backend.model.base.BaseDocument;
 import com.safevoice.backend.model.enums.AppRole;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

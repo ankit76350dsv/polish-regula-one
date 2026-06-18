@@ -1,4 +1,4 @@
-package com.safevoice.backend.model;
+package com.safevoice.backend.model.embedded;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

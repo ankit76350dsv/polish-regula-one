@@ -1,5 +1,6 @@
-package com.safevoice.backend.model;
+package com.safevoice.backend.model.document;
 
+import com.safevoice.backend.model.base.BaseDocument;
 import com.safevoice.backend.model.enums.NotificationType;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

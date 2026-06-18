@@ -1,4 +1,4 @@
-package com.safevoice.backend.model;
+package com.safevoice.backend.model.base;
 
 import lombok.Data;
 import org.springframework.data.annotation.CreatedBy;
