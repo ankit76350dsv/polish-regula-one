@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
   Archive,
@@ -8,19 +9,13 @@ import {
   Copy,
   FileText,
   Filter,
-  Inbox,
   Lock,
-  MessageSquare,
-  Plus,
   Scale,
   Search,
   Send,
-  Settings,
   Shield,
   ShieldCheck,
-  Trash2,
-  UserCheck,
-  Users
+  UserCheck
 } from "lucide-react";
 import { motion } from "motion/react";
 import {
@@ -36,6 +31,7 @@ import {
   SaaSUser
 } from "../types";
 import { complianceReview, rolePermissions, SafeVoiceDb } from "../data/mockData";
+import { useJurisdiction } from "../config/activeJurisdiction";
 import {
   AppButton,
   AppModal,
@@ -61,17 +57,21 @@ const statuses: CaseStatus[] = [
 
 const severities: CaseSeverity[] = ["Low", "Medium", "High", "Critical"];
 
+// Translate a report category, falling back to the raw value if a locale string is missing.
+const useCategoryLabel = () => {
+  const { t } = useTranslation();
+  return (category: ReportCategory) => t(`categories.${category}`, { defaultValue: category });
+};
+
 export function AccessDeniedView({ onGoReport }: { onGoReport: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="max-w-xl mx-auto py-16">
-      <SecureCard title="Access denied" subtitle="Reporter sessions cannot view staff workspaces.">
+      <SecureCard title={t("accessDenied.title")} subtitle={t("accessDenied.subtitle")}>
         <div className="space-y-4 text-sm text-slate-300">
-          <p>
-            This boundary is intentional. In production, staff access requires OIDC login, MFA, short sessions, role
-            authorization, and audit logging. Reporter sessions stay isolated from case-management data.
-          </p>
+          <p>{t("accessDenied.body")}</p>
           <AppButton variant="secure" onClick={onGoReport} icon={<Shield className="w-4 h-4" />}>
-            Return to reporter portal
+            {t("accessDenied.returnToPortal")}
           </AppButton>
         </div>
       </SecureCard>
@@ -84,6 +84,9 @@ export function PublicReportPortal({
 }: {
   onSubmitReport: (report: ReportSubmission) => void;
 }) {
+  const { t } = useTranslation();
+  const jurisdiction = useJurisdiction();
+  const categoryLabel = useCategoryLabel();
   const [step, setStep] = useState(1);
   const [category, setCategory] = useState<ReportCategory>(ReportCategory.Corruption);
   const [description, setDescription] = useState("");
@@ -94,6 +97,7 @@ export function PublicReportPortal({
   const [relayContact, setRelayContact] = useState("");
 
   const isHrHandoff = category === ReportCategory.LabourDispute;
+  const hasExtension = jurisdiction.feedbackExtensionMonths > 0;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,42 +122,46 @@ export function PublicReportPortal({
       <div className="lg:col-span-2">
         <SecureCard
           isEncrypted={!isHrHandoff}
-          title={isHrHandoff ? "HR grievance handoff" : "Anonymous whistleblower report"}
-          subtitle={`Privacy-preserving intake, step ${step} of 2`}
+          title={isHrHandoff ? t("report.titleHr") : t("report.titleAnonymous")}
+          subtitle={t("report.subtitle", { step })}
         >
-          <div className="flex items-center gap-3 mb-6 bg-slate-950 p-3 rounded-lg border border-slate-800">
-            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold ${step === 1 ? "bg-cyan-500 text-slate-950" : "bg-cyan-500/10 text-cyan-300 border border-cyan-500/20"}`}>1</span>
-            <span className="text-xs text-slate-300 font-semibold">Minimum facts</span>
-            <ChevronRight className="w-4 h-4 text-slate-600" />
-            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold ${step === 2 ? "bg-cyan-500 text-slate-950" : "bg-slate-800 text-slate-500"}`}>2</span>
-            <span className="text-xs text-slate-400 font-semibold">Protection choices</span>
-          </div>
+          <ol className="flex items-center gap-3 mb-6 bg-slate-950 p-3 rounded-lg border border-slate-800 list-none">
+            <li className="flex items-center gap-3">
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold ${step === 1 ? "bg-cyan-500 text-slate-950" : "bg-cyan-500/10 text-cyan-300 border border-cyan-500/20"}`} aria-current={step === 1 ? "step" : undefined}>1</span>
+              <span className="text-xs text-slate-300 font-semibold">{t("report.stepFacts")}</span>
+            </li>
+            <ChevronRight className="w-4 h-4 text-slate-500" aria-hidden="true" />
+            <li className="flex items-center gap-3">
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold ${step === 2 ? "bg-cyan-500 text-slate-950" : "bg-slate-800 text-slate-400"}`} aria-current={step === 2 ? "step" : undefined}>2</span>
+              <span className="text-xs text-slate-400 font-semibold">{t("report.stepProtection")}</span>
+            </li>
+          </ol>
 
           <form onSubmit={submit} className="space-y-6">
             {step === 1 ? (
-              <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
+              <div className="space-y-5">
                 <div>
-                  <label className="text-xs font-bold text-slate-300 uppercase font-mono block mb-1.5">
-                    Report category
+                  <label htmlFor="report_category" className="text-xs font-bold text-slate-300 uppercase font-mono block mb-1.5">
+                    {t("report.category")}
                   </label>
                   <select
+                    id="report_category"
                     value={category}
                     onChange={(e) => setCategory(e.target.value as ReportCategory)}
                     className="block w-full rounded-lg bg-slate-950 border border-slate-700 text-slate-100 px-3.5 py-2.5 text-sm cursor-pointer outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
                   >
                     {Object.values(ReportCategory).map((cat) => (
                       <option key={cat} value={cat}>
-                        {cat}
+                        {categoryLabel(cat)}
                       </option>
                     ))}
                   </select>
                   {isHrHandoff && (
                     <div className="mt-3 bg-amber-950/30 border border-amber-800/50 rounded-lg p-3.5 text-xs text-amber-200 flex items-start gap-2.5">
-                      <AlertCircle className="w-5 h-5 text-amber-300 shrink-0 mt-0.5" />
+                      <AlertCircle className="w-5 h-5 text-amber-300 shrink-0 mt-0.5" aria-hidden="true" />
                       <div>
-                        <span className="font-bold block mb-1">Separated from anonymous whistleblower tracking</span>
-                        Individual employment grievances are routed to HR in this mock. No tracking code is issued, and no
-                        reporter telemetry is collected here.
+                        <span className="font-bold block mb-1">{t("report.hrSeparatedTitle")}</span>
+                        {t("report.hrSeparatedBody")}
                       </div>
                     </div>
                   )}
@@ -163,7 +171,7 @@ export function PublicReportPortal({
                   <SecureTextField
                     type="date"
                     id="incident_date"
-                    label="Incident date"
+                    label={t("report.incidentDate")}
                     value={incidentDate}
                     onChange={(e) => setIncidentDate(e.target.value)}
                     required
@@ -171,17 +179,17 @@ export function PublicReportPortal({
                   <SecureTextField
                     type="text"
                     id="incident_dept"
-                    label="Area involved"
-                    placeholder="e.g. Procurement, IT Security"
+                    label={t("report.areaInvolved")}
+                    placeholder={t("report.areaPlaceholder")}
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
-                    helperText="Use the broadest useful area to reduce re-identification risk."
+                    helperText={t("report.areaHelper")}
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="incident_desc" className="text-xs font-bold text-slate-300 uppercase font-mono">
-                    Facts needed for follow-up
+                    {t("report.factsLabel")}
                   </label>
                   <textarea
                     id="incident_desc"
@@ -190,46 +198,48 @@ export function PublicReportPortal({
                     rows={5}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe what happened, when, and what evidence exists. Avoid details that identify you unless they are necessary."
+                    placeholder={t("report.factsPlaceholder")}
+                    aria-describedby="incident_desc_helper"
                     className="block w-full rounded-lg bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm p-3.5 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
                   />
-                  <span className="text-[11px] text-slate-500">
-                    Do not include personal data that is not needed to assess the report.
+                  <span id="incident_desc_helper" className="text-[11px] text-slate-400">
+                    {t("report.factsHelper")}
                   </span>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-300 uppercase font-mono block mb-2">
-                    Evidence attachments
-                  </label>
+                  <span className="text-xs font-bold text-slate-300 uppercase font-mono block mb-2">
+                    {t("report.evidence")}
+                  </span>
                   <AttachmentUploader files={attachments} onFilesChanged={setAttachments} />
                 </div>
-              </motion.div>
+              </div>
             ) : (
-              <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
+              <div className="space-y-5">
                 {!isHrHandoff && (
                   <div className="space-y-4">
                     <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-lg p-4 text-xs text-emerald-200 flex items-start gap-3">
-                      <Lock className="w-5 h-5 text-emerald-300 mt-0.5 shrink-0" />
+                      <Lock className="w-5 h-5 text-emerald-300 mt-0.5 shrink-0" aria-hidden="true" />
                       <div>
-                        <span className="font-bold block mb-1">Anonymous mode is default</span>
-                        SafeVoice does not collect reporter IP address, device fingerprint, browser fingerprint, user-agent,
-                        or geolocation for report handling.
+                        <span className="font-bold block mb-1">{t("report.anonymousDefaultTitle")}</span>
+                        {t("report.anonymousDefaultBody")}
                       </div>
                     </div>
 
                     <div className="bg-slate-950 border border-slate-800 p-4 rounded-lg">
                       <div className="flex items-center justify-between gap-4">
                         <div>
-                          <p className="text-xs font-bold text-slate-200">Use optional secure relay?</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            The mock stores only a vault reference. Investigators never see the contact value.
-                          </p>
+                          <p className="text-xs font-bold text-slate-200" id="relay_label">{t("report.relayTitle")}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{t("report.relayBody")}</p>
                         </div>
                         <button
                           type="button"
+                          role="switch"
+                          aria-checked={wantsRelay}
+                          aria-labelledby="relay_label"
+                          aria-label={t("report.relayToggleLabel")}
                           onClick={() => setWantsRelay(!wantsRelay)}
-                          className={`w-12 h-6 rounded-full p-0.5 transition-colors flex ${wantsRelay ? "bg-cyan-500 justify-end" : "bg-slate-700 justify-start"}`}
+                          className={`w-12 h-6 rounded-full p-0.5 transition-colors flex focus:outline-none focus:ring-2 focus:ring-cyan-500 ${wantsRelay ? "bg-cyan-500 justify-end" : "bg-slate-700 justify-start"}`}
                         >
                           <span className="w-5 h-5 bg-slate-950 rounded-full shadow-md" />
                         </button>
@@ -239,11 +249,11 @@ export function PublicReportPortal({
                           <SecureTextField
                             type="text"
                             id="relay_contact"
-                            label="Vaulted relay contact"
-                            placeholder="secure mailbox or phone relay"
+                            label={t("report.relayLabel")}
+                            placeholder={t("report.relayPlaceholder")}
                             value={relayContact}
                             onChange={(e) => setRelayContact(e.target.value)}
-                            helperText="For the mock, the actual value is discarded and represented as a vault reference."
+                            helperText={t("report.relayHelper")}
                           />
                         </div>
                       )}
@@ -252,29 +262,37 @@ export function PublicReportPortal({
                 )}
 
                 <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 text-xs text-slate-300 space-y-2">
-                  <p className="font-semibold text-slate-100">Privacy notice summary</p>
+                  <p className="font-semibold text-slate-100">{t("report.privacyNoticeTitle")}</p>
+                  <p>{t("report.privacyNoticeController", { controller: jurisdiction.controllerName })}</p>
                   <p>
-                    Controller: RegulaOne Poland S.A. Purpose: receive, assess, follow up, and document reports. Personal
-                    data not relevant to the report must not be collected or must be deleted promptly.
-                  </p>
-                  <p>
-                    You may also report externally to the Polish Ombudsman or competent authority where applicable. Case
-                    feedback is due within three months after acknowledgement.
+                    {hasExtension
+                      ? t("report.privacyNoticeExternal", {
+                          authority: jurisdiction.externalAuthority.name,
+                          months: jurisdiction.feedbackMonths,
+                          extension: jurisdiction.feedbackExtensionMonths
+                        })
+                      : t("report.privacyNoticeExternalNoExtension", {
+                          authority: jurisdiction.externalAuthority.name,
+                          months: jurisdiction.feedbackMonths
+                        })}{" "}
+                    <a href={jurisdiction.externalAuthority.url} target="_blank" rel="noreferrer noopener" className="text-cyan-300 underline">
+                      {jurisdiction.externalAuthority.name}
+                    </a>
                   </p>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             <div className="flex justify-between items-center border-t border-slate-800 pt-4">
               {step === 2 ? (
                 <AppButton type="button" variant="outline" onClick={() => setStep(1)}>
-                  Back
+                  {t("common.back")}
                 </AppButton>
               ) : (
                 <span />
               )}
               <AppButton type="submit" variant={step === 2 ? "secure" : "primary"} icon={step === 2 ? <Shield className="w-4 h-4" /> : undefined}>
-                {step === 1 ? "Continue" : isHrHandoff ? "Route to HR" : "Submit anonymous report"}
+                {step === 1 ? t("common.continue") : isHrHandoff ? t("report.routeToHr") : t("report.submitAnonymous")}
               </AppButton>
             </div>
           </form>
@@ -282,29 +300,29 @@ export function PublicReportPortal({
       </div>
 
       <div className="space-y-6">
-        <SecureCard title="Poland and EU safeguards" subtitle="Controls shown in this mock">
+        <SecureCard title={t("report.safeguardsTitle")} subtitle={t("report.safeguardsSubtitle")}>
           <ul className="space-y-3 text-xs text-slate-300">
             {[
-              "7-day acknowledgement and 3-month feedback deadlines",
-              "No reporter IP, user-agent, fingerprint, or geolocation collection",
-              "Evidence metadata stripping and malware scanning before vault storage",
-              "Irrelevant personal data deletion review within 14 days",
-              "External reporting information available before submission"
+              t("report.safeguard1", { days: jurisdiction.acknowledgementDays, months: jurisdiction.feedbackMonths }),
+              t("report.safeguard2"),
+              t("report.safeguard3"),
+              t("report.safeguard4", { days: jurisdiction.irrelevantDataDeletionDays }),
+              t("report.safeguard5")
             ].map((item) => (
               <li key={item} className="flex items-start gap-2">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" aria-hidden="true" />
                 <span>{item}</span>
               </li>
             ))}
           </ul>
         </SecureCard>
 
-        <SecureCard title="Data minimisation" subtitle="What this frontend avoids">
+        <SecureCard title={t("report.minimisationTitle")} subtitle={t("report.minimisationSubtitle")}>
           <div className="grid gap-2 text-xs text-slate-300">
-            {["Analytics", "Marketing pixels", "Device fingerprints", "Browser fingerprints", "Geolocation", "Reporter IP display"].map((item) => (
+            {["analytics", "marketing", "deviceFp", "browserFp", "geo", "ip"].map((item) => (
               <div key={item} className="flex items-center justify-between rounded-lg bg-slate-950 border border-slate-800 px-3 py-2">
-                <span>{item}</span>
-                <span className="text-emerald-300 font-mono text-[10px] uppercase">not collected</span>
+                <span>{t(`report.minimisation.${item}`)}</span>
+                <span className="text-emerald-300 font-mono text-[10px] uppercase">{t("report.notCollected")}</span>
               </div>
             ))}
           </div>
@@ -321,6 +339,7 @@ export function ReportSuccessView({
   generatedCode?: string;
   category: ReportCategory;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const isHrHandoff = category === ReportCategory.LabourDispute;
 
@@ -334,44 +353,43 @@ export function ReportSuccessView({
   return (
     <div className="max-w-xl mx-auto text-center py-6 leading-relaxed">
       <div className="inline-flex items-center justify-center h-16 w-16 bg-emerald-950/60 text-emerald-300 border border-emerald-500/20 rounded-full mb-6">
-        <ShieldCheck className="w-8 h-8" />
+        <ShieldCheck className="w-8 h-8" aria-hidden="true" />
       </div>
 
       <h1 className="text-xl font-bold text-slate-100 tracking-tight">
-        {isHrHandoff ? "Grievance routed" : "Report submitted"}
+        {isHrHandoff ? t("success.titleHr") : t("success.titleReport")}
       </h1>
       <p className="text-xs text-slate-400 mt-2 max-w-sm mx-auto">
-        {isHrHandoff
-          ? "This item was separated from anonymous whistleblower tracking and routed to HR handling."
-          : "Your report is stored as a minimized case record. Keep the tracking code offline."}
+        {isHrHandoff ? t("success.subHr") : t("success.subReport")}
       </p>
 
       {isHrHandoff ? (
         <div className="bg-amber-950/20 border border-amber-900/60 rounded-lg p-6 mt-8 text-left text-xs text-slate-300 space-y-3">
-          <p className="font-bold text-amber-200">No anonymous tracking code was issued.</p>
-          <p>
-            The mock avoids collecting reporter telemetry here as well, but an HR grievance process may require different
-            notices, confidentiality terms, and contact procedures.
-          </p>
+          <p className="font-bold text-amber-200">{t("success.hrNoCodeTitle")}</p>
+          <p>{t("success.hrNoCodeBody")}</p>
         </div>
       ) : (
         <div className="space-y-6 mt-8">
           <div className="bg-slate-900 border border-slate-800 rounded-lg p-6 relative overflow-hidden">
             <span className="absolute inset-x-0 top-0 h-[2px] bg-emerald-400/70" />
             <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-300 uppercase tracking-widest font-mono mb-3">
-              <Lock className="w-3.5 h-3.5" /> anonymous tracking code
+              <Lock className="w-3.5 h-3.5" aria-hidden="true" /> {t("success.trackingCodeLabel")}
             </div>
 
             <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 relative flex items-center justify-between max-w-sm mx-auto">
               <span className="text-md font-mono text-slate-100 font-bold select-all tracking-wider">{generatedCode}</span>
-              <button onClick={handleCopy} className="text-slate-400 hover:text-cyan-300 hover:bg-slate-900 p-2 rounded transition-colors cursor-pointer">
+              <button
+                onClick={handleCopy}
+                aria-label={copied ? t("success.copied") : t("success.copy")}
+                className="text-slate-400 hover:text-cyan-300 hover:bg-slate-900 p-2 rounded transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              >
                 {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
               </button>
             </div>
           </div>
 
-          <div className="bg-rose-950/20 border border-rose-900/50 text-rose-200 text-xs rounded-lg p-4 text-left leading-normal">
-            SafeVoice cannot identify you from the tracking code. Losing it may prevent anonymous follow-up.
+          <div className="bg-rose-950/20 border border-rose-900/50 text-rose-200 text-xs rounded-lg p-4 text-left leading-normal" role="note">
+            {t("success.cannotIdentify")}
           </div>
         </div>
       )}
@@ -390,6 +408,7 @@ export function TrackCaseView({
   onAddMessage: (caseId: string, text: string) => void;
   onAddEvidence: (caseId: string, attachments: EvidenceAttachment[]) => void;
 }) {
+  const { t } = useTranslation();
   const [codeInput, setCodeInput] = useState("");
   const [trackedCase, setTrackedCase] = useState<CaseReport | null>(null);
   const [errorText, setErrorText] = useState("");
@@ -404,7 +423,7 @@ export function TrackCaseView({
       setErrorText("");
     } else {
       setTrackedCase(null);
-      setErrorText("Tracking code not found. HR handoff items do not receive tracking codes.");
+      setErrorText(t("track.notFound"));
     }
   };
 
@@ -413,20 +432,20 @@ export function TrackCaseView({
   if (!trackedCase) {
     return (
       <div className="max-w-md mx-auto py-10">
-        <SecureCard title="Track anonymous report" subtitle="Use only the code issued after submission" isEncrypted>
+        <SecureCard title={t("track.title")} subtitle={t("track.subtitle")} isEncrypted>
           <form onSubmit={handleTrackSubmit} className="space-y-4">
             <SecureTextField
-              label="Tracking code"
+              label={t("track.codeLabel")}
               id="pin_tracker_field"
-              placeholder="SV-XXXX-XXXX"
+              placeholder={t("track.codePlaceholder")}
               required
               value={codeInput}
               onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
-              helperText="No account, email address, IP address, or device identifier is required."
+              helperText={t("track.codeHelper")}
             />
-            {errorText && <div className="text-xs text-rose-300 bg-rose-950/20 p-2.5 rounded border border-rose-900/40">{errorText}</div>}
+            {errorText && <div role="alert" className="text-xs text-rose-300 bg-rose-950/20 p-2.5 rounded border border-rose-900/40">{errorText}</div>}
             <AppButton type="submit" variant="primary" className="w-full">
-              Open secure case channel
+              {t("track.openChannel")}
             </AppButton>
           </form>
         </SecureCard>
@@ -439,22 +458,22 @@ export function TrackCaseView({
       <div className="lg:col-span-2 space-y-6">
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
           <div>
-            <span className="text-[10px] font-mono uppercase text-slate-500 block">Anonymous case</span>
+            <span className="text-[10px] font-mono uppercase text-slate-400 block">{t("track.anonymousCase")}</span>
             <h1 className="text-md font-mono text-slate-200 font-bold">{trackedCase.id}</h1>
           </div>
           <div className="flex gap-2 items-center">
             <CaseStatusBadge status={trackedCase.status} />
             <AppButton size="sm" variant="outline" onClick={() => setTrackedCase(null)}>
-              Exit
+              {t("common.exit")}
             </AppButton>
           </div>
         </div>
 
-        <SecureCard title="Case progress" subtitle={`Acknowledgement due ${trackedCase.acknowledgementDue}; feedback due ${trackedCase.feedbackDue}`}>
+        <SecureCard title={t("track.progress")} subtitle={t("track.deadlines", { ack: trackedCase.acknowledgementDue, feedback: trackedCase.feedbackDue })}>
           <TimelineWidget events={trackedCase.timeline} />
         </SecureCard>
 
-        <SecureCard title="Add supplementary evidence" subtitle="Original filenames are replaced with generic evidence references">
+        <SecureCard title={t("track.addEvidence")} subtitle={t("track.addEvidenceSub")}>
           <AttachmentUploader files={evidenceFiles} onFilesChanged={setEvidenceFiles} />
           <div className="flex justify-end mt-4">
             <AppButton
@@ -465,17 +484,17 @@ export function TrackCaseView({
                 setEvidenceFiles([]);
               }}
             >
-              Submit evidence refs
+              {t("track.submitEvidence")}
             </AppButton>
           </div>
         </SecureCard>
       </div>
 
       <div className="space-y-6">
-        <SecureCard title="Secure conversation" subtitle="Two-way anonymous follow-up" isEncrypted>
+        <SecureCard title={t("track.secureConversation")} subtitle={t("track.secureConversationSub")} isEncrypted>
           <div className="max-h-80 overflow-y-auto space-y-3 min-h-48">
             {currentCaseMessages.length === 0 ? (
-              <div className="text-center py-10 text-slate-500 text-xs italic">No messages yet.</div>
+              <div className="text-center py-10 text-slate-400 text-xs italic">{t("track.noMessages")}</div>
             ) : (
               currentCaseMessages.map((msg) => (
                 <ChatBubble key={msg.id} sender={msg.sender === "Reporter" ? "Reporter" : msg.sender} text={msg.text} timestamp={msg.timestamp} attachments={msg.attachments} />
@@ -491,26 +510,28 @@ export function TrackCaseView({
             }}
             className="mt-4 pt-4 border-t border-slate-800 flex gap-2"
           >
+            <label htmlFor="track_message" className="sr-only">{t("track.messagePlaceholder")}</label>
             <input
+              id="track_message"
               type="text"
               required
               value={typedMessage}
               onChange={(e) => setTypedMessage(e.target.value)}
-              placeholder="Send follow-up without identifying yourself"
+              placeholder={t("track.messagePlaceholder")}
               className="bg-slate-950 text-xs text-slate-100 rounded-lg p-2 flex-grow outline-none border border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
             />
-            <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-slate-950 p-2 rounded-lg transition-colors cursor-pointer">
+            <button type="submit" aria-label={t("track.sendMessage")} className="bg-cyan-600 hover:bg-cyan-500 text-slate-950 p-2 rounded-lg transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500">
               <Send className="w-4 h-4" />
             </button>
           </form>
         </SecureCard>
 
-        <SecureCard title="Technical metadata policy">
+        <SecureCard title={t("track.metadataPolicy")}>
           <div className="grid gap-2 text-xs">
             {Object.entries(trackedCase.technicalMetadataPolicy).map(([key, value]) => (
               <div key={key} className="flex items-center justify-between rounded bg-slate-950 border border-slate-800 px-3 py-2">
                 <span className="text-slate-300">{key.replace(/([A-Z])/g, " $1")}</span>
-                <span className="text-emerald-300 font-mono uppercase">{value ? "stored" : "not stored"}</span>
+                <span className="text-emerald-300 font-mono uppercase">{value ? t("track.stored") : t("track.notStored")}</span>
               </div>
             ))}
           </div>
@@ -529,6 +550,8 @@ export function AdminDashboard({
   activeRole: AppRole;
   onNavigateToCases: () => void;
 }) {
+  const { t } = useTranslation();
+  const jurisdiction = useJurisdiction();
   const total = reports.length;
   const openCount = reports.filter((report) => report.status !== "Closed").length;
   const ackDue = reports.filter((report) => report.status === "Received").length;
@@ -540,30 +563,28 @@ export function AdminDashboard({
     <div className="space-y-8 leading-relaxed">
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-100 tracking-tight">Case operations</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Operational queue focused on acknowledgement, follow-up, retention, and authorized access.
-          </p>
+          <h1 className="text-xl font-bold text-slate-100 tracking-tight">{t("dashboard.title")}</h1>
+          <p className="text-xs text-slate-400 mt-1">{t("dashboard.subtitle")}</p>
         </div>
         <div className="mt-4 md:mt-0 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 text-xs font-mono text-slate-400">
-          Active role: <strong className="text-cyan-300 font-bold">{activeRole}</strong>
+          {t("common.activeRole")}: <strong className="text-cyan-300 font-bold">{t(`roles.${activeRole}`)}</strong>
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: "Total cases", val: total, icon: FileText },
-          { label: "Open", val: openCount, icon: Clock },
-          { label: "Needs ack", val: ackDue, icon: AlertCircle },
-          { label: "Anonymous", val: anonymousCount, icon: Shield },
-          { label: "Deletion scheduled", val: deletionScheduled + legalHolds, icon: Archive }
+          { label: t("dashboard.totalCases"), val: total, icon: FileText },
+          { label: t("dashboard.open"), val: openCount, icon: Clock },
+          { label: t("dashboard.needsAck"), val: ackDue, icon: AlertCircle },
+          { label: t("dashboard.anonymous"), val: anonymousCount, icon: Shield },
+          { label: t("dashboard.deletionScheduled"), val: deletionScheduled + legalHolds, icon: Archive }
         ].map((item) => {
           const Icon = item.icon;
           return (
             <div key={item.label} className="bg-slate-900 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-slate-500 mb-2">
+              <div className="flex items-center justify-between text-slate-400 mb-2">
                 <span className="text-[10px] font-mono tracking-wider uppercase font-semibold">{item.label}</span>
-                <Icon className="w-4 h-4" />
+                <Icon className="w-4 h-4" aria-hidden="true" />
               </div>
               <div className="text-xl font-bold tracking-tight text-slate-100">{item.val}</div>
             </div>
@@ -572,36 +593,31 @@ export function AdminDashboard({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <SecureCard title="Workflow controls" subtitle="Production controls represented in the mock">
+        <SecureCard title={t("dashboard.workflowTitle")} subtitle={t("dashboard.workflowSubtitle")}>
           <ul className="space-y-3 text-xs text-slate-300">
             {[
-              "Acknowledge reports within 7 days",
-              "Provide feedback within 3 months",
-              "Keep reporter metadata unavailable to administrators",
-              "Review irrelevant personal data for deletion within 14 days",
-              "Apply legal hold only with documented reason"
+              t("dashboard.workflow1", { days: jurisdiction.acknowledgementDays }),
+              t("dashboard.workflow2", { months: jurisdiction.feedbackMonths }),
+              t("dashboard.workflow3"),
+              t("dashboard.workflow4", { days: jurisdiction.irrelevantDataDeletionDays }),
+              t("dashboard.workflow5")
             ].map((item) => (
               <li key={item} className="flex gap-2">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
                 {item}
               </li>
             ))}
           </ul>
         </SecureCard>
 
-        <SecureCard title="Small-cell analytics removed" subtitle="Privacy by design">
-          <p className="text-xs text-slate-300">
-            The previous trend charts and department heatmaps were removed from this mock because low-volume reporting
-            analytics can reveal who reported or when a team reported.
-          </p>
+        <SecureCard title={t("dashboard.analyticsTitle")} subtitle={t("dashboard.analyticsSubtitle")}>
+          <p className="text-xs text-slate-300">{t("dashboard.analyticsBody")}</p>
         </SecureCard>
 
-        <SecureCard title="Next queue action">
-          <p className="text-xs text-slate-300 mb-4">
-            Open the case register to triage, assign, message, close, or apply retention holds.
-          </p>
+        <SecureCard title={t("dashboard.nextAction")}>
+          <p className="text-xs text-slate-300 mb-4">{t("dashboard.nextActionBody")}</p>
           <AppButton variant="primary" onClick={onNavigateToCases} icon={<Filter className="w-4 h-4" />}>
-            Open register
+            {t("dashboard.openRegister")}
           </AppButton>
         </SecureCard>
       </div>
@@ -618,6 +634,8 @@ export function CaseManagementGrid({
   activeRole: AppRole;
   onSelectCase: (caseId: string) => void;
 }) {
+  const { t } = useTranslation();
+  const categoryLabel = useCategoryLabel();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
@@ -632,34 +650,38 @@ export function CaseManagementGrid({
     <div className="space-y-6 leading-relaxed">
       <div className="flex flex-col md:flex-row items-center gap-4 bg-slate-900 p-4 rounded-lg border border-slate-800">
         <div className="relative w-full md:flex-1">
+          <label htmlFor="case_search" className="sr-only">{t("cases.searchPlaceholder")}</label>
           <input
+            id="case_search"
             type="text"
-            placeholder="Search by case, category, status, or broad area"
+            placeholder={t("cases.searchPlaceholder")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-9 pr-4 text-xs font-semibold text-slate-200 outline-none placeholder-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-9 pr-4 text-xs font-semibold text-slate-200 outline-none placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
           />
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" aria-hidden="true" />
         </div>
+        <label htmlFor="case_status_filter" className="sr-only">{t("cases.headers.status")}</label>
         <select
+          id="case_status_filter"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="bg-slate-950 text-xs font-semibold border border-slate-700 text-slate-300 rounded-lg px-3.5 py-2 cursor-pointer outline-none w-full md:w-auto focus:border-cyan-500"
         >
-          <option value="ALL">All statuses</option>
+          <option value="ALL">{t("cases.allStatuses")}</option>
           {statuses.map((status) => (
             <option key={status} value={status}>
-              {status}
+              {t(`status.${status}`)}
             </option>
           ))}
         </select>
       </div>
 
-      <AppTable headers={["Case ID", "Category", "Status", "Deadlines", "Retention", "Assigned", "Disclosure", "Action"]}>
+      <AppTable headers={[t("cases.headers.caseId"), t("cases.headers.category"), t("cases.headers.status"), t("cases.headers.deadlines"), t("cases.headers.retention"), t("cases.headers.assigned"), t("cases.headers.disclosure"), t("cases.headers.action")]}>
         {filtered.length === 0 ? (
           <tr>
-            <td colSpan={8} className="text-center py-10 text-slate-500 italic">
-              No cases match the filters.
+            <td colSpan={8} className="text-center py-10 text-slate-400 italic">
+              {t("cases.noMatch")}
             </td>
           </tr>
         ) : (
@@ -667,24 +689,24 @@ export function CaseManagementGrid({
             <tr key={caseItem.id} className="hover:bg-slate-800/50 transition-colors border-b border-slate-800">
               <td className="px-4 py-3 font-mono text-xs font-bold text-slate-200">{caseItem.id}</td>
               <td className="px-4 py-3 text-xs">
-                <div className="font-semibold text-slate-100">{caseItem.category}</div>
-                <div className="text-[11px] text-slate-500 mt-1">{caseItem.department}</div>
+                <div className="font-semibold text-slate-100">{categoryLabel(caseItem.category)}</div>
+                <div className="text-[11px] text-slate-400 mt-1">{caseItem.department}</div>
               </td>
               <td className="px-4 py-3">
                 <CaseStatusBadge status={caseItem.status} />
               </td>
               <td className="px-4 py-3 text-[11px] text-slate-400 font-mono">
-                <div>Ack: {caseItem.acknowledgementDue}</div>
-                <div>Feedback: {caseItem.feedbackDue}</div>
+                <div>{t("cases.ack")}: {caseItem.acknowledgementDue}</div>
+                <div>{t("cases.feedback")}: {caseItem.feedbackDue}</div>
               </td>
               <td className="px-4 py-3 text-xs">
                 <span className="bg-slate-950 px-2 py-1 rounded border border-slate-800">{caseItem.retention.state}</span>
               </td>
-              <td className="px-4 py-3 text-xs text-slate-300">{caseItem.assignedInvestigator || "Unassigned"}</td>
+              <td className="px-4 py-3 text-xs text-slate-300">{caseItem.assignedInvestigator || t("cases.unassigned")}</td>
               <td className="px-4 py-3 text-xs text-cyan-300">{caseItem.disclosureMode}</td>
               <td className="px-4 py-3">
-                <AppButton size="sm" variant="outline" onClick={() => onSelectCase(caseItem.id)}>
-                  Open
+                <AppButton size="sm" variant="outline" aria-label={`${t("common.open")} ${caseItem.id}`} onClick={() => onSelectCase(caseItem.id)}>
+                  {t("common.open")}
                 </AppButton>
               </td>
             </tr>
@@ -692,8 +714,8 @@ export function CaseManagementGrid({
         )}
       </AppTable>
 
-      <div className="text-[11px] text-slate-500">
-        Active role: {activeRole}. Table intentionally omits narrative text and reporter contact data.
+      <div className="text-[11px] text-slate-400">
+        {t("cases.footer", { role: t(`roles.${activeRole}`) })}
       </div>
     </div>
   );
@@ -722,6 +744,8 @@ export function CaseDetailsView({
   onAddAdminMessage: (caseId: string, text: string) => void;
   onRetentionUpdate: (caseId: string, legalHold: boolean, reason?: string) => void;
 }) {
+  const { t } = useTranslation();
+  const categoryLabel = useCategoryLabel();
   const [stateStatus, setStateStatus] = useState<CaseStatus>(caseItem.status);
   const [stateSeverity, setStateSeverity] = useState<CaseSeverity>(caseItem.severity);
   const [stateInv, setStateInv] = useState(caseItem.assignedInvestigator || "");
@@ -744,19 +768,20 @@ export function CaseDetailsView({
               <CaseStatusBadge status={caseItem.status} />
               <CaseSeverityBadge severity={caseItem.severity} />
             </div>
-            <h1 className="text-md font-bold text-slate-100 mt-2">{caseItem.category}</h1>
+            <h1 className="text-md font-bold text-slate-100 mt-2">{categoryLabel(caseItem.category)}</h1>
           </div>
           <div className="text-xs bg-slate-950 px-4 py-2 rounded-lg border border-slate-800">
-            <span className="text-slate-500 font-mono">Feedback due: </span>
+            <span className="text-slate-400 font-mono">{t("caseDetails.feedbackDue")} </span>
             <span className="font-mono text-emerald-300 font-bold">{caseItem.feedbackDue}</span>
           </div>
         </div>
 
-        <SecureCard title="Action center" subtitle="Least-privilege state changes">
+        <SecureCard title={t("caseDetails.actionCenter")} subtitle={t("caseDetails.actionCenterSub")}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase font-mono block mb-1">Status</label>
+              <label htmlFor="case_status" className="text-[11px] font-bold text-slate-400 uppercase font-mono block mb-1">{t("caseDetails.statusLabel")}</label>
               <select
+                id="case_status"
                 value={stateStatus}
                 onChange={(e) => setStateStatus(e.target.value as CaseStatus)}
                 disabled={!canClose && stateStatus === "Closed"}
@@ -764,41 +789,43 @@ export function CaseDetailsView({
               >
                 {statuses.map((status) => (
                   <option key={status} value={status} disabled={status === "Closed" && !canClose}>
-                    {status}
+                    {t(`status.${status}`)}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase font-mono block mb-1">Severity</label>
+              <label htmlFor="case_severity" className="text-[11px] font-bold text-slate-400 uppercase font-mono block mb-1">{t("caseDetails.severityLabel")}</label>
               <select
+                id="case_severity"
                 value={stateSeverity}
                 onChange={(e) => setStateSeverity(e.target.value as CaseSeverity)}
                 className="bg-slate-950 w-full text-xs font-semibold text-slate-200 border border-slate-700 rounded px-3.5 py-2.5 outline-none cursor-pointer focus:border-cyan-500"
               >
                 {severities.map((severity) => (
                   <option key={severity} value={severity}>
-                    {severity}
+                    {t(`severity.${severity}`)}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase font-mono block mb-1">Investigator</label>
+              <label htmlFor="case_investigator" className="text-[11px] font-bold text-slate-400 uppercase font-mono block mb-1">{t("caseDetails.investigatorLabel")}</label>
               <select
+                id="case_investigator"
                 value={stateInv}
                 onChange={(e) => setStateInv(e.target.value)}
                 disabled={!canAssign}
                 className="bg-slate-950 w-full text-xs font-semibold text-slate-200 border border-slate-700 rounded px-3.5 py-2.5 outline-none cursor-pointer focus:border-cyan-500 disabled:opacity-60"
               >
-                <option value="">Unassigned</option>
+                <option value="">{t("caseDetails.unassigned")}</option>
                 {users
                   .filter((user) => user.status === "Active")
                   .map((user) => (
                     <option key={user.id} value={user.name}>
-                      {user.name} ({user.role})
+                      {user.name} ({t(`roles.${user.role}`)})
                     </option>
                   ))}
               </select>
@@ -813,30 +840,30 @@ export function CaseDetailsView({
                 if (canAssign) onAssignInvestigator(caseItem.id, stateInv);
               }}
             >
-              Commit and audit
+              {t("caseDetails.commit")}
             </AppButton>
           </div>
         </SecureCard>
 
-        <SecureCard title="Report synopsis" subtitle="Restricted case content">
+        <SecureCard title={t("caseDetails.synopsis")} subtitle={t("caseDetails.synopsisSub")}>
           <p className="text-xs text-slate-300 leading-relaxed">{caseItem.description}</p>
           {caseItem.attachments.length > 0 && (
             <div className="pt-4 mt-4 border-t border-slate-800">
-              <span className="text-[10px] font-bold text-slate-500 font-mono uppercase block mb-2">
-                Evidence references ({caseItem.attachments.length})
+              <span className="text-[10px] font-bold text-slate-400 font-mono uppercase block mb-2">
+                {t("caseDetails.evidenceRefs", { count: caseItem.attachments.length })}
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {caseItem.attachments.map((file) => (
                   <div key={file.id} className="bg-slate-950 px-3 py-2.5 rounded-lg border border-slate-800 text-xs font-mono">
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate flex items-center gap-2 text-slate-300">
-                        <FileText className="w-4 h-4 text-emerald-400 shrink-0" /> {file.displayName}
+                        <FileText className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" /> {file.displayName}
                       </span>
                       <span className="text-[9px] uppercase font-bold text-emerald-300 bg-emerald-950/60 px-1 py-0.5 rounded border border-emerald-500/20">
                         {file.status}
                       </span>
                     </div>
-                    <div className="text-[10px] text-slate-500 mt-1">{file.storageVaultRef}</div>
+                    <div className="text-[10px] text-slate-400 mt-1">{file.storageVaultRef}</div>
                   </div>
                 ))}
               </div>
@@ -844,43 +871,43 @@ export function CaseDetailsView({
           )}
         </SecureCard>
 
-        <SecureCard title="Investigation timeline" subtitle="Case events without reporter telemetry">
+        <SecureCard title={t("caseDetails.timeline")} subtitle={t("caseDetails.timelineSub")}>
           <TimelineWidget events={caseItem.timeline} />
         </SecureCard>
       </div>
 
       <div className="space-y-6">
-        <SecureCard title="Retention and legal hold" subtitle={`Delete after ${caseItem.retention.deleteAfter}`}>
+        <SecureCard title={t("caseDetails.retentionTitle")} subtitle={t("caseDetails.retentionSub", { date: caseItem.retention.deleteAfter })}>
           <div className="space-y-3 text-xs">
             <div className="flex items-center justify-between rounded bg-slate-950 border border-slate-800 px-3 py-2">
-              <span>State</span>
+              <span>{t("caseDetails.state")}</span>
               <span className="text-cyan-300">{caseItem.retention.state}</span>
             </div>
             <div className="flex items-center justify-between rounded bg-slate-950 border border-slate-800 px-3 py-2">
-              <span>Irrelevant data deletion due</span>
+              <span>{t("caseDetails.irrelevantDue")}</span>
               <span className="text-slate-300">{caseItem.retention.irrelevantPersonalDataDeletionDue}</span>
             </div>
             <SecureTextField
-              label="Legal hold reason"
+              label={t("caseDetails.legalHoldReason")}
               value={holdReason}
               onChange={(e) => setHoldReason(e.target.value)}
               disabled={!canRetention}
             />
             <div className="flex gap-2">
               <AppButton size="sm" variant="secure" disabled={!canRetention} onClick={() => onRetentionUpdate(caseItem.id, true, holdReason)}>
-                Apply hold
+                {t("caseDetails.applyHold")}
               </AppButton>
               <AppButton size="sm" variant="outline" disabled={!canRetention} onClick={() => onRetentionUpdate(caseItem.id, false)}>
-                Remove hold
+                {t("caseDetails.removeHold")}
               </AppButton>
             </div>
           </div>
         </SecureCard>
 
-        <SecureCard title="Anonymous messages" isEncrypted>
+        <SecureCard title={t("caseDetails.anonymousMessages")} isEncrypted>
           <div className="max-h-72 overflow-y-auto min-h-48 space-y-3">
             {currentCaseMessages.length === 0 ? (
-              <div className="text-center py-10 text-slate-500 text-xs italic">No messages yet.</div>
+              <div className="text-center py-10 text-slate-400 text-xs italic">{t("track.noMessages")}</div>
             ) : (
               currentCaseMessages.map((msg) => (
                 <ChatBubble key={msg.id} sender={msg.sender} text={msg.text} timestamp={msg.timestamp} attachments={msg.attachments} />
@@ -896,21 +923,23 @@ export function CaseDetailsView({
             }}
             className="mt-4 pt-4 border-t border-slate-800 flex gap-2"
           >
+            <label htmlFor="admin_reply" className="sr-only">{t("caseDetails.replyPlaceholder")}</label>
             <input
+              id="admin_reply"
               type="text"
               required
               value={adminMsg}
               onChange={(e) => setAdminMsg(e.target.value)}
-              placeholder="Reply without asking for identity unless necessary"
+              placeholder={t("caseDetails.replyPlaceholder")}
               className="bg-slate-950 text-xs border border-slate-700 rounded-lg p-2.5 flex-grow outline-none focus:border-cyan-500"
             />
-            <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-slate-950 p-2.5 rounded-lg shrink-0 transition-colors cursor-pointer">
+            <button type="submit" aria-label={t("track.sendMessage")} className="bg-cyan-600 hover:bg-cyan-500 text-slate-950 p-2.5 rounded-lg shrink-0 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500">
               <Send className="w-4 h-4" />
             </button>
           </form>
         </SecureCard>
 
-        <SecureCard title="Restricted note">
+        <SecureCard title={t("caseDetails.restrictedNote")}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -920,15 +949,17 @@ export function CaseDetailsView({
             }}
             className="space-y-3"
           >
+            <label htmlFor="restricted_note" className="sr-only">{t("caseDetails.restrictedNote")}</label>
             <textarea
+              id="restricted_note"
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               rows={3}
-              placeholder="Internal note. Avoid unnecessary personal data."
+              placeholder={t("caseDetails.notePlaceholder")}
               className="w-full bg-slate-950 text-xs border border-slate-700 rounded-lg p-3 outline-none focus:border-cyan-500"
             />
             <AppButton type="submit" variant="outline" size="sm">
-              Add note
+              {t("caseDetails.addNote")}
             </AppButton>
           </form>
         </SecureCard>
@@ -948,6 +979,8 @@ export function CentralEncryptedInbox({
   activeRole: AppRole;
   onAddAdminMessage: (caseId: string, text: string) => void;
 }) {
+  const { t } = useTranslation();
+  const categoryLabel = useCategoryLabel();
   const [activeCaseIdx, setActiveCaseIdx] = useState(0);
   const [typedSend, setTypedSend] = useState("");
   const trackableCases = reports.filter((report) => Boolean(report.trackingCode));
@@ -956,29 +989,30 @@ export function CentralEncryptedInbox({
   const canReply = activeRole !== "Auditor";
 
   if (!selectedCase) {
-    return <div className="text-center py-20 text-slate-500 italic max-w-lg mx-auto">No anonymous communication channels are active.</div>;
+    return <div className="text-center py-20 text-slate-400 italic max-w-lg mx-auto">{t("inbox.noChannels")}</div>;
   }
 
   return (
     <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-900 grid grid-cols-1 md:grid-cols-3 max-w-5xl mx-auto h-[550px] leading-relaxed shadow-2xl">
       <div className="border-r border-slate-800 bg-slate-950 overflow-y-auto divide-y divide-slate-800 h-full">
         <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
-          <span className="text-xs font-mono font-bold text-slate-300">Channels</span>
+          <span className="text-xs font-mono font-bold text-slate-300">{t("inbox.channels")}</span>
           <span className="text-[10px] text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 font-mono font-bold">{trackableCases.length}</span>
         </div>
         {trackableCases.map((report, idx) => (
           <button
             key={report.id}
             onClick={() => setActiveCaseIdx(idx)}
-            className={`w-full text-left p-4 hover:bg-slate-900 transition-colors cursor-pointer flex flex-col gap-1.5 ${
+            aria-current={activeCaseIdx === idx ? "true" : undefined}
+            className={`w-full text-left p-4 hover:bg-slate-900 transition-colors cursor-pointer flex flex-col gap-1.5 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
               activeCaseIdx === idx ? "bg-slate-900 border-l-4 border-cyan-500" : ""
             }`}
           >
             <div className="flex items-center justify-between">
               <span className="font-mono text-xs text-slate-200 font-bold">{report.id}</span>
-              <span className="text-[9px] uppercase font-mono text-slate-500">{report.submissionDate.split(" ")[0]}</span>
+              <span className="text-[9px] uppercase font-mono text-slate-400">{report.submissionDate.split(" ")[0]}</span>
             </div>
-            <div className="text-xs font-bold text-slate-400">{report.category}</div>
+            <div className="text-xs font-bold text-slate-400">{categoryLabel(report.category)}</div>
           </button>
         ))}
       </div>
@@ -987,16 +1021,16 @@ export function CentralEncryptedInbox({
         <div className="p-4 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
           <div>
             <span className="text-xs font-mono font-bold text-slate-200">{selectedCase.id}</span>
-            <span className="text-[11px] text-slate-400 block mt-0.5">{selectedCase.category}</span>
+            <span className="text-[11px] text-slate-400 block mt-0.5">{categoryLabel(selectedCase.category)}</span>
           </div>
           <span className="text-[9px] font-mono text-emerald-300 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase">
-            anonymous channel
+            {t("inbox.anonymousChannel")}
           </span>
         </div>
 
         <div className="p-4 flex-1 overflow-y-auto space-y-3.5 bg-slate-950/30 h-72">
           {selectedCaseMessages.length === 0 ? (
-            <div className="text-center py-20 text-slate-500 text-xs italic">No communications posted.</div>
+            <div className="text-center py-20 text-slate-400 text-xs italic">{t("inbox.noComms")}</div>
           ) : (
             selectedCaseMessages.map((msg) => (
               <ChatBubble key={msg.id} sender={msg.sender === "Reporter" ? "Anonymous Whistleblower" : msg.sender} text={msg.text} timestamp={msg.timestamp} attachments={msg.attachments} />
@@ -1013,19 +1047,22 @@ export function CentralEncryptedInbox({
           }}
           className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2.5"
         >
+          <label htmlFor="inbox_reply" className="sr-only">{t("inbox.replyTo", { id: selectedCase.id })}</label>
           <input
+            id="inbox_reply"
             type="text"
             required
             disabled={!canReply}
             value={typedSend}
             onChange={(e) => setTypedSend(e.target.value)}
-            placeholder={canReply ? `Reply to ${selectedCase.id}` : "Auditor role is read-only"}
+            placeholder={canReply ? t("inbox.replyTo", { id: selectedCase.id }) : t("inbox.auditorReadonly")}
             className="flex-grow bg-slate-900 text-xs rounded-lg p-2.5 outline-none border border-slate-700 text-slate-200 focus:border-cyan-500 disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={!canReply}
-            className="bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 text-slate-950 px-4 rounded-lg font-semibold text-xs py-2 h-10 transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+            aria-label={t("track.sendMessage")}
+            className="bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 text-slate-950 px-4 rounded-lg font-semibold text-xs py-2 h-10 transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-cyan-500"
           >
             <Send className="w-3.5 h-3.5" />
           </button>
@@ -1036,6 +1073,7 @@ export function CentralEncryptedInbox({
 }
 
 export function SecurityAuditTrailLogs({ logs, activeRole }: { logs: AuditLog[]; activeRole: AppRole }) {
+  const { t } = useTranslation();
   const [auditSearch, setAuditSearch] = useState("");
   const canAudit = SafeVoiceDb.can(activeRole, "accessAudits");
 
@@ -1052,37 +1090,37 @@ export function SecurityAuditTrailLogs({ logs, activeRole }: { logs: AuditLog[];
     <div className="space-y-6 leading-relaxed max-w-5xl mx-auto">
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div>
-          <h1 className="text-lg font-bold text-slate-100 tracking-tight">Immutable audit trail</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Admin-visible log excludes reporter IP, user-agent, fingerprints, geolocation, and message bodies.
-          </p>
+          <h1 className="text-lg font-bold text-slate-100 tracking-tight">{t("audits.title")}</h1>
+          <p className="text-xs text-slate-400 mt-1">{t("audits.subtitle")}</p>
         </div>
       </div>
 
       <div className="flex flex-col md:flex-row items-center gap-4 bg-slate-900 p-4 rounded-lg border border-slate-800 justify-between">
         <div className="relative w-full md:max-w-xs">
+          <label htmlFor="audit_search" className="sr-only">{t("audits.searchPlaceholder")}</label>
           <input
+            id="audit_search"
             type="text"
-            placeholder="Search audit events"
+            placeholder={t("audits.searchPlaceholder")}
             value={auditSearch}
             onChange={(e) => setAuditSearch(e.target.value)}
             className="w-full bg-slate-950 border border-slate-700 text-slate-300 rounded-lg py-2 pl-9 pr-4 text-xs font-semibold outline-none focus:border-cyan-500"
           />
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" aria-hidden="true" />
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-950 border border-slate-800 p-2 rounded">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-          <span className="font-mono text-[10px] text-slate-300">Hash-chain demo only; production requires WORM storage.</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" aria-hidden="true" />
+          <span className="font-mono text-[10px] text-slate-300">{t("audits.wormNote")}</span>
         </div>
       </div>
 
-      <AppTable headers={["Timestamp", "Actor", "Action", "Subject", "Outcome", "Metadata policy", "Seal"]}>
+      <AppTable headers={[t("audits.headers.timestamp"), t("audits.headers.actor"), t("audits.headers.action"), t("audits.headers.subject"), t("audits.headers.outcome"), t("audits.headers.metadata"), t("audits.headers.seal")]}>
         {filteredLogs.map((log) => (
           <tr key={log.id} className="hover:bg-slate-800/50 border-b border-slate-800 transition-colors">
             <td className="px-4 py-3 text-xs font-mono text-slate-400 whitespace-nowrap">{log.timestamp}</td>
             <td className="px-4 py-3 text-xs text-slate-200">
-              <div className="font-bold">{log.actorRole}</div>
-              <div className="text-[10px] text-slate-500 font-mono">{log.actorRef}</div>
+              <div className="font-bold">{t(`roles.${log.actorRole}`, { defaultValue: log.actorRole })}</div>
+              <div className="text-[10px] text-slate-400 font-mono">{log.actorRef}</div>
             </td>
             <td className="px-4 py-3 text-xs text-slate-300">{log.actionType}</td>
             <td className="px-4 py-3 text-xs font-mono text-slate-400">{log.subjectId || "N/A"}</td>
@@ -1090,14 +1128,14 @@ export function SecurityAuditTrailLogs({ logs, activeRole }: { logs: AuditLog[];
             <td className="px-4 py-3 text-xs text-slate-400 max-w-sm">
               {log.metadataNotice}
               {log.oldValue && log.newValue && (
-                <div className="mt-1 flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
+                <div className="mt-1 flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
                   <span>{log.oldValue}</span>
-                  <ChevronRight className="w-3 h-3" />
+                  <ChevronRight className="w-3 h-3" aria-hidden="true" />
                   <span className="text-cyan-300">{log.newValue}</span>
                 </div>
               )}
             </td>
-            <td className="px-4 py-3 text-xs font-mono text-slate-500">{log.hashChain}</td>
+            <td className="px-4 py-3 text-xs font-mono text-slate-400">{log.hashChain}</td>
           </tr>
         ))}
       </AppTable>
@@ -1114,6 +1152,7 @@ export function UsersPermissionsMatrix({
   activeRole: AppRole;
   onInviteUser: (name: string, email: string, role: AppRole) => void;
 }) {
+  const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -1124,41 +1163,41 @@ export function UsersPermissionsMatrix({
     <div className="space-y-8 max-w-5xl mx-auto leading-relaxed">
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-4 gap-4">
         <div>
-          <h1 className="text-lg font-bold text-slate-100 tracking-tight">Access controls</h1>
-          <p className="text-xs text-slate-400 mt-1">Least-privilege roles with MFA and authorization status.</p>
+          <h1 className="text-lg font-bold text-slate-100 tracking-tight">{t("users.title")}</h1>
+          <p className="text-xs text-slate-400 mt-1">{t("users.subtitle")}</p>
         </div>
-        <AppButton variant="primary" icon={<Plus className="w-4 h-4" />} disabled={!canManageUsers} onClick={() => setModalOpen(true)}>
-          Invite officer
+        <AppButton variant="primary" icon={<UserCheck className="w-4 h-4" />} disabled={!canManageUsers} onClick={() => setModalOpen(true)}>
+          {t("users.inviteOfficer")}
         </AppButton>
       </div>
 
-      <SecureCard title="Authorized personnel">
-        <AppTable headers={["Officer", "Role", "Status", "MFA", "Last login review"]}>
+      <SecureCard title={t("users.authorizedPersonnel")}>
+        <AppTable headers={[t("users.headers.officer"), t("users.headers.role"), t("users.headers.status"), t("users.headers.mfa"), t("users.headers.lastReview")]}>
           {users.map((user) => (
             <tr key={user.id} className="hover:bg-slate-800/50 border-b border-slate-800 text-xs">
               <td className="px-4 py-3 font-bold text-slate-200">
                 {user.name}
-                <span className="block font-normal text-[10px] text-slate-500 mt-0.5">{user.email}</span>
+                <span className="block font-normal text-[10px] text-slate-400 mt-0.5">{user.email}</span>
               </td>
               <td className="px-4 py-3">
-                <span className="bg-slate-950 px-2.5 py-1 rounded border border-slate-800 text-cyan-300 font-semibold uppercase tracking-wider">{user.role}</span>
+                <span className="bg-slate-950 px-2.5 py-1 rounded border border-slate-800 text-cyan-300 font-semibold uppercase tracking-wider">{t(`roles.${user.role}`)}</span>
               </td>
               <td className="px-4 py-3">{user.status}</td>
-              <td className="px-4 py-3 text-emerald-300">{user.mfaRequired ? "Required" : "Missing"}</td>
-              <td className="px-4 py-3 text-slate-500 font-mono">{user.lastLoginReview}</td>
+              <td className="px-4 py-3 text-emerald-300">{user.mfaRequired ? t("users.mfaRequired") : t("users.mfaMissing")}</td>
+              <td className="px-4 py-3 text-slate-400 font-mono">{user.lastLoginReview}</td>
             </tr>
           ))}
         </AppTable>
       </SecureCard>
 
-      <SecureCard title="Permission matrix" subtitle="Exports and user administration are intentionally narrow">
-        <AppTable headers={["Role", "View", "Assign", "Close", "Export", "Audits", "Users", "Retention"]}>
+      <SecureCard title={t("users.permissionMatrix")} subtitle={t("users.permissionMatrixSub")}>
+        <AppTable headers={[t("users.headers.role"), t("users.headers.view"), t("users.headers.assign"), t("users.headers.close"), t("users.headers.export"), t("users.headers.audits"), t("users.headers.usersCol"), t("users.headers.retention")]}>
           {rolePermissions.map((rule) => (
             <tr key={rule.role} className="hover:bg-slate-800/50 border-b border-slate-800">
-              <td className="px-4 py-3 font-mono text-xs font-bold text-cyan-300 uppercase">{rule.role}</td>
+              <td className="px-4 py-3 font-mono text-xs font-bold text-cyan-300 uppercase">{t(`roles.${rule.role}`)}</td>
               {(["viewReports", "assignCases", "closeCases", "exportData", "accessAudits", "manageUsers", "manageRetention"] as const).map((key) => (
                 <td key={key} className="px-4 py-3 text-center text-xs">
-                  <span className={rule[key] ? "text-emerald-300 font-semibold" : "text-slate-600 font-semibold"}>{rule[key] ? "Allowed" : "Blocked"}</span>
+                  <span className={rule[key] ? "text-emerald-300 font-semibold" : "text-slate-500 font-semibold"}>{rule[key] ? t("users.allowed") : t("users.blocked")}</span>
                 </td>
               ))}
             </tr>
@@ -1166,7 +1205,7 @@ export function UsersPermissionsMatrix({
         </AppTable>
       </SecureCard>
 
-      <AppModal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Invite authorized officer">
+      <AppModal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={t("users.inviteTitle")}>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -1178,24 +1217,24 @@ export function UsersPermissionsMatrix({
           }}
           className="space-y-4"
         >
-          <SecureTextField label="Officer name" required value={inviteName} onChange={(e) => setInviteName(e.target.value)} />
-          <SecureTextField label="Business email" type="email" required value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
+          <SecureTextField label={t("users.officerName")} required value={inviteName} onChange={(e) => setInviteName(e.target.value)} />
+          <SecureTextField label={t("users.businessEmail")} type="email" required value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
           <div>
-            <label className="text-xs font-bold text-slate-300 uppercase font-mono block mb-1.5">Role</label>
-            <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as AppRole)} className="bg-slate-950 w-full text-xs font-semibold text-slate-200 border border-slate-700 rounded px-3.5 py-2.5 outline-none cursor-pointer focus:border-cyan-500">
+            <label htmlFor="invite_role" className="text-xs font-bold text-slate-300 uppercase font-mono block mb-1.5">{t("users.role")}</label>
+            <select id="invite_role" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as AppRole)} className="bg-slate-950 w-full text-xs font-semibold text-slate-200 border border-slate-700 rounded px-3.5 py-2.5 outline-none cursor-pointer focus:border-cyan-500">
               {rolePermissions.map((role) => (
                 <option key={role.role} value={role.role}>
-                  {role.role}
+                  {t(`roles.${role.role}`)}
                 </option>
               ))}
             </select>
           </div>
           <div className="flex gap-3 justify-end pt-4 border-t border-slate-800">
             <AppButton type="button" variant="outline" onClick={() => setModalOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </AppButton>
             <AppButton type="submit" variant="primary">
-              Invite with MFA
+              {t("users.inviteWithMfa")}
             </AppButton>
           </div>
         </form>
@@ -1205,31 +1244,35 @@ export function UsersPermissionsMatrix({
 }
 
 export function BrandedSettingsView() {
+  const { t } = useTranslation();
+  const jurisdiction = useJurisdiction();
   const [activeSettingsTab, setActiveSettingsTab] = useState("security");
 
   const tabs = [
-    { key: "security", label: "Admin Security", icon: Lock },
-    { key: "retention", label: "Retention", icon: Clock },
-    { key: "legal", label: "Legal Basis", icon: Scale },
-    { key: "review", label: "Review Matrix", icon: FileText }
+    { key: "security", label: t("settings.tabSecurity"), icon: Lock },
+    { key: "retention", label: t("settings.tabRetention"), icon: Clock },
+    { key: "legal", label: t("settings.tabLegal"), icon: Scale },
+    { key: "review", label: t("settings.tabReview"), icon: FileText }
   ];
 
   const reviewGroups = useMemo(() => complianceReview, []);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 max-w-6xl mx-auto items-start leading-relaxed">
-      <div className="bg-slate-950 border border-slate-800 p-3 rounded-lg space-y-1">
+      <div className="bg-slate-950 border border-slate-800 p-3 rounded-lg space-y-1" role="tablist" aria-label={t("nav.complianceSettings")}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
               key={tab.key}
+              role="tab"
+              aria-selected={activeSettingsTab === tab.key}
               onClick={() => setActiveSettingsTab(tab.key)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
                 activeSettingsTab === tab.key ? "bg-slate-900 border border-slate-700 text-cyan-300" : "hover:bg-slate-900 text-slate-400 hover:text-slate-100"
               }`}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>{tab.label}</span>
             </button>
           );
@@ -1238,7 +1281,7 @@ export function BrandedSettingsView() {
 
       <div className="lg:col-span-3">
         {activeSettingsTab === "security" && (
-          <SecureCard title="Administrative security controls" subtitle="Required before production use">
+          <SecureCard title={t("settings.securityTitle")} subtitle={t("settings.securitySub")}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               {[
                 ["MFA", "Required for all staff roles; no bypass role"],
@@ -1260,24 +1303,24 @@ export function BrandedSettingsView() {
         )}
 
         {activeSettingsTab === "retention" && (
-          <SecureCard title="Retention and deletion policy" subtitle="Configurable but legally bounded">
+          <SecureCard title={t("settings.retentionTitle")} subtitle={t("settings.retentionSub")}>
             <div className="space-y-4 text-xs text-slate-300">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-slate-950 border border-slate-800 rounded-lg p-3">
-                  <div className="font-bold text-slate-100">Default retention</div>
-                  <div className="text-slate-400 mt-1">3 years after the calendar year in which follow-up ends or related proceedings end.</div>
+                  <div className="font-bold text-slate-100">{t("settings.defaultRetention")}</div>
+                  <div className="text-slate-400 mt-1">{t("settings.defaultRetentionBody", { years: jurisdiction.retentionYears })}</div>
                 </div>
                 <div className="bg-slate-950 border border-slate-800 rounded-lg p-3">
-                  <div className="font-bold text-slate-100">Irrelevant data</div>
-                  <div className="text-slate-400 mt-1">Delete within 14 days after determining it is not relevant to the report.</div>
+                  <div className="font-bold text-slate-100">{t("settings.irrelevantData")}</div>
+                  <div className="text-slate-400 mt-1">{t("settings.irrelevantDataBody", { days: jurisdiction.irrelevantDataDeletionDays })}</div>
                 </div>
                 <div className="bg-slate-950 border border-slate-800 rounded-lg p-3">
-                  <div className="font-bold text-slate-100">Legal hold</div>
-                  <div className="text-slate-400 mt-1">Suspends deletion only with reason, approver, timestamp, and periodic review.</div>
+                  <div className="font-bold text-slate-100">{t("settings.legalHold")}</div>
+                  <div className="text-slate-400 mt-1">{t("settings.legalHoldBody")}</div>
                 </div>
                 <div className="bg-slate-950 border border-slate-800 rounded-lg p-3">
-                  <div className="font-bold text-slate-100">Secure destruction</div>
-                  <div className="text-slate-400 mt-1">Delete DB rows, KMS data keys, object versions, quarantine copies, and search indexes.</div>
+                  <div className="font-bold text-slate-100">{t("settings.secureDestruction")}</div>
+                  <div className="text-slate-400 mt-1">{t("settings.secureDestructionBody")}</div>
                 </div>
               </div>
             </div>
@@ -1285,34 +1328,27 @@ export function BrandedSettingsView() {
         )}
 
         {activeSettingsTab === "legal" && (
-          <SecureCard title="Controller, processor, and lawful basis" subtitle="Policy text for the mock frontend">
+          <SecureCard title={t("settings.legalTitle")} subtitle={t("settings.legalSub")}>
             <div className="space-y-4 text-xs text-slate-300">
               <div className="bg-slate-950 p-4 border border-slate-800 rounded-lg">
                 <div className="flex items-center gap-1.5 font-bold text-slate-100 mb-2">
-                  <Scale className="w-4 h-4 text-cyan-300" /> Processing basis
+                  <Scale className="w-4 h-4 text-cyan-300" aria-hidden="true" /> {t("settings.processingBasis")}
                 </div>
-                <p>
-                  Reports are processed to receive, verify, follow up, communicate with the reporter, document actions, and
-                  protect against retaliation. Production deployments need a tenant-specific privacy notice and DPA.
-                </p>
+                <p>{t("settings.processingBasisBody")}</p>
               </div>
               <div className="bg-slate-950 p-4 border border-slate-800 rounded-lg">
                 <div className="flex items-center gap-1.5 font-bold text-slate-100 mb-2">
-                  <UserCheck className="w-4 h-4 text-cyan-300" /> Responsibilities
+                  <UserCheck className="w-4 h-4 text-cyan-300" aria-hidden="true" /> {t("settings.responsibilities")}
                 </div>
-                <p>
-                  The customer organization is controller for its report register. SafeVoice acts as processor unless it
-                  determines purposes and means for shared operations. Processor contracts must cover sub-processors, EU
-                  hosting, audit rights, deletion, and incident response.
-                </p>
+                <p>{t("settings.responsibilitiesBody")}</p>
               </div>
             </div>
           </SecureCard>
         )}
 
         {activeSettingsTab === "review" && (
-          <SecureCard title="Feature compliance review" subtitle="Keep, modify, remove, add recommendations">
-            <AppTable headers={["Area", "Existing feature", "Decision", "Justification", "Risk"]}>
+          <SecureCard title={t("settings.reviewTitle")} subtitle={t("settings.reviewSub")}>
+            <AppTable headers={[t("settings.reviewHeaders.area"), t("settings.reviewHeaders.feature"), t("settings.reviewHeaders.decision"), t("settings.reviewHeaders.justification"), t("settings.reviewHeaders.risk")]}>
               {reviewGroups.map((item) => (
                 <tr key={`${item.area}-${item.classification}`} className="border-b border-slate-800 hover:bg-slate-800/40">
                   <td className="px-4 py-3 text-xs font-bold text-slate-100">{item.area}</td>

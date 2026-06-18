@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import { Info } from "lucide-react";
 import {
@@ -15,6 +16,8 @@ import {
   SaaSUser
 } from "./types";
 import { reporterMetadataPolicy, SafeVoiceDb } from "./data/mockData";
+import { useJurisdiction } from "./config/activeJurisdiction";
+import { useMotionProps } from "./a11y/motion";
 import { AppNavbar, AppSidebar } from "./components/Navigation";
 import {
   AccessDeniedView,
@@ -44,9 +47,10 @@ const addMonths = (months: number) => {
   return date.toISOString().replace("T", " ").substring(0, 16);
 };
 
-const retentionDate = () => {
+// Build the deletion date from the jurisdiction's retention period (e.g. Poland: 3 years).
+const retentionDate = (years: number) => {
   const date = new Date();
-  date.setFullYear(date.getFullYear() + 3);
+  date.setFullYear(date.getFullYear() + years);
   return `${date.getFullYear()}-12-31`;
 };
 
@@ -78,6 +82,9 @@ const severityFor = (category: ReportCategory): CaseSeverity => {
 };
 
 export default function App() {
+  const { t } = useTranslation();
+  const jurisdiction = useJurisdiction();
+  const m = useMotionProps();
   const [currentPath, setCurrentPath] = useState<string>(() => routeFromHash());
   const [reports, setReports] = useState<CaseReport[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -118,6 +125,26 @@ export default function App() {
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
+
+  // Keep the browser tab title in step with the current screen and language. A descriptive,
+  // per-page title helps screen-reader users know where they are (WCAG 2.4.2).
+  useEffect(() => {
+    const sectionKeys: Record<string, string> = {
+      "/report": "nav.submitReport",
+      "/report/success": "nav.submitReport",
+      "/track": "nav.trackReport",
+      "/access-denied": "accessDenied.title",
+      "/dashboard": "nav.caseOperations",
+      "/cases": "nav.caseRegister",
+      "/cases/:id": "nav.caseRegister",
+      "/messages": "nav.secureInbox",
+      "/audits": "nav.auditTrail",
+      "/users": "nav.accessControls",
+      "/settings": "nav.complianceSettings"
+    };
+    const key = sectionKeys[currentPath];
+    document.title = key ? `${t(key)} · ${t("app.name")}` : t("app.documentTitle");
+  }, [currentPath, t]);
 
   const reloadFromDb = () => {
     setReports(SafeVoiceDb.getReports());
@@ -174,24 +201,24 @@ export default function App() {
       status: "Received",
       severity: severityFor(data.category),
       submissionDate,
-      acknowledgementDue: addDays(7),
-      feedbackDue: addMonths(3),
+      acknowledgementDue: addDays(jurisdiction.acknowledgementDays),
+      feedbackDue: addMonths(jurisdiction.feedbackMonths),
       assignedInvestigator: isHrHandoff ? "Katarzyna Mazur" : undefined,
       disclosureMode,
       contactVaultRef: disclosureMode === "Confidential Named" ? data.contactVaultRef : undefined,
       intakeChannel: isHrHandoff ? "HR grievance handoff" : "Anonymous web portal",
       lawfulBasis: isHrHandoff
         ? "Internal HR grievance procedure; no SafeVoice anonymous tracking code issued"
-        : "Legal obligation and legitimate follow-up under EU 2019/1937 and Polish internal reporting procedure",
-      controller: "RegulaOne Poland S.A.",
-      processor: isHrHandoff ? "Internal HR desk" : "SafeVoice EU hosting processor",
+        : `Legal obligation and legitimate follow-up under ${jurisdiction.legalBasisLabel}`,
+      controller: jurisdiction.controllerName,
+      processor: isHrHandoff ? "Internal HR desk" : jurisdiction.processorName,
       slaHoursRemaining: 2160,
       technicalMetadataPolicy: reporterMetadataPolicy,
       retention: {
         state: "Active",
-        retentionYears: 3,
-        deleteAfter: retentionDate(),
-        irrelevantPersonalDataDeletionDue: addDays(14)
+        retentionYears: jurisdiction.retentionYears,
+        deleteAfter: retentionDate(jurisdiction.retentionYears),
+        irrelevantPersonalDataDeletionDue: addDays(jurisdiction.irrelevantDataDeletionDays)
       },
       riskFlags: isHrHandoff
         ? ["Outside whistleblower scope", "HR confidentiality required"]
@@ -547,6 +574,13 @@ export default function App() {
 
   return (
     <div className="bg-slate-950 text-slate-200 font-sans min-h-screen flex antialiased">
+      {/* Skip link lets keyboard and screen-reader users jump past the menus straight to content (WCAG 2.4.1). */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-3 focus:left-3 focus:bg-cyan-600 focus:text-slate-950 focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"
+      >
+        {t("common.skipToContent")}
+      </a>
       <AppSidebar
         currentPath={currentPath}
         onNavigate={navigateTo}
@@ -559,28 +593,28 @@ export default function App() {
         <AppNavbar activeRole={activeRole} setActiveRole={setRole} notifications={notifications} onMarkAllRead={handleMarkAllAlertsRead} />
 
         {activeRole === "Public User" && currentPath === "/access-denied" && (
-          <div className="bg-amber-950/30 border-b border-amber-900/50 px-6 py-2.5 text-xs text-amber-200 flex items-center gap-2">
-            <Info className="w-4 h-4 shrink-0" />
-            Staff tools require an authorized role with MFA in production. Reporter sessions remain isolated from back-office data.
+          <div className="bg-amber-950/30 border-b border-amber-900/50 px-6 py-2.5 text-xs text-amber-200 flex items-center gap-2" role="status">
+            <Info className="w-4 h-4 shrink-0" aria-hidden="true" />
+            {t("accessDenied.staffBanner")}
           </div>
         )}
 
-        <main className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto pb-20">
+        <main id="main-content" className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto pb-20">
           <AnimatePresence mode="wait">
             {currentPath === "/report" && (
-              <motion.div key="report" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <motion.div key="report" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
                 <PublicReportPortal onSubmitReport={handleFormReportSubmit} />
               </motion.div>
             )}
 
             {currentPath === "/report/success" && (
-              <motion.div key="success" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, y: -10 }}>
+              <motion.div key="success" {...m({ initial: { opacity: 0, scale: 0.98 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, y: -10 } })}>
                 <ReportSuccessView generatedCode={lastSuccessCode} category={lastSuccessCategory} />
               </motion.div>
             )}
 
             {currentPath === "/track" && (
-              <motion.div key="track" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <motion.div key="track" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
                 <TrackCaseView
                   reports={reports}
                   messages={messages}
@@ -591,25 +625,25 @@ export default function App() {
             )}
 
             {currentPath === "/access-denied" && (
-              <motion.div key="denied" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <motion.div key="denied" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
                 <AccessDeniedView onGoReport={() => navigateTo("/report")} />
               </motion.div>
             )}
 
             {currentPath === "/dashboard" && staffPermission && (
-              <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <motion.div key="dashboard" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
                 <AdminDashboard reports={reports} activeRole={staffPermission} onNavigateToCases={() => navigateTo("/cases")} />
               </motion.div>
             )}
 
             {currentPath === "/cases" && staffPermission && (
-              <motion.div key="cases" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <motion.div key="cases" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
                 <CaseManagementGrid reports={reports} activeRole={staffPermission} onSelectCase={handleSelectCase} />
               </motion.div>
             )}
 
             {currentPath === "/cases/:id" && currentDetailsCase && staffPermission && (
-              <motion.div key={`case-detail-${selectedCaseId}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <motion.div key={`case-detail-${selectedCaseId}`} {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
                 <CaseDetailsView
                   caseItem={currentDetailsCase}
                   messages={messages}
@@ -626,25 +660,25 @@ export default function App() {
             )}
 
             {currentPath === "/messages" && staffPermission && (
-              <motion.div key="messages" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <motion.div key="messages" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
                 <CentralEncryptedInbox reports={reports} messages={messages} activeRole={staffPermission} onAddAdminMessage={handleAddAdminReplyMessage} />
               </motion.div>
             )}
 
             {currentPath === "/audits" && staffPermission && (
-              <motion.div key="audits" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <motion.div key="audits" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
                 <SecurityAuditTrailLogs logs={auditLogs} activeRole={staffPermission} />
               </motion.div>
             )}
 
             {currentPath === "/users" && staffPermission && (
-              <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <motion.div key="users" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
                 <UsersPermissionsMatrix users={users} activeRole={staffPermission} onInviteUser={handleInviteOfficerObj} />
               </motion.div>
             )}
 
             {currentPath === "/settings" && staffPermission && (
-              <motion.div key="settings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <motion.div key="settings" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
                 <BrandedSettingsView />
               </motion.div>
             )}

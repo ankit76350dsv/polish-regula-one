@@ -1,4 +1,5 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
@@ -11,6 +12,7 @@ import {
   X
 } from "lucide-react";
 import { CaseSeverity, CaseStatus, EvidenceAttachment } from "../types";
+import { useMotionProps } from "../a11y/motion";
 
 interface AppButtonProps {
   children?: React.ReactNode;
@@ -21,6 +23,7 @@ interface AppButtonProps {
   type?: "button" | "submit" | "reset";
   disabled?: boolean;
   title?: string;
+  "aria-label"?: string;
   onClick?: (event: any) => void;
 }
 
@@ -102,55 +105,29 @@ export function SecureCard({
 }
 
 export function CaseStatusBadge({ status }: { status: CaseStatus }) {
-  const configs: Record<CaseStatus, { bg: string; dot: string; label: string }> = {
-    Received: {
-      bg: "bg-sky-950/40 text-sky-300 border-sky-800/40",
-      dot: "bg-sky-400",
-      label: "Received"
-    },
-    Acknowledged: {
-      bg: "bg-emerald-950/30 text-emerald-300 border-emerald-800/40",
-      dot: "bg-emerald-400",
-      label: "Acknowledged"
-    },
-    Triage: {
-      bg: "bg-amber-950/40 text-amber-300 border-amber-800/40",
-      dot: "bg-amber-400",
-      label: "Triage"
-    },
-    Investigating: {
-      bg: "bg-cyan-950/40 text-cyan-300 border-cyan-800/40",
-      dot: "bg-cyan-400",
-      label: "Investigating"
-    },
-    "Awaiting Reporter": {
-      bg: "bg-violet-950/40 text-violet-300 border-violet-800/40",
-      dot: "bg-violet-400",
-      label: "Awaiting Reporter"
-    },
-    Remediation: {
-      bg: "bg-teal-950/40 text-teal-300 border-teal-800/40",
-      dot: "bg-teal-400",
-      label: "Remediation"
-    },
-    Closed: {
-      bg: "bg-slate-800 text-slate-300 border-slate-700",
-      dot: "bg-slate-400",
-      label: "Closed"
-    }
+  const { t } = useTranslation();
+  const configs: Record<CaseStatus, { bg: string; dot: string }> = {
+    Received: { bg: "bg-sky-950/40 text-sky-300 border-sky-800/40", dot: "bg-sky-400" },
+    Acknowledged: { bg: "bg-emerald-950/30 text-emerald-300 border-emerald-800/40", dot: "bg-emerald-400" },
+    Triage: { bg: "bg-amber-950/40 text-amber-300 border-amber-800/40", dot: "bg-amber-400" },
+    Investigating: { bg: "bg-cyan-950/40 text-cyan-300 border-cyan-800/40", dot: "bg-cyan-400" },
+    "Awaiting Reporter": { bg: "bg-violet-950/40 text-violet-300 border-violet-800/40", dot: "bg-violet-400" },
+    Remediation: { bg: "bg-teal-950/40 text-teal-300 border-teal-800/40", dot: "bg-teal-400" },
+    Closed: { bg: "bg-slate-800 text-slate-300 border-slate-700", dot: "bg-slate-400" }
   };
 
   const config = configs[status];
 
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ${config.bg}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
-      {config.label}
+      <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} aria-hidden="true" />
+      {t(`status.${status}`)}
     </span>
   );
 }
 
 export function CaseSeverityBadge({ severity }: { severity: CaseSeverity }) {
+  const { t } = useTranslation();
   const configs: Record<CaseSeverity, string> = {
     Low: "bg-slate-800 text-slate-300 border-slate-700",
     Medium: "bg-sky-950/30 text-sky-300 border-sky-900/30",
@@ -160,7 +137,7 @@ export function CaseSeverityBadge({ severity }: { severity: CaseSeverity }) {
 
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${configs[severity]}`}>
-      {severity}
+      {t(`severity.${severity}`)}
     </span>
   );
 }
@@ -189,25 +166,31 @@ export function SecureTextField({
   id,
   ...props
 }: SecureTextFieldProps) {
+  const { t } = useTranslation();
+  const generatedId = useId();
+  const fieldId = id || generatedId;
+  const helperId = helperText ? `${fieldId}-helper` : undefined;
+
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label htmlFor={id} className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+        <label htmlFor={fieldId} className="text-xs font-semibold text-slate-300 flex items-center justify-between">
           <span>{label}</span>
-          {props.required && <span className="text-cyan-300 font-mono text-[10px] uppercase">Required</span>}
+          {props.required && <span className="text-cyan-300 font-mono text-[10px] uppercase">{t("common.required")}</span>}
         </label>
       )}
       <div className="relative rounded-lg shadow-sm">
         {icon && <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">{icon}</div>}
         <input
-          id={id}
+          id={fieldId}
+          aria-describedby={helperId}
           className={`block w-full rounded-lg bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 py-2.5 ${
             icon ? "pl-10" : "pl-3.5"
           } pr-3.5 transition-colors`}
           {...props}
         />
       </div>
-      {helperText && <p className="text-[11px] text-slate-400 leading-relaxed">{helperText}</p>}
+      {helperText && <p id={helperId} className="text-[11px] text-slate-400 leading-relaxed">{helperText}</p>}
     </div>
   );
 }
@@ -227,7 +210,7 @@ export function AppTable({
         <thead className="bg-slate-950 text-slate-300">
           <tr>
             {headers.map((header) => (
-              <th key={header} className="px-4 py-3 text-left text-xs font-semibold tracking-wider font-mono uppercase">
+              <th key={header} scope="col" className="px-4 py-3 text-left text-xs font-semibold tracking-wider font-mono uppercase">
                 {header}
               </th>
             ))}
@@ -252,31 +235,86 @@ export function AppModal({
   children: React.ReactNode;
   maxWidth?: string;
 }) {
+  const { t } = useTranslation();
+  const m = useMotionProps();
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Remember what was focused before the dialog opened so we can give focus back on close.
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+
+  // When the dialog opens: remember focus, move focus inside, and lock background scroll.
+  useEffect(() => {
+    if (!isOpen) return;
+    previouslyFocused.current = document.activeElement as HTMLElement;
+    const panel = panelRef.current;
+    const focusable = panel?.querySelector<HTMLElement>(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+    );
+    focusable?.focus();
+
+    // Esc closes the dialog; Tab is trapped so focus never leaves it (WCAG 2.1.2 / 2.4.3).
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !panel) return;
+      const items = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+      );
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      // Give focus back to whatever opened the dialog.
+      previouslyFocused.current?.focus();
+    };
+  }, [isOpen, onClose]);
+
   return (
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 py-10 text-center">
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              {...m({ initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } })}
               onClick={onClose}
               className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
               aria-hidden="true"
             />
             <motion.div
-              initial={{ scale: 0.96, opacity: 0, y: 12 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.96, opacity: 0, y: 12 }}
+              ref={panelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              {...m({
+                initial: { scale: 0.96, opacity: 0, y: 12 },
+                animate: { scale: 1, opacity: 1, y: 0 },
+                exit: { scale: 0.96, opacity: 0, y: 12 }
+              })}
               className={`relative inline-block bg-slate-900 border border-slate-800 text-left rounded-lg shadow-2xl ${maxWidth} w-full overflow-hidden`}
             >
               <div className="border-b border-slate-800 px-5 py-4 flex items-center justify-between bg-slate-950">
-                <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <h3 id={titleId} className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" />
                   {title}
                 </h3>
-                <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 cursor-pointer">
+                <button
+                  onClick={onClose}
+                  aria-label={t("common.cancel")}
+                  className="rounded-lg p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                >
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -298,8 +336,9 @@ interface TimelineNode {
 }
 
 export function TimelineWidget({ events }: { events: TimelineNode[] }) {
+  const { t } = useTranslation();
   if (!events || events.length === 0) {
-    return <div className="py-8 text-center text-xs text-slate-500 italic">No case events recorded.</div>;
+    return <div className="py-8 text-center text-xs text-slate-400 italic">{t("noEvents")}</div>;
   }
 
   return (
@@ -324,7 +363,7 @@ export function TimelineWidget({ events }: { events: TimelineNode[] }) {
                             : "bg-slate-800 text-slate-300 border border-slate-700"
                     }`}
                   >
-                    <FileText className="w-3.5 h-3.5" />
+                    <FileText className="w-3.5 h-3.5" aria-hidden="true" />
                   </span>
                 </div>
                 <div className="flex-1 min-w-0 pt-1.5 flex justify-between gap-4">
@@ -332,7 +371,7 @@ export function TimelineWidget({ events }: { events: TimelineNode[] }) {
                     <p className="text-xs font-medium text-slate-200">{event.title}</p>
                     <p className="text-xs text-slate-400 mt-1 leading-relaxed">{event.description}</p>
                   </div>
-                  <div className="text-right text-[10px] font-mono text-slate-500 whitespace-nowrap">{event.timestamp}</div>
+                  <div className="text-right text-[10px] font-mono text-slate-400 whitespace-nowrap">{event.timestamp}</div>
                 </div>
               </div>
             </div>
@@ -361,6 +400,7 @@ const formatSize = (size: number) => {
 };
 
 export function AttachmentUploader({ onFilesChanged, files }: AttachmentUploaderProps) {
+  const { t } = useTranslation();
   const [isDragActive, setIsDragActive] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -385,12 +425,12 @@ export function AttachmentUploader({ onFilesChanged, files }: AttachmentUploader
   const addFile = (file: File) => {
     const extension = normalizeExtension(file.name);
     if (!extension) {
-      setError("Unsupported file type. Use PDF, PNG, JPG, XML, or DOCX only.");
+      setError(t("evidence.unsupported"));
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      setError("File exceeds the 10 MB evidence limit.");
+      setError(t("evidence.tooLarge"));
       return;
     }
 
@@ -438,7 +478,7 @@ export function AttachmentUploader({ onFilesChanged, files }: AttachmentUploader
   return (
     <div className="flex flex-col gap-3">
       <div
-        className={`border-2 border-dashed rounded-lg p-5 text-center transition-colors cursor-pointer ${
+        className={`border-2 border-dashed rounded-lg p-5 text-center transition-colors cursor-pointer focus-within:border-cyan-500 ${
           isDragActive ? "border-emerald-500 bg-emerald-950/20" : "border-slate-700 hover:border-slate-500 bg-slate-950/50 hover:bg-slate-950"
         }`}
         onDragEnter={handleDrag}
@@ -447,34 +487,39 @@ export function AttachmentUploader({ onFilesChanged, files }: AttachmentUploader
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
       >
+        <label htmlFor="fileUploaderInput" className="sr-only">
+          {t("report.evidence")}
+        </label>
         <input
           ref={fileInputRef}
           type="file"
-          className="hidden"
+          className="sr-only"
           onChange={handleFileInput}
           accept=".pdf,.png,.jpg,.jpeg,.xml,.docx"
           id="fileUploaderInput"
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? "fileUploaderError" : undefined}
         />
         <div className="flex flex-col items-center gap-2">
-          <Upload className="w-8 h-8 text-slate-400" />
+          <Upload className="w-8 h-8 text-slate-400" aria-hidden="true" />
           <p className="text-xs font-semibold text-slate-300">
-            Drag and drop evidence, or <span className="text-cyan-300 hover:underline">browse</span>
+            {t("evidence.dropPrompt")}
           </p>
-          <p className="text-[11px] text-slate-500">PDF, PNG, JPG, XML, DOCX only. Original filenames are not shown to administrators.</p>
+          <p className="text-[11px] text-slate-400">{t("evidence.fileTypes")}</p>
         </div>
       </div>
 
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-rose-900/60 bg-rose-950/30 p-3 text-xs text-rose-200">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
+        <div id="fileUploaderError" role="alert" className="flex items-start gap-2 rounded-lg border border-rose-900/60 bg-rose-950/30 p-3 text-xs text-rose-200">
+          <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
           {error}
         </div>
       )}
 
       {progress !== null && (
-        <div className="bg-slate-950 rounded-lg p-2.5 border border-slate-800">
+        <div className="bg-slate-950 rounded-lg p-2.5 border border-slate-800" role="status" aria-live="polite">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-mono text-emerald-300 uppercase">Scanning, stripping metadata, and sealing vault reference</span>
+            <span className="text-[10px] font-mono text-emerald-300 uppercase">{t("evidence.scanning")}</span>
             <span className="text-[10px] font-mono text-slate-400">{progress}%</span>
           </div>
           <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
@@ -485,25 +530,26 @@ export function AttachmentUploader({ onFilesChanged, files }: AttachmentUploader
 
       {files.length > 0 && (
         <div className="flex flex-col gap-1.5 mt-1">
-          <p className="text-[10px] font-semibold text-slate-400 font-mono uppercase tracking-wider">Evidence references ({files.length})</p>
+          <p className="text-[10px] font-semibold text-slate-400 font-mono uppercase tracking-wider">{t("evidence.refs", { count: files.length })}</p>
           <ul className="space-y-1.5">
             {files.map((file, idx) => (
               <li key={file.id} className="flex items-center justify-between text-xs font-mono bg-slate-950/60 p-2 rounded border border-slate-800 group">
                 <div className="flex items-center gap-2 text-slate-300 truncate max-w-[85%]">
-                  <FileText className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <FileText className="w-3.5 h-3.5 text-emerald-400 shrink-0" aria-hidden="true" />
                   <span className="truncate">{file.displayName}</span>
-                  <span className="text-[9px] text-slate-400 bg-slate-900 px-1 py-0.5 rounded border border-slate-700">{file.sizeLabel}</span>
+                  <span className="text-[9px] text-slate-300 bg-slate-900 px-1 py-0.5 rounded border border-slate-700">{file.sizeLabel}</span>
                   <span className="text-[9px] text-emerald-300 bg-emerald-950/40 px-1 py-0.5 rounded border border-emerald-500/10">
                     {file.status}
                   </span>
                 </div>
                 <button
                   type="button"
+                  aria-label={t("evidence.removeFile")}
                   onClick={(e) => {
                     e.stopPropagation();
                     removeFile(idx);
                   }}
-                  className="text-slate-500 hover:text-rose-400 p-1 rounded hover:bg-slate-900 transition-colors"
+                  className="text-slate-400 hover:text-rose-400 p-1 rounded hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -528,6 +574,7 @@ export function ChatBubble({
   attachments?: EvidenceAttachment[];
   key?: React.Key;
 }) {
+  const { t } = useTranslation();
   const isReporter = sender === "Reporter" || sender === "Anonymous Whistleblower";
 
   return (
@@ -541,19 +588,19 @@ export function ChatBubble({
       >
         <div className="flex items-center justify-between gap-5 mb-1.5 border-b border-white/10 pb-1">
           <span className={`font-semibold ${isReporter ? "text-cyan-300" : "text-white"}`}>
-            {isReporter ? "Anonymous reporter" : sender}
+            {isReporter ? t("chat.anonymousReporter") : sender}
           </span>
-          <span className={`text-[9px] font-mono ${isReporter ? "text-slate-500" : "text-cyan-100"}`}>{timestamp}</span>
+          <span className={`text-[9px] font-mono ${isReporter ? "text-slate-400" : "text-cyan-100"}`}>{timestamp}</span>
         </div>
         <p className="leading-relaxed whitespace-pre-wrap">{text}</p>
 
         {attachments.length > 0 && (
           <div className="mt-2.5 pt-2 border-t border-slate-800/40">
-            <span className="text-[9px] font-mono uppercase text-slate-400 tracking-wider">Evidence refs:</span>
+            <span className="text-[9px] font-mono uppercase text-slate-400 tracking-wider">{t("chat.evidenceRefs")}</span>
             <div className="space-y-1 mt-1">
               {attachments.map((file) => (
                 <div key={file.id} className="flex items-center gap-1.5 font-mono text-[10px] text-emerald-300 bg-slate-950 px-2 py-1 rounded border border-slate-800">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" aria-hidden="true" />
                   <span className="truncate">{file.displayName}</span>
                 </div>
               ))}

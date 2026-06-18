@@ -12,8 +12,17 @@ import {
   SaaSUser,
   TechnicalMetadataPolicy
 } from "../types";
+import { activeJurisdiction } from "../config/activeJurisdiction";
 
-const STORAGE_VERSION = "safevoice-compliance-v2-2026-06-18";
+// The example cases below use the active country's controller, processor, and retention
+// period so a deployment for, say, Germany does not show Poland-specific demo text.
+const CONTROLLER = activeJurisdiction.controllerName;
+const PROCESSOR = activeJurisdiction.processorName;
+const RETENTION_YEARS = activeJurisdiction.retentionYears;
+
+// Bumping the version string forces the seed data to refresh in the browser. Tie it to the
+// jurisdiction so switching country shows that country's demo controller/processor.
+const STORAGE_VERSION = `safevoice-compliance-v3-${activeJurisdiction.code}`;
 
 export const reporterMetadataPolicy: TechnicalMetadataPolicy = {
   reporterIpStored: false,
@@ -168,14 +177,14 @@ export const initialReports: CaseReport[] = [
     assignedInvestigator: "Tomasz Wojcik",
     disclosureMode: "Anonymous",
     intakeChannel: "Anonymous web portal",
-    lawfulBasis: "Legal obligation and legitimate follow-up under EU 2019/1937 and Polish whistleblower procedure",
-    controller: "RegulaOne Poland S.A.",
-    processor: "SafeVoice EU hosting processor",
+    lawfulBasis: `Legal obligation and legitimate follow-up under ${activeJurisdiction.legalBasisLabel}`,
+    controller: CONTROLLER,
+    processor: PROCESSOR,
     slaHoursRemaining: 1488,
     technicalMetadataPolicy: reporterMetadataPolicy,
     retention: {
       state: "Active",
-      retentionYears: 3,
+      retentionYears: RETENTION_YEARS,
       deleteAfter: "2029-12-31",
       irrelevantPersonalDataDeletionDue: "2026-05-26"
     },
@@ -233,13 +242,13 @@ export const initialReports: CaseReport[] = [
     disclosureMode: "Anonymous",
     intakeChannel: "Anonymous web portal",
     lawfulBasis: "Legal obligation, regulatory investigation, and protection of data subjects",
-    controller: "RegulaOne Poland S.A.",
-    processor: "SafeVoice EU hosting processor",
+    controller: CONTROLLER,
+    processor: PROCESSOR,
     slaHoursRemaining: 1656,
     technicalMetadataPolicy: reporterMetadataPolicy,
     retention: {
       state: "Active",
-      retentionYears: 3,
+      retentionYears: RETENTION_YEARS,
       deleteAfter: "2029-12-31",
       irrelevantPersonalDataDeletionDue: "2026-06-02"
     },
@@ -280,13 +289,13 @@ export const initialReports: CaseReport[] = [
     disclosureMode: "HR Handoff",
     intakeChannel: "HR grievance handoff",
     lawfulBasis: "HR grievance handling under internal labour procedure; no SafeVoice tracking code issued",
-    controller: "RegulaOne Poland S.A.",
+    controller: CONTROLLER,
     processor: "Internal HR desk",
     slaHoursRemaining: 2160,
     technicalMetadataPolicy: reporterMetadataPolicy,
     retention: {
       state: "Active",
-      retentionYears: 3,
+      retentionYears: RETENTION_YEARS,
       deleteAfter: "2029-12-31",
       irrelevantPersonalDataDeletionDue: "2026-06-07"
     },
