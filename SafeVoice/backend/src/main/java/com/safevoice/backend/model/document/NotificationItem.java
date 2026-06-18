@@ -28,4 +28,6 @@ public class NotificationItem extends BaseDocument {
     private NotificationType type;
 
     private UUID caseId;
+
+    private String userId; // Specific recipient user ID; null for all tenant users
 }
