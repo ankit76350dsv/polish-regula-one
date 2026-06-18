@@ -2,6 +2,7 @@ package com.ksefflow.backend.controllers;
 
 import com.ksefflow.backend.models.KsefReceivedInvoice;
 import com.ksefflow.backend.security.AuthenticatedUser;
+import com.ksefflow.backend.security.KsefPermission;
 import com.ksefflow.backend.services.KsefReceivedInvoiceService;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -38,12 +39,17 @@ public class KsefReceivedInvoiceController {
      * @param from optional window start (ISO, e.g. 2026-06-01T00:00:00)
      * @param to   optional window end — KSeF allows at most a 3-month span
      */
+    // Permissions: KSEF_TENANT_ADMIN (full access), KSEF_CASE_MANAGER (pull purchase
+    //              invoices from KSeF). Read-only roles cannot trigger a sync.
     @PostMapping("/sync")
     public ResponseEntity<KsefReceivedInvoiceService.SyncResult> sync(
             AuthenticatedUser caller,
             @RequestParam @NotBlank @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits") String nip,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
+
+        // Pulling purchase invoices from KSeF is an issuer action — case manager or admin.
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER);
 
         log.info("[sync]:1 POST /received-invoices/sync — tenant={} nip={} from={} to={}",
                 caller.tenantId(), nip, from, to);
@@ -54,11 +60,16 @@ public class KsefReceivedInvoiceController {
         return ResponseEntity.ok(result);
     }
 
+    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER,
+    //              KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR. (KSEF_EMPLOYEE has no invoice access.)
     /** Paginated list of received invoices for the tenant (metadata only). */
     @GetMapping
     public ResponseEntity<Page<KsefReceivedInvoice>> list(
             AuthenticatedUser caller,
             @PageableDefault(size = 20) Pageable pageable) {
+        // Read access — issuers, oversight roles, or the tenant admin.
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
+                KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
         log.info("[list]:1 GET /received-invoices — tenant={}", caller.tenantId());
         return ResponseEntity.ok(receivedInvoiceService.listReceived(caller.tenantId(), pageable));
     }
@@ -69,11 +80,16 @@ public class KsefReceivedInvoiceController {
      *
      * @param nip the tenant's own 10-digit NIP (needed only if the XML must be fetched from KSeF)
      */
+    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER,
+    //              KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR. Returns invoice XML for review/export.
     @GetMapping(value = "/{ksefNumber}/xml", produces = MediaType.APPLICATION_XML_VALUE)
     public ResponseEntity<String> getXml(
             AuthenticatedUser caller,
             @PathVariable String ksefNumber,
             @RequestParam @NotBlank @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits") String nip) {
+        // Read access — issuers, oversight roles, or the tenant admin.
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
+                KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
         log.info("[getXml]:1 GET /received-invoices/{}/xml — tenant={}", ksefNumber, caller.tenantId());
         String xml = receivedInvoiceService.getReceivedInvoiceXml(caller.tenantId(), ksefNumber, nip);
         return ResponseEntity.ok(xml);

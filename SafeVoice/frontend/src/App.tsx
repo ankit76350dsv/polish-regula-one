@@ -573,11 +573,11 @@ export default function App() {
   const staffPermission = activeRole !== "Public User" ? activeRole : undefined;
 
   return (
-    <div className="bg-slate-950 text-slate-200 font-sans min-h-screen flex antialiased">
+    <div className="bg-slate-50 text-slate-900 font-sans min-h-screen flex antialiased">
       {/* Skip link lets keyboard and screen-reader users jump past the menus straight to content (WCAG 2.4.1). */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-3 focus:left-3 focus:bg-cyan-600 focus:text-slate-950 focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-3 focus:left-3 focus:bg-cyan-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"
       >
         {t("common.skipToContent")}
       </a>
@@ -593,7 +593,7 @@ export default function App() {
         <AppNavbar activeRole={activeRole} setActiveRole={setRole} notifications={notifications} onMarkAllRead={handleMarkAllAlertsRead} />
 
         {activeRole === "Public User" && currentPath === "/access-denied" && (
-          <div className="bg-amber-950/30 border-b border-amber-900/50 px-6 py-2.5 text-xs text-amber-200 flex items-center gap-2" role="status">
+          <div className="bg-amber-50 border-b border-amber-250 px-6 py-2.5 text-xs text-amber-850 flex items-center gap-2" role="status">
             <Info className="w-4 h-4 shrink-0" aria-hidden="true" />
             {t("accessDenied.staffBanner")}
           </div>

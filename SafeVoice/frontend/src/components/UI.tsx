@@ -36,15 +36,15 @@ export function AppButton({
   ...props
 }: AppButtonProps) {
   const baseClasses =
-    "inline-flex items-center justify-center font-medium rounded-lg transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:opacity-50 disabled:cursor-not-allowed";
+    "inline-flex items-center justify-center font-medium rounded-lg transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-50 disabled:cursor-not-allowed";
 
   const variants = {
-    primary: "bg-cyan-600 hover:bg-cyan-500 text-slate-950 focus:ring-cyan-500",
-    secondary: "bg-slate-900 hover:bg-slate-800 text-slate-100 border border-slate-700 focus:ring-slate-500",
-    outline: "bg-transparent border border-slate-700 hover:bg-slate-900 text-slate-200 focus:ring-slate-500",
-    danger: "bg-rose-950/50 border border-rose-800/70 text-rose-200 hover:bg-rose-900/50 focus:ring-rose-500",
+    primary: "bg-cyan-600 hover:bg-cyan-700 text-white focus:ring-cyan-500",
+    secondary: "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 focus:ring-slate-500",
+    outline: "bg-transparent border border-slate-300 hover:bg-slate-550 hover:bg-slate-50 text-slate-700 focus:ring-slate-500",
+    danger: "bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 focus:ring-rose-500",
     secure:
-      "bg-emerald-950/50 border border-emerald-500/50 hover:border-emerald-300 text-emerald-200 hover:bg-emerald-900/40 focus:ring-emerald-500"
+      "bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 focus:ring-emerald-500"
   };
 
   const sizes = {
@@ -79,22 +79,22 @@ export function SecureCard({
   headerAction
 }: SecureCardProps) {
   return (
-    <section className={`bg-slate-900/80 border border-slate-800 rounded-lg overflow-hidden relative ${className}`}>
-      {isEncrypted && <div className="absolute inset-x-0 top-0 h-[2px] bg-emerald-400/70" />}
+    <section className={`bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs relative ${className}`}>
+      {isEncrypted && <div className="absolute inset-x-0 top-0 h-[2px] bg-emerald-500/70" />}
       {(title || subtitle || isEncrypted) && (
-        <div className="border-b border-slate-800 px-5 py-4 flex items-start justify-between gap-4">
+        <div className="border-b border-slate-150 px-5 py-4 flex items-start justify-between gap-4">
           <div>
             {title && (
-              <h3 className="text-sm font-semibold text-slate-100 tracking-tight flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-900 tracking-tight flex items-center gap-2">
                 {title}
                 {isEncrypted && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono text-emerald-300 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 uppercase">
                     <Lock className="w-3 h-3" /> encrypted
                   </span>
                 )}
               </h3>
             )}
-            {subtitle && <p className="text-xs text-slate-400 mt-1 leading-relaxed">{subtitle}</p>}
+            {subtitle && <p className="text-xs text-slate-500 mt-1 leading-relaxed">{subtitle}</p>}
           </div>
           {headerAction && <div className="shrink-0">{headerAction}</div>}
         </div>
@@ -107,13 +107,13 @@ export function SecureCard({
 export function CaseStatusBadge({ status }: { status: CaseStatus }) {
   const { t } = useTranslation();
   const configs: Record<CaseStatus, { bg: string; dot: string }> = {
-    Received: { bg: "bg-sky-950/40 text-sky-300 border-sky-800/40", dot: "bg-sky-400" },
-    Acknowledged: { bg: "bg-emerald-950/30 text-emerald-300 border-emerald-800/40", dot: "bg-emerald-400" },
-    Triage: { bg: "bg-amber-950/40 text-amber-300 border-amber-800/40", dot: "bg-amber-400" },
-    Investigating: { bg: "bg-cyan-950/40 text-cyan-300 border-cyan-800/40", dot: "bg-cyan-400" },
-    "Awaiting Reporter": { bg: "bg-violet-950/40 text-violet-300 border-violet-800/40", dot: "bg-violet-400" },
-    Remediation: { bg: "bg-teal-950/40 text-teal-300 border-teal-800/40", dot: "bg-teal-400" },
-    Closed: { bg: "bg-slate-800 text-slate-300 border-slate-700", dot: "bg-slate-400" }
+    Received: { bg: "bg-sky-50 text-sky-700 border-sky-200", dot: "bg-sky-500" },
+    Acknowledged: { bg: "bg-emerald-50 text-emerald-700 border-emerald-200/60", dot: "bg-emerald-500" },
+    Triage: { bg: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
+    Investigating: { bg: "bg-cyan-50 text-cyan-700 border-cyan-200", dot: "bg-cyan-500" },
+    "Awaiting Reporter": { bg: "bg-violet-50 text-violet-755 border-violet-200", dot: "bg-violet-500" },
+    Remediation: { bg: "bg-teal-50 text-teal-700 border-teal-200", dot: "bg-teal-500" },
+    Closed: { bg: "bg-slate-100 text-slate-705 border-slate-200", dot: "bg-slate-400" }
   };
 
   const config = configs[status];
@@ -129,10 +129,10 @@ export function CaseStatusBadge({ status }: { status: CaseStatus }) {
 export function CaseSeverityBadge({ severity }: { severity: CaseSeverity }) {
   const { t } = useTranslation();
   const configs: Record<CaseSeverity, string> = {
-    Low: "bg-slate-800 text-slate-300 border-slate-700",
-    Medium: "bg-sky-950/30 text-sky-300 border-sky-900/30",
-    High: "bg-amber-950/30 text-amber-300 border-amber-900/30",
-    Critical: "bg-rose-950/40 text-rose-300 border-rose-900/40"
+    Low: "bg-slate-100 text-slate-700 border-slate-200",
+    Medium: "bg-sky-50 text-sky-700 border-sky-200",
+    High: "bg-amber-50 text-amber-800 border-amber-200",
+    Critical: "bg-rose-50 text-rose-700 border-rose-200"
   };
 
   return (
@@ -174,23 +174,23 @@ export function SecureTextField({
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {label && (
-        <label htmlFor={fieldId} className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+        <label htmlFor={fieldId} className="text-xs font-semibold text-slate-700 flex items-center justify-between">
           <span>{label}</span>
-          {props.required && <span className="text-cyan-300 font-mono text-[10px] uppercase">{t("common.required")}</span>}
+          {props.required && <span className="text-cyan-600 font-mono text-[10px] uppercase">{t("common.required")}</span>}
         </label>
       )}
       <div className="relative rounded-lg shadow-sm">
-        {icon && <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">{icon}</div>}
+        {icon && <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">{icon}</div>}
         <input
           id={fieldId}
           aria-describedby={helperId}
-          className={`block w-full rounded-lg bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 py-2.5 ${
+          className={`block w-full rounded-lg bg-white border border-slate-350 text-slate-900 placeholder-slate-400 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 py-2.5 ${
             icon ? "pl-10" : "pl-3.5"
           } pr-3.5 transition-colors`}
           {...props}
         />
       </div>
-      {helperText && <p id={helperId} className="text-[11px] text-slate-400 leading-relaxed">{helperText}</p>}
+      {helperText && <p id={helperId} className="text-[11px] text-slate-500 leading-relaxed">{helperText}</p>}
     </div>
   );
 }
@@ -205,9 +205,9 @@ export function AppTable({
   className?: string;
 }) {
   return (
-    <div className={`overflow-x-auto w-full border border-slate-800 rounded-lg ${className}`}>
-      <table className="min-w-full divide-y divide-slate-800 bg-slate-900/50">
-        <thead className="bg-slate-950 text-slate-300">
+    <div className={`overflow-x-auto w-full border border-slate-200 rounded-lg ${className}`}>
+      <table className="min-w-full divide-y divide-slate-200 bg-white">
+        <thead className="bg-slate-50 text-slate-700 border-b border-slate-200">
           <tr>
             {headers.map((header) => (
               <th key={header} scope="col" className="px-4 py-3 text-left text-xs font-semibold tracking-wider font-mono uppercase">
@@ -216,7 +216,7 @@ export function AppTable({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-800 text-sm text-slate-300">{children}</tbody>
+        <tbody className="divide-y divide-slate-200 text-sm text-slate-700">{children}</tbody>
       </table>
     </div>
   );
@@ -290,7 +290,7 @@ export function AppModal({
             <motion.div
               {...m({ initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } })}
               onClick={onClose}
-              className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
               aria-hidden="true"
             />
             <motion.div
@@ -303,17 +303,17 @@ export function AppModal({
                 animate: { scale: 1, opacity: 1, y: 0 },
                 exit: { scale: 0.96, opacity: 0, y: 12 }
               })}
-              className={`relative inline-block bg-slate-900 border border-slate-800 text-left rounded-lg shadow-2xl ${maxWidth} w-full overflow-hidden`}
+              className={`relative inline-block bg-white border border-slate-200 text-left rounded-lg shadow-2xl ${maxWidth} w-full overflow-hidden`}
             >
-              <div className="border-b border-slate-800 px-5 py-4 flex items-center justify-between bg-slate-950">
-                <h3 id={titleId} className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+              <div className="border-b border-slate-200 px-5 py-4 flex items-center justify-between bg-slate-50">
+                <h3 id={titleId} className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" aria-hidden="true" />
                   {title}
                 </h3>
                 <button
                   onClick={onClose}
                   aria-label={t("common.cancel")}
-                  className="rounded-lg p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="rounded-lg p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -348,19 +348,19 @@ export function TimelineWidget({ events }: { events: TimelineNode[] }) {
           <li key={event.id}>
             <div className="relative pb-8">
               {eventIdx !== events.length - 1 && (
-                <span className="absolute top-4 left-4 -ml-px h-full w-px bg-slate-800" aria-hidden="true" />
+                <span className="absolute top-4 left-4 -ml-px h-full w-px bg-slate-200" aria-hidden="true" />
               )}
               <div className="relative flex space-x-3">
                 <div>
                   <span
-                    className={`h-8 w-8 rounded-full flex items-center justify-center ring-4 ring-slate-950 ${
+                    className={`h-8 w-8 rounded-full flex items-center justify-center ring-4 ring-white ${
                       event.type === "system"
-                        ? "bg-slate-950 text-emerald-400 border border-emerald-500/20"
+                        ? "bg-white text-emerald-600 border border-emerald-200"
                         : event.type === "status"
-                          ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                          ? "bg-cyan-50 text-cyan-700 border border-cyan-200"
                           : event.type === "retention"
-                            ? "bg-amber-500/10 text-amber-300 border border-amber-500/20"
-                            : "bg-slate-800 text-slate-300 border border-slate-700"
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : "bg-slate-100 text-slate-700 border border-slate-250"
                     }`}
                   >
                     <FileText className="w-3.5 h-3.5" aria-hidden="true" />
@@ -368,10 +368,10 @@ export function TimelineWidget({ events }: { events: TimelineNode[] }) {
                 </div>
                 <div className="flex-1 min-w-0 pt-1.5 flex justify-between gap-4">
                   <div>
-                    <p className="text-xs font-medium text-slate-200">{event.title}</p>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">{event.description}</p>
+                    <p className="text-xs font-medium text-slate-900">{event.title}</p>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">{event.description}</p>
                   </div>
-                  <div className="text-right text-[10px] font-mono text-slate-400 whitespace-nowrap">{event.timestamp}</div>
+                  <div className="text-right text-[10px] font-mono text-slate-500 whitespace-nowrap">{event.timestamp}</div>
                 </div>
               </div>
             </div>
@@ -479,7 +479,7 @@ export function AttachmentUploader({ onFilesChanged, files }: AttachmentUploader
     <div className="flex flex-col gap-3">
       <div
         className={`border-2 border-dashed rounded-lg p-5 text-center transition-colors cursor-pointer focus-within:border-cyan-500 ${
-          isDragActive ? "border-emerald-500 bg-emerald-950/20" : "border-slate-700 hover:border-slate-500 bg-slate-950/50 hover:bg-slate-950"
+          isDragActive ? "border-emerald-500 bg-emerald-50/50" : "border-slate-300 hover:border-slate-450 bg-slate-550 bg-slate-50/50 hover:bg-slate-100/30"
         }`}
         onDragEnter={handleDrag}
         onDragOver={handleDrag}
@@ -501,44 +501,44 @@ export function AttachmentUploader({ onFilesChanged, files }: AttachmentUploader
           aria-describedby={error ? "fileUploaderError" : undefined}
         />
         <div className="flex flex-col items-center gap-2">
-          <Upload className="w-8 h-8 text-slate-400" aria-hidden="true" />
-          <p className="text-xs font-semibold text-slate-300">
+          <Upload className="w-8 h-8 text-slate-500" aria-hidden="true" />
+          <p className="text-xs font-semibold text-slate-700">
             {t("evidence.dropPrompt")}
           </p>
-          <p className="text-[11px] text-slate-400">{t("evidence.fileTypes")}</p>
+          <p className="text-[11px] text-slate-500">{t("evidence.fileTypes")}</p>
         </div>
       </div>
 
       {error && (
-        <div id="fileUploaderError" role="alert" className="flex items-start gap-2 rounded-lg border border-rose-900/60 bg-rose-950/30 p-3 text-xs text-rose-200">
+        <div id="fileUploaderError" role="alert" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
           <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
           {error}
         </div>
       )}
 
       {progress !== null && (
-        <div className="bg-slate-950 rounded-lg p-2.5 border border-slate-800" role="status" aria-live="polite">
+        <div className="bg-slate-50 rounded-lg p-2.5 border border-slate-200" role="status" aria-live="polite">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-mono text-emerald-300 uppercase">{t("evidence.scanning")}</span>
-            <span className="text-[10px] font-mono text-slate-400">{progress}%</span>
+            <span className="text-[10px] font-mono text-emerald-700 uppercase">{t("evidence.scanning")}</span>
+            <span className="text-[10px] font-mono text-slate-500">{progress}%</span>
           </div>
-          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-            <div className="bg-cyan-400 h-full transition-all duration-150" style={{ width: `${progress}%` }} />
+          <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+            <div className="bg-cyan-500 h-full transition-all duration-150" style={{ width: `${progress}%` }} />
           </div>
         </div>
       )}
 
       {files.length > 0 && (
         <div className="flex flex-col gap-1.5 mt-1">
-          <p className="text-[10px] font-semibold text-slate-400 font-mono uppercase tracking-wider">{t("evidence.refs", { count: files.length })}</p>
+          <p className="text-[10px] font-semibold text-slate-500 font-mono uppercase tracking-wider">{t("evidence.refs", { count: files.length })}</p>
           <ul className="space-y-1.5">
             {files.map((file, idx) => (
-              <li key={file.id} className="flex items-center justify-between text-xs font-mono bg-slate-950/60 p-2 rounded border border-slate-800 group">
-                <div className="flex items-center gap-2 text-slate-300 truncate max-w-[85%]">
-                  <FileText className="w-3.5 h-3.5 text-emerald-400 shrink-0" aria-hidden="true" />
+              <li key={file.id} className="flex items-center justify-between text-xs font-mono bg-white p-2 rounded border border-slate-200 group">
+                <div className="flex items-center gap-2 text-slate-700 truncate max-w-[85%]">
+                  <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" aria-hidden="true" />
                   <span className="truncate">{file.displayName}</span>
-                  <span className="text-[9px] text-slate-300 bg-slate-900 px-1 py-0.5 rounded border border-slate-700">{file.sizeLabel}</span>
-                  <span className="text-[9px] text-emerald-300 bg-emerald-950/40 px-1 py-0.5 rounded border border-emerald-500/10">
+                  <span className="text-[9px] text-slate-700 bg-slate-100 px-1 py-0.5 rounded border border-slate-200">{file.sizeLabel}</span>
+                  <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200/50">
                     {file.status}
                   </span>
                 </div>
@@ -549,7 +549,7 @@ export function AttachmentUploader({ onFilesChanged, files }: AttachmentUploader
                     e.stopPropagation();
                     removeFile(idx);
                   }}
-                  className="text-slate-400 hover:text-rose-400 p-1 rounded hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="text-slate-550 hover:text-rose-600 p-1 rounded hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -582,25 +582,25 @@ export function ChatBubble({
       <div
         className={`max-w-[78%] rounded-lg p-3.5 text-xs shadow-md border ${
           isReporter
-            ? "bg-slate-950 text-slate-100 border-slate-700"
-            : "bg-cyan-700 text-white border-cyan-500/40"
+            ? "bg-slate-50 text-slate-800 border-slate-200"
+            : "bg-cyan-600 text-white border-cyan-500/20"
         }`}
       >
-        <div className="flex items-center justify-between gap-5 mb-1.5 border-b border-white/10 pb-1">
-          <span className={`font-semibold ${isReporter ? "text-cyan-300" : "text-white"}`}>
+        <div className="flex items-center justify-between gap-5 mb-1.5 border-b border-slate-200/40 pb-1">
+          <span className={`font-semibold ${isReporter ? "text-cyan-700" : "text-white"}`}>
             {isReporter ? t("chat.anonymousReporter") : sender}
           </span>
-          <span className={`text-[9px] font-mono ${isReporter ? "text-slate-400" : "text-cyan-100"}`}>{timestamp}</span>
+          <span className={`text-[9px] font-mono ${isReporter ? "text-slate-500" : "text-cyan-105"}`}>{timestamp}</span>
         </div>
         <p className="leading-relaxed whitespace-pre-wrap">{text}</p>
 
         {attachments.length > 0 && (
-          <div className="mt-2.5 pt-2 border-t border-slate-800/40">
-            <span className="text-[9px] font-mono uppercase text-slate-400 tracking-wider">{t("chat.evidenceRefs")}</span>
+          <div className="mt-2.5 pt-2 border-t border-slate-200/60">
+            <span className="text-[9px] font-mono uppercase text-slate-500 tracking-wider">{t("chat.evidenceRefs")}</span>
             <div className="space-y-1 mt-1">
               {attachments.map((file) => (
-                <div key={file.id} className="flex items-center gap-1.5 font-mono text-[10px] text-emerald-300 bg-slate-950 px-2 py-1 rounded border border-slate-800">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" aria-hidden="true" />
+                <div key={file.id} className="flex items-center gap-1.5 font-mono text-[10px] text-emerald-700 bg-white px-2 py-1 rounded border border-slate-200">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" aria-hidden="true" />
                   <span className="truncate">{file.displayName}</span>
                 </div>
               ))}

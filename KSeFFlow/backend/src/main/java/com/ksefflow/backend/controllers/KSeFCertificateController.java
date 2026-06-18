@@ -4,6 +4,7 @@ import com.ksefflow.backend.dto.certificate.CertificateResponse;
 import com.ksefflow.backend.models.KsefCertificate;
 import com.ksefflow.backend.models.utils.KsefCertificatePurpose;
 import com.ksefflow.backend.security.AuthenticatedUser;
+import com.ksefflow.backend.security.KsefPermission;
 import com.ksefflow.backend.services.certificate.CertificateService;
 import com.ksefflow.backend.services.certificate.KsefCertificateEnrollmentService;
 import jakarta.validation.constraints.NotBlank;
@@ -68,12 +69,17 @@ public class KSeFCertificateController {
      * Response 201: CertificateResponse (safe metadata only)
      * Response 400: enrollment failed / rejected by KSeF
      */
+    // Permissions: KSEF_TENANT_ADMIN only — issuing a KSeF certificate is an
+    //              administrative, legally significant action. No other role may enroll.
     @PostMapping("/enroll")
     public ResponseEntity<CertificateResponse> enroll(
             AuthenticatedUser caller,
             @RequestParam @NotBlank @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits") String nip,
             @RequestParam(defaultValue = "AUTHENTICATION") KsefCertificatePurpose purpose,
             @RequestParam @NotBlank String name) {
+
+        // Issuing a KSeF certificate is an admin-only action.
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN);
 
         log.info("[enroll]:1 POST /certificates/enroll — tenant={} purpose={} name={}",
                 caller.tenantId(), purpose, name);
@@ -108,11 +114,16 @@ public class KSeFCertificateController {
      * Response 200: CertificateResponse with metadata of the stored certificate
      * Response 400: invalid file format, wrong password, or file too large
      */
+    // Permissions: KSEF_TENANT_ADMIN only — uploading/replacing the signing certificate
+    //              controls how the whole tenant signs invoices, so it stays admin-only.
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CertificateResponse> uploadCertificate(
             AuthenticatedUser                                       caller,
             @RequestPart("file")                                    MultipartFile file,
             @RequestParam(value = "password", required = false)     String password) throws IOException {
+
+        // Uploading/replacing the signing certificate is an admin-only action.
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN);
 
         String tenantId = caller.tenantId();
         String userId = caller.userId();
@@ -156,9 +167,14 @@ public class KSeFCertificateController {
      *
      * Response 200: array of CertificateResponse (may be empty)
      */
+    // Permissions: KSEF_TENANT_ADMIN (manage), KSEF_AUDITOR (read-only, for audit review).
+    //              Metadata only — no private keys or passwords are ever returned.
     @GetMapping
     public ResponseEntity<List<CertificateResponse>> listCertificates(
             AuthenticatedUser caller) {
+
+        // Read access — auditors (for review) or the tenant admin.
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_AUDITOR);
 
         String tenantId = caller.tenantId();
         log.info("[listCertificates]:1 GET /certificates — tenant={}", tenantId);
@@ -187,10 +203,15 @@ public class KSeFCertificateController {
      * Response 200: { "message": "Certificate deactivated" }
      * Response 404: certificate not found or belongs to a different tenant
      */
+    // Permissions: KSEF_TENANT_ADMIN only — disabling a certificate changes the tenant's
+    //              signing setup, so it is restricted to admins.
     @PatchMapping("/{id}/deactivate")
     public ResponseEntity<Map<String, String>> deactivateCertificate(
             AuthenticatedUser caller,
             @PathVariable     String id) {
+
+        // Disabling a certificate changes the tenant's signing setup — admin-only.
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN);
 
         String tenantId = caller.tenantId();
         log.info("[deactivateCertificate]:1 PATCH /{}/deactivate — tenant={}", id, tenantId);

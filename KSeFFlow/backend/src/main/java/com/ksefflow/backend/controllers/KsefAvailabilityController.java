@@ -1,6 +1,7 @@
 package com.ksefflow.backend.controllers;
 
 import com.ksefflow.backend.security.AuthenticatedUser;
+import com.ksefflow.backend.security.KsefPermission;
 import com.ksefflow.backend.services.KSeFAuditLogService;
 import com.ksefflow.backend.services.KsefAvailabilityService;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,8 @@ public class KsefAvailabilityController {
 
     // ── Read (any authenticated user) ────────────────────────────────────────────
 
+    // Permissions: any KSeF role (KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER,
+    //              KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR, KSEF_EMPLOYEE) — read-only status.
     @GetMapping
     public ResponseEntity<KsefAvailabilityService.Status> getStatus(AuthenticatedUser caller) {
         log.info("[getStatus]:1 GET /ksef-status — tenant={}", caller.tenantId());
@@ -37,6 +40,8 @@ public class KsefAvailabilityController {
 
     // ── Declare (admin only) ──────────────────────────────────────────────────────
 
+    // Permissions: KSEF_TENANT_ADMIN only — declaring an emergency is a legal decision
+    //              that changes invoice deadlines, so no other role may do it.
     // Declare a Ministry-announced emergency ("tryb awaryjny") — 7-business-day window.
     @PostMapping("/emergency")
     public ResponseEntity<KsefAvailabilityService.Status> declareEmergency(
@@ -48,6 +53,7 @@ public class KsefAvailabilityController {
         return ResponseEntity.ok(status);
     }
 
+    // Permissions: KSEF_TENANT_ADMIN only — same reason as /emergency.
     // Manually declare unavailability (e.g. a known maintenance window) — next-business-day window.
     @PostMapping("/unavailability")
     public ResponseEntity<KsefAvailabilityService.Status> declareUnavailability(
@@ -59,6 +65,7 @@ public class KsefAvailabilityController {
         return ResponseEntity.ok(status);
     }
 
+    // Permissions: KSEF_TENANT_ADMIN only — clearing a declaration is also admin-only.
     // Clear any manual declaration and let the automatic monitor take over again.
     @PostMapping("/online")
     public ResponseEntity<KsefAvailabilityService.Status> declareOnline(
@@ -72,16 +79,9 @@ public class KsefAvailabilityController {
 
     // ── Helpers ────────────────────────────────────────────────────────────────────
 
-    // Only ROLE_ADMIN (or higher) may change the KSeF state. Everyone else gets 403 Forbidden.
+    // Only a KSEF_TENANT_ADMIN may change the KSeF state. Everyone else gets 403 Forbidden.
     private void requireAdmin(AuthenticatedUser caller) {
-        String role = caller.role();
-        boolean isAdmin = role != null && (role.contains("ADMIN") || role.contains("SUPER"));
-        if (!isAdmin) {
-            log.warn("[requireAdmin]:1 User [{}] (role [{}]) tried to change KSeF availability — denied",
-                    caller.email(), role);
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Only an administrator can change the KSeF availability state");
-        }
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN);
     }
 
     private static String safeReason(DeclareRequest request) {

@@ -1,5 +1,8 @@
 package com.ksefflow.backend.security;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
 import java.util.List;
 
 /**
@@ -36,21 +39,22 @@ public record AuthenticatedUser(
     }
 
     /**
-     * True if the caller holds the given KSeF permission code.
-     * Use this in controllers/services to gate KSeF actions, e.g.
-     * {@code if (!user.hasPermission(KsefPermission.KSEF_AUDITOR)) throw ...}.
+     * The one and only permission gate. Allow the action ONLY if the caller holds at
+     * least one of the permission codes passed in; otherwise throw 403 Forbidden.
+     *
+     * Pass exactly the permissions that the action requires — nothing else is allowed.
+     * For an admin-only action, pass just {@code KSEF_TENANT_ADMIN}. For an action that
+     * several roles may perform, list them all (include {@code KSEF_TENANT_ADMIN} when
+     * the admin should also have access). Call it at the top of a controller method:
+     * {@code caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER);}
      */
-    public boolean hasPermission(KsefPermission permission) {
-        return permission != null && permissions.contains(permission.name());
-    }
-
-    /**
-     * A RegulaOne ROLE_ADMIN / ROLE_SUPER_ADMIN is always treated as a KSeF tenant
-     * admin too, so existing admin-only endpoints keep working even before anyone
-     * is explicitly granted KSEF_TENANT_ADMIN. Otherwise the explicit code is checked.
-     */
-    public boolean isKsefTenantAdmin() {
-        boolean roleAdmin = role != null && (role.contains("ADMIN") || role.contains("SUPER"));
-        return roleAdmin || hasPermission(KsefPermission.KSEF_TENANT_ADMIN);
+    public void requireAnyPermission(KsefPermission... allowed) {
+        for (KsefPermission p : allowed) {
+            if (p != null && permissions.contains(p.name())) {
+                return; // caller holds a required permission → allowed
+            }
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "You do not have permission to perform this action");
     }
 }

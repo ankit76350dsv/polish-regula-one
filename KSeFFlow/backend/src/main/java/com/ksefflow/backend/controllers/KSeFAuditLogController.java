@@ -2,6 +2,7 @@ package com.ksefflow.backend.controllers;
 
 import com.ksefflow.backend.models.KsefAuditLog;
 import com.ksefflow.backend.security.AuthenticatedUser;
+import com.ksefflow.backend.security.KsefPermission;
 import com.ksefflow.backend.services.KSeFAuditLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,8 @@ public class KSeFAuditLogController {
      *   size    — entries per page                default 20
      *   sort    — field,direction                 default timestamp,desc
      */
+    // Permissions: KSEF_TENANT_ADMIN (full access), KSEF_AUDITOR (read audit logs + export),
+    //              KSEF_COMPLIANCE_OFFICER (oversight). Read-only — no write endpoint exists.
     @GetMapping
     public ResponseEntity<Page<KsefAuditLog>> listAuditLogs(
             AuthenticatedUser caller,
@@ -47,6 +50,10 @@ public class KSeFAuditLogController {
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String search,
             @PageableDefault(size = 20) Pageable pageable) {
+
+        // Read-only oversight — auditors, compliance officers, or the tenant admin.
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN,
+                KsefPermission.KSEF_AUDITOR, KsefPermission.KSEF_COMPLIANCE_OFFICER);
 
         String tenantId = caller.tenantId();
         log.info("[listAuditLogs]:1 Audit log query: tenantId={} from={} to={} role={} search={}",
