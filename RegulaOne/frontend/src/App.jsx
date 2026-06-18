@@ -21,6 +21,7 @@ import TenantDetailPage from './pages/Admin/TenantDetailPage';
 import UserManagement   from './pages/Admin/UserManagement';
 import PackageTiers     from './pages/Admin/PackageTiers';
 import AdminTeam        from './pages/Admin/AdminTeam';
+import UserPermissionsPage from './pages/Admin/UserPermissionsPage';
 import AdminPlan        from './pages/Admin/AdminPlan';
 
 // Module pages
@@ -126,8 +127,9 @@ export default function App() {
 
           {user?.role === 'ROLE_ADMIN' && (
             <>
-              <Route path="/company/:tenantId/team"    element={<AdminTeam />} />
-              <Route path="/company/:tenantId/my-plan" element={<AdminPlan />} />
+              <Route path="/company/:tenantId/team"          element={<AdminTeam />} />
+              <Route path="/company/:tenantId/team/:userId"  element={<UserPermissionsPage />} />
+              <Route path="/company/:tenantId/my-plan"       element={<AdminPlan />} />
             </>
           )}
 

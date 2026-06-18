@@ -2,12 +2,13 @@
 // Replaces the mock-data implementation that was used during UI development.
 
 import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Users, UserCheck, UserX, UserPlus, X, AlertTriangle, Loader2, LayoutGrid } from 'lucide-react';
+import { Users, UserCheck, UserX, UserPlus, X, AlertTriangle, Loader2, LayoutGrid, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useTeamStats, useTeamMembers, useInviteUser, useUpdateUserStatus, useUpdateUserModules } from '../../hooks/useTeam';
 
@@ -44,6 +45,12 @@ function formatDate(iso) {
 
 export default function AdminTeam() {
   const tenantName = useAuthStore((s) => s.user?.tenantName ?? 'your organisation');
+
+  // Used to open a member's permissions page when their name is clicked.
+  const navigate   = useNavigate();
+  const { tenantId } = useParams();
+  const openPermissions = (user) =>
+    navigate(`/company/${tenantId}/team/${user.id}`);
 
   // Server state — fetched from backend
   const { data: stats,   isLoading: statsLoading,   error: statsError   } = useTeamStats();
@@ -536,14 +543,21 @@ export default function AdminTeam() {
                   return (
                     <TableRow key={u.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
 
-                      {/* Avatar + full name */}
+                      {/* Avatar + full name — clicking opens the user's permissions page */}
                       <TableCell className="px-6 py-4">
-                        <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => openPermissions(u)}
+                          className="flex items-center gap-3 text-left group"
+                          title="Manage permissions"
+                        >
                           <div className="h-8 w-8 rounded-full bg-red-50 border border-red-100 flex items-center justify-center text-xs font-bold text-red-600 flex-shrink-0">
                             {initials(u.name)}
                           </div>
-                          <span className="font-semibold text-sm text-slate-700">{u.name}</span>
-                        </div>
+                          <span className="font-semibold text-sm text-slate-700 group-hover:text-red-600 group-hover:underline transition-colors">
+                            {u.name}
+                          </span>
+                        </button>
                       </TableCell>
 
                       <TableCell className="px-6 py-4 text-xs text-slate-500 font-mono">{u.email}</TableCell>
@@ -573,6 +587,14 @@ export default function AdminTeam() {
                       {/* Action buttons — status toggle + module editor */}
                       <TableCell className="text-right px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs font-bold h-7 px-3 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => openPermissions(u)}
+                          >
+                            <ShieldCheck className="h-3.5 w-3.5 mr-1" />Permissions
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

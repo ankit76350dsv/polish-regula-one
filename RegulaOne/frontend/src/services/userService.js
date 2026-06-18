@@ -45,6 +45,12 @@ export const userService = {
   updateUserModules: (userId, moduleIds) =>
     api.patch(`/api/admin/users/${userId}/modules`, { moduleIds }),
 
+  // PATCH /api/admin/users/{userId}/permissions
+  // Body: { permissions: string[] } — replaces the user's cross-app permission codes
+  // (e.g. KSEF_AUDITOR). Uses MongoDB document id (same field as updateUserModules).
+  updateUserPermissions: (userId, permissions) =>
+    api.patch(`/api/admin/users/${userId}/permissions`, { permissions }),
+
   // DELETE /api/admin/users/{username}
   // Kept here for future delete-user flow.
   deleteUser: (username) =>

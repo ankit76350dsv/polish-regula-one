@@ -85,6 +85,23 @@ export function useUpdateUserModules() {
   });
 }
 
+// Replaces a user's cross-app permission codes and refreshes the members list.
+// Caller passes { userId, permissions } — permissions is an array of strings
+// such as ['KSEF_AUDITOR', 'KSEF_CASE_MANAGER'].
+export function useUpdateUserPermissions() {
+  const tenantId = useAuthStore((s) => s.user?.tenantId);
+  const qc       = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, permissions }) => userService.updateUserPermissions(userId, permissions),
+    onSuccess: () => {
+      toast.success('Permissions updated');
+      qc.invalidateQueries({ queryKey: TEAM_KEYS.members(tenantId) });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to update permissions'),
+  });
+}
+
 // Enables or disables a user and refreshes both members and stats on success.
 // Caller passes { userId, enabled } — where enabled: true = ACTIVE, false = SUSPENDED.
 export function useUpdateUserStatus() {
