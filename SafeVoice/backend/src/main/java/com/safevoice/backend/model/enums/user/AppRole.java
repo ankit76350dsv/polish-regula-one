@@ -7,7 +7,7 @@ import lombok.Getter;
  */
 @Getter
 public enum AppRole {
-    SUPER_ADMIN("Super Admin"),
+    ADMIN("Admin"),
     COMPLIANCE_OFFICER("Compliance Officer"),
     INVESTIGATOR("Investigator"),
     HR_MANAGER("HR Manager"),
