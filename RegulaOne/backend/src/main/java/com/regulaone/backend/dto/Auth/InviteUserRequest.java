@@ -27,4 +27,9 @@ public class InviteUserRequest {
     // If empty/null at invite time, defaults to the package's appIds so that new
     // members get the same module set the organisation paid for.
     private List<TenantModule> moduleIds = new ArrayList<>();
+
+    // Added: admin can grant cross-app permission codes (e.g. KSEF_AUDITOR) to the
+    // invited user. Free-form list of strings — each module knows its own codes.
+    // Defaults to empty so an invite without permissions simply grants none.
+    private List<String> permissions = new ArrayList<>();
 }

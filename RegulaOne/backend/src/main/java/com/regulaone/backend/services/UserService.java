@@ -9,6 +9,7 @@ import com.regulaone.backend.dto.Auth.LoginRequest;
 import com.regulaone.backend.dto.Auth.LoginResponse;
 import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
 import com.regulaone.backend.dto.Auth.SignupRequest;
+import com.regulaone.backend.dto.Auth.UpdatePermissionsRequest;
 import com.regulaone.backend.dto.Auth.UpdateProfileRequest;
 import com.regulaone.backend.dto.Auth.UpdateModulesRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
@@ -36,6 +37,7 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeTy
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UserType;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -265,6 +267,12 @@ public class UserService {
         // Module access: admin explicitly passes the moduleIds during invite.
         List<TenantModule> moduleIds = request.getModuleIds();
 
+        // Cross-app permission codes the admin chose for this user (e.g. KSEF_AUDITOR).
+        // Never null — fall back to an empty list so the builder default stays clean.
+        List<String> permissions = request.getPermissions() != null
+                ? request.getPermissions()
+                : new ArrayList<>();
+
         // Link the invited user to the tenant so that their /me response
         // returns the correct tenantId and they are not shown the
         // "Organisation not found" modal on first login.
@@ -276,6 +284,7 @@ public class UserService {
                 .enabled(true)
                 .tenant(tenant)
                 .moduleIds(moduleIds)
+                .permissions(permissions)
                 .build();
 
         userRepository.save(user);
@@ -373,6 +382,26 @@ public class UserService {
         // OLD: no module update existed — module access was only set at invite time
         // NEW: allow admin to revise module access at any time from the Team panel
         user.setModuleIds(request.getModuleIds());
+        user.setUpdatedAt(LocalDateTime.now());
+
+        userRepository.save(user);
+
+        return UserResponse.from(user);
+    }
+
+    // ! update user cross-app permissions
+    // Replaces the user's entire permissions list with the one supplied by the admin.
+    // Mirrors updateUserModules — same pattern, but for app permission codes such as
+    // KSEF_TENANT_ADMIN / KSEF_AUDITOR. Uses the MongoDB document id (not cognitoSub).
+    public UserResponse updateUserPermissions(String userId, UpdatePermissionsRequest request) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Normalise null to an empty list so we never store null in MongoDB.
+        user.setPermissions(request.getPermissions() != null
+                ? request.getPermissions()
+                : new ArrayList<>());
         user.setUpdatedAt(LocalDateTime.now());
 
         userRepository.save(user);

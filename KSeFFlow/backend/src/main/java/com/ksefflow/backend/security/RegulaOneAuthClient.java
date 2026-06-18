@@ -91,9 +91,10 @@ public class RegulaOneAuthClient {
                     "Your account is not associated with an organisation");
         }
 
-        log.info("[resolve]:8 Step 3 — resolved userId={} tenantId={} role={} tenantStatus={}",
-                d.id(), d.tenantId(), d.role(), d.tenantStatus());
-        return new AuthenticatedUser(d.id(), d.email(), d.role(), d.tenantId(), d.tenantName(), d.tenantStatus());
+        log.info("[resolve]:8 Step 3 — resolved userId={} tenantId={} role={} tenantStatus={} permissions={}",
+                d.id(), d.tenantId(), d.role(), d.tenantStatus(), d.permissions());
+        return new AuthenticatedUser(d.id(), d.email(), d.role(), d.tenantId(),
+                d.tenantName(), d.tenantStatus(), d.permissions());
     }
 
     private String extractIdToken(HttpServletRequest request) {
@@ -118,6 +119,7 @@ public class RegulaOneAuthClient {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record MeData(String id, String email, String role,
-                          String tenantId, String tenantName, String tenantStatus) {
+                          String tenantId, String tenantName, String tenantStatus,
+                          java.util.List<String> permissions) {
     }
 }

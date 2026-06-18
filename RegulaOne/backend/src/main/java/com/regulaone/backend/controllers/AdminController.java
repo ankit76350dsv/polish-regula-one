@@ -5,6 +5,7 @@ import com.regulaone.backend.dto.Admin.AdminPackageResponse;
 import com.regulaone.backend.dto.Admin.InvoiceResponse;
 import com.regulaone.backend.dto.Auth.InviteUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateModulesRequest;
+import com.regulaone.backend.dto.Auth.UpdatePermissionsRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
@@ -73,6 +74,17 @@ public class AdminController {
         return ResponseEntity.ok(AppResponse.success(
                 "Module access updated successfully",
                 userService.updateUserModules(userId, request)));
+    }
+
+    // Lets an admin replace a user's cross-app permission codes (e.g. KSEF_AUDITOR).
+    // Same shape as the modules endpoint above — the whole list is replaced at once.
+    @PatchMapping("/users/{userId}/permissions")
+    public ResponseEntity<AppResponse<UserResponse>> updateUserPermissions(
+            @PathVariable String userId,
+            @RequestBody UpdatePermissionsRequest request) {
+        return ResponseEntity.ok(AppResponse.success(
+                "User permissions updated successfully",
+                userService.updateUserPermissions(userId, request)));
     }
 
     @PatchMapping("/users/{userId}/status")

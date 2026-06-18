@@ -55,6 +55,11 @@ public class UserResponse {
     // Frontend reads this to show/hide sidebar items — a module absent here is hidden.
     private List<TenantModule> moduleIds;
 
+    // Added: cross-app permission codes for this user (e.g. KSEF_TENANT_ADMIN).
+    // Other apps (KSeFFlow, etc.) read this from /me to decide what the user can do.
+    // Always a list (never null) so callers can iterate without a null-check.
+    private List<String> permissions;
+
     public static UserResponse from(User user) {
         // Derive tenant fields — Tenant may be null when no organisation has been set up yet
         String tenantId = null;
@@ -100,6 +105,13 @@ public class UserResponse {
                 ? user.getModuleIds()
                 : new ArrayList<>();
 
+        // Cross-app permission codes — empty list instead of null for the same reason.
+        // Older user documents created before this field existed will have null in
+        // MongoDB; we normalise that to an empty list here.
+        List<String> permissions = (user.getPermissions() != null)
+                ? user.getPermissions()
+                : new ArrayList<>();
+
         return UserResponse.builder()
                 .id(user.getId())
                 .name(user.getName())
@@ -116,6 +128,7 @@ public class UserResponse {
                 .planExpiringSoon(planExpiringSoon)
                 .packageId(packageId)
                 .moduleIds(moduleIds)
+                .permissions(permissions)
                 .build();
     }
 
