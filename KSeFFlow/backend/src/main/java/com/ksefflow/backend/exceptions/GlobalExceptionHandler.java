@@ -6,6 +6,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -85,6 +86,21 @@ public class GlobalExceptionHandler {
                 "Uploaded file exceeds the maximum allowed size"));
     }
 
+    // Honours the status + reason carried by a ResponseStatusException so the client gets the
+    // REAL message (e.g. a 403 permission denial or a 400 "A reason is required") instead of
+    // the generic 500 below. Without this, the catch-all handler would swallow every
+    // ResponseStatusException into "An unexpected error occurred" — hiding the actual reason.
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleResponseStatus(ResponseStatusException e) {
+        int status = e.getStatusCode().value();
+        // getReason() is the human-readable text we passed when throwing; fall back if absent.
+        String message = (e.getReason() != null && !e.getReason().isBlank())
+                ? e.getReason()
+                : "Request could not be completed";
+        log.warn("[handleResponseStatus]:1 {} -> {}", status, message);
+        return ResponseEntity.status(status).body(errorBody(status, errorCodeForStatus(status), message));
+    }
+
     // 500 — catch-all for anything not handled above
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception e) {
@@ -94,6 +110,20 @@ public class GlobalExceptionHandler {
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────
+
+    // Maps an HTTP status to a short, stable error code the frontend can branch on.
+    private static String errorCodeForStatus(int status) {
+        return switch (status) {
+            case 400 -> "BAD_REQUEST";
+            case 401 -> "UNAUTHORIZED";
+            case 403 -> "FORBIDDEN";
+            case 404 -> "NOT_FOUND";
+            case 409 -> "CONFLICT";
+            case 422 -> "UNPROCESSABLE_ENTITY";
+            case 503 -> "SERVICE_UNAVAILABLE";
+            default  -> "REQUEST_ERROR";
+        };
+    }
 
     private static Map<String, Object> errorBody(int status, String errorCode, String message) {
         return Map.of(
