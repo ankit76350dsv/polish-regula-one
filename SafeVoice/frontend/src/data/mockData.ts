@@ -1,10 +1,98 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+import {
+  AppRole,
+  AuditLog,
+  CaseMessage,
+  CaseReport,
+  CaseStatus,
+  EvidenceAttachment,
+  NotificationItem,
+  ReportCategory,
+  ReviewRecommendation,
+  RolePermissions,
+  SaaSUser,
+  TechnicalMetadataPolicy
+} from "../types";
 
-import { CaseReport, AuditLog, SaaSUser, CaseMessage, CaseNote, NotificationItem, CaseStatus } from "../types";
-import { ReportCategory } from "../types";
+const STORAGE_VERSION = "safevoice-compliance-v2-2026-06-18";
+
+export const reporterMetadataPolicy: TechnicalMetadataPolicy = {
+  reporterIpStored: false,
+  userAgentStored: false,
+  deviceFingerprintStored: false,
+  geolocationStored: false,
+  browserFingerprintStored: false
+};
+
+export const rolePermissions: RolePermissions[] = [
+  {
+    role: "Super Admin",
+    viewReports: true,
+    assignCases: true,
+    closeCases: true,
+    exportData: true,
+    accessAudits: true,
+    manageUsers: true,
+    manageRetention: true
+  },
+  {
+    role: "Compliance Officer",
+    viewReports: true,
+    assignCases: true,
+    closeCases: true,
+    exportData: false,
+    accessAudits: true,
+    manageUsers: false,
+    manageRetention: true
+  },
+  {
+    role: "Investigator",
+    viewReports: true,
+    assignCases: false,
+    closeCases: false,
+    exportData: false,
+    accessAudits: false,
+    manageUsers: false,
+    manageRetention: false
+  },
+  {
+    role: "HR Manager",
+    viewReports: true,
+    assignCases: false,
+    closeCases: false,
+    exportData: false,
+    accessAudits: false,
+    manageUsers: false,
+    manageRetention: false
+  },
+  {
+    role: "Auditor",
+    viewReports: true,
+    assignCases: false,
+    closeCases: false,
+    exportData: true,
+    accessAudits: true,
+    manageUsers: false,
+    manageRetention: false
+  }
+];
+
+const evidence = (
+  id: string,
+  displayName: string,
+  extension: EvidenceAttachment["extension"],
+  sizeLabel: string,
+  status: EvidenceAttachment["status"] = "Metadata stripped"
+): EvidenceAttachment => ({
+  id,
+  displayName,
+  extension,
+  sizeLabel,
+  status,
+  metadataStripped: status === "Metadata stripped",
+  originalNameStored: false,
+  uploadedAt: "2026-06-01 10:00",
+  storageVaultRef: `vault://safevoice/evidence/${id}`
+});
 
 export const initialUsers: SaaSUser[] = [
   {
@@ -13,23 +101,29 @@ export const initialUsers: SaaSUser[] = [
     email: "jan.kowalski@regulaone.pl",
     role: "Super Admin",
     status: "Active",
-    joinedDate: "2026-01-10"
+    joinedDate: "2026-01-10",
+    mfaRequired: true,
+    lastLoginReview: "2026-06-14 09:12"
   },
   {
     id: "usr-2",
-    name: "Zofia Wiśniewska",
+    name: "Zofia Wisniewska",
     email: "zofia.wisniewska@regulaone.pl",
     role: "Compliance Officer",
     status: "Active",
-    joinedDate: "2026-02-15"
+    joinedDate: "2026-02-15",
+    mfaRequired: true,
+    lastLoginReview: "2026-06-16 08:45"
   },
   {
     id: "usr-3",
-    name: "Tomasz Wójcik",
+    name: "Tomasz Wojcik",
     email: "tomasz.wojcik@regulaone.pl",
     role: "Investigator",
     status: "Active",
-    joinedDate: "2026-03-01"
+    joinedDate: "2026-03-01",
+    mfaRequired: true,
+    lastLoginReview: "2026-06-15 11:20"
   },
   {
     id: "usr-4",
@@ -37,59 +131,85 @@ export const initialUsers: SaaSUser[] = [
     email: "katarzyna.mazur@regulaone.pl",
     role: "HR Manager",
     status: "Active",
-    joinedDate: "2026-04-12"
+    joinedDate: "2026-04-12",
+    mfaRequired: true,
+    lastLoginReview: "2026-06-12 10:02"
   },
   {
     id: "usr-5",
-    name: "Andrzej Kamiński",
-    email: "andrew.kam@external-audit.com",
+    name: "Andrzej Kaminski",
+    email: "andrew.kam@external-audit.eu",
     role: "Auditor",
     status: "Pending",
-    joinedDate: "2026-05-20"
+    joinedDate: "2026-05-20",
+    mfaRequired: true,
+    lastLoginReview: "Not activated"
   }
 ];
 
 export const initialReports: CaseReport[] = [
   {
     id: "SV-2026-001",
-    trackingPin: "SV-7832-9012",
+    trackingCode: "SV-W4R9-M2Q7",
     category: ReportCategory.Corruption,
-    description: "Irregularities in the public procurement process for IT equipment in the Warsaw Branch. High-ranking procurement managers received expensive gifts from the bidding hardware supplier (valued over 15,000 PLN) in exchange for exclusive technical specs requirements that matched only their inventory.",
+    description:
+      "Procurement requirements appear tailored to one supplier. The report describes gifts, supplier contacts, and matching equipment requirements without naming the reporter.",
     incidentDate: "2026-05-10",
-    department: "Procurement & Logistics",
-    attachments: ["procurement_spec_v3.pdf", "supplier_invoice_match.png"],
+    department: "Procurement",
+    attachments: [
+      evidence("ev-001-a", "Evidence 1 (PDF)", "PDF", "1.8 MB"),
+      evidence("ev-001-b", "Evidence 2 (PNG)", "PNG", "420 KB")
+    ],
     status: "Investigating",
     severity: "Critical",
     submissionDate: "2026-05-12 11:24",
-    assignedInvestigator: "Tomasz Wójcik",
-    isAnonymous: true,
-    slaHoursRemaining: 1440, // 60 days of 90-day legislative SLA
+    acknowledgementDue: "2026-05-19 11:24",
+    feedbackDue: "2026-08-19 11:24",
+    assignedInvestigator: "Tomasz Wojcik",
+    disclosureMode: "Anonymous",
+    intakeChannel: "Anonymous web portal",
+    lawfulBasis: "Legal obligation and legitimate follow-up under EU 2019/1937 and Polish whistleblower procedure",
+    controller: "RegulaOne Poland S.A.",
+    processor: "SafeVoice EU hosting processor",
+    slaHoursRemaining: 1488,
+    technicalMetadataPolicy: reporterMetadataPolicy,
+    retention: {
+      state: "Active",
+      retentionYears: 3,
+      deleteAfter: "2029-12-31",
+      irrelevantPersonalDataDeletionDue: "2026-05-26"
+    },
+    riskFlags: ["Public procurement", "Anti-retaliation", "Evidence preservation"],
     timeline: [
       {
-        id: "tem-1-1",
-        title: "Report Submitted Confidentially",
-        description: "Authenticated via system endpoint with AES-256 DB encryption active. Category 'Corruption' mapped to compliance alert.",
+        id: "tl-001-1",
+        title: "Anonymous report received",
+        description:
+          "Intake accepted without IP, user-agent, device, browser, or geolocation storage.",
         timestamp: "2026-05-12 11:24",
         type: "system"
       },
       {
-        id: "tem-1-2",
-        title: "7-Day Pre-acknowledgement Confirmed",
-        description: "The Polish compliance deadline met within the specified statutory period.",
+        id: "tl-001-2",
+        title: "Acknowledgement available in portal",
+        description:
+          "7-day acknowledgement obligation satisfied through the tracking channel.",
         timestamp: "2026-05-13 09:00",
-        type: "system"
+        type: "status"
       },
       {
-        id: "tem-1-3",
-        title: "Assigned to Investigator",
-        description: "Case allocated to senior compliance lawyer Tomasz Wójcik for formal pre-assessment.",
-        timestamp: "2026-05-14 14:10",
-        type: "system"
+        id: "tl-001-3",
+        title: "Evidence sanitized",
+        description:
+          "Original filenames were not persisted; files are referenced by vault IDs after malware and metadata checks.",
+        timestamp: "2026-05-13 09:15",
+        type: "attachment"
       },
       {
-        id: "tem-1-4",
-        title: "Investigation Opened",
-        description: "Preliminary evidence suggests matching inventory codes and restrictive bidder constraints.",
+        id: "tl-001-4",
+        title: "Investigation opened",
+        description:
+          "Case assigned to an authorized investigator with written confidentiality duties.",
         timestamp: "2026-05-17 10:30",
         type: "status"
       }
@@ -97,174 +217,90 @@ export const initialReports: CaseReport[] = [
   },
   {
     id: "SV-2026-002",
-    trackingPin: "SV-1102-4951",
-    category: ReportCategory.DataBreach,
-    description: "Exporting confidential customer databases containing complete Polish ID numbers (PESEL) and addresses to an unencrypted Google Drive account by an external consultant without the required access approval. Violates our firm's GDPR policy.",
+    trackingCode: "SV-P8C2-L7H5",
+    category: ReportCategory.DataProtection,
+    description:
+      "A consultant allegedly exported customer records containing national identifiers to an unmanaged cloud drive.",
     incidentDate: "2026-05-18",
-    department: "IT Infrastructure Support",
-    attachments: ["unauthorized_gdrive_sync.csv"],
-    status: "Under Review",
+    department: "IT Security",
+    attachments: [evidence("ev-002-a", "Evidence 1 (XML)", "XML", "22 KB")],
+    status: "Triage",
     severity: "High",
     submissionDate: "2026-05-19 16:42",
-    assignedInvestigator: "Zofia Wiśniewska",
-    isAnonymous: true,
-    slaHoursRemaining: 1848,
+    acknowledgementDue: "2026-05-26 16:42",
+    feedbackDue: "2026-08-26 16:42",
+    assignedInvestigator: "Zofia Wisniewska",
+    disclosureMode: "Anonymous",
+    intakeChannel: "Anonymous web portal",
+    lawfulBasis: "Legal obligation, regulatory investigation, and protection of data subjects",
+    controller: "RegulaOne Poland S.A.",
+    processor: "SafeVoice EU hosting processor",
+    slaHoursRemaining: 1656,
+    technicalMetadataPolicy: reporterMetadataPolicy,
+    retention: {
+      state: "Active",
+      retentionYears: 3,
+      deleteAfter: "2029-12-31",
+      irrelevantPersonalDataDeletionDue: "2026-06-02"
+    },
+    riskFlags: ["GDPR", "Possible breach notification", "Access review"],
     timeline: [
       {
-        id: "tem-2-1",
-        title: "Report Submitted",
-        description: "Secure data breach protocol initiated. Automated SLA monitoring began.",
+        id: "tl-002-1",
+        title: "Report received",
+        description:
+          "Personal data minimization checks started; non-relevant identifiers are due for deletion within 14 days.",
         timestamp: "2026-05-19 16:42",
         type: "system"
       },
       {
-        id: "tem-2-2",
-        title: "Assigned to Zofia Wiśniewska",
-        description: "Compliance team alert triggered.",
+        id: "tl-002-2",
+        title: "DPO triage requested",
+        description:
+          "Compliance officer opened breach-risk triage without exposing reporter metadata to admins.",
         timestamp: "2026-05-20 08:15",
-        type: "system"
+        type: "status"
       }
     ]
   },
   {
     id: "SV-2026-003",
-    // Labour dispute - no tracking PIN for this category according to the Polish statutory rules!
     category: ReportCategory.LabourDispute,
-    description: "Forced overtime in the Katowice warehouse without safety breaks or overtime allowance. Direct supervisor threatens shifts removal if team raises concerns on hours registry transparency.",
+    description:
+      "Individual overtime and scheduling grievance routed to HR. It is not represented as an anonymous whistleblower case in this mock.",
     incidentDate: "2026-05-22",
-    department: "Logistics - Warehouse Katowice",
+    department: "Logistics",
     attachments: [],
     status: "Received",
     severity: "Medium",
     submissionDate: "2026-05-24 07:12",
-    assignedInvestigator: "Katarzyna Mazur", // Assigned straight to HR!
-    isAnonymous: false,
-    reporterName: "Michał Nowak",
-    reporterEmail: "m.nowak@regulaone.pl",
+    acknowledgementDue: "2026-05-31 07:12",
+    feedbackDue: "2026-08-31 07:12",
+    assignedInvestigator: "Katarzyna Mazur",
+    disclosureMode: "HR Handoff",
+    intakeChannel: "HR grievance handoff",
+    lawfulBasis: "HR grievance handling under internal labour procedure; no SafeVoice tracking code issued",
+    controller: "RegulaOne Poland S.A.",
+    processor: "Internal HR desk",
     slaHoursRemaining: 2160,
+    technicalMetadataPolicy: reporterMetadataPolicy,
+    retention: {
+      state: "Active",
+      retentionYears: 3,
+      deleteAfter: "2029-12-31",
+      irrelevantPersonalDataDeletionDue: "2026-06-07"
+    },
+    riskFlags: ["Outside whistleblower scope", "HR confidentiality required"],
     timeline: [
       {
-        id: "tem-3-1",
-        title: "Labour Dispute Routed to HR",
-        description: "This report bypassed anonymous encryption filters and was forwarded directly to Human Resources.",
+        id: "tl-003-1",
+        title: "HR grievance handoff recorded",
+        description:
+          "No anonymous tracking PIN was generated. The UI clearly separates this from the whistleblower channel.",
         timestamp: "2026-05-24 07:12",
         type: "system"
       }
     ]
-  },
-  {
-    id: "SV-2026-004",
-    trackingPin: "SV-9943-4481",
-    category: ReportCategory.Harassment,
-    description: "Repeated psychological harassment, intimidation, and verbal abuse by the senior product unit lead during team standups. High team turnover and multiple employees taking mental health leaves (L4) directly because of this work culture.",
-    incidentDate: "2026-04-20",
-    department: "Product Engineering",
-    attachments: ["standup_audio_clip_transcript.xlsx"],
-    status: "Investigating",
-    severity: "High",
-    submissionDate: "2026-04-25 15:30",
-    assignedInvestigator: "Katarzyna Mazur",
-    isAnonymous: true,
-    slaHoursRemaining: 864,
-    timeline: [
-      {
-        id: "tem-4-1",
-        title: "Anonymous Report Received",
-        description: "Secure routing setup completed. Highly sensitive whistleblower files marked restricted.",
-        timestamp: "2026-04-25 15:30",
-        type: "system"
-      },
-      {
-        id: "tem-4-2",
-        title: "Internal Check Approved",
-        description: "Gathering historic HR exit surveys corroborating unit complaints.",
-        timestamp: "2026-04-28 10:00",
-        type: "status"
-      }
-    ]
-  },
-  {
-    id: "SV-2026-005",
-    trackingPin: "SV-5531-1192",
-    category: ReportCategory.Fraud,
-    description: "Invoice manipulation and double-billing of marketing agency consulting fees for fictitious search engine campaigns during Q1 2026. Discrepancy estimated at roughly 80,000 PLN, routed through a shell agency owner tied to a procurement agent's spouse.",
-    incidentDate: "2026-03-15",
-    department: "Marketing - Finance Unit",
-    attachments: ["invoice_variance_ledger_q1.xlsx"],
-    status: "Closed",
-    severity: "Critical",
-    submissionDate: "2026-03-20 09:15",
-    assignedInvestigator: "Zofia Wiśniewska",
-    isAnonymous: true,
-    slaHoursRemaining: 0,
-    timeline: [
-      {
-        id: "tem-5-1",
-        title: "Report Received",
-        description: "Direct alert dispatched to Compliance Officer.",
-        timestamp: "2026-03-20 09:15",
-        type: "system"
-      },
-      {
-        id: "tem-5-2",
-        title: "Formal Audit Initiated",
-        description: "External audit panel validated ledger variance.",
-        timestamp: "2026-03-25 14:00",
-        type: "status"
-      },
-      {
-        id: "tem-5-3",
-        title: "Contract Terminated & Legal Prosecution Drafted",
-        description: "The marketing vendor contract terminated. Retained services refunded. Formal legal case prepared.",
-        timestamp: "2026-04-18 11:00",
-        type: "status"
-      },
-      {
-        id: "tem-5-4",
-        title: "Case Formally Closed",
-        description: "Full compliance resolution filed and reported to Board of Directors.",
-        timestamp: "2026-05-15 16:30",
-        type: "status"
-      }
-    ]
-  }
-];
-
-export const initialAuditLogs: AuditLog[] = [
-  {
-    id: "aud-1",
-    user: "Jan Kowalski (Super Admin)",
-    action: "Configured Whistleblower System parameters for compliance with Polish Ustawa o ochronie sygnalistów",
-    timestamp: "2026-05-01 10:14:52",
-    ipAddress: "194.181.112.44"
-  },
-  {
-    id: "aud-2",
-    user: "Zofia Wiśniewska (Compliance Officer)",
-    action: "Assigned investigator Tomasz Wójcik to procurement integrity report SV-2026-001",
-    timestamp: "2026-05-14 14:10:05",
-    ipAddress: "83.144.92.12"
-  },
-  {
-    id: "aud-3",
-    user: "Tomasz Wójcik (Investigator)",
-    action: "Marked procurement incident report SV-2026-001 as severity status: Critical",
-    timestamp: "2026-05-14 15:42:19",
-    ipAddress: "83.144.92.15"
-  },
-  {
-    id: "aud-4",
-    user: "Katarzyna Mazur (HR Manager)",
-    action: "Opened case HR routing check for Warehouse forced hours SV-2026-003",
-    timestamp: "2026-05-24 08:30:11",
-    ipAddress: "46.205.191.2"
-  },
-  {
-    id: "aud-5",
-    user: "System Daemon",
-    action: "Archived closed ledger case reports SV-2026-005 in compliant write-once storage locker",
-    timestamp: "2026-05-15 16:35:00",
-    ipAddress: "localhost"
   }
 ];
 
@@ -273,7 +309,8 @@ export const initialMessages: CaseMessage[] = [
     id: "msg-1-1",
     caseId: "SV-2026-001",
     sender: "Compliance Officer",
-    text: "Welcome specifically to our secure communication channel. Your identity is completely shielded via random ledger hash logic. Could you specify if you have copies of the IT procurement specifications for v3 that was shared in the final steering call?",
+    text:
+      "We acknowledged your report. If you can provide the approximate meeting date or procurement stage, do so without adding details that could identify you.",
     timestamp: "2026-05-15 10:00",
     readByReporter: true,
     readByAdmin: true
@@ -282,28 +319,59 @@ export const initialMessages: CaseMessage[] = [
     id: "msg-1-2",
     caseId: "SV-2026-001",
     sender: "Reporter",
-    text: "Yes, I have uploaded the draft document called 'procurement_spec_v3.pdf'. If you check line 124, you will see a requirements constraint specifying a direct optical component that only is distributed by Supplier TechGlobal Poland.",
+    text:
+      "The final specification call took place in the second week of May. The uploaded evidence points to the unique optical component requirement.",
     timestamp: "2026-05-15 14:24",
     readByReporter: true,
     readByAdmin: true,
-    attachments: ["procurement_spec_v3.pdf"]
+    attachments: [initialReports[0].attachments[0]]
+  }
+];
+
+export const initialAuditLogs: AuditLog[] = [
+  {
+    id: "aud-1",
+    actorRole: "System",
+    actorRef: "safevoice-policy-engine",
+    actionType: "ACCESS_REVIEW",
+    subjectId: "tenant-policy",
+    timestamp: "2026-06-01 10:14:52",
+    outcome: "Recorded",
+    metadataNotice:
+      "Reporter IP, user-agent, browser fingerprint, device fingerprint, and geolocation are not available to administrators.",
+    hashChain: "seal-001"
   },
   {
-    id: "msg-1-3",
-    caseId: "SV-2026-001",
-    sender: "Investigator",
-    text: "Excellent documentation. This represents a crystal-clear breach of anti-competition standards. We are conducting internal interviews tomorrow and will keep this secure thread updated. Please check regularly with your PIN code.",
-    timestamp: "2026-05-16 09:12",
-    readByReporter: false,
-    readByAdmin: true
+    id: "aud-2",
+    actorRole: "Compliance Officer",
+    actorRef: "usr-2",
+    actionType: "INVESTIGATOR_ASSIGNED",
+    subjectId: "SV-2026-001",
+    timestamp: "2026-05-14 14:10:05",
+    outcome: "Allowed",
+    oldValue: "Unassigned",
+    newValue: "Tomasz Wojcik",
+    metadataNotice: "Administrative session details are restricted to security operations, not case investigators.",
+    hashChain: "seal-002"
+  },
+  {
+    id: "aud-3",
+    actorRole: "System",
+    actorRef: "retention-scheduler",
+    actionType: "RETENTION_UPDATED",
+    subjectId: "SV-2026-002",
+    timestamp: "2026-05-20 08:17:00",
+    outcome: "Recorded",
+    metadataNotice: "14-day irrelevant personal data deletion timer started.",
+    hashChain: "seal-003"
   }
 ];
 
 export const initialNotifications: NotificationItem[] = [
   {
     id: "notif-1",
-    title: "New Confidential Incident Submitted",
-    description: "Case SV-2026-002 (Data Breach - IT Infrastructure) submitted via public portal.",
+    title: "New minimized report",
+    description: "SV-2026-002 entered DPO triage. No reporter technical metadata is exposed.",
     timestamp: "2026-05-19 16:42",
     read: false,
     type: "new_report",
@@ -311,17 +379,17 @@ export const initialNotifications: NotificationItem[] = [
   },
   {
     id: "notif-2",
-    title: "SLA Warning Level 1",
-    description: "SLA alert triggered for harassment investigation SV-2026-004. Assessment responses pending.",
-    timestamp: "2026-05-28 08:00",
+    title: "Retention timer active",
+    description: "Irrelevant personal data review is due within 14 days for SV-2026-002.",
+    timestamp: "2026-05-20 08:17",
     read: false,
-    type: "sla_warning",
-    caseId: "SV-2026-004"
+    type: "retention",
+    caseId: "SV-2026-002"
   },
   {
     id: "notif-3",
-    title: "New Signal Message Received",
-    description: "Whistleblower posted reply file on Case SV-2026-001 procurement inquiry.",
+    title: "Reporter message",
+    description: "Anonymous follow-up was posted for SV-2026-001.",
     timestamp: "2026-05-15 14:24",
     read: true,
     type: "message",
@@ -329,15 +397,117 @@ export const initialNotifications: NotificationItem[] = [
   }
 ];
 
-// Reusable local storage wrapper so users keep reports and actions they make during the session!
+export const complianceReview: ReviewRecommendation[] = [
+  {
+    area: "Public report intake",
+    currentFeature: "Category, incident date, department, narrative, optional evidence",
+    classification: "Modify",
+    justification:
+      "Keep only data needed to assess the report; add clear privacy notice, lawful basis, external reporting information, and anonymous defaults.",
+    risk: "Overly specific department names or narrative text can re-identify reporters in small teams."
+  },
+  {
+    area: "Reporter identity fields",
+    currentFeature: "Legal name and corporate email were requested when anonymity was disabled",
+    classification: "Remove",
+    justification:
+      "A whistleblower channel should not require direct identifiers. Contact should be through a tracking code or vault-backed relay only when voluntarily chosen.",
+    risk: "Administrators could infer or disclose reporter identity."
+  },
+  {
+    area: "Labour dispute handling",
+    currentFeature: "Forced named HR routing and no tracking PIN",
+    classification: "Modify",
+    justification:
+      "Separate ordinary HR grievances from whistleblower reports, do not promise anonymous whistleblower protections for out-of-scope grievances, and avoid collecting unnecessary identifiers.",
+    risk: "Mislabeling HR grievances as whistleblower cases creates legal confusion and confidentiality risk."
+  },
+  {
+    area: "Tracking workflow",
+    currentFeature: "PIN-based status and two-way communication",
+    classification: "Keep",
+    justification:
+      "Anonymous tracking supports acknowledgement, follow-up questions, and feedback without direct identity collection.",
+    risk: "Tracking code must be high entropy, rate-limited, and never described as a decryption key."
+  },
+  {
+    area: "File upload",
+    currentFeature: "File names were retained and XLSX was allowed",
+    classification: "Modify",
+    justification:
+      "Restrict uploads to PDF, PNG, JPG, XML, and DOCX; remove original filenames from admin views; model metadata stripping, malware scanning, signed URLs, and encrypted storage.",
+    risk: "Original filenames, document metadata, and spreadsheet content can reveal identity."
+  },
+  {
+    area: "Audit logs",
+    currentFeature: "Admin-facing table exposed IP addresses",
+    classification: "Modify",
+    justification:
+      "Reporter IP and user-agent should not be collected for case handling. Admin security telemetry should be restricted to security operations and not shown to case handlers.",
+    risk: "Technical metadata can defeat anonymity."
+  },
+  {
+    area: "Dashboards and analytics",
+    currentFeature: "Trend charts and department heatmaps",
+    classification: "Remove",
+    justification:
+      "Aggregate analytics are not necessary for handling reports in the mock and can re-identify reporters in low-volume teams.",
+    risk: "Small-cell analytics can expose reporting patterns."
+  },
+  {
+    area: "RBAC",
+    currentFeature: "Public users were auto-upgraded to admin roles in simulator mode",
+    classification: "Modify",
+    justification:
+      "Role changes must be explicit and access denied by default. Least privilege must govern case, audit, retention, and user-management actions.",
+    risk: "Privilege confusion and accidental unauthorized case access."
+  },
+  {
+    area: "Retention",
+    currentFeature: "Static retention copy without workflow enforcement",
+    classification: "Add",
+    justification:
+      "Add configurable retention, legal hold, 14-day irrelevant-data deletion timer, and closed-case deletion scheduling.",
+    risk: "Keeping reports longer than necessary conflicts with storage limitation."
+  },
+  {
+    area: "Administrative security",
+    currentFeature: "Role simulator without MFA/session controls",
+    classification: "Add",
+    justification:
+      "Display MFA, account lockout, session expiration, session revocation, login monitoring, and password policy requirements.",
+    risk: "Compromised back-office accounts can expose sensitive case material."
+  }
+];
+
+const readJson = <T,>(key: string, fallback: T): T => {
+  SafeVoiceDb.ensureSeeded();
+  const raw = localStorage.getItem(key);
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    localStorage.setItem(key, JSON.stringify(fallback));
+    return fallback;
+  }
+};
+
+const seal = () => `seal-${Date.now().toString(36)}`;
+
 export class SafeVoiceDb {
+  static ensureSeeded() {
+    if (localStorage.getItem("sv_schema_version") === STORAGE_VERSION) return;
+
+    localStorage.setItem("sv_schema_version", STORAGE_VERSION);
+    localStorage.setItem("sv_reports", JSON.stringify(initialReports));
+    localStorage.setItem("sv_audit_logs", JSON.stringify(initialAuditLogs));
+    localStorage.setItem("sv_messages", JSON.stringify(initialMessages));
+    localStorage.setItem("sv_users", JSON.stringify(initialUsers));
+    localStorage.setItem("sv_notifications", JSON.stringify(initialNotifications));
+  }
+
   static getReports(): CaseReport[] {
-    const data = localStorage.getItem("sv_reports");
-    if (!data) {
-      localStorage.setItem("sv_reports", JSON.stringify(initialReports));
-      return initialReports;
-    }
-    return JSON.parse(data);
+    return readJson("sv_reports", initialReports);
   }
 
   static saveReports(reports: CaseReport[]) {
@@ -345,12 +515,7 @@ export class SafeVoiceDb {
   }
 
   static getAuditLogs(): AuditLog[] {
-    const data = localStorage.getItem("sv_audit_logs");
-    if (!data) {
-      localStorage.setItem("sv_audit_logs", JSON.stringify(initialAuditLogs));
-      return initialAuditLogs;
-    }
-    return JSON.parse(data);
+    return readJson("sv_audit_logs", initialAuditLogs);
   }
 
   static saveAuditLogs(logs: AuditLog[]) {
@@ -358,12 +523,7 @@ export class SafeVoiceDb {
   }
 
   static getMessages(): CaseMessage[] {
-    const data = localStorage.getItem("sv_messages");
-    if (!data) {
-      localStorage.setItem("sv_messages", JSON.stringify(initialMessages));
-      return initialMessages;
-    }
-    return JSON.parse(data);
+    return readJson("sv_messages", initialMessages);
   }
 
   static saveMessages(messages: CaseMessage[]) {
@@ -371,12 +531,7 @@ export class SafeVoiceDb {
   }
 
   static getUsers(): SaaSUser[] {
-    const data = localStorage.getItem("sv_users");
-    if (!data) {
-      localStorage.setItem("sv_users", JSON.stringify(initialUsers));
-      return initialUsers;
-    }
-    return JSON.parse(data);
+    return readJson("sv_users", initialUsers);
   }
 
   static saveUsers(users: SaaSUser[]) {
@@ -384,31 +539,27 @@ export class SafeVoiceDb {
   }
 
   static getNotifications(): NotificationItem[] {
-    const data = localStorage.getItem("sv_notifications");
-    if (!data) {
-      localStorage.setItem("sv_notifications", JSON.stringify(initialNotifications));
-      return initialNotifications;
-    }
-    return JSON.parse(data);
+    return readJson("sv_notifications", initialNotifications);
   }
 
   static saveNotifications(notifications: NotificationItem[]) {
     localStorage.setItem("sv_notifications", JSON.stringify(notifications));
   }
 
-  static addAuditLog(user: string, action: string, ipAddress: string = "83.144.92.12", oldStatus?: CaseStatus, newStatus?: CaseStatus) {
+  static addAuditLog(log: Omit<AuditLog, "id" | "timestamp" | "hashChain">) {
     const logs = this.getAuditLogs();
     const newLog: AuditLog = {
       id: `aud-${Date.now()}`,
-      user,
-      action,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      ipAddress,
-      oldStatus,
-      newStatus
+      timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
+      hashChain: seal(),
+      ...log
     };
-    logs.unshift(newLog);
-    this.saveAuditLogs(logs);
+    this.saveAuditLogs([newLog, ...logs]);
     return newLog;
+  }
+
+  static can(role: AppRole, permission: keyof Omit<RolePermissions, "role">) {
+    const match = rolePermissions.find((p) => p.role === role);
+    return Boolean(match?.[permission]);
   }
 }

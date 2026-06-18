@@ -1,88 +1,124 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import React, { useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { Info } from "lucide-react";
 import {
-  ShieldAlert, Lock, AlertOctagon, Info,
-  ExternalLink, LogIn, Database, RefreshCw, Layers
-} from "lucide-react";
-import {
-  AppRole, CaseReport, CaseMessage, AuditLog,
-  SaaSUser, NotificationItem, ReportCategory, CaseStatus, CaseSeverity
+  AppRole,
+  AuditLog,
+  CaseMessage,
+  CaseReport,
+  CaseSeverity,
+  CaseStatus,
+  EvidenceAttachment,
+  NotificationItem,
+  ReportCategory,
+  ReportSubmission,
+  SaaSUser
 } from "./types";
-import { SafeVoiceDb } from "./data/mockData";
-import { AppSidebar, AppNavbar } from "./components/Navigation";
+import { reporterMetadataPolicy, SafeVoiceDb } from "./data/mockData";
+import { AppNavbar, AppSidebar } from "./components/Navigation";
 import {
-  PublicReportPortal, ReportSuccessView, TrackCaseView,
-  AdminDashboard, CaseManagementGrid, CaseDetailsView,
-  CentralEncryptedInbox, SecurityAuditTrailLogs,
-  UsersPermissionsMatrix, BrandedSettingsView
+  AccessDeniedView,
+  AdminDashboard,
+  BrandedSettingsView,
+  CaseDetailsView,
+  CaseManagementGrid,
+  CentralEncryptedInbox,
+  PublicReportPortal,
+  ReportSuccessView,
+  SecurityAuditTrailLogs,
+  TrackCaseView,
+  UsersPermissionsMatrix
 } from "./components/Views";
 
-export default function App() {
-  // Sync state with url hash router
-  const [currentPath, setCurrentPath] = useState<string>(() => {
-    const hash = window.location.hash.replace("#", "");
-    return hash || "/report";
-  });
+const nowStamp = () => new Date().toISOString().replace("T", " ").substring(0, 16);
 
-  // Hot Reload / state variables
+const addDays = (days: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().replace("T", " ").substring(0, 16);
+};
+
+const addMonths = (months: number) => {
+  const date = new Date();
+  date.setMonth(date.getMonth() + months);
+  return date.toISOString().replace("T", " ").substring(0, 16);
+};
+
+const retentionDate = () => {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() + 3);
+  return `${date.getFullYear()}-12-31`;
+};
+
+const randomPart = () => {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const values = new Uint8Array(4);
+  window.crypto.getRandomValues(values);
+  return Array.from(values, (value) => alphabet[value % alphabet.length]).join("");
+};
+
+const createCaseId = () => {
+  const values = new Uint16Array(1);
+  window.crypto.getRandomValues(values);
+  return `SV-${new Date().getFullYear()}-${String((values[0] % 900) + 100).padStart(3, "0")}`;
+};
+
+const createTrackingCode = () => `SV-${randomPart()}-${randomPart()}`;
+
+const routeFromHash = () => {
+  const hash = window.location.hash.replace(/^#/, "");
+  return hash || "/report";
+};
+
+const severityFor = (category: ReportCategory): CaseSeverity => {
+  if ([ReportCategory.Corruption, ReportCategory.Fraud, ReportCategory.PublicProcurement].includes(category)) return "Critical";
+  if ([ReportCategory.DataProtection, ReportCategory.Cybersecurity, ReportCategory.AML].includes(category)) return "High";
+  if (category === ReportCategory.LabourDispute) return "Medium";
+  return "Medium";
+};
+
+export default function App() {
+  const [currentPath, setCurrentPath] = useState<string>(() => routeFromHash());
   const [reports, setReports] = useState<CaseReport[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [messages, setMessages] = useState<CaseMessage[]>([]);
   const [users, setUsers] = useState<SaaSUser[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  
-  // Simulated Roles for interactive client-testing!
-  const [activeRole, setActiveRole] = useState<AppRole | "Public User">("Compliance Officer");
-  
-  // Cache for success page
-  const [lastSuccessPin, setLastSuccessPin] = useState<string | undefined>("");
+  const [activeRole, setActiveRole] = useState<AppRole | "Public User">("Public User");
+  const [lastSuccessCode, setLastSuccessCode] = useState<string | undefined>("");
   const [lastSuccessCategory, setLastSuccessCategory] = useState<ReportCategory>(ReportCategory.Corruption);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
-  // Initialize DB on mount
   useEffect(() => {
-    setReports(SafeVoiceDb.getReports());
-    setAuditLogs(SafeVoiceDb.getAuditLogs());
-    setMessages(SafeVoiceDb.getMessages());
-    setUsers(SafeVoiceDb.getUsers());
-    setNotifications(SafeVoiceDb.getNotifications());
+    SafeVoiceDb.ensureSeeded();
+    reloadFromDb();
   }, []);
 
-  // Sync hash routing changes
   useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace("#", "");
-      if (hash) {
-        // Handle sub-routing checks like cases/SV-2026-001
-        if (hash.startsWith("/cases/")) {
-          const id = hash.replace("/cases/", "");
-          setSelectedCaseId(id);
-          setCurrentPath("/cases/:id");
-        } else {
-          setCurrentPath(hash);
-        }
+    const syncRoute = () => {
+      const hash = routeFromHash();
+      if (hash.startsWith("/cases/")) {
+        setSelectedCaseId(hash.replace("/cases/", ""));
+        setCurrentPath("/cases/:id");
+      } else {
+        setCurrentPath(hash);
       }
     };
+
+    const handleHashChange = () => {
+      const hash = routeFromHash();
+      if (hash.startsWith("/cases/")) {
+        setSelectedCaseId(hash.replace("/cases/", ""));
+        setCurrentPath("/cases/:id");
+      } else {
+        setCurrentPath(hash);
+      }
+    };
+    syncRoute();
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  const navigateTo = (path: string) => {
-    window.location.hash = path;
-    setCurrentPath(path);
-  };
-
-  const handleSelectCase = (caseId: string) => {
-    setSelectedCaseId(caseId);
-    navigateTo(`/cases/${caseId}`);
-  };
-
-  // Re-write State & DB Synchronizers
   const reloadFromDb = () => {
     setReports(SafeVoiceDb.getReports());
     setAuditLogs(SafeVoiceDb.getAuditLogs());
@@ -91,420 +127,460 @@ export default function App() {
     setNotifications(SafeVoiceDb.getNotifications());
   };
 
-  // 1. Submit report handler
-  const handleFormReportSubmit = (data: Omit<CaseReport, "id" | "status" | "submissionDate" | "timeline" | "severity">) => {
-    const generatedId = `SV-${new Date().getFullYear()}-${Math.floor(Math.random() * 899 + 100)}`;
-    
-    let generatedPin: string | undefined = undefined;
-    const isLabourDispute = data.category === ReportCategory.LabourDispute;
-
-    if (!isLabourDispute) {
-      generatedPin = `SV-${Math.floor(Math.random() * 8999 + 1000)}-${Math.floor(Math.random() * 8999 + 1000)}`;
+  const navigateTo = (path: string) => {
+    if (window.location.hash !== `#${path}`) {
+      window.location.hash = path;
     }
+    setCurrentPath(path);
+  };
+
+  const setRole = (role: AppRole | "Public User") => {
+    setActiveRole(role);
+    if (role === "Public User" && !["/report", "/track", "/report/success", "/access-denied"].includes(currentPath)) {
+      navigateTo("/report");
+    }
+    if (role !== "Public User" && currentPath === "/access-denied") {
+      navigateTo("/dashboard");
+    }
+  };
+
+  const activeUser = useMemo(
+    () => (activeRole === "Public User" ? undefined : users.find((user) => user.role === activeRole)),
+    [activeRole, users]
+  );
+
+  const currentDetailsCase = selectedCaseId ? reports.find((report) => report.id === selectedCaseId) : null;
+
+  const handleSelectCase = (caseId: string) => {
+    setSelectedCaseId(caseId);
+    navigateTo(`/cases/${caseId}`);
+  };
+
+  const handleFormReportSubmit = (data: ReportSubmission) => {
+    const isHrHandoff = data.category === ReportCategory.LabourDispute;
+    const generatedId = createCaseId();
+    const generatedTrackingCode = isHrHandoff ? undefined : createTrackingCode();
+    const submissionDate = nowStamp();
+    const disclosureMode = isHrHandoff ? "HR Handoff" : data.disclosureMode;
 
     const newReport: CaseReport = {
       id: generatedId,
-      trackingPin: generatedPin,
+      trackingCode: generatedTrackingCode,
       category: data.category,
       description: data.description,
       incidentDate: data.incidentDate,
       department: data.department,
       attachments: data.attachments,
       status: "Received",
-      severity: isLabourDispute ? "Medium" : "High",
-      submissionDate: new Date().toISOString().replace("T", " ").substring(0, 16),
-      isAnonymous: data.isAnonymous,
-      reporterName: data.reporterName,
-      reporterEmail: data.reporterEmail,
-      assignedInvestigator: isLabourDispute ? "Katarzyna Mazur" : undefined, // Labor dispute goes straight to HR
+      severity: severityFor(data.category),
+      submissionDate,
+      acknowledgementDue: addDays(7),
+      feedbackDue: addMonths(3),
+      assignedInvestigator: isHrHandoff ? "Katarzyna Mazur" : undefined,
+      disclosureMode,
+      contactVaultRef: disclosureMode === "Confidential Named" ? data.contactVaultRef : undefined,
+      intakeChannel: isHrHandoff ? "HR grievance handoff" : "Anonymous web portal",
+      lawfulBasis: isHrHandoff
+        ? "Internal HR grievance procedure; no SafeVoice anonymous tracking code issued"
+        : "Legal obligation and legitimate follow-up under EU 2019/1937 and Polish internal reporting procedure",
+      controller: "RegulaOne Poland S.A.",
+      processor: isHrHandoff ? "Internal HR desk" : "SafeVoice EU hosting processor",
       slaHoursRemaining: 2160,
+      technicalMetadataPolicy: reporterMetadataPolicy,
+      retention: {
+        state: "Active",
+        retentionYears: 3,
+        deleteAfter: retentionDate(),
+        irrelevantPersonalDataDeletionDue: addDays(14)
+      },
+      riskFlags: isHrHandoff
+        ? ["Outside whistleblower scope", "HR confidentiality required"]
+        : ["Anonymous channel", "Anti-retaliation", "Metadata minimisation"],
       timeline: [
         {
-          id: `tem-n-${Date.now()}`,
-          title: isLabourDispute ? "Labour Dispute Submitted & Routed to HR" : "Anonymous Report Received",
-          description: isLabourDispute 
-            ? "Report bypassed cryptographic tracking triggers and was forwarded directly to HR Desk."
-            : "Data package securely stored and AES encryption shields initialized.",
-          timestamp: new Date().toISOString().replace("T", " ").substring(0, 16),
+          id: `tl-${Date.now()}`,
+          title: isHrHandoff ? "HR grievance handoff recorded" : "Anonymous report received",
+          description: isHrHandoff
+            ? "No tracking code was generated. The workflow separates HR grievances from the whistleblower channel."
+            : "Report accepted without storing reporter IP, user-agent, device fingerprint, browser fingerprint, or geolocation.",
+          timestamp: submissionDate,
           type: "system"
+        },
+        {
+          id: `tl-del-${Date.now()}`,
+          title: "Irrelevant data deletion timer started",
+          description: "Any accidentally collected non-relevant personal data must be removed within 14 days of discovery.",
+          timestamp: submissionDate,
+          type: "retention"
         }
       ]
     };
 
-    // Update DB
-    const allReports = [newReport, ...reports];
-    SafeVoiceDb.saveReports(allReports);
+    SafeVoiceDb.saveReports([newReport, ...reports]);
 
-    // Save initial system message if secure PIN activated
-    if (generatedPin) {
-      const activeMsgs = SafeVoiceDb.getMessages();
-      const initialSystemMsg: CaseMessage = {
-        id: `msg-sys-${Date.now()}`,
-        caseId: generatedId,
-        sender: "System",
-        text: `Secure encrypted bridge established. Communication tunnel verified. The appointed investigator will update you in accordance with the 7-day Polish Compliance Directive SLA.`,
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 16),
-        attachments: []
-      };
-      SafeVoiceDb.saveMessages([initialSystemMsg, ...activeMsgs]);
+    if (generatedTrackingCode) {
+      SafeVoiceDb.saveMessages([
+        {
+          id: `msg-sys-${Date.now()}`,
+          caseId: generatedId,
+          sender: "System",
+          text: "Your report has been received. Use this anonymous channel for acknowledgement, follow-up questions, and final feedback.",
+          timestamp: submissionDate,
+          attachments: []
+        },
+        ...SafeVoiceDb.getMessages()
+      ]);
     }
 
-    // Push system notifications
-    const allNotifs = SafeVoiceDb.getNotifications();
-    const newNotif: NotificationItem = {
-      id: `notif-${Date.now()}`,
-      title: isLabourDispute ? "HR Dispute Received" : "Critical Whistleblower Incident Submitted",
-      description: `New Case ID ${generatedId} submitted under category ${data.category}.`,
-      timestamp: new Date().toISOString().replace("T", " ").substring(0, 16),
-      read: false,
-      type: "new_report",
-      caseId: generatedId
-    };
-    SafeVoiceDb.saveNotifications([newNotif, ...allNotifs]);
+    SafeVoiceDb.saveNotifications([
+      {
+        id: `notif-${Date.now()}`,
+        title: isHrHandoff ? "HR grievance handoff" : "New minimized report",
+        description: `${generatedId} submitted. Reporter technical metadata is not exposed to administrators.`,
+        timestamp: submissionDate,
+        read: false,
+        type: "new_report",
+        caseId: generatedId
+      },
+      ...SafeVoiceDb.getNotifications()
+    ]);
 
-    // Audit logs entry
-    SafeVoiceDb.addAuditLog(
-      "Public Gateway Portal",
-      `Created Case entry ${generatedId} under Whistleblower Protection Code. Compliance tracking initialized.`
-    );
+    SafeVoiceDb.addAuditLog({
+      actorRole: "Public Portal",
+      actorRef: "anonymous-intake",
+      actionType: "REPORT_RECEIVED",
+      subjectId: generatedId,
+      outcome: "Recorded",
+      metadataNotice: "Reporter network and device metadata were not collected for case handling."
+    });
 
-    // Refresh application states
     reloadFromDb();
-    setLastSuccessPin(generatedPin);
+    setLastSuccessCode(generatedTrackingCode);
     setLastSuccessCategory(data.category);
-    
     navigateTo("/report/success");
   };
 
-  // 2. Add follower text messages by Reporter
   const handleReporterMessageSubmit = (caseId: string, text: string) => {
-    const allMsgs = SafeVoiceDb.getMessages();
-    const msgTime = new Date().toISOString().replace("T", " ").substring(0, 16);
-    
-    const newMsg: CaseMessage = {
-      id: `msg-rep-${Date.now()}`,
-      caseId,
-      sender: "Reporter",
-      text,
-      timestamp: msgTime,
-    };
-    SafeVoiceDb.saveMessages([newMsg, ...allMsgs]);
+    const msgTime = nowStamp();
+    SafeVoiceDb.saveMessages([
+      {
+        id: `msg-rep-${Date.now()}`,
+        caseId,
+        sender: "Reporter",
+        text,
+        timestamp: msgTime
+      },
+      ...SafeVoiceDb.getMessages()
+    ]);
 
-    // Appended timeline
     const allReports = SafeVoiceDb.getReports();
-    const target = allReports.find((r) => r.id === caseId);
+    const target = allReports.find((report) => report.id === caseId);
     if (target) {
       target.timeline.unshift({
         id: `tl-rep-${Date.now()}`,
-        title: "Whistleblower follow-up posted",
-        description: "Anonymous reporter sent new information update over cryptographic tunnel.",
+        title: "Reporter follow-up received",
+        description: "Additional information posted through the anonymous communication channel.",
         timestamp: msgTime,
         type: "message"
       });
+      target.status = target.status === "Received" ? "Acknowledged" : target.status;
       SafeVoiceDb.saveReports(allReports);
     }
 
-    // Logs & Alerts
-    SafeVoiceDb.addAuditLog("Public Portal", `Reporter submitted follow-up message clarification for Case ${caseId}.`);
-    
-    const allNotifs = SafeVoiceDb.getNotifications();
-    SafeVoiceDb.saveNotifications([
-      {
-        id: `notif-chat-${Date.now()}`,
-        title: "Secured follow-up submitted",
-        description: `Anonymous reporter posted message update on Case ${caseId}.`,
-        timestamp: msgTime,
-        read: false,
-        type: "message",
-        caseId
-      },
-      ...allNotifs
-    ]);
-
+    SafeVoiceDb.addAuditLog({
+      actorRole: "Public Portal",
+      actorRef: "anonymous-tracking-channel",
+      actionType: "MESSAGE_POSTED",
+      subjectId: caseId,
+      outcome: "Recorded",
+      metadataNotice: "Reporter message accepted without network or device identifiers."
+    });
     reloadFromDb();
   };
 
-  // 3. Add supplemental files by Reporter
-  const handleReporterEvidenceSubmit = (caseId: string, fileName: string) => {
+  const handleReporterEvidenceSubmit = (caseId: string, attachments: EvidenceAttachment[]) => {
     const allReports = SafeVoiceDb.getReports();
-    const target = allReports.find((r) => r.id === caseId);
-    if (target) {
-      if (!target.attachments.includes(fileName)) {
-        target.attachments.push(fileName);
-        SafeVoiceDb.saveReports(allReports);
-        SafeVoiceDb.addAuditLog("Public Portal", `Supplemental whistleblower evidence package received: ${fileName} on Case ${caseId}.`);
-        reloadFromDb();
-      }
-    }
+    const target = allReports.find((report) => report.id === caseId);
+    if (!target) return;
+
+    const existing = new Set(target.attachments.map((attachment) => attachment.id));
+    const additions = attachments.filter((attachment) => !existing.has(attachment.id));
+    if (additions.length === 0) return;
+
+    target.attachments = [...target.attachments, ...additions];
+    target.timeline.unshift({
+      id: `tl-ev-${Date.now()}`,
+      title: "Supplemental evidence added",
+      description: `${additions.length} evidence reference(s) added after file-type validation, malware scan, and metadata stripping.`,
+      timestamp: nowStamp(),
+      type: "attachment"
+    });
+    SafeVoiceDb.saveReports(allReports);
+    SafeVoiceDb.addAuditLog({
+      actorRole: "Public Portal",
+      actorRef: "anonymous-tracking-channel",
+      actionType: "EVIDENCE_ADDED",
+      subjectId: caseId,
+      outcome: "Recorded",
+      metadataNotice: "Original filenames are not shown to administrators."
+    });
+    reloadFromDb();
   };
 
-  // 4. Update Case status by back-office Compliance Admin
   const handleUpdateCaseStatus = (caseId: string, status: CaseStatus) => {
     const allReports = SafeVoiceDb.getReports();
-    const target = allReports.find((r) => r.id === caseId);
-    if (target) {
-      const oldVal = target.status;
-      target.status = status;
-      
-      const logTime = new Date().toISOString().replace("T", " ").substring(0, 16);
-      target.timeline.unshift({
-        id: `tl-stat-${Date.now()}`,
-        title: "Case status modified",
-        description: `Status updated from '${oldVal}' to '${status}' by authorized Officer (${activeRole}).`,
-        timestamp: logTime,
-        type: "status"
-      });
-      SafeVoiceDb.saveReports(allReports);
+    const target = allReports.find((report) => report.id === caseId);
+    if (!target) return;
 
-      SafeVoiceDb.addAuditLog(
-        `${activeRole} (${users.find((u) => u.role === activeRole)?.name || "Officer"})`,
-        `Changed Case status SV-XXX on system files.`,
-        "83.144.92.12",
-        oldVal,
-        status
-      );
-
-      reloadFromDb();
+    const oldValue = target.status;
+    target.status = status;
+    target.timeline.unshift({
+      id: `tl-stat-${Date.now()}`,
+      title: "Case status changed",
+      description: `Status changed from ${oldValue} to ${status}.`,
+      timestamp: nowStamp(),
+      type: "status"
+    });
+    if (status === "Closed" && target.retention.state !== "Legal Hold") {
+      target.retention.state = "Deletion Scheduled";
     }
+    SafeVoiceDb.saveReports(allReports);
+    SafeVoiceDb.addAuditLog({
+      actorRole: activeRole === "Public User" ? "System" : activeRole,
+      actorRef: activeUser?.id || "system",
+      actionType: "CASE_STATUS_CHANGED",
+      subjectId: caseId,
+      outcome: SafeVoiceDb.can((activeRole as AppRole) || "Auditor", "closeCases") ? "Allowed" : "Recorded",
+      oldValue,
+      newValue: status,
+      metadataNotice: "Audit entry contains case state only, not reporter identity or technical metadata."
+    });
+    reloadFromDb();
   };
 
-  // 5. Update case severity by back-office Admin
   const handleUpdateCaseSeverity = (caseId: string, severity: CaseSeverity) => {
     const allReports = SafeVoiceDb.getReports();
-    const target = allReports.find((r) => r.id === caseId);
-    if (target) {
-      const oldVal = target.severity;
-      target.severity = severity;
-      
-      const logTime = new Date().toISOString().replace("T", " ").substring(0, 16);
-      target.timeline.unshift({
-        id: `tl-sev-${Date.now()}`,
-        title: "Incident severity classification changed",
-        description: `Severity adjusted to '${severity}' profile by authorized Officer.`,
-        timestamp: logTime,
-        type: "system"
-      });
-      SafeVoiceDb.saveReports(allReports);
-      SafeVoiceDb.addAuditLog(`${activeRole}`, `Adjusted Case ${caseId} severity tier from '${oldVal}' to '${severity}'.`);
-      reloadFromDb();
-    }
+    const target = allReports.find((report) => report.id === caseId);
+    if (!target) return;
+
+    const oldValue = target.severity;
+    target.severity = severity;
+    target.timeline.unshift({
+      id: `tl-sev-${Date.now()}`,
+      title: "Severity changed",
+      description: `Severity changed from ${oldValue} to ${severity}.`,
+      timestamp: nowStamp(),
+      type: "status"
+    });
+    SafeVoiceDb.saveReports(allReports);
+    SafeVoiceDb.addAuditLog({
+      actorRole: activeRole === "Public User" ? "System" : activeRole,
+      actorRef: activeUser?.id || "system",
+      actionType: "SEVERITY_CHANGED",
+      subjectId: caseId,
+      outcome: "Allowed",
+      oldValue,
+      newValue: severity,
+      metadataNotice: "No reporter metadata is present in this audit event."
+    });
+    reloadFromDb();
   };
 
-  // 6. Assign investigator to incident case
   const handleAssignInvestigator = (caseId: string, investigatorName: string) => {
     const allReports = SafeVoiceDb.getReports();
-    const target = allReports.find((r) => r.id === caseId);
-    if (target) {
-      target.assignedInvestigator = investigatorName || undefined;
-      const logTime = new Date().toISOString().replace("T", " ").substring(0, 16);
-      target.timeline.unshift({
-        id: `tl-assign-${Date.now()}`,
-        title: "Investigator assigned",
-        description: investigatorName 
-          ? `Compliance officer ${investigatorName} assigned to oversee the case directive.`
-          : "Case investigator unassigned.",
-        timestamp: logTime,
-        type: "system"
-      });
-      SafeVoiceDb.saveReports(allReports);
-      SafeVoiceDb.addAuditLog(`${activeRole}`, `Assigned investigator ${investigatorName || "None"} to Case ${caseId}.`);
-      reloadFromDb();
-    }
+    const target = allReports.find((report) => report.id === caseId);
+    if (!target) return;
+
+    const oldValue = target.assignedInvestigator || "Unassigned";
+    target.assignedInvestigator = investigatorName || undefined;
+    target.timeline.unshift({
+      id: `tl-assign-${Date.now()}`,
+      title: "Investigator assignment changed",
+      description: investigatorName
+        ? `${investigatorName} assigned under written confidentiality duties.`
+        : "Investigator removed from case.",
+      timestamp: nowStamp(),
+      type: "system"
+    });
+    SafeVoiceDb.saveReports(allReports);
+    SafeVoiceDb.addAuditLog({
+      actorRole: activeRole === "Public User" ? "System" : activeRole,
+      actorRef: activeUser?.id || "system",
+      actionType: "INVESTIGATOR_ASSIGNED",
+      subjectId: caseId,
+      outcome: "Allowed",
+      oldValue,
+      newValue: investigatorName || "Unassigned",
+      metadataNotice: "Assignment event excludes reporter identity and network metadata."
+    });
+    reloadFromDb();
   };
 
-  // 7. Add internal discussion notes
   const handleAddInternalNote = (caseId: string, text: string) => {
     const allReports = SafeVoiceDb.getReports();
-    const target = allReports.find((r) => r.id === caseId);
-    if (target) {
-      const author = users.find((u) => u.role === activeRole)?.name || "System Officer";
-      const logTime = new Date().toISOString().replace("T", " ").substring(0, 16);
-      target.timeline.unshift({
-        id: `tl-note-${Date.now()}`,
-        title: "Internal Investigation Note Posted",
-        description: `[RESTRICTED NOTE] by ${author} (${activeRole}): ${text}`,
-        timestamp: logTime,
-        type: "comment"
-      });
-      SafeVoiceDb.saveReports(allReports);
-      SafeVoiceDb.addAuditLog(`${activeRole}`, `Posted private investigator note on case SV-XXX.`);
-      reloadFromDb();
-    }
+    const target = allReports.find((report) => report.id === caseId);
+    if (!target) return;
+
+    target.timeline.unshift({
+      id: `tl-note-${Date.now()}`,
+      title: "Restricted investigation note",
+      description: text,
+      timestamp: nowStamp(),
+      type: "comment"
+    });
+    SafeVoiceDb.saveReports(allReports);
+    SafeVoiceDb.addAuditLog({
+      actorRole: activeRole === "Public User" ? "System" : activeRole,
+      actorRef: activeUser?.id || "system",
+      actionType: "ACCESS_REVIEW",
+      subjectId: caseId,
+      outcome: "Recorded",
+      metadataNotice: "Audit records note creation, not the note body."
+    });
+    reloadFromDb();
   };
 
-  // 8. Add admin chat reply directly over anonymous messenger tunnel
   const handleAddAdminReplyMessage = (caseId: string, text: string) => {
-    const allMsgs = SafeVoiceDb.getMessages();
-    const replyTime = new Date().toISOString().replace("T", " ").substring(0, 16);
+    const replyTime = nowStamp();
     const authorRole = activeRole === "Public User" ? "Compliance Officer" : activeRole;
 
-    const newMsg: CaseMessage = {
-      id: `msg-admin-${Date.now()}`,
-      caseId,
-      sender: authorRole as any,
-      text,
-      timestamp: replyTime,
-      readByReporter: false,
-      readByAdmin: true
-    };
-    SafeVoiceDb.saveMessages([newMsg, ...allMsgs]);
+    SafeVoiceDb.saveMessages([
+      {
+        id: `msg-admin-${Date.now()}`,
+        caseId,
+        sender: authorRole as CaseMessage["sender"],
+        text,
+        timestamp: replyTime,
+        readByReporter: false,
+        readByAdmin: true
+      },
+      ...SafeVoiceDb.getMessages()
+    ]);
 
-    // Append case Timeline
     const allReports = SafeVoiceDb.getReports();
-    const target = allReports.find((r) => r.id === caseId);
+    const target = allReports.find((report) => report.id === caseId);
     if (target) {
+      target.status = target.status === "Received" ? "Acknowledged" : target.status;
       target.timeline.unshift({
         id: `tl-reply-${Date.now()}`,
-        title: "Compliance reply posted",
-        description: `Official outreach post transmitted over secure tunnel link by Investigator team.`,
+        title: "Staff reply posted",
+        description: "A follow-up message was posted through the anonymous communication channel.",
         timestamp: replyTime,
         type: "message"
       });
       SafeVoiceDb.saveReports(allReports);
     }
 
-    SafeVoiceDb.addAuditLog(`${authorRole}`, `Dispatched reply outreach statement to Whistleblower case ${caseId}.`);
+    SafeVoiceDb.addAuditLog({
+      actorRole: authorRole as AppRole,
+      actorRef: activeUser?.id || "role-simulator",
+      actionType: "MESSAGE_POSTED",
+      subjectId: caseId,
+      outcome: "Allowed",
+      metadataNotice: "Message audit excludes message body and reporter technical data."
+    });
     reloadFromDb();
   };
 
-  // 9. Invite / Authorize new officer
   const handleInviteOfficerObj = (name: string, email: string, role: AppRole) => {
-    const activeUsrs = SafeVoiceDb.getUsers();
-    const newUsr: SaaSUser = {
-      id: `usr-${Date.now()}`,
-      name,
-      email,
-      role,
-      status: "Pending",
-      joinedDate: new Date().toISOString().split("T")[0]
-    };
-    SafeVoiceDb.saveUsers([...activeUsrs, newUsr]);
-
-    // Logs & Notifs
-    SafeVoiceDb.addAuditLog(`${activeRole}`, `Authorized and invited compliance investigator ${name} (${role}) to RegulaOne SafeVoice tenant.`);
-    
-    const allNotifs = SafeVoiceDb.getNotifications();
-    SafeVoiceDb.saveNotifications([
+    SafeVoiceDb.saveUsers([
+      ...SafeVoiceDb.getUsers(),
       {
-        id: `notif-inv-${Date.now()}`,
-        title: "Officer invite issued",
-        description: `Authorization credentials sent to ${email} as ${role}.`,
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 16),
-        read: false,
-        type: "update"
-      },
-      ...allNotifs
+        id: `usr-${Date.now()}`,
+        name,
+        email,
+        role,
+        status: "Pending",
+        joinedDate: new Date().toISOString().split("T")[0],
+        mfaRequired: true,
+        lastLoginReview: "Pending activation"
+      }
     ]);
 
+    SafeVoiceDb.addAuditLog({
+      actorRole: activeRole === "Public User" ? "System" : activeRole,
+      actorRef: activeUser?.id || "system",
+      actionType: "OFFICER_INVITED",
+      outcome: "Allowed",
+      metadataNotice: "Officer invite stores business contact only; MFA is mandatory before access."
+    });
+    reloadFromDb();
+  };
+
+  const handleRetentionUpdate = (caseId: string, legalHold: boolean, reason?: string) => {
+    const allReports = SafeVoiceDb.getReports();
+    const target = allReports.find((report) => report.id === caseId);
+    if (!target) return;
+
+    const oldValue = target.retention.state;
+    target.retention.state = legalHold ? "Legal Hold" : target.status === "Closed" ? "Deletion Scheduled" : "Active";
+    target.retention.legalHoldReason = legalHold ? reason || "Legal review pending" : undefined;
+    target.timeline.unshift({
+      id: `tl-ret-${Date.now()}`,
+      title: legalHold ? "Legal hold applied" : "Legal hold removed",
+      description: legalHold
+        ? "Automatic deletion paused for a documented legal reason."
+        : "Retention schedule restored.",
+      timestamp: nowStamp(),
+      type: "retention"
+    });
+    SafeVoiceDb.saveReports(allReports);
+    SafeVoiceDb.addAuditLog({
+      actorRole: activeRole === "Public User" ? "System" : activeRole,
+      actorRef: activeUser?.id || "system",
+      actionType: "RETENTION_UPDATED",
+      subjectId: caseId,
+      outcome: "Allowed",
+      oldValue,
+      newValue: target.retention.state,
+      metadataNotice: "Retention event contains no reporter identifiers."
+    });
     reloadFromDb();
   };
 
   const handleMarkAllAlertsRead = () => {
-    const list = SafeVoiceDb.getNotifications().map((n) => ({ ...n, read: true }));
-    SafeVoiceDb.saveNotifications(list);
+    SafeVoiceDb.saveNotifications(SafeVoiceDb.getNotifications().map((notification) => ({ ...notification, read: true })));
     reloadFromDb();
   };
 
-  // Determine current active case model for detail router
-  const currentDetailsCase = selectedCaseId
-    ? reports.find((r) => r.id === selectedCaseId)
-    : null;
-
-  // Verification helper for evaluate mode
-  const isPublicUser = activeRole === "Public User";
+  const staffPermission = activeRole !== "Public User" ? activeRole : undefined;
 
   return (
-    <div className="bg-[#0B0C10] text-[#E2E8F0] font-sans min-h-screen flex antialiased">
-      {/* 1. App Navigation Sidebar */}
+    <div className="bg-slate-950 text-slate-200 font-sans min-h-screen flex antialiased">
       <AppSidebar
         currentPath={currentPath}
-        onNavigate={(path) => {
-          // If Public User tries to click Backoffice panels, automatically guide them to simulate Admin!
-          if (isPublicUser && !["/report", "/track", "/report/success"].includes(path)) {
-            setActiveRole("Compliance Officer");
-          }
-          navigateTo(path);
-        }}
+        onNavigate={navigateTo}
         activeRole={activeRole}
-        setActiveRole={setActiveRole}
+        setActiveRole={setRole}
         unreadCount={messages.length}
       />
 
-      {/* Main Container workspace */}
       <div className="flex-grow flex flex-col min-h-screen overflow-x-hidden">
-        {/* Top Navbar Header */}
-        <AppNavbar
-          activeRole={activeRole}
-          setActiveRole={(r) => {
-            setActiveRole(r);
-            // Automatically update current navigation panels depending on chosen focus
-            if (r === "Public User") {
-              if (currentPath !== "/track" && currentPath !== "/report/success") {
-                navigateTo("/report");
-              }
-            } else {
-              if (currentPath === "/report" || currentPath === "/report/success") {
-                navigateTo("/dashboard");
-              }
-            }
-          }}
-          notifications={notifications}
-          onMarkAllRead={handleMarkAllAlertsRead}
-        />
+        <AppNavbar activeRole={activeRole} setActiveRole={setRole} notifications={notifications} onMarkAllRead={handleMarkAllAlertsRead} />
 
-        {/* Informative Guidance Banner during User Test Mode */}
-        {isPublicUser && !["/report", "/track", "/report/success"].includes(currentPath) && (
-          <div className="bg-gradient-to-r from-indigo-950/70 to-slate-900 border-b border-indigo-500/10 px-6 py-2.5 text-xs text-indigo-300 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Info className="w-4 h-4 text-indigo-400 shrink-0" />
-              <span>
-                <strong>SIMULATOR TIP:</strong> You are accessing backoffice dashboards. We have upgraded your simulator role to <strong>Compliance Officer</strong> to let you process database entries dynamically!
-              </span>
-            </div>
-            <button
-              onClick={() => setActiveRole("Compliance Officer")}
-              className="bg-indigo-600 text-white font-mono font-black px-2.5 py-1 rounded text-[10px] uppercase cursor-pointer hover:bg-indigo-500 transition-colors"
-            >
-              Verify Active
-            </button>
+        {activeRole === "Public User" && currentPath === "/access-denied" && (
+          <div className="bg-amber-950/30 border-b border-amber-900/50 px-6 py-2.5 text-xs text-amber-200 flex items-center gap-2">
+            <Info className="w-4 h-4 shrink-0" />
+            Staff tools require an authorized role with MFA in production. Reporter sessions remain isolated from back-office data.
           </div>
         )}
 
-        {/* Primary Page Canvas */}
         <main className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto pb-20">
           <AnimatePresence mode="wait">
             {currentPath === "/report" && (
-              <motion.div
-                key="report"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
+              <motion.div key="report" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                 <PublicReportPortal onSubmitReport={handleFormReportSubmit} />
               </motion.div>
             )}
 
             {currentPath === "/report/success" && (
-              <motion.div
-                key="success"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
-                <ReportSuccessView generatedPin={lastSuccessPin} category={lastSuccessCategory} />
+              <motion.div key="success" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, y: -10 }}>
+                <ReportSuccessView generatedCode={lastSuccessCode} category={lastSuccessCategory} />
               </motion.div>
             )}
 
             {currentPath === "/track" && (
-              <motion.div
-                key="track"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
+              <motion.div key="track" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                 <TrackCaseView
                   reports={reports}
                   messages={messages}
@@ -514,103 +590,61 @@ export default function App() {
               </motion.div>
             )}
 
-            {currentPath === "/dashboard" && (
-              <motion.div
-                key="dashboard"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
-                <AdminDashboard
-                  reports={reports}
-                  activeRole={activeRole}
-                  onNavigateToCases={() => navigateTo("/cases")}
-                />
+            {currentPath === "/access-denied" && (
+              <motion.div key="denied" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <AccessDeniedView onGoReport={() => navigateTo("/report")} />
               </motion.div>
             )}
 
-            {currentPath === "/cases" && (
-              <motion.div
-                key="cases"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
-                <CaseManagementGrid reports={reports} onSelectCase={handleSelectCase} />
+            {currentPath === "/dashboard" && staffPermission && (
+              <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <AdminDashboard reports={reports} activeRole={staffPermission} onNavigateToCases={() => navigateTo("/cases")} />
               </motion.div>
             )}
 
-            {currentPath === "/cases/:id" && currentDetailsCase && (
-              <motion.div
-                key={`case-detail-${selectedCaseId}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
+            {currentPath === "/cases" && staffPermission && (
+              <motion.div key="cases" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <CaseManagementGrid reports={reports} activeRole={staffPermission} onSelectCase={handleSelectCase} />
+              </motion.div>
+            )}
+
+            {currentPath === "/cases/:id" && currentDetailsCase && staffPermission && (
+              <motion.div key={`case-detail-${selectedCaseId}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                 <CaseDetailsView
                   caseItem={currentDetailsCase}
                   messages={messages}
                   users={users}
+                  activeRole={staffPermission}
                   onUpdateStatus={handleUpdateCaseStatus}
                   onUpdateSeverity={handleUpdateCaseSeverity}
                   onAssignInvestigator={handleAssignInvestigator}
                   onAddInternalNote={handleAddInternalNote}
                   onAddAdminMessage={handleAddAdminReplyMessage}
+                  onRetentionUpdate={handleRetentionUpdate}
                 />
               </motion.div>
             )}
 
-            {currentPath === "/messages" && (
-              <motion.div
-                key="messages"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
-                <CentralEncryptedInbox
-                  reports={reports}
-                  messages={messages}
-                  onAddAdminMessage={handleAddAdminReplyMessage}
-                />
+            {currentPath === "/messages" && staffPermission && (
+              <motion.div key="messages" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <CentralEncryptedInbox reports={reports} messages={messages} activeRole={staffPermission} onAddAdminMessage={handleAddAdminReplyMessage} />
               </motion.div>
             )}
 
-            {currentPath === "/audits" && (
-              <motion.div
-                key="audits"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
-                <SecurityAuditTrailLogs logs={auditLogs} />
+            {currentPath === "/audits" && staffPermission && (
+              <motion.div key="audits" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <SecurityAuditTrailLogs logs={auditLogs} activeRole={staffPermission} />
               </motion.div>
             )}
 
-            {currentPath === "/users" && (
-              <motion.div
-                key="users"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
-                <UsersPermissionsMatrix users={users} onInviteUser={handleInviteOfficerObj} />
+            {currentPath === "/users" && staffPermission && (
+              <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <UsersPermissionsMatrix users={users} activeRole={staffPermission} onInviteUser={handleInviteOfficerObj} />
               </motion.div>
             )}
 
-            {currentPath === "/settings" && (
-              <motion.div
-                key="settings"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
+            {currentPath === "/settings" && staffPermission && (
+              <motion.div key="settings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                 <BrandedSettingsView />
               </motion.div>
             )}
