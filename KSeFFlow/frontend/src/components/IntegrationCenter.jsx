@@ -17,14 +17,17 @@ import {
   declareKsefOnline,
 } from '../api/ksefApi';
 import { useLanguage } from '../context/LanguageContext';
+import { can } from '../lib/permissions';
 
-export default function IntegrationCenter({ tenant, role, govStatus, onSetGovStatus, onAddNotification }) {
+export default function IntegrationCenter({ tenant, role, permissions, govStatus, onSetGovStatus, onAddNotification }) {
   const { language, t } = useLanguage();
   const [selectedEnv, setSelectedEnv] = useState('SANDBOX');
   const [isTesting, setIsTesting] = useState(false);
   const [pingSpeed, setPingSpeed] = useState(342);
 
-  const isAdmin = role === 'Super Admin' || role === 'Company Admin';
+  // Declaring emergency / unavailability / online is KSEF_TENANT_ADMIN-only —
+  // matches the backend guards on /ksef-status/*.
+  const isAdmin = can.manageAvailability(permissions);
 
   // ── Real KSeF availability state (C7) ─────────────────────────────────────────
   const [ksefStatus, setKsefStatus]   = useState(null);

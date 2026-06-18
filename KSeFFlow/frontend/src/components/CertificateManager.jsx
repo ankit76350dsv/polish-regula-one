@@ -13,10 +13,12 @@ import {
 } from 'lucide-react';
 import { uploadCertificate, listCertificates, deactivateCertificate, enrollCertificate } from '../api/ksefApi';
 import { useLanguage } from '../context/LanguageContext';
+import { can } from '../lib/permissions';
 
-export default function CertificateManager({ tenant, role, onAddNotification }) {
+export default function CertificateManager({ tenant, role, permissions, onAddNotification }) {
   const { language, t } = useLanguage();
-  const canModify = role === 'Super Admin' || role === 'Company Admin' || role === 'Accountant';
+  // Upload/enroll/deactivate are KSEF_TENANT_ADMIN-only — matches the backend guards.
+  const canModify = can.manageCertificates(permissions);
 
   // ── Form state ────────────────────────────────────────────────────────────────
   const [dragActive,    setDragActive]    = useState(false);

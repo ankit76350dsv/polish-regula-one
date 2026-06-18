@@ -6,6 +6,7 @@ import {
   revokePermission,
 } from '../api/ksefApi';
 import { useLanguage } from '../context/LanguageContext';
+import { can } from '../lib/permissions';
 
 // ── KSeF permissions (uprawnienia) ────────────────────────────────────────────
 // SIMPLE EXPLANATION:
@@ -38,10 +39,14 @@ const getPermissionLabel = (code, lang) => {
   return labels[code]?.[lang] || code;
 };
 
-export default function PermissionsManager({ tenant, role, onAddNotification }) {
+export default function PermissionsManager({ tenant, role, permissions: userPermissions, onAddNotification }) {
   const { language, t } = useLanguage();
   const nip = tenant?.nip || '';
-  const isAdmin = role === 'Company Admin' || role === 'Super Admin';
+  // Granting/revoking KSeF permissions is KSEF_TENANT_ADMIN-only — matches the
+  // backend guards on POST /permissions/persons/grants and DELETE /permissions/{id}.
+  // NOTE: renamed to userPermissions to avoid clashing with the `permissions` state
+  // below (which holds the company's KSeF permission grants, a different concept).
+  const isAdmin = can.managePermissions(userPermissions);
 
   const [permissions, setPermissions] = useState([]);
   const [isLoading, setIsLoading]     = useState(false);

@@ -17,16 +17,18 @@ import {
 } from 'lucide-react';
 import CorrectionModal from './CorrectionModal';
 import { useLanguage } from '../context/LanguageContext';
+import { can } from '../lib/permissions';
 
-export default function InvoiceList({ tenant, role, invoices, onAddNotification, onViewInvoiceDetail, onAddInvoice }) {
+export default function InvoiceList({ tenant, role, permissions, invoices, onAddNotification, onViewInvoiceDetail, onAddInvoice }) {
   const { t, language } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   // The SENT invoice currently being corrected (opens the correction modal). null = closed.
   const [correctionFor, setCorrectionFor] = useState(null);
-  // Only roles that can issue invoices may issue a correction.
-  const canCorrect = role === 'Super Admin' || role === 'Company Admin' || role === 'Accountant';
+  // Only users who can issue invoices may issue a correction (KSEF_CASE_MANAGER /
+  // KSEF_TENANT_ADMIN) — matches the backend guard on POST /invoices/{id}/correct.
+  const canCorrect = can.issueInvoices(permissions);
 
   const tenantInvoices = invoices.filter(inv => inv.tenantId === tenant.id);
 

@@ -118,7 +118,15 @@ export default function App() {
         const tenantId   = user.tenantId ?? '';
         const isSuperAdmin = mappedRole === 'Super Admin';
 
-        setCurrentUser({ name: user.name, email: user.email, role: mappedRole, tenantId });
+        // Carry the KSeF permission codes (e.g. ["KSEF_AUDITOR"]) through from /me so the
+        // UI can gate actions the same way the backend does. Defaults to an empty array.
+        setCurrentUser({
+          name: user.name,
+          email: user.email,
+          role: mappedRole,
+          permissions: Array.isArray(user.permissions) ? user.permissions : [],
+          tenantId,
+        });
         setActiveRole(mappedRole);
         setActiveTenant({
           id:               tenantId,
@@ -258,6 +266,10 @@ export default function App() {
   const currentInvoiceObj = currentInvoiceId
     ? invoices.find(inv => inv.id === currentInvoiceId) ?? null
     : null;
+
+  // KSeF permission codes for the logged-in user — passed to components so they can
+  // gate buttons/actions to match the backend's per-endpoint permission checks.
+  const userPermissions = currentUser?.permissions ?? [];
 
   const logAuditAction = (action, detail, targetTenantId = activeTenant.id) => {
     const newLog = {
@@ -584,6 +596,7 @@ export default function App() {
                 <InvoiceForm
                   tenant={activeTenant}
                   role={activeRole}
+                  permissions={userPermissions}
                   onAddInvoice={addInvoice}
                   onAddNotification={addNotification}
                   onNavigate={navigateTo}
@@ -595,6 +608,7 @@ export default function App() {
                 <InvoiceList
                   tenant={activeTenant}
                   role={activeRole}
+                  permissions={userPermissions}
                   invoices={invoices}
                   onAddNotification={addNotification}
                   onAddInvoice={addInvoice}
@@ -613,6 +627,7 @@ export default function App() {
                   <InvoiceForm
                     tenant={activeTenant}
                     role={activeRole}
+                    permissions={userPermissions}
                     onAddInvoice={addInvoice}
                     onAddNotification={addNotification}
                     onNavigate={navigateTo}
@@ -633,6 +648,7 @@ export default function App() {
                 <ReceivedInvoices
                   tenant={activeTenant}
                   role={activeRole}
+                  permissions={userPermissions}
                   onAddNotification={addNotification}
                 />
               )}
@@ -641,6 +657,7 @@ export default function App() {
                 <PermissionsManager
                   tenant={activeTenant}
                   role={activeRole}
+                  permissions={userPermissions}
                   onAddNotification={addNotification}
                 />
               )}
@@ -661,6 +678,7 @@ export default function App() {
                 <IntegrationCenter
                   tenant={activeTenant}
                   role={activeRole}
+                  permissions={userPermissions}
                   govStatus={govStatus}
                   onSetGovStatus={setGovStatus}
                   onAddNotification={addNotification}
@@ -671,6 +689,7 @@ export default function App() {
                 <CertificateManager
                   tenant={activeTenant}
                   role={activeRole}
+                  permissions={userPermissions}
                   onAddNotification={addNotification}
                 />
               )}

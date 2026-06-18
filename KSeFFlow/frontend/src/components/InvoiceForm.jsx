@@ -14,10 +14,13 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { can } from '../lib/permissions';
 
-export default function InvoiceForm({ tenant, role, onAddInvoice, onAddNotification, onNavigate, govStatus, existingInvoice }) {
+export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, onAddNotification, onNavigate, govStatus, existingInvoice }) {
   const { t, language } = useLanguage();
-  const canModify = role === 'Super Admin' || role === 'Company Admin' || role === 'Accountant' || role === 'Finance User';
+  // Issuing/submitting invoices requires KSEF_CASE_MANAGER (or KSEF_TENANT_ADMIN) —
+  // same rule the backend enforces on POST /invoices/draft and /submit.
+  const canModify = can.issueInvoices(permissions);
 
   const { pathname } = useLocation();
   const tenantIdFromUrl = pathname.split('/').filter(Boolean)[1] ?? tenant.id;

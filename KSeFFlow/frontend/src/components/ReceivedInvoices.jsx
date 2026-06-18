@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Inbox, RefreshCw, FileText, Download, Loader2, Paperclip } from 'lucide-react';
 import { listReceivedInvoices, syncReceivedInvoices, getReceivedInvoiceXml } from '../api/ksefApi';
 import { useLanguage } from '../context/LanguageContext';
+import { can } from '../lib/permissions';
 
 // ── Received (purchase) invoices — faktury otrzymane ──────────────────────────
 // SIMPLE EXPLANATION:
@@ -9,8 +10,12 @@ import { useLanguage } from '../context/LanguageContext';
 // says every company must be able to RECEIVE the invoices OTHER companies issue to them.
 // This screen pulls those purchase invoices down from KSeF and lets the user browse them and
 // open the full XML. The tenant's own NIP is the "I am the buyer" context for the backend.
-export default function ReceivedInvoices({ tenant, onAddNotification }) {
+export default function ReceivedInvoices({ tenant, permissions, onAddNotification }) {
   const { language, t } = useLanguage();
+  // Pulling new invoices from KSeF requires KSEF_CASE_MANAGER (or KSEF_TENANT_ADMIN) —
+  // matches the backend guard on POST /received-invoices/sync. Browsing the list is
+  // open to read roles, so only the Sync button is gated here.
+  const canSync = can.issueInvoices(permissions);
   const [invoices, setInvoices]   = useState([]);
   const [isLoading, setIsLoading] = useState(false); // loading the saved list
   const [isSyncing, setIsSyncing] = useState(false); // pulling fresh data from KSeF
@@ -35,6 +40,17 @@ export default function ReceivedInvoices({ tenant, onAddNotification }) {
 
   // Ask KSeF for any new purchase invoices, then refresh the list.
   const handleSync = async () => {
+    // Backend will reject this with 403 unless the user can issue invoices; guard the UI too.
+    if (!canSync) {
+      onAddNotification?.(
+        language === 'pl' ? 'Brak uprawnień' : 'Not allowed',
+        language === 'pl'
+          ? 'Pobieranie faktur z KSeF wymaga uprawnienia menedżera faktur.'
+          : 'Downloading invoices from KSeF requires the case manager permission.',
+        'error',
+      );
+      return;
+    }
     if (!nip) {
       onAddNotification?.(
         language === 'pl' ? 'Brak NIP' : 'No NIP', 
@@ -107,14 +123,16 @@ export default function ReceivedInvoices({ tenant, onAddNotification }) {
             <p className="text-xs text-slate-500">{language === 'pl' ? 'Faktury zakupowe wystawione na Twoją firmę w KSeF.' : 'Purchase invoices issued to your company in KSeF.'}</p>
           </div>
         </div>
-        <button
-          onClick={handleSync}
-          disabled={isSyncing}
-          className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-bold py-2 px-4 rounded-xl text-xs transition cursor-pointer font-sans"
-        >
-          {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          {isSyncing ? (language === 'pl' ? 'Pobieranie z KSeF…' : 'Downloading from KSeF…') : (language === 'pl' ? 'Pobierz z KSeF' : 'Download from KSeF')}
-        </button>
+        {canSync && (
+          <button
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-bold py-2 px-4 rounded-xl text-xs transition cursor-pointer font-sans"
+          >
+            {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            {isSyncing ? (language === 'pl' ? 'Pobieranie z KSeF…' : 'Downloading from KSeF…') : (language === 'pl' ? 'Pobierz z KSeF' : 'Download from KSeF')}
+          </button>
+        )}
       </div>
 
       {error && (
