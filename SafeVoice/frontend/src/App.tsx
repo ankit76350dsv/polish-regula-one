@@ -10,7 +10,6 @@ import {
   CaseSeverity,
   CaseStatus,
   EvidenceAttachment,
-  NotificationItem,
   ReportCategory,
   ReportSubmission,
   SaaSUser
@@ -90,7 +89,6 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [messages, setMessages] = useState<CaseMessage[]>([]);
   const [users, setUsers] = useState<SaaSUser[]>([]);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [activeRole, setActiveRole] = useState<AppRole | "Public User">("Public User");
   const [lastSuccessCode, setLastSuccessCode] = useState<string | undefined>("");
   const [lastSuccessCategory, setLastSuccessCategory] = useState<ReportCategory>(ReportCategory.Corruption);
@@ -151,7 +149,6 @@ export default function App() {
     setAuditLogs(SafeVoiceDb.getAuditLogs());
     setMessages(SafeVoiceDb.getMessages());
     setUsers(SafeVoiceDb.getUsers());
-    setNotifications(SafeVoiceDb.getNotifications());
   };
 
   const navigateTo = (path: string) => {
@@ -258,19 +255,6 @@ export default function App() {
         ...SafeVoiceDb.getMessages()
       ]);
     }
-
-    SafeVoiceDb.saveNotifications([
-      {
-        id: `notif-${Date.now()}`,
-        title: isHrHandoff ? "HR grievance handoff" : "New minimized report",
-        description: `${generatedId} submitted. Reporter technical metadata is not exposed to administrators.`,
-        timestamp: submissionDate,
-        read: false,
-        type: "new_report",
-        caseId: generatedId
-      },
-      ...SafeVoiceDb.getNotifications()
-    ]);
 
     SafeVoiceDb.addAuditLog({
       actorRole: "Public Portal",
@@ -565,11 +549,6 @@ export default function App() {
     reloadFromDb();
   };
 
-  const handleMarkAllAlertsRead = () => {
-    SafeVoiceDb.saveNotifications(SafeVoiceDb.getNotifications().map((notification) => ({ ...notification, read: true })));
-    reloadFromDb();
-  };
-
   const staffPermission = activeRole !== "Public User" ? activeRole : undefined;
 
   return (
@@ -590,7 +569,7 @@ export default function App() {
       />
 
       <div className="flex-grow flex flex-col min-h-screen overflow-x-hidden">
-        <AppNavbar activeRole={activeRole} setActiveRole={setRole} notifications={notifications} onMarkAllRead={handleMarkAllAlertsRead} />
+        <AppNavbar activeRole={activeRole} setActiveRole={setRole} />
 
         {activeRole === "Public User" && currentPath === "/access-denied" && (
           <div className="bg-amber-50 border-b border-amber-250 px-6 py-2.5 text-xs text-amber-850 flex items-center gap-2" role="status">

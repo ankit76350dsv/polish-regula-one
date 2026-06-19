@@ -5,7 +5,6 @@ import {
   CaseReport,
   CaseStatus,
   EvidenceAttachment,
-  NotificationItem,
   ReportCategory,
   ReviewRecommendation,
   RolePermissions,
@@ -376,36 +375,6 @@ export const initialAuditLogs: AuditLog[] = [
   }
 ];
 
-export const initialNotifications: NotificationItem[] = [
-  {
-    id: "notif-1",
-    title: "New minimized report",
-    description: "SV-2026-002 entered DPO triage. No reporter technical metadata is exposed.",
-    timestamp: "2026-05-19 16:42",
-    read: false,
-    type: "new_report",
-    caseId: "SV-2026-002"
-  },
-  {
-    id: "notif-2",
-    title: "Retention timer active",
-    description: "Irrelevant personal data review is due within 14 days for SV-2026-002.",
-    timestamp: "2026-05-20 08:17",
-    read: false,
-    type: "retention",
-    caseId: "SV-2026-002"
-  },
-  {
-    id: "notif-3",
-    title: "Reporter message",
-    description: "Anonymous follow-up was posted for SV-2026-001.",
-    timestamp: "2026-05-15 14:24",
-    read: true,
-    type: "message",
-    caseId: "SV-2026-001"
-  }
-];
-
 export const complianceReview: ReviewRecommendation[] = [
   {
     area: "Public report intake",
@@ -512,7 +481,6 @@ export class SafeVoiceDb {
     localStorage.setItem("sv_audit_logs", JSON.stringify(initialAuditLogs));
     localStorage.setItem("sv_messages", JSON.stringify(initialMessages));
     localStorage.setItem("sv_users", JSON.stringify(initialUsers));
-    localStorage.setItem("sv_notifications", JSON.stringify(initialNotifications));
   }
 
   static getReports(): CaseReport[] {
@@ -545,14 +513,6 @@ export class SafeVoiceDb {
 
   static saveUsers(users: SaaSUser[]) {
     localStorage.setItem("sv_users", JSON.stringify(users));
-  }
-
-  static getNotifications(): NotificationItem[] {
-    return readJson("sv_notifications", initialNotifications);
-  }
-
-  static saveNotifications(notifications: NotificationItem[]) {
-    localStorage.setItem("sv_notifications", JSON.stringify(notifications));
   }
 
   static addAuditLog(log: Omit<AuditLog, "id" | "timestamp" | "hashChain">) {

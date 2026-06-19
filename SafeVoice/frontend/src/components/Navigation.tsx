@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlertOctagon,
-  Bell,
   ChevronLeft,
   FileCheck2,
   Home,
@@ -15,7 +14,7 @@ import {
   Terminal,
   UserCheck
 } from "lucide-react";
-import { AppRole, NotificationItem } from "../types";
+import { AppRole } from "../types";
 import { useJurisdiction } from "../config/activeJurisdiction";
 
 interface NavigationProps {
@@ -180,19 +179,14 @@ export function AppSidebar({
 interface NavbarProps {
   activeRole: AppRole | "Public User";
   setActiveRole: (role: AppRole | "Public User") => void;
-  notifications: NotificationItem[];
-  onMarkAllRead: () => void;
 }
 
 export function AppNavbar({
   activeRole,
-  setActiveRole,
-  notifications,
-  onMarkAllRead
+  setActiveRole
 }: NavbarProps) {
   const { t, i18n } = useTranslation();
   const jurisdiction = useJurisdiction();
-  const [showNotifMenu, setShowNotifMenu] = useState(false);
   const roles: (AppRole | "Public User")[] = [
     "Public User",
     "Super Admin",
@@ -202,7 +196,6 @@ export function AppNavbar({
     "Auditor"
   ];
 
-  const unreadNotifs = notifications.filter((n) => !n.read);
   const isPublic = activeRole === "Public User";
 
   // Short compliance chip for the active country (EU-adaptable; Poland shows its 2024 Act).
@@ -265,57 +258,6 @@ export function AppNavbar({
             ))}
           </select>
         </div>
-
-        {!isPublic && (
-          <div className="relative">
-            <button
-              onClick={() => setShowNotifMenu(!showNotifMenu)}
-              aria-label={t("navbar.notifications")}
-              aria-haspopup="true"
-              aria-expanded={showNotifMenu}
-              className="relative bg-white border border-slate-300 p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:border-slate-400 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            >
-              <Bell className="w-4 h-4" />
-              {unreadNotifs.length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75 animate-ping" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
-                </span>
-              )}
-            </button>
-
-            {showNotifMenu && (
-              <div className="absolute right-0 mt-2.5 w-80 bg-white border border-slate-200 rounded-lg shadow-2xl z-40 overflow-hidden text-slate-750" role="menu">
-                <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                  <h4 className="text-xs font-semibold text-slate-800">{t("navbar.caseNotifications")}</h4>
-                  {unreadNotifs.length > 0 && (
-                    <button onClick={onMarkAllRead} className="text-[10px] text-cyan-600 hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded">
-                      {t("common.markAllRead")}
-                    </button>
-                  )}
-                </div>
-                <div className="max-h-64 overflow-y-auto divide-y divide-slate-200">
-                  {notifications.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-slate-500 italic">{t("navbar.noNotifications")}</div>
-                  ) : (
-                    notifications.map((notif) => (
-                      <div key={notif.id} className={`p-3 text-xs transition-colors hover:bg-slate-50 ${notif.read ? "opacity-60 bg-white" : "bg-slate-50/50"}`} role="menuitem">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="font-semibold text-slate-900 flex items-center gap-1">
-                            {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />}
-                            {notif.title}
-                          </span>
-                          <span className="text-[9px] text-slate-500 font-mono">{notif.timestamp}</span>
-                        </div>
-                        <p className="text-slate-650 leading-relaxed text-[11px]">{notif.description}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="hidden lg:flex items-center gap-2.5 border-l border-slate-200 pl-4">
           <div className="flex flex-col items-end">

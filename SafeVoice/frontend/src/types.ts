@@ -182,16 +182,6 @@ export interface RolePermissions {
   manageRetention: boolean;
 }
 
-export interface NotificationItem {
-  id: string;
-  title: string;
-  description: string;
-  timestamp: string;
-  read: boolean;
-  type: "new_report" | "escalation" | "sla_warning" | "update" | "message" | "retention";
-  caseId?: string;
-}
-
 export interface ReviewRecommendation {
   area: string;
   currentFeature: string;
