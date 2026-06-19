@@ -2,11 +2,10 @@ package com.ksefflow.backend.services.retry;
 
 import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
-import com.ksefflow.backend.models.utils.KsefNotificationType;
+import com.ksefflow.backend.notification.HubNotificationPublisher;
 import com.ksefflow.backend.repository.KsefInvoiceRepository;
 import com.ksefflow.backend.services.KSeFAuditLogService;
 import com.ksefflow.backend.services.KSeFInvoiceService;
-import com.ksefflow.backend.services.KsefNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,7 +53,8 @@ public class KsefRetryQueueService {
 
     private final KsefInvoiceRepository invoiceRepository;
     private final KSeFInvoiceService invoiceService;
-    private final KsefNotificationService notificationService;
+    // Notifications go to the centralized Hub (RegulaOne), not a local store.
+    private final HubNotificationPublisher hubPublisher;
 
     // The "user" recorded in audit logs for actions taken by this automatic job (no real person).
     private static final String SYSTEM_ACTOR = "system@ksefflow";
@@ -137,11 +137,11 @@ public class KsefRetryQueueService {
                 KsefInvoice result = invoiceService.resubmitOffline(invoice, SYSTEM_ACTOR, SYSTEM_IP);
                 if (result.getStatus() == KsefInvoiceStatus.SENT) {
                     sent++;
-                    notificationService.notifyTenant(result.getTenantId(), KsefNotificationType.SUCCESS,
+                    hubPublisher.publishInvoiceEvent("INVOICE_SENT", result.getTenantId(),
                             "Offline invoice submitted to KSeF",
                             "Invoice " + result.getInvoiceNumber() + " was successfully sent to KSeF (ksefId "
                                     + result.getKsefId() + ").",
-                            "INVOICE", result.getId());
+                            result.getId(), "INVOICE_SENT:" + result.getId());
                 } else {
                     requeued++; // still offline — will be tried again next round
                 }
@@ -191,10 +191,10 @@ public class KsefRetryQueueService {
         KSeFAuditLogService.writeAuditLog(invoice.getTenantId(), "INVOICE_RETRY_FAILED", invoice.getId(),
                 null, reason, SYSTEM_ACTOR, SYSTEM_IP);
 
-        notificationService.notifyTenant(invoice.getTenantId(), KsefNotificationType.ERROR,
+        hubPublisher.publishInvoiceEvent("INVOICE_RETRY_FAILED", invoice.getTenantId(),
                 "Invoice could not be sent to KSeF",
                 "Invoice " + invoice.getInvoiceNumber() + " was moved to FAILED. " + reason,
-                "INVOICE", invoice.getId());
+                invoice.getId(), "INVOICE_RETRY_FAILED:" + invoice.getId());
 
         log.error("[failQueueItem]:1 Invoice [{}] (tenant [{}]) marked FAILED — {}",
                 invoice.getInvoiceNumber(), invoice.getTenantId(), reason);
