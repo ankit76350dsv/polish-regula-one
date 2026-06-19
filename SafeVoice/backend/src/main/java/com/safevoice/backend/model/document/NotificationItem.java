@@ -17,8 +17,16 @@ import java.util.UUID;
 @Document(collection = "notifications")
 public class NotificationItem extends BaseDocument {
 
+    /**
+     * MUST remain generic and reference-only (e.g. "New Message Received").
+     * DO NOT quote or copy content from whistleblower reports or messages to avoid storing unencrypted PII.
+     */
     private String title;
 
+    /**
+     * MUST remain generic and reference-only (e.g. "A new message was added to case CR-123").
+     * DO NOT quote or copy content from whistleblower reports or messages to avoid storing unencrypted PII.
+     */
     private String description;
 
     private Instant timestamp;

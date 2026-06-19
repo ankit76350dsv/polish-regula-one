@@ -9,6 +9,9 @@ import lombok.EqualsAndHashCode;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,10 +25,18 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @Document(collection = "case_reports")
+@CompoundIndexes({
+    @CompoundIndex(name = "tenant_tracking_idx", def = "{'tenantId': 1, 'trackingCode': 1}", unique = true, sparse = true)
+})
 public class CaseReport extends BaseDocument {
 
-    @Indexed(unique = true, sparse = true)
+    @Indexed(sparse = true)
     private String trackingCode;
+
+    private String hashedPin;
+
+    @org.springframework.data.annotation.Version
+    private Long version;
 
     private ReportCategory category;
 

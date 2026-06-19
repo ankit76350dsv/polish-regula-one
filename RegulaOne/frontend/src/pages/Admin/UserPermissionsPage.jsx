@@ -46,6 +46,38 @@ const PERMISSION_GROUPS = [
       },
     ],
   },
+  {
+    app: 'SafeVoice',
+    description: 'Whistleblower case-management (EU Directive 2019/1937) permissions',
+    // Codes MUST match SafeVoicePermission on the SafeVoice backend.
+    permissions: [
+      {
+        code: 'SAFEVOICE_TENANT_ADMIN',
+        label: 'Tenant Admin',
+        desc: 'Full control: invite officers, manage retention and legal holds.',
+      },
+      {
+        code: 'SAFEVOICE_COMPLIANCE_OFFICER',
+        label: 'Compliance Officer',
+        desc: 'Triage cases, change status, assign investigators, message reporters.',
+      },
+      {
+        code: 'SAFEVOICE_INVESTIGATOR',
+        label: 'Investigator',
+        desc: 'Work assigned cases: add evidence and post case messages.',
+      },
+      {
+        code: 'SAFEVOICE_HR_MANAGER',
+        label: 'HR Manager',
+        desc: 'Handle HR-handoff (labour dispute / grievance) cases only.',
+      },
+      {
+        code: 'SAFEVOICE_AUDITOR',
+        label: 'Auditor',
+        desc: 'Read-only access to cases, audit logs and retention exports.',
+      },
+    ],
+  },
 ];
 
 // Total number of selectable permission codes across all groups (for the counter).
