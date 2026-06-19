@@ -84,6 +84,8 @@ export const mapBackendInvoice = (b) => ({
   submissionAttempts: b.submissionAttempts ?? 0,
   lastErrorMessage:  b.lastErrorMessage   ?? b.rejectionReason ?? null,
   createdAt:         b.createdAt          ?? null,
+  // Full ordered status timeline (DRAFT → PENDING → SENT → ...) — see getInvoiceStatus.
+  statusHistory:     Array.isArray(b.statusHistory) ? b.statusHistory : [],
   // Extra fields used by this app's UI
   canSubmit:         b.canSubmit,
   hasXml:            b.hasXml,
@@ -127,6 +129,22 @@ export const listInvoices = async () => {
 
 export const getInvoice = async (_tenantId, invoiceId) => {
   return mapBackendInvoice(await ksefFetch(`${INVOICE_PATH}/${invoiceId}`));
+};
+
+/**
+ * Fetch an invoice's status timeline: current status, the "what to do next" hint, and the
+ * full ordered history of status changes (DRAFT → PENDING → SENT → ...) with timestamps.
+ * GET /api/v1/invoices/{invoiceId}/status. Returns the backend InvoiceStatusResponse shape:
+ *   { invoiceId, invoiceNumber, currentStatus, currentStatusLabel, nextStep,
+ *     lastErrorMessage, ksefSubmissionDeadline, ksefId,
+ *     history: [{ status, statusLabel, timestamp, note, changedBy }] }
+ */
+export const getInvoiceStatus = async (invoiceId) => {
+  const res = await ksefFetch(`${INVOICE_PATH}/${invoiceId}/status`);
+  return {
+    ...res,
+    history: Array.isArray(res?.history) ? res.history : [],
+  };
 };
 
 /**

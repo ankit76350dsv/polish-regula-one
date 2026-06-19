@@ -1,6 +1,7 @@
 package com.ksefflow.backend.controllers;
 
 import com.ksefflow.backend.dto.invoice.CreateInvoiceRequest;
+import com.ksefflow.backend.dto.invoice.InvoiceStatusResponse;
 import com.ksefflow.backend.dto.invoice.SubmitInvoiceResponse;
 import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
@@ -206,6 +207,27 @@ public class KSeFInvoiceController {
         KsefInvoice invoice = invoiceService.getInvoice(caller.tenantId(), invoiceId);
         log.info("[getInvoice]:2 ✔ GET /{} — status={} → 200 OK", invoiceId, invoice.getStatus());
         return ResponseEntity.ok(invoice);
+    }
+
+    /**
+     * Get the invoice's status timeline.
+     *
+     * Returns the CURRENT status, a plain-language "what to do next" hint, and the FULL
+     * ordered history of status changes (DRAFT → PENDING → SENT → ...), each with its own
+     * timestamp, reason, and who made the change. Useful for a status/timeline UI widget.
+     */
+    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER,
+    //              KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR.
+    @GetMapping("/{invoiceId}/status")
+    public ResponseEntity<InvoiceStatusResponse> getInvoiceStatus(
+            AuthenticatedUser caller,
+            @PathVariable String invoiceId) {
+        // Read access — issuers, oversight roles, or the tenant admin.
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
+                KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
+        log.info("[getInvoiceStatus]:1 ▶ GET /{}/status — tenant={}", invoiceId, caller.tenantId());
+        KsefInvoice invoice = invoiceService.getInvoice(caller.tenantId(), invoiceId);
+        return ResponseEntity.ok(InvoiceStatusResponse.from(invoice));
     }
 
     /**

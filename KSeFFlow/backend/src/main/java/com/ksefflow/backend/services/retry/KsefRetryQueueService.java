@@ -183,9 +183,9 @@ public class KsefRetryQueueService {
     // Marks an invoice FAILED, writes an immutable audit entry, and alerts the tenant so a
     // human can submit/correct it manually (FAILED → DRAFT → submit is the existing recovery path).
     private void failQueueItem(KsefInvoice invoice, String reason) {
-        invoice.setStatus(KsefInvoiceStatus.FAILED);
         invoice.setLastErrorMessage(reason);
-        invoice.setUpdatedAt(LocalDateTime.now());
+        // SYSTEM actor — this transition is made by the automated retry job, not a user.
+        invoice.recordStatus(KsefInvoiceStatus.FAILED, reason, SYSTEM_ACTOR);
         invoiceRepository.save(invoice);
 
         KSeFAuditLogService.writeAuditLog(invoice.getTenantId(), "INVOICE_RETRY_FAILED", invoice.getId(),

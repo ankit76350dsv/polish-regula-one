@@ -14,20 +14,45 @@ package com.ksefflow.backend.models.utils;
 public enum KsefInvoiceStatus {
 
     // Invoice created locally — not yet submitted to KSeF
-    DRAFT,
+    DRAFT("Draft",
+            "Review the invoice details, then submit it to KSeF when you are ready."),
 
     // Submitted to KSeF API and awaiting the official KSeF reference ID
-    PENDING,
+    PENDING("Pending",
+            "Submitted to KSeF — waiting for confirmation. No action needed; the status updates automatically."),
 
     // Accepted by KSeF — ksefId and UPO received and stored
-    SENT,
+    SENT("Sent",
+            "Accepted by KSeF. Download the UPO (official confirmation) for your records — no further action required."),
 
     // Hard rejection from KSeF (e.g. invalid NIP, schema violation) — requires manual correction
-    FAILED,
+    FAILED("Failed",
+            "KSeF rejected the invoice. Review the error message, correct the invoice, and submit it again."),
 
     // Automatic retry in progress after a transient failure
-    RETRYING,
+    RETRYING("Retrying",
+            "An automatic retry is in progress. No action needed unless it ends in FAILED."),
 
     // KSeF API was unreachable; invoice queued locally with offline PDF fallback generated
-    OFFLINE_MODE
+    OFFLINE_MODE("Offline (queued)",
+            "KSeF was unavailable, so the invoice is queued and will be retried automatically before its legal deadline. No action needed unless it fails.");
+
+    // Short human-readable name for the status (for the UI badge).
+    private final String label;
+
+    // Plain-language guidance telling the user what, if anything, to do next.
+    private final String nextStep;
+
+    KsefInvoiceStatus(String label, String nextStep) {
+        this.label = label;
+        this.nextStep = nextStep;
+    }
+
+    public String getLabel() {
+        return label;
+    }
+
+    public String getNextStep() {
+        return nextStep;
+    }
 }

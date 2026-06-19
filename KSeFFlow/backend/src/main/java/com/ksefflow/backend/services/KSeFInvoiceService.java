@@ -125,6 +125,10 @@ public class KSeFInvoiceService {
             invoice.setCreatedAt(existing.getCreatedAt());
             invoice.setUpdatedAt(LocalDateTime.now());
             invoice.setStatus(KsefInvoiceStatus.DRAFT);
+            // Preserve the existing status timeline — re-saving a draft is NOT a status change
+            // (it stays DRAFT), so we carry the prior history over rather than appending or
+            // wiping it (the incoming object was rebuilt from the request and has none).
+            invoice.setStatusHistory(existing.getStatusHistory());
             invoice.setKsefEnvironment(apiProperties.getEnvironment());
 
             KsefInvoice updated = ksef_invoices_repository.save(invoice);
@@ -143,9 +147,9 @@ public class KSeFInvoiceService {
             return updated;
         }
 
-        // No existing invoice → create a fresh DRAFT.
-        invoice.setStatus(KsefInvoiceStatus.DRAFT);
+        // No existing invoice → create a fresh DRAFT and seed the status timeline.
         invoice.setCreatedAt(LocalDateTime.now());
+        invoice.recordStatus(KsefInvoiceStatus.DRAFT, "Invoice created as draft", userEmail);
         invoice.setKsefEnvironment(apiProperties.getEnvironment());
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
@@ -237,10 +241,9 @@ public class KSeFInvoiceService {
         KsefInvoice invoice = loadAndGuardDraft(tenantId, invoiceId);
 
         // ! Step 2 — Move invoice to PENDING state
-        invoice.setStatus(KsefInvoiceStatus.PENDING);
-        invoice.setUpdatedAt(LocalDateTime.now());
         int nextAttempt = invoice.getSubmissionAttempts() + 1;
         invoice.setSubmissionAttempts(nextAttempt);
+        invoice.recordStatus(KsefInvoiceStatus.PENDING, "Submitted to KSeF (attempt " + nextAttempt + ")", userEmail);
 
         log.info("[submitInvoice]:2 Submission attempt count updated to [{}] and saving PENDING invoice state into database for invoice [{}]", nextAttempt, invoice.getInvoiceNumber());
 
@@ -312,11 +315,10 @@ public class KSeFInvoiceService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        invoice.setStatus(KsefInvoiceStatus.RETRYING);
         int nextAttempt = invoice.getSubmissionAttempts() + 1;
         invoice.setSubmissionAttempts(nextAttempt);
         invoice.setLastRetryAt(now);
-        invoice.setUpdatedAt(now);
+        invoice.recordStatus(KsefInvoiceStatus.RETRYING, "Automatic retry attempt " + nextAttempt, userEmail);
         ksef_invoices_repository.save(invoice);
 
         KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_RETRY_STARTED", invoiceId, null,
@@ -438,7 +440,7 @@ public class KSeFInvoiceService {
         //! invoce update...
         log.info("[executeKsefSubmission]:7 Updating invoice status to SENT for invoice [{}]",
                 invoice.getInvoiceNumber());
-        invoice.setStatus(KsefInvoiceStatus.SENT);
+        invoice.recordStatus(KsefInvoiceStatus.SENT, "Accepted by KSeF (ksefId " + ksefId + ")", userEmail);
         invoice.setKsefId(ksefId); // ! ksefReferenceNumber
         invoice.setUpoDocumentId(upoDocumentId); // ! mongodb _id of the invoice
         invoice.setUpoStatus(KsefUpoStatus.RECEIVED);
@@ -569,10 +571,10 @@ public class KSeFInvoiceService {
                     invoice.getInvoiceNumber(), qrEx.getMessage(), qrEx);
         }
 
-        invoice.setStatus(KsefInvoiceStatus.OFFLINE_MODE);
         invoice.setLastErrorMessage(complianceNote != null ? errorMessage + " | " + complianceNote : errorMessage);
         invoice.setLastRetryAt(now);
-        invoice.setUpdatedAt(now);
+        invoice.recordStatus(KsefInvoiceStatus.OFFLINE_MODE,
+                "KSeF unavailable — queued offline (deadline " + invoice.getKsefSubmissionDeadline() + ")", userEmail);
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
         KSeFAuditLogService.writeAuditLog(invoice.getTenantId(), "INVOICE_OFFLINE_MODE", invoice.getId(),

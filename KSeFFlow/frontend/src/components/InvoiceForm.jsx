@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { can } from '../lib/permissions';
+import InvoiceStatusTimeline from './InvoiceStatusTimeline';
 
 export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, onAddNotification, onNavigate, govStatus, existingInvoice }) {
   const { t, language } = useLanguage();
@@ -891,6 +892,10 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                   <div className="text-[10px] text-stone-400 text-center">
                     {language === 'pl' ? 'Ta faktura została już przetworzona. Przełącz na zakładkę XML lub PDF, aby sprawdzić pełną treść.' : 'This invoice has already been processed. Switch to the XML or PDF tab to inspect the full document.'}
                   </div>
+
+                  {/* Full status timeline: how this invoice progressed (DRAFT → PENDING → SENT/FAILED → ...),
+                      its current status, and what the user should do next. Reads the backend /status endpoint. */}
+                  <InvoiceStatusTimeline invoiceId={existingInvoice?.id} />
                 </div>
               ) : (
                 <div className="space-y-2">

@@ -123,6 +123,13 @@ public class KsefInvoice {
     @Builder.Default
     private KsefInvoiceStatus status = KsefInvoiceStatus.DRAFT;
 
+    // Full ordered timeline of every status change this invoice went through
+    // (DRAFT → PENDING → SENT → ...), each entry with its own timestamp and a short note.
+    // Appended via recordStatus(...) at every transition and NEVER edited or removed, so the
+    // complete lifecycle is preserved for audit and can be shown in the UI.
+    @Builder.Default
+    private List<StatusHistoryEntry> statusHistory = new ArrayList<>();
+
     // Official KSeF reference ID returned after successful submission.
     // Format: {sellerNIP}-{YYYYMMDD}-{16-char hex token}
     // Null until status transitions to SENT.
@@ -232,6 +239,54 @@ public class KsefInvoice {
     private boolean softDeleted = false;
 
     private LocalDateTime deletedAt;
+
+    // ── Status history helper ───────────────────────────────────────────────────
+
+    /**
+     * Records a status change in ONE place: updates the current status, stamps updatedAt,
+     * and APPENDS an immutable entry to {@link #statusHistory} so the full lifecycle timeline
+     * (DRAFT → PENDING → SENT → ...) is preserved. Call this instead of {@code setStatus(...)}
+     * at every real transition.
+     *
+     * @param newStatus the status the invoice is moving into
+     * @param note      short human-readable reason (e.g. "Submitted to KSeF")
+     * @param changedBy who triggered it — a user email, or "SYSTEM" for automated jobs
+     */
+    public void recordStatus(KsefInvoiceStatus newStatus, String note, String changedBy) {
+        LocalDateTime now = LocalDateTime.now();
+        this.status = newStatus;
+        this.updatedAt = now;
+        if (this.statusHistory == null) {
+            this.statusHistory = new ArrayList<>();
+        }
+        this.statusHistory.add(StatusHistoryEntry.builder()
+                .status(newStatus)
+                .timestamp(now)
+                .note(note)
+                .changedBy(changedBy)
+                .build());
+    }
+
+    // ── Embedded: one status-change record ─────────────────────────────────────
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class StatusHistoryEntry {
+
+        // The status the invoice moved INTO at this point in time.
+        private KsefInvoiceStatus status;
+
+        // When the change happened.
+        private LocalDateTime timestamp;
+
+        // Short human-readable reason for the change (e.g. "Accepted by KSeF").
+        private String note;
+
+        // Who caused it — a user email, or "SYSTEM" for automated transitions (e.g. the retry job).
+        private String changedBy;
+    }
 
     // ── Embedded: invoice line item ───────────────────────────────────────────
 
