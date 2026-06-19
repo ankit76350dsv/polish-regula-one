@@ -1,0 +1,21 @@
+package com.safevoice.backend.repository;
+
+import com.safevoice.backend.model.document.CaseMessage;
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * MongoDB repository for managing CaseMessage chat documents.
+ */
+@Repository
+public interface CaseMessageRepository extends MongoRepository<CaseMessage, UUID> {
+
+    /**
+     * Retrieves all chat logs inside a specific case, ordered by timestamp.
+     * Enforces tenant isolation.
+     */
+    List<CaseMessage> findAllByTenantIdAndCaseIdOrderByTimestampAsc(String tenantId, UUID caseId);
+}
