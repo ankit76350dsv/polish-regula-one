@@ -334,9 +334,11 @@ export function PublicReportPortal({
 
 export function ReportSuccessView({
   generatedCode,
+  pin,
   category
 }: {
   generatedCode?: string;
+  pin?: string;
   category: ReportCategory;
 }) {
   const { t } = useTranslation();
@@ -372,19 +374,33 @@ export function ReportSuccessView({
         <div className="space-y-6 mt-8">
           <div className="bg-slate-50 border border-slate-205 rounded-lg p-6 relative overflow-hidden">
             <span className="absolute inset-x-0 top-0 h-[2px] bg-emerald-500/70" />
-            <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 uppercase tracking-widest font-mono mb-3">
-              <Lock className="w-3.5 h-3.5" aria-hidden="true" /> {t("success.trackingCodeLabel")}
-            </div>
+            <div className="flex flex-col gap-6 max-w-sm mx-auto">
+              <div>
+                <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 uppercase tracking-widest font-mono mb-2">
+                  <Lock className="w-3.5 h-3.5" aria-hidden="true" /> {t("success.trackingCodeLabel")}
+                </div>
+                <div className="bg-white p-4 rounded-lg border border-slate-200 relative flex items-center justify-between">
+                  <span className="text-md font-mono text-slate-900 font-bold select-all tracking-wider">{generatedCode}</span>
+                  <button
+                    onClick={handleCopy}
+                    aria-label={copied ? t("success.copied") : t("success.copy")}
+                    className="text-slate-500 hover:text-cyan-600 hover:bg-slate-100 p-2 rounded transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  >
+                    {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
 
-            <div className="bg-white p-4 rounded-lg border border-slate-200 relative flex items-center justify-between max-w-sm mx-auto">
-              <span className="text-md font-mono text-slate-900 font-bold select-all tracking-wider">{generatedCode}</span>
-              <button
-                onClick={handleCopy}
-                aria-label={copied ? t("success.copied") : t("success.copy")}
-                className="text-slate-500 hover:text-cyan-600 hover:bg-slate-100 p-2 rounded transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-              </button>
+              {pin && (
+                <div>
+                  <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 uppercase tracking-widest font-mono mb-2">
+                    <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" /> Access PIN (Shown Once)
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border border-slate-200 relative flex items-center justify-center">
+                    <span className="text-md font-mono text-slate-900 font-bold select-all tracking-wider">{pin}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

@@ -11,11 +11,11 @@ import java.util.UUID;
  * MongoDB repository for managing CaseMessage chat documents.
  */
 @Repository
-public interface CaseMessageRepository extends MongoRepository<CaseMessage, UUID> {
+public interface CaseMessageRepository extends MongoRepository<CaseMessage, String> {
 
     /**
      * Retrieves all chat logs inside a specific case, ordered by timestamp.
      * Enforces tenant isolation.
      */
-    List<CaseMessage> findAllByTenantIdAndCaseIdOrderByTimestampAsc(String tenantId, UUID caseId);
+    List<CaseMessage> findAllByTenantIdAndCaseIdOrderByTimestampAsc(String tenantId, String caseId);
 }

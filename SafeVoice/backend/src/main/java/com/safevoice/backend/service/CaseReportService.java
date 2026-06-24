@@ -20,7 +20,6 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Service orchestrating operations on CaseReport documents.
@@ -66,6 +65,7 @@ public class CaseReportService {
         CaseReport caseReport = new CaseReport();
         caseReport.setTenantId(tenantId);
         caseReport.setTrackingCode(trackingCode);
+        caseReport.setHashedPin(hashedPin);
         caseReport.setCategory(request.getCategory());
         caseReport.setDescription(request.getDescription());
         caseReport.setIncidentDate(request.getIncidentDate());
@@ -84,7 +84,7 @@ public class CaseReportService {
         // Setup timeline
         List<TimelineEvent> timeline = new ArrayList<>();
         timeline.add(new TimelineEvent(
-                UUID.randomUUID(),
+                new org.bson.types.ObjectId().toHexString(),
                 "Report Submitted",
                 "Case intake completed via " + request.getIntakeChannel().name(),
                 now,
@@ -154,7 +154,7 @@ public class CaseReportService {
     /**
      * Internal lookup by ID.
      */
-    public CaseReport getById(UUID id, String tenantId) {
+    public CaseReport getById(String id, String tenantId) {
         return caseReportRepository.findById(id)
                 .filter(r -> r.getTenantId().equals(tenantId) && !r.isDeleted())
                 .orElseThrow(() -> new IllegalArgumentException("Case report not found"));
@@ -170,7 +170,7 @@ public class CaseReportService {
     /**
      * Update Case status.
      */
-    public CaseReport updateStatus(UUID caseId, CaseStatus newStatus, String tenantId, String actorRole, String actorId) {
+    public CaseReport updateStatus(String caseId, CaseStatus newStatus, String tenantId, String actorRole, String actorId) {
         CaseReport report = getById(caseId, tenantId);
         CaseStatus oldStatus = report.getStatus();
         if (oldStatus == newStatus) {
@@ -179,7 +179,7 @@ public class CaseReportService {
 
         report.setStatus(newStatus);
         report.getTimeline().add(new TimelineEvent(
-                UUID.randomUUID(),
+                new org.bson.types.ObjectId().toHexString(),
                 "Status Changed",
                 "Case status updated from " + oldStatus + " to " + newStatus,
                 Instant.now(),
@@ -206,7 +206,7 @@ public class CaseReportService {
     /**
      * Update Case severity.
      */
-    public CaseReport updateSeverity(UUID caseId, CaseSeverity newSeverity, String tenantId, String actorRole, String actorId) {
+    public CaseReport updateSeverity(String caseId, CaseSeverity newSeverity, String tenantId, String actorRole, String actorId) {
         CaseReport report = getById(caseId, tenantId);
         CaseSeverity oldSeverity = report.getSeverity();
         if (oldSeverity == newSeverity) {
@@ -215,7 +215,7 @@ public class CaseReportService {
 
         report.setSeverity(newSeverity);
         report.getTimeline().add(new TimelineEvent(
-                UUID.randomUUID(),
+                new org.bson.types.ObjectId().toHexString(),
                 "Severity Changed",
                 "Case severity updated from " + oldSeverity + " to " + newSeverity,
                 Instant.now(),
@@ -242,13 +242,13 @@ public class CaseReportService {
     /**
      * Assign investigator.
      */
-    public CaseReport assignInvestigator(UUID caseId, String investigator, String tenantId, String actorRole, String actorId) {
+    public CaseReport assignInvestigator(String caseId, String investigator, String tenantId, String actorRole, String actorId) {
         CaseReport report = getById(caseId, tenantId);
         String oldInvestigator = report.getAssignedInvestigator();
 
         report.setAssignedInvestigator(investigator);
         report.getTimeline().add(new TimelineEvent(
-                UUID.randomUUID(),
+                new org.bson.types.ObjectId().toHexString(),
                 "Investigator Assigned",
                 "Case assigned to investigator: " + investigator,
                 Instant.now(),
@@ -275,11 +275,11 @@ public class CaseReportService {
     /**
      * Helper to add file attachments to CaseReport.
      */
-    public CaseReport addAttachment(UUID caseId, com.safevoice.backend.model.embedded.EvidenceAttachment attachment, String tenantId) {
+    public CaseReport addAttachment(String caseId, com.safevoice.backend.model.embedded.EvidenceAttachment attachment, String tenantId) {
         CaseReport report = getById(caseId, tenantId);
         report.getAttachments().add(attachment);
         report.getTimeline().add(new TimelineEvent(
-                UUID.randomUUID(),
+                new org.bson.types.ObjectId().toHexString(),
                 "Evidence Attachment Uploaded",
                 "File " + attachment.getDisplayName() + " successfully attached.",
                 Instant.now(),
@@ -296,7 +296,7 @@ public class CaseReportService {
                 caseId,
                 AuditOutcome.RECORDED,
                 null,
-                attachment.getId().toString(),
+                attachment.getId(),
                 "New evidence file hash verified: " + attachment.getSha256Checksum()
         );
 

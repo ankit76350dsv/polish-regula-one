@@ -91,6 +91,7 @@ export default function App() {
   const [users, setUsers] = useState<SaaSUser[]>([]);
   const [activeRole, setActiveRole] = useState<AppRole | "Public User">("Public User");
   const [lastSuccessCode, setLastSuccessCode] = useState<string | undefined>("");
+  const [lastSuccessPin, setLastSuccessPin] = useState<string | undefined>("");
   const [lastSuccessCategory, setLastSuccessCategory] = useState<ReportCategory>(ReportCategory.Corruption);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
@@ -180,95 +181,169 @@ export default function App() {
     navigateTo(`/cases/${caseId}`);
   };
 
-  const handleFormReportSubmit = (data: ReportSubmission) => {
+  const mapCategoryToBackend = (cat: ReportCategory): string => {
+    switch (cat) {
+      case ReportCategory.Corruption: return "CORRUPTION";
+      case ReportCategory.Fraud: return "FRAUD";
+      case ReportCategory.PublicProcurement: return "PUBLIC_PROCUREMENT";
+      case ReportCategory.AML: return "AML";
+      case ReportCategory.ProductSafety: return "PRODUCT_SAFETY";
+      case ReportCategory.Environmental: return "ENVIRONMENTAL";
+      case ReportCategory.ConsumerProtection: return "CONSUMER_PROTECTION";
+      case ReportCategory.DataProtection: return "DATA_PROTECTION";
+      case ReportCategory.Cybersecurity: return "CYBERSECURITY";
+      case ReportCategory.HealthSafety: return "HEALTH_SAFETY";
+      case ReportCategory.Discrimination: return "DISCRIMINATION";
+      case ReportCategory.Harassment: return "HARASSMENT";
+      case ReportCategory.LabourDispute: return "LABOUR_DISPUTE";
+      default: return "OTHER";
+    }
+  };
+
+  const mapDisclosureModeToBackend = (mode: string): string => {
+    switch (mode) {
+      case "Anonymous": return "ANONYMOUS";
+      case "Confidential Named": return "CONFIDENTIAL_NAMED";
+      case "HR Handoff": return "HR_HANDOFF";
+      default: return "ANONYMOUS";
+    }
+  };
+
+  const handleFormReportSubmit = async (data: ReportSubmission) => {
     const isHrHandoff = data.category === ReportCategory.LabourDispute;
-    const generatedId = createCaseId();
-    const generatedTrackingCode = isHrHandoff ? undefined : createTrackingCode();
-    const submissionDate = nowStamp();
-    const disclosureMode = isHrHandoff ? "HR Handoff" : data.disclosureMode;
+    const mappedCategory = mapCategoryToBackend(data.category);
+    const mappedDisclosureMode = mapDisclosureModeToBackend(data.disclosureMode);
+    const mappedIntakeChannel = data.disclosureMode === "HR Handoff"
+      ? "HR_GRIEVANCE_HANDOFF"
+      : data.disclosureMode === "Confidential Named"
+        ? "CONFIDENTIAL_NAMED_PORTAL"
+        : "ANONYMOUS_WEB_PORTAL";
 
-    const newReport: CaseReport = {
-      id: generatedId,
-      trackingCode: generatedTrackingCode,
-      category: data.category,
-      description: data.description,
-      incidentDate: data.incidentDate,
-      department: data.department,
-      attachments: data.attachments,
-      status: "Received",
-      severity: severityFor(data.category),
-      submissionDate,
-      acknowledgementDue: addDays(jurisdiction.acknowledgementDays),
-      feedbackDue: addMonths(jurisdiction.feedbackMonths),
-      assignedInvestigator: isHrHandoff ? "Katarzyna Mazur" : undefined,
-      disclosureMode,
-      contactVaultRef: disclosureMode === "Confidential Named" ? data.contactVaultRef : undefined,
-      intakeChannel: isHrHandoff ? "HR grievance handoff" : "Anonymous web portal",
-      lawfulBasis: isHrHandoff
-        ? "Internal HR grievance procedure; no SafeVoice anonymous tracking code issued"
-        : `Legal obligation and legitimate follow-up under ${jurisdiction.legalBasisLabel}`,
-      controller: jurisdiction.controllerName,
-      processor: isHrHandoff ? "Internal HR desk" : jurisdiction.processorName,
-      slaHoursRemaining: 2160,
-      technicalMetadataPolicy: reporterMetadataPolicy,
-      retention: {
-        state: "Active",
-        retentionYears: jurisdiction.retentionYears,
-        deleteAfter: retentionDate(jurisdiction.retentionYears),
-        irrelevantPersonalDataDeletionDue: addDays(jurisdiction.irrelevantDataDeletionDays)
-      },
-      riskFlags: isHrHandoff
-        ? ["Outside whistleblower scope", "HR confidentiality required"]
-        : ["Anonymous channel", "Anti-retaliation", "Metadata minimisation"],
-      timeline: [
-        {
-          id: `tl-${Date.now()}`,
-          title: isHrHandoff ? "HR grievance handoff recorded" : "Anonymous report received",
-          description: isHrHandoff
-            ? "No tracking code was generated. The workflow separates HR grievances from the whistleblower channel."
-            : "Report accepted without storing reporter IP, user-agent, device fingerprint, browser fingerprint, or geolocation.",
-          timestamp: submissionDate,
-          type: "system"
-        },
-        {
-          id: `tl-del-${Date.now()}`,
-          title: "Irrelevant data deletion timer started",
-          description: "Any accidentally collected non-relevant personal data must be removed within 14 days of discovery.",
-          timestamp: submissionDate,
-          type: "retention"
-        }
-      ]
-    };
-
-    SafeVoiceDb.saveReports([newReport, ...reports]);
-
-    if (generatedTrackingCode) {
-      SafeVoiceDb.saveMessages([
-        {
-          id: `msg-sys-${Date.now()}`,
-          caseId: generatedId,
-          sender: "System",
-          text: "Your report has been received. Use this anonymous channel for acknowledgement, follow-up questions, and final feedback.",
-          timestamp: submissionDate,
-          attachments: []
-        },
-        ...SafeVoiceDb.getMessages()
-      ]);
+    let parsedIncidentDate: string | null = null;
+    try {
+      if (data.incidentDate) {
+        parsedIncidentDate = new Date(data.incidentDate + "T00:00:00Z").toISOString();
+      }
+    } catch (e) {
+      parsedIncidentDate = new Date().toISOString();
     }
 
-    SafeVoiceDb.addAuditLog({
-      actorRole: "Public Portal",
-      actorRef: "anonymous-intake",
-      actionType: "REPORT_RECEIVED",
-      subjectId: generatedId,
-      outcome: "Recorded",
-      metadataNotice: "Reporter network and device metadata were not collected for case handling."
-    });
+    try {
+      const response = await fetch("http://localhost:9003/api/v1/public/cases", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Tenant-ID": "6a34ca2d9d71d550dff0c3b6"
+        },
+        body: JSON.stringify({
+          category: mappedCategory,
+          description: data.description,
+          incidentDate: parsedIncidentDate,
+          department: data.department,
+          disclosureMode: mappedDisclosureMode,
+          contactVaultRef: data.contactVaultRef || null,
+          intakeChannel: mappedIntakeChannel
+        })
+      });
 
-    reloadFromDb();
-    setLastSuccessCode(generatedTrackingCode);
-    setLastSuccessCategory(data.category);
-    navigateTo("/report/success");
+      if (!response.ok) {
+        throw new Error("Failed to submit whistleblower report: " + response.statusText);
+      }
+
+      const resData = await response.json();
+      
+      const generatedId = resData.id || createCaseId();
+      const generatedTrackingCode = resData.trackingCode;
+      const plaintextPin = resData.pin;
+      const submissionDate = resData.submissionDate ? resData.submissionDate.replace("T", " ").substring(0, 16) : nowStamp();
+
+      const newReport: CaseReport = {
+        id: generatedId,
+        trackingCode: generatedTrackingCode || undefined,
+        category: data.category,
+        description: data.description,
+        incidentDate: data.incidentDate,
+        department: data.department,
+        attachments: data.attachments,
+        status: "Received",
+        severity: severityFor(data.category),
+        submissionDate,
+        acknowledgementDue: resData.acknowledgementDue ? resData.acknowledgementDue.replace("T", " ").substring(0, 16) : addDays(jurisdiction.acknowledgementDays),
+        feedbackDue: resData.feedbackDue ? resData.feedbackDue.replace("T", " ").substring(0, 16) : addMonths(jurisdiction.feedbackMonths),
+        assignedInvestigator: isHrHandoff ? "Katarzyna Mazur" : undefined,
+        disclosureMode: data.disclosureMode,
+        contactVaultRef: data.disclosureMode === "Confidential Named" ? data.contactVaultRef : undefined,
+        intakeChannel: data.disclosureMode === "HR Handoff" ? "HR grievance handoff" : "Anonymous web portal",
+        lawfulBasis: isHrHandoff
+          ? "Internal HR grievance procedure; no SafeVoice anonymous tracking code issued"
+          : `Legal obligation and legitimate follow-up under ${jurisdiction.legalBasisLabel}`,
+        controller: jurisdiction.controllerName,
+        processor: isHrHandoff ? "Internal HR desk" : jurisdiction.processorName,
+        slaHoursRemaining: 2160,
+        technicalMetadataPolicy: reporterMetadataPolicy,
+        retention: {
+          state: "Active",
+          retentionYears: jurisdiction.retentionYears,
+          deleteAfter: retentionDate(jurisdiction.retentionYears),
+          irrelevantPersonalDataDeletionDue: addDays(jurisdiction.irrelevantDataDeletionDays)
+        },
+        riskFlags: isHrHandoff
+          ? ["Outside whistleblower scope", "HR confidentiality required"]
+          : ["Anonymous channel", "Anti-retaliation", "Metadata minimisation"],
+        timeline: [
+          {
+            id: `tl-${Date.now()}`,
+            title: isHrHandoff ? "HR grievance handoff recorded" : "Anonymous report received",
+            description: isHrHandoff
+              ? "No tracking code was generated. The workflow separates HR grievances from the whistleblower channel."
+              : "Report accepted without storing reporter IP, user-agent, device fingerprint, browser fingerprint, or geolocation.",
+            timestamp: submissionDate,
+            type: "system"
+          },
+          {
+            id: `tl-del-${Date.now()}`,
+            title: "Irrelevant data deletion timer started",
+            description: "Any accidentally collected non-relevant personal data must be removed within 14 days of discovery.",
+            timestamp: submissionDate,
+            type: "retention"
+          }
+        ]
+      };
+
+      SafeVoiceDb.saveReports([newReport, ...reports]);
+
+      if (generatedTrackingCode) {
+        SafeVoiceDb.saveMessages([
+          {
+            id: `msg-sys-${Date.now()}`,
+            caseId: generatedId,
+            sender: "System",
+            text: "Your report has been received. Use this anonymous channel for acknowledgement, follow-up questions, and final feedback.",
+            timestamp: submissionDate,
+            attachments: []
+          },
+          ...SafeVoiceDb.getMessages()
+        ]);
+      }
+
+      SafeVoiceDb.addAuditLog({
+        actorRole: "Public Portal",
+        actorRef: "anonymous-intake",
+        actionType: "REPORT_RECEIVED",
+        subjectId: generatedId,
+        outcome: "Recorded",
+        metadataNotice: "Reporter network and device metadata were not collected for case handling."
+      });
+
+      reloadFromDb();
+      setLastSuccessCode(generatedTrackingCode);
+      setLastSuccessPin(plaintextPin);
+      setLastSuccessCategory(data.category);
+      navigateTo("/report/success");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to submit the whistleblower report to the backend. Please verify that the SafeVoice backend is running.");
+    }
   };
 
   const handleReporterMessageSubmit = (caseId: string, text: string) => {
@@ -588,7 +663,7 @@ export default function App() {
 
             {currentPath === "/report/success" && (
               <motion.div key="success" {...m({ initial: { opacity: 0, scale: 0.98 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, y: -10 } })}>
-                <ReportSuccessView generatedCode={lastSuccessCode} category={lastSuccessCategory} />
+                <ReportSuccessView generatedCode={lastSuccessCode} pin={lastSuccessPin} category={lastSuccessCategory} />
               </motion.div>
             )}
 
