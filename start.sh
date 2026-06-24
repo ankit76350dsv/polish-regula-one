@@ -6,7 +6,7 @@
 # Port map:
 #   RegulaOne   backend :8080   frontend :3000
 #   KSeFFlow    backend :8081   frontend :3001
-#   SafeVoice   backend :8087   frontend :3007
+#   SafeVoice   backend :9003   frontend :1003
 #   WasteSync   backend :8083   frontend :3003
 #   SafeWork    backend :8082   frontend :3002
 #   WorkPulse   backend :8085   frontend :3005
@@ -146,8 +146,8 @@ sleep 0.4
 
 # ── SafeVoice (Whistleblower) ────────────────────────────────────────────────
 echo "► SafeVoice"
-start_backend  "SafeVoice" 8087
-start_frontend "SafeVoice" 3007
+start_backend  "SafeVoice" 9003
+start_frontend "SafeVoice" 1003
 sleep 0.4
 
 # ── WasteSync (BDO waste reporting) ─────────────────────────────────────────
@@ -179,7 +179,7 @@ echo "All available services launched."
 echo ""
 echo "  Platform Hub  → http://localhost:3000"
 echo "  KSeFFlow      → http://localhost:3001"
-echo "  SafeVoice     → http://localhost:3007"
+echo "  SafeVoice     → http://localhost:1003"
 echo "  WasteSync     → http://localhost:3003"
 echo "  SafeWork      → http://localhost:3002"
 echo "  WorkPulse     → http://localhost:3005"
