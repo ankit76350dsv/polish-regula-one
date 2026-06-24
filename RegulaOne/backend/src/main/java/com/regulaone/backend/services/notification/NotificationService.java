@@ -6,6 +6,7 @@ import com.regulaone.backend.dto.notification.NotificationResponse;
 import com.regulaone.backend.dto.notification.UpdatePreferenceRequest;
 import com.regulaone.backend.models.User;
 import com.regulaone.backend.models.notification.*;
+import com.regulaone.backend.models.notification.enums.*;
 import com.regulaone.backend.repository.NotificationIngestLogRepository;
 import com.regulaone.backend.repository.NotificationPreferenceRepository;
 import com.regulaone.backend.repository.NotificationRepository;
@@ -116,10 +117,21 @@ public class NotificationService {
 
     // ── User-facing reads/writes (always tenant + recipient scoped) ───────────────
 
-    public Page<NotificationResponse> list(String tenantId, String userId, String status, Pageable pageable) {
+    // module is optional — when provided, results are restricted to that app (by sourceModule)
+    // so a module's frontend only sees its own notifications. When null, all apps are returned.
+    public Page<NotificationResponse> list(String tenantId, String userId, SourceModule module, String status, Pageable pageable) {
+        boolean byStatus = status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status);
+        boolean byApp = module != null;
+        NotificationStatus st = byStatus ? NotificationStatus.valueOf(status.toUpperCase()) : null;
+
         Page<Notification> page;
-        if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status)) {
-            NotificationStatus st = NotificationStatus.valueOf(status.toUpperCase());
+        if (byApp && byStatus) {
+            page = notificationRepository
+                    .findByTenantIdAndRecipientUserIdAndSourceModuleAndStatusAndSoftDeletedFalseOrderByCreatedAtDesc(tenantId, userId, module, st, pageable);
+        } else if (byApp) {
+            page = notificationRepository
+                    .findByTenantIdAndRecipientUserIdAndSourceModuleAndSoftDeletedFalseOrderByCreatedAtDesc(tenantId, userId, module, pageable);
+        } else if (byStatus) {
             page = notificationRepository
                     .findByTenantIdAndRecipientUserIdAndStatusAndSoftDeletedFalseOrderByCreatedAtDesc(tenantId, userId, st, pageable);
         } else {
@@ -129,7 +141,11 @@ public class NotificationService {
         return page.map(NotificationResponse::from);
     }
 
-    public long unreadCount(String tenantId, String userId) {
+    public long unreadCount(String tenantId, String userId, SourceModule module) {
+        if (module != null) {
+            return notificationRepository
+                    .countByTenantIdAndRecipientUserIdAndSourceModuleAndStatusAndSoftDeletedFalse(tenantId, userId, module, NotificationStatus.UNREAD);
+        }
         return notificationRepository
                 .countByTenantIdAndRecipientUserIdAndStatusAndSoftDeletedFalse(tenantId, userId, NotificationStatus.UNREAD);
     }
@@ -148,9 +164,12 @@ public class NotificationService {
         return NotificationResponse.from(n);
     }
 
-    public int markAllRead(String tenantId, String userId) {
-        List<Notification> unread = notificationRepository
-                .findByTenantIdAndRecipientUserIdAndStatus(tenantId, userId, NotificationStatus.UNREAD);
+    // Marks unread as read. Scoped to one app when module is provided (so KSeFFlow's
+    // "mark all read" doesn't clear another app's notifications), else across all apps.
+    public int markAllRead(String tenantId, String userId, SourceModule module) {
+        List<Notification> unread = (module != null)
+                ? notificationRepository.findByTenantIdAndRecipientUserIdAndSourceModuleAndStatus(tenantId, userId, module, NotificationStatus.UNREAD)
+                : notificationRepository.findByTenantIdAndRecipientUserIdAndStatus(tenantId, userId, NotificationStatus.UNREAD);
         LocalDateTime now = LocalDateTime.now();
         unread.forEach(n -> { n.setStatus(NotificationStatus.READ); n.setReadAt(now); });
         notificationRepository.saveAll(unread);

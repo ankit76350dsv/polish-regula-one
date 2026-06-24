@@ -1,4 +1,4 @@
-package com.regulaone.backend.models.notification;
+package com.regulaone.backend.models.notification.enums;
 
 // Controls how much content may leave the in-app channel (data minimization, GDPR Art. 5(1)(c)).
 //   NORMAL       — content may appear in email/push.

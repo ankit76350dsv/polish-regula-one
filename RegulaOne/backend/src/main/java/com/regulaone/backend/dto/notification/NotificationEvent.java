@@ -1,6 +1,6 @@
 package com.regulaone.backend.dto.notification;
 
-import com.regulaone.backend.models.notification.SourceModule;
+import com.regulaone.backend.models.notification.enums.SourceModule;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 

@@ -1,7 +1,8 @@
 package com.regulaone.backend.repository;
 
 import com.regulaone.backend.models.notification.Notification;
-import com.regulaone.backend.models.notification.NotificationStatus;
+import com.regulaone.backend.models.notification.enums.NotificationStatus;
+import com.regulaone.backend.models.notification.enums.SourceModule;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
@@ -28,4 +29,18 @@ public interface NotificationRepository extends MongoRepository<Notification, St
     // Used by mark-all-read.
     List<Notification> findByTenantIdAndRecipientUserIdAndStatus(
             String tenantId, String recipientUserId, NotificationStatus status);
+
+    // ── Per-app variants (frontend passes ?module=KSEFFLOW so it only sees its own app) ──
+
+    Page<Notification> findByTenantIdAndRecipientUserIdAndSourceModuleAndSoftDeletedFalseOrderByCreatedAtDesc(
+            String tenantId, String recipientUserId, SourceModule sourceModule, Pageable pageable);
+
+    Page<Notification> findByTenantIdAndRecipientUserIdAndSourceModuleAndStatusAndSoftDeletedFalseOrderByCreatedAtDesc(
+            String tenantId, String recipientUserId, SourceModule sourceModule, NotificationStatus status, Pageable pageable);
+
+    long countByTenantIdAndRecipientUserIdAndSourceModuleAndStatusAndSoftDeletedFalse(
+            String tenantId, String recipientUserId, SourceModule sourceModule, NotificationStatus status);
+
+    List<Notification> findByTenantIdAndRecipientUserIdAndSourceModuleAndStatus(
+            String tenantId, String recipientUserId, SourceModule sourceModule, NotificationStatus status);
 }

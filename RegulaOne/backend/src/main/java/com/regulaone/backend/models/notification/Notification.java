@@ -1,5 +1,6 @@
 package com.regulaone.backend.models.notification;
 
+import com.regulaone.backend.models.notification.enums.*;
 import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
@@ -38,6 +39,9 @@ public class Notification {
 
     // ── Classification ──────────────────────────────────────────────────────────
     private NotificationEventType eventType;
+    // Origin app/module. Doubles as the per-app filter key — the frontend maps this to a
+    // display name (e.g. KSEFFLOW → "KSeFFlow") and shows only its own app's notifications.
+    @Indexed
     private SourceModule sourceModule;
     private NotificationCategory category;
     private NotificationSeverity severity;

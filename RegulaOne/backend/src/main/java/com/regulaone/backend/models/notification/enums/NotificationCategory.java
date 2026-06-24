@@ -1,4 +1,4 @@
-package com.regulaone.backend.models.notification;
+package com.regulaone.backend.models.notification.enums;
 
 // Broad grouping used for filtering in the UI and for per-category user preferences.
 public enum NotificationCategory {

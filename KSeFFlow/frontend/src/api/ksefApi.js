@@ -317,22 +317,26 @@ const mapHubNotification = (n) => ({
   hub:       true,
 });
 
-/** Recent notifications for the signed-in user (newest first). */
+// This app only shows its OWN notifications. The Hub stores a sourceModule per notification;
+// passing ?module=KSEFFLOW makes the backend return (and count) only KSeFFlow's.
+const HUB_MODULE = 'KSEFFLOW';
+
+/** Recent KSeFFlow notifications for the signed-in user (newest first). */
 export const getHubNotifications = async ({ size = 20 } = {}) => {
-  const page = await apiFetch(`/api/notifications?page=0&size=${size}`);
+  const page = await apiFetch(`/api/notifications?module=${HUB_MODULE}&page=0&size=${size}`);
   const content = Array.isArray(page?.content) ? page.content : (Array.isArray(page) ? page : []);
   return content.map(mapHubNotification);
 };
 
-/** Unread badge count → number. */
+/** Unread KSeFFlow badge count → number. */
 export const getHubUnreadCount = async () => {
-  const res = await apiFetch('/api/notifications/unread-count');
+  const res = await apiFetch(`/api/notifications/unread-count?module=${HUB_MODULE}`);
   return res?.unread ?? 0;
 };
 
-/** Mark every notification read; returns how many were updated. */
+/** Mark every KSeFFlow notification read; returns how many were updated. */
 export const markAllHubNotificationsRead = async () => {
-  const res = await apiFetch('/api/notifications/read-all', { method: 'PATCH' });
+  const res = await apiFetch(`/api/notifications/read-all?module=${HUB_MODULE}`, { method: 'PATCH' });
   return res?.updated ?? 0;
 };
 

@@ -1,4 +1,4 @@
-package com.regulaone.backend.models.notification;
+package com.regulaone.backend.models.notification.enums;
 
 // Delivery channels a notification can go out on. IN_APP is the canonical store and is
 // always written; the others are layered on in later phases (email is Phase 3, push Phase 5).

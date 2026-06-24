@@ -19,6 +19,7 @@ import com.ksefflow.backend.exceptions.KsefCertificateException;
 import com.ksefflow.backend.exceptions.KsefSubmissionException;
 import com.ksefflow.backend.exceptions.KsefXmlGenerationException;
 import com.ksefflow.backend.models.KsefInvoice;
+import com.ksefflow.backend.notification.HubNotificationPublisher;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
 import com.ksefflow.backend.models.utils.KsefOfflineMode;
 import com.ksefflow.backend.models.utils.KsefUpoStatus;
@@ -81,6 +82,8 @@ public class KSeFInvoiceService {
     // Tells us the current KSeF state (online / unavailable / Ministry-declared emergency) so
     // a parked invoice gets the legally correct deadline. See KsefAvailabilityService (C7).
     private final KsefAvailabilityService availabilityService;
+    // Publishes problems during the submission pipeline to the centralized notification Hub.
+    private final HubNotificationPublisher hubPublisher;
 
     // KSeF 2.0 usage flag identifying the MF public key that wraps the session AES key.
     private static final String SYMMETRIC_KEY_ENCRYPTION_USAGE = "SymmetricKeyEncryption";
@@ -254,14 +257,21 @@ public class KSeFInvoiceService {
 
         KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null, "attempt=" + invoice.getSubmissionAttempts(), userEmail, ipAddress);
 
-        // ! Step 3 — Generate FA(3) XML
-        // ! return two thiing XML and hashof XML
-        FA3XmlGeneratorService.FA3XmlResult xmlResult = xmlGeneratorService.generateXml(invoice);
-
-        // Step 4 — Validate XML against the official FA(3) schema, but ONLY if the
-        // local XSD check is turned on (see ksef.validation.xsd.enabled). When it is off,
-        // KSeF checks the invoice on its side. Business rules already ran during XML build.
-        fa3ValidationGate.validateBeforeSubmission(xmlResult.xmlContent());
+        // ! Step 3 + 4 — Generate FA(3) XML and validate it against the official schema (when
+        // ksef.validation.xsd.enabled). A failure here is a VALIDATION error (bad/missing fields,
+        // invalid VAT, malformed XML) — notify the issuer via the Hub, then rethrow so the API
+        // still returns the error to the caller.
+        FA3XmlGeneratorService.FA3XmlResult xmlResult;
+        try {
+            xmlResult = xmlGeneratorService.generateXml(invoice);
+            fa3ValidationGate.validateBeforeSubmission(xmlResult.xmlContent());
+        } catch (KsefXmlGenerationException e) {
+            hubPublisher.publishInvoiceEvent("INVOICE_VALIDATION_ERROR", tenantId,
+                    "Invoice failed validation",
+                    "Invoice " + invoice.getInvoiceNumber() + " did not pass FA(3) validation: " + e.getMessage(),
+                    invoiceId, "INVOICE_VALIDATION_ERROR:" + invoiceId + ":" + nextAttempt);
+            throw e;
+        }
         // Save XML hash
         invoice.setFa3XmlHash(xmlResult.sha256Hash());
         ksef_invoices_repository.save(invoice);
@@ -282,6 +292,15 @@ public class KSeFInvoiceService {
             KsefOfflineMode mode = availabilityService.currentOfflineMode();
             log.warn("[submitInvoice]:5 KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE (mode={})",
                     invoice.getInvoiceNumber(), e.getMessage(), mode);
+
+            // Notify the issuer that this submission could not reach KSeF and was parked offline
+            // (the background retry queue will keep trying until the legal deadline).
+            hubPublisher.publishInvoiceEvent("INVOICE_SUBMISSION_FAILED", tenantId,
+                    "Invoice could not be sent to KSeF",
+                    "Invoice " + invoice.getInvoiceNumber() + " could not be submitted ("
+                            + e.getMessage() + ") and was queued offline for automatic retry.",
+                    invoiceId, "INVOICE_SUBMISSION_FAILED:" + invoiceId + ":" + nextAttempt);
+
             return handleOfflineMode(invoice, mode, e.getMessage(), userEmail, ipAddress);
         }
     }

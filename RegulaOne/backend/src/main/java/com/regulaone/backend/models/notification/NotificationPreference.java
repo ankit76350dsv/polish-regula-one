@@ -1,5 +1,6 @@
 package com.regulaone.backend.models.notification;
 
+import com.regulaone.backend.models.notification.enums.*;
 import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;

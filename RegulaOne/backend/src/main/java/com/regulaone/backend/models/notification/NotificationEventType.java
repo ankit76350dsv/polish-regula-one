@@ -1,5 +1,6 @@
 package com.regulaone.backend.models.notification;
 
+import com.regulaone.backend.models.notification.enums.*;
 import java.util.List;
 
 /**

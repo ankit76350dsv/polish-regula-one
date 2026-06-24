@@ -5,6 +5,7 @@ import com.regulaone.backend.dto.notification.NotificationResponse;
 import com.regulaone.backend.dto.notification.UpdatePreferenceRequest;
 import com.regulaone.backend.models.User;
 import com.regulaone.backend.models.notification.NotificationPreference;
+import com.regulaone.backend.models.notification.enums.SourceModule;
 import com.regulaone.backend.repository.UserRepository;
 import com.regulaone.backend.services.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -42,22 +43,26 @@ public class NotificationController {
     @Value("${notification.test.enabled:false}")
     private boolean testEndpointEnabled;
 
-    // GET /api/notifications?status=&page=&size=
+    // GET /api/notifications?module=&status=&page=&size=
+    // `module` (e.g. "KSEFFLOW") restricts to one application; omit it to see all apps.
     @GetMapping
     public ResponseEntity<AppResponse<Page<NotificationResponse>>> list(
             @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String module,
             @RequestParam(required = false) String status,
             @PageableDefault(size = 20) Pageable pageable) {
         User u = currentUser(jwt);
-        Page<NotificationResponse> page = notificationService.list(tenantId(u), u.getId(), status, pageable);
+        Page<NotificationResponse> page = notificationService.list(tenantId(u), u.getId(), parseModule(module), status, pageable);
         return ResponseEntity.ok(AppResponse.success("Notifications loaded", page));
     }
 
-    // GET /api/notifications/unread-count
+    // GET /api/notifications/unread-count?module=
     @GetMapping("/unread-count")
-    public ResponseEntity<AppResponse<Map<String, Long>>> unreadCount(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<AppResponse<Map<String, Long>>> unreadCount(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String module) {
         User u = currentUser(jwt);
-        long count = notificationService.unreadCount(tenantId(u), u.getId());
+        long count = notificationService.unreadCount(tenantId(u), u.getId(), parseModule(module));
         return ResponseEntity.ok(AppResponse.success("Unread count", Map.of("unread", count)));
     }
 
@@ -77,11 +82,13 @@ public class NotificationController {
         return ResponseEntity.ok(AppResponse.success("Marked read", notificationService.markRead(tenantId(u), u.getId(), id)));
     }
 
-    // PATCH /api/notifications/read-all
+    // PATCH /api/notifications/read-all?module=
     @PatchMapping("/read-all")
-    public ResponseEntity<AppResponse<Map<String, Integer>>> markAllRead(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<AppResponse<Map<String, Integer>>> markAllRead(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String module) {
         User u = currentUser(jwt);
-        int updated = notificationService.markAllRead(tenantId(u), u.getId());
+        int updated = notificationService.markAllRead(tenantId(u), u.getId(), parseModule(module));
         return ResponseEntity.ok(AppResponse.success("All marked read", Map.of("updated", updated)));
     }
 
@@ -137,6 +144,13 @@ public class NotificationController {
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
+
+    // Parse the optional ?module= filter into a SourceModule; unknown/blank → null (all apps).
+    private SourceModule parseModule(String module) {
+        if (module == null || module.isBlank()) return null;
+        try { return SourceModule.valueOf(module.trim().toUpperCase()); }
+        catch (IllegalArgumentException e) { return null; }
+    }
 
     private User currentUser(Jwt jwt) {
         return userRepository.findByCognitoSub(jwt.getSubject())
