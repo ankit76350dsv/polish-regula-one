@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  INITIAL_AUDIT_LOGS,
-  INITIAL_NOTIFICATIONS
+  INITIAL_AUDIT_LOGS
 } from './data/mockData';
 import { listInvoices, getMyTenant, getHubNotifications, getHubUnreadCount, markAllHubNotificationsRead } from './api/ksefApi';
 import { SSO_CALLBACK_URL, clearSsoRedirectGuard, tryRefreshSession } from './lib/api';
@@ -28,6 +27,7 @@ import AuditCenter from './components/AuditCenter';
 import ArchitectureDocs from './components/ArchitectureDocs';
 import ReceivedInvoices from './components/ReceivedInvoices';
 import PermissionsManager from './components/PermissionsManager';
+import NotificationCenter from './components/NotificationCenter';
 import Login from './components/Login';
 
 import {
@@ -74,7 +74,8 @@ export default function App() {
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
   const [, setAuditLogs] = useState(INITIAL_AUDIT_LOGS);
   // Transient, client-only signals raised by components via addNotification (form errors etc.).
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  // Starts empty — persistent notifications come from the Hub, not mock data.
+  const [notifications, setNotifications] = useState([]);
   // Persistent notifications from the centralized Hub (RegulaOne), scoped to this user.
   const [hubNotifications, setHubNotifications] = useState([]);
   const [hubUnread, setHubUnread] = useState(0);
@@ -241,21 +242,20 @@ export default function App() {
   }, [isAuthenticated, location.pathname, activeTenant.id]);
 
   // ── Centralized notifications ───────────────────────────────────────────────
-  // Load the user's notifications from the Hub once after login. Failures are non-fatal —
-  // the bell just keeps its last known state. (Real-time SSE updates arrive in a later phase.)
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    let cancelled = false;
-
+  // Pull the user's KSeFFlow notifications + unread count straight from the Hub (no mock data).
+  // Exposed as a callback so the Notification Center can refresh the bell after acting on items.
+  const loadHub = useCallback(() => {
     getHubNotifications({ size: 20 })
-      .then(list => { if (!cancelled) setHubNotifications(list); })
+      .then(setHubNotifications)
       .catch(() => { /* non-fatal */ });
     getHubUnreadCount()
-      .then(count => { if (!cancelled) setHubUnread(count); })
+      .then(setHubUnread)
       .catch(() => { /* non-fatal */ });
+  }, []);
 
-    return () => { cancelled = true; };
-  }, [isAuthenticated]);
+  useEffect(() => {
+    if (isAuthenticated) loadHub();
+  }, [isAuthenticated, loadHub]);
 
   useEffect(() => {
     const tenantId = urlTenantId ?? activeTenant.id;
@@ -385,6 +385,7 @@ export default function App() {
     integration:     ['Super Admin', 'Company Admin'],
     certificates:    ['Super Admin', 'Company Admin', 'Accountant'],
     audit:           ['Super Admin', 'Company Admin', 'Auditor'],
+    notifications:   ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
     architecture:    ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor']
   };
 
@@ -526,6 +527,14 @@ export default function App() {
                     <p className="text-center text-slate-400 py-6">{t('header.clearSignals')}</p>
                   )}
                 </div>
+                <div className="border-t border-slate-100 pt-2">
+                  <button
+                    onClick={() => { setShowNotifications(false); navigateTo('notifications'); }}
+                    className="w-full text-center text-[11px] font-bold text-red-600 hover:underline cursor-pointer"
+                  >
+                    {language === 'pl' ? 'Zobacz wszystkie powiadomienia' : 'View all notifications'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -581,6 +590,13 @@ export default function App() {
               {navItem('integration', t('sidebar.apiCenter'), Cpu)}
               {navItem('certificates', t('sidebar.certificates'), ShieldCheck)}
               {navItem('audit', t('sidebar.auditCenter'), BookOpen)}
+              {navItem('notifications', language === 'pl' ? 'Powiadomienia' : 'Notifications', Bell,
+                hubUnread > 0 ? (
+                  <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
+                    {hubUnread}
+                  </span>
+                ) : undefined
+              )}
               {navItem('architecture', t('sidebar.blueprints'), FileClock)}
             </nav>
           </div>
@@ -738,6 +754,10 @@ export default function App() {
                   role={activeRole}
                   onAddNotification={addNotification}
                 />
+              )}
+
+              {currentSection === 'notifications' && (
+                <NotificationCenter onChanged={loadHub} />
               )}
 
               {currentSection === 'architecture' && (

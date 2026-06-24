@@ -306,11 +306,15 @@ const HUB_SEVERITY_TO_TYPE = {
   CRITICAL: 'error', ERROR: 'error', WARNING: 'warn', SUCCESS: 'success', INFO: 'info',
 };
 
-// Maps a Hub NotificationResponse onto the shape the KSeFFlow bell already renders.
+// Maps a Hub NotificationResponse onto the shape the KSeFFlow UI renders. Keeps the legacy
+// bell fields (message/type/read/timestamp) AND the richer fields the center uses.
 const mapHubNotification = (n) => ({
   id:        n.id,
   title:     n.title,
   message:   n.body,
+  severity:  n.severity,
+  category:  n.category,
+  status:    n.status,
   type:      HUB_SEVERITY_TO_TYPE[n.severity] ?? 'info',
   timestamp: n.createdAt,
   read:      n.status !== 'UNREAD',
@@ -318,27 +322,55 @@ const mapHubNotification = (n) => ({
 });
 
 // This app only shows its OWN notifications. The Hub stores a sourceModule per notification;
-// passing ?module=KSEFFLOW makes the backend return (and count) only KSeFFlow's.
+// `module=KSEFFLOW` is MANDATORY on every call — the backend returns/acts on only KSeFFlow's.
 const HUB_MODULE = 'KSEFFLOW';
+const withModule = (extra = '') => `module=${HUB_MODULE}${extra ? '&' + extra : ''}`;
 
-/** Recent KSeFFlow notifications for the signed-in user (newest first). */
+/** Recent KSeFFlow notifications for the signed-in user (newest first) — used by the bell. */
 export const getHubNotifications = async ({ size = 20 } = {}) => {
-  const page = await apiFetch(`/api/notifications?module=${HUB_MODULE}&page=0&size=${size}`);
+  const page = await apiFetch(`/api/notifications?${withModule(`page=0&size=${size}`)}`);
   const content = Array.isArray(page?.content) ? page.content : (Array.isArray(page) ? page : []);
   return content.map(mapHubNotification);
 };
 
+/**
+ * Paginated, optionally status-filtered list for the Notification Center.
+ * Mirrors the RegulaOne hub center: returns mapped content + page metadata.
+ */
+export const listHubNotifications = async ({ status, page = 0, size = 20 } = {}) => {
+  const statusQs = (status && status !== 'ALL') ? `status=${status}&` : '';
+  const json = await apiFetch(`/api/notifications?${withModule(`${statusQs}page=${page}&size=${size}`)}`);
+  return {
+    content:       (Array.isArray(json?.content) ? json.content : []).map(mapHubNotification),
+    totalElements: json?.totalElements ?? 0,
+    totalPages:    json?.totalPages    ?? 0,
+    number:        json?.number        ?? page,
+  };
+};
+
 /** Unread KSeFFlow badge count → number. */
 export const getHubUnreadCount = async () => {
-  const res = await apiFetch(`/api/notifications/unread-count?module=${HUB_MODULE}`);
+  const res = await apiFetch(`/api/notifications/unread-count?${withModule()}`);
   return res?.unread ?? 0;
 };
 
+/** Mark a single notification read. */
+export const markHubNotificationRead = async (id) =>
+  apiFetch(`/api/notifications/${id}/read?${withModule()}`, { method: 'PATCH' });
+
 /** Mark every KSeFFlow notification read; returns how many were updated. */
 export const markAllHubNotificationsRead = async () => {
-  const res = await apiFetch(`/api/notifications/read-all?module=${HUB_MODULE}`, { method: 'PATCH' });
+  const res = await apiFetch(`/api/notifications/read-all?${withModule()}`, { method: 'PATCH' });
   return res?.updated ?? 0;
 };
+
+/** Archive a notification (kept in history, hidden from the active list). */
+export const archiveHubNotification = async (id) =>
+  apiFetch(`/api/notifications/${id}/archive?${withModule()}`, { method: 'PATCH' });
+
+/** Soft-delete a notification for this user. */
+export const deleteHubNotification = async (id) =>
+  apiFetch(`/api/notifications/${id}?${withModule()}`, { method: 'DELETE' });
 
 /**
  * Fetch the current user's own tenant/organisation from the RegulaOne backend.
