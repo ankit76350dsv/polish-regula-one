@@ -2,18 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "motion/react";
 import { Info } from "lucide-react";
-import {
-  AppRole,
-  AuditLog,
-  CaseMessage,
-  CaseReport,
-  CaseSeverity,
-  CaseStatus,
-  EvidenceAttachment,
-  ReportCategory,
-  ReportSubmission,
-  SaaSUser
-} from "./types";
+import { ReportCategory } from "./types";
 import { reporterMetadataPolicy, SafeVoiceDb } from "./data/mockData";
 import { useJurisdiction } from "./config/activeJurisdiction";
 import { useMotionProps } from "./a11y/motion";
@@ -29,25 +18,26 @@ import {
   ReportSuccessView,
   SecurityAuditTrailLogs,
   TrackCaseView,
-  UsersPermissionsMatrix
+  UsersPermissionsMatrix,
 } from "./components/Views";
 
-const nowStamp = () => new Date().toISOString().replace("T", " ").substring(0, 16);
+const nowStamp = () =>
+  new Date().toISOString().replace("T", " ").substring(0, 16);
 
-const addDays = (days: number) => {
+const addDays = (days) => {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return date.toISOString().replace("T", " ").substring(0, 16);
 };
 
-const addMonths = (months: number) => {
+const addMonths = (months) => {
   const date = new Date();
   date.setMonth(date.getMonth() + months);
   return date.toISOString().replace("T", " ").substring(0, 16);
 };
 
 // Build the deletion date from the jurisdiction's retention period (e.g. Poland: 3 years).
-const retentionDate = (years: number) => {
+const retentionDate = (years) => {
   const date = new Date();
   date.setFullYear(date.getFullYear() + years);
   return `${date.getFullYear()}-12-31`;
@@ -57,7 +47,9 @@ const randomPart = () => {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const values = new Uint8Array(4);
   window.crypto.getRandomValues(values);
-  return Array.from(values, (value) => alphabet[value % alphabet.length]).join("");
+  return Array.from(values, (value) => alphabet[value % alphabet.length]).join(
+    "",
+  );
 };
 
 const createCaseId = () => {
@@ -73,9 +65,23 @@ const routeFromHash = () => {
   return hash || "/report";
 };
 
-const severityFor = (category: ReportCategory): CaseSeverity => {
-  if ([ReportCategory.Corruption, ReportCategory.Fraud, ReportCategory.PublicProcurement].includes(category)) return "Critical";
-  if ([ReportCategory.DataProtection, ReportCategory.Cybersecurity, ReportCategory.AML].includes(category)) return "High";
+const severityFor = (category) => {
+  if (
+    [
+      ReportCategory.Corruption,
+      ReportCategory.Fraud,
+      ReportCategory.PublicProcurement,
+    ].includes(category)
+  )
+    return "Critical";
+  if (
+    [
+      ReportCategory.DataProtection,
+      ReportCategory.Cybersecurity,
+      ReportCategory.AML,
+    ].includes(category)
+  )
+    return "High";
   if (category === ReportCategory.LabourDispute) return "Medium";
   return "Medium";
 };
@@ -84,16 +90,18 @@ export default function App() {
   const { t } = useTranslation();
   const jurisdiction = useJurisdiction();
   const m = useMotionProps();
-  const [currentPath, setCurrentPath] = useState<string>(() => routeFromHash());
-  const [reports, setReports] = useState<CaseReport[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [messages, setMessages] = useState<CaseMessage[]>([]);
-  const [users, setUsers] = useState<SaaSUser[]>([]);
-  const [activeRole, setActiveRole] = useState<AppRole | "Public User">("Public User");
-  const [lastSuccessCode, setLastSuccessCode] = useState<string | undefined>("");
-  const [lastSuccessPin, setLastSuccessPin] = useState<string | undefined>("");
-  const [lastSuccessCategory, setLastSuccessCategory] = useState<ReportCategory>(ReportCategory.Corruption);
-  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [currentPath, setCurrentPath] = useState(() => routeFromHash());
+  const [reports, setReports] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [activeRole, setActiveRole] = useState("Public User");
+  const [lastSuccessCode, setLastSuccessCode] = useState("");
+  const [lastSuccessPin, setLastSuccessPin] = useState("");
+  const [lastSuccessCategory, setLastSuccessCategory] = useState(
+    ReportCategory.Corruption,
+  );
+  const [selectedCaseId, setSelectedCaseId] = useState(null);
 
   useEffect(() => {
     SafeVoiceDb.ensureSeeded();
@@ -128,7 +136,7 @@ export default function App() {
   // Keep the browser tab title in step with the current screen and language. A descriptive,
   // per-page title helps screen-reader users know where they are (WCAG 2.4.2).
   useEffect(() => {
-    const sectionKeys: Record<string, string> = {
+    const sectionKeys = {
       "/report": "nav.submitReport",
       "/report/success": "nav.submitReport",
       "/track": "nav.trackReport",
@@ -139,10 +147,12 @@ export default function App() {
       "/messages": "nav.secureInbox",
       "/audits": "nav.auditTrail",
       "/users": "nav.accessControls",
-      "/settings": "nav.complianceSettings"
+      "/settings": "nav.complianceSettings",
     };
     const key = sectionKeys[currentPath];
-    document.title = key ? `${t(key)} · ${t("app.name")}` : t("app.documentTitle");
+    document.title = key
+      ? `${t(key)} · ${t("app.name")}`
+      : t("app.documentTitle");
   }, [currentPath, t]);
 
   const reloadFromDb = () => {
@@ -152,16 +162,21 @@ export default function App() {
     setUsers(SafeVoiceDb.getUsers());
   };
 
-  const navigateTo = (path: string) => {
+  const navigateTo = (path) => {
     if (window.location.hash !== `#${path}`) {
       window.location.hash = path;
     }
     setCurrentPath(path);
   };
 
-  const setRole = (role: AppRole | "Public User") => {
+  const setRole = (role) => {
     setActiveRole(role);
-    if (role === "Public User" && !["/report", "/track", "/report/success", "/access-denied"].includes(currentPath)) {
+    if (
+      role === "Public User" &&
+      !["/report", "/track", "/report/success", "/access-denied"].includes(
+        currentPath,
+      )
+    ) {
       navigateTo("/report");
     }
     if (role !== "Public User" && currentPath === "/access-denied") {
@@ -170,94 +185,128 @@ export default function App() {
   };
 
   const activeUser = useMemo(
-    () => (activeRole === "Public User" ? undefined : users.find((user) => user.role === activeRole)),
-    [activeRole, users]
+    () =>
+      activeRole === "Public User"
+        ? undefined
+        : users.find((user) => user.role === activeRole),
+    [activeRole, users],
   );
 
-  const currentDetailsCase = selectedCaseId ? reports.find((report) => report.id === selectedCaseId) : null;
+  const currentDetailsCase = selectedCaseId
+    ? reports.find((report) => report.id === selectedCaseId)
+    : null;
 
-  const handleSelectCase = (caseId: string) => {
+  const handleSelectCase = (caseId) => {
     setSelectedCaseId(caseId);
     navigateTo(`/cases/${caseId}`);
   };
 
-  const mapCategoryToBackend = (cat: ReportCategory): string => {
+  const mapCategoryToBackend = (cat) => {
     switch (cat) {
-      case ReportCategory.Corruption: return "CORRUPTION";
-      case ReportCategory.Fraud: return "FRAUD";
-      case ReportCategory.PublicProcurement: return "PUBLIC_PROCUREMENT";
-      case ReportCategory.AML: return "AML";
-      case ReportCategory.ProductSafety: return "PRODUCT_SAFETY";
-      case ReportCategory.Environmental: return "ENVIRONMENTAL";
-      case ReportCategory.ConsumerProtection: return "CONSUMER_PROTECTION";
-      case ReportCategory.DataProtection: return "DATA_PROTECTION";
-      case ReportCategory.Cybersecurity: return "CYBERSECURITY";
-      case ReportCategory.HealthSafety: return "HEALTH_SAFETY";
-      case ReportCategory.Discrimination: return "DISCRIMINATION";
-      case ReportCategory.Harassment: return "HARASSMENT";
-      case ReportCategory.LabourDispute: return "LABOUR_DISPUTE";
-      default: return "OTHER";
+      case ReportCategory.Corruption:
+        return "CORRUPTION";
+      case ReportCategory.Fraud:
+        return "FRAUD";
+      case ReportCategory.PublicProcurement:
+        return "PUBLIC_PROCUREMENT";
+      case ReportCategory.AML:
+        return "AML";
+      case ReportCategory.ProductSafety:
+        return "PRODUCT_SAFETY";
+      case ReportCategory.Environmental:
+        return "ENVIRONMENTAL";
+      case ReportCategory.ConsumerProtection:
+        return "CONSUMER_PROTECTION";
+      case ReportCategory.DataProtection:
+        return "DATA_PROTECTION";
+      case ReportCategory.Cybersecurity:
+        return "CYBERSECURITY";
+      case ReportCategory.HealthSafety:
+        return "HEALTH_SAFETY";
+      case ReportCategory.Discrimination:
+        return "DISCRIMINATION";
+      case ReportCategory.Harassment:
+        return "HARASSMENT";
+      case ReportCategory.LabourDispute:
+        return "LABOUR_DISPUTE";
+      default:
+        return "OTHER";
     }
   };
 
-  const mapDisclosureModeToBackend = (mode: string): string => {
+  const mapDisclosureModeToBackend = (mode) => {
     switch (mode) {
-      case "Anonymous": return "ANONYMOUS";
-      case "Confidential Named": return "CONFIDENTIAL_NAMED";
-      case "HR Handoff": return "HR_HANDOFF";
-      default: return "ANONYMOUS";
+      case "Anonymous":
+        return "ANONYMOUS";
+      case "Confidential Named":
+        return "CONFIDENTIAL_NAMED";
+      case "HR Handoff":
+        return "HR_HANDOFF";
+      default:
+        return "ANONYMOUS";
     }
   };
 
-  const handleFormReportSubmit = async (data: ReportSubmission) => {
+  const handleFormReportSubmit = async (data) => {
     const isHrHandoff = data.category === ReportCategory.LabourDispute;
     const mappedCategory = mapCategoryToBackend(data.category);
-    const mappedDisclosureMode = mapDisclosureModeToBackend(data.disclosureMode);
-    const mappedIntakeChannel = data.disclosureMode === "HR Handoff"
-      ? "HR_GRIEVANCE_HANDOFF"
-      : data.disclosureMode === "Confidential Named"
-        ? "CONFIDENTIAL_NAMED_PORTAL"
-        : "ANONYMOUS_WEB_PORTAL";
+    const mappedDisclosureMode = mapDisclosureModeToBackend(
+      data.disclosureMode,
+    );
+    const mappedIntakeChannel =
+      data.disclosureMode === "HR Handoff"
+        ? "HR_GRIEVANCE_HANDOFF"
+        : data.disclosureMode === "Confidential Named"
+          ? "CONFIDENTIAL_NAMED_PORTAL"
+          : "ANONYMOUS_WEB_PORTAL";
 
-    let parsedIncidentDate: string | null = null;
+    let parsedIncidentDate = null;
     try {
       if (data.incidentDate) {
-        parsedIncidentDate = new Date(data.incidentDate + "T00:00:00Z").toISOString();
+        parsedIncidentDate = new Date(
+          data.incidentDate + "T00:00:00Z",
+        ).toISOString();
       }
     } catch (e) {
       parsedIncidentDate = new Date().toISOString();
     }
 
     try {
-      const response = await fetch("http://localhost:9003/api/v1/public/cases", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Tenant-ID": "6a34ca2d9d71d550dff0c3b6"
+      const response = await fetch(
+        "http://localhost:9003/api/v1/public/cases",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Tenant-ID": "6a34ca2d9d71d550dff0c3b6",
+          },
+          body: JSON.stringify({
+            category: mappedCategory,
+            description: data.description,
+            incidentDate: parsedIncidentDate,
+            department: data.department,
+            disclosureMode: mappedDisclosureMode,
+            contactVaultRef: data.contactVaultRef || null,
+            intakeChannel: mappedIntakeChannel,
+          }),
         },
-        body: JSON.stringify({
-          category: mappedCategory,
-          description: data.description,
-          incidentDate: parsedIncidentDate,
-          department: data.department,
-          disclosureMode: mappedDisclosureMode,
-          contactVaultRef: data.contactVaultRef || null,
-          intakeChannel: mappedIntakeChannel
-        })
-      });
+      );
 
       if (!response.ok) {
-        throw new Error("Failed to submit whistleblower report: " + response.statusText);
+        throw new Error(
+          "Failed to submit whistleblower report: " + response.statusText,
+        );
       }
 
       const resData = await response.json();
-      
       const generatedId = resData.id || createCaseId();
       const generatedTrackingCode = resData.trackingCode;
       const plaintextPin = resData.pin;
-      const submissionDate = resData.submissionDate ? resData.submissionDate.replace("T", " ").substring(0, 16) : nowStamp();
+      const submissionDate = resData.submissionDate
+        ? resData.submissionDate.replace("T", " ").substring(0, 16)
+        : nowStamp();
 
-      const newReport: CaseReport = {
+      const newReport = {
         id: generatedId,
         trackingCode: generatedTrackingCode || undefined,
         category: data.category,
@@ -268,24 +317,38 @@ export default function App() {
         status: "Received",
         severity: severityFor(data.category),
         submissionDate,
-        acknowledgementDue: resData.acknowledgementDue ? resData.acknowledgementDue.replace("T", " ").substring(0, 16) : addDays(jurisdiction.acknowledgementDays),
-        feedbackDue: resData.feedbackDue ? resData.feedbackDue.replace("T", " ").substring(0, 16) : addMonths(jurisdiction.feedbackMonths),
+        acknowledgementDue: resData.acknowledgementDue
+          ? resData.acknowledgementDue.replace("T", " ").substring(0, 16)
+          : addDays(jurisdiction.acknowledgementDays),
+        feedbackDue: resData.feedbackDue
+          ? resData.feedbackDue.replace("T", " ").substring(0, 16)
+          : addMonths(jurisdiction.feedbackMonths),
         assignedInvestigator: isHrHandoff ? "Katarzyna Mazur" : undefined,
         disclosureMode: data.disclosureMode,
-        contactVaultRef: data.disclosureMode === "Confidential Named" ? data.contactVaultRef : undefined,
-        intakeChannel: data.disclosureMode === "HR Handoff" ? "HR grievance handoff" : "Anonymous web portal",
+        contactVaultRef:
+          data.disclosureMode === "Confidential Named"
+            ? data.contactVaultRef
+            : undefined,
+        intakeChannel:
+          data.disclosureMode === "HR Handoff"
+            ? "HR grievance handoff"
+            : "Anonymous web portal",
         lawfulBasis: isHrHandoff
           ? "Internal HR grievance procedure; no SafeVoice anonymous tracking code issued"
           : `Legal obligation and legitimate follow-up under ${jurisdiction.legalBasisLabel}`,
         controller: jurisdiction.controllerName,
-        processor: isHrHandoff ? "Internal HR desk" : jurisdiction.processorName,
+        processor: isHrHandoff
+          ? "Internal HR desk"
+          : jurisdiction.processorName,
         slaHoursRemaining: 2160,
         technicalMetadataPolicy: reporterMetadataPolicy,
         retention: {
           state: "Active",
           retentionYears: jurisdiction.retentionYears,
           deleteAfter: retentionDate(jurisdiction.retentionYears),
-          irrelevantPersonalDataDeletionDue: addDays(jurisdiction.irrelevantDataDeletionDays)
+          irrelevantPersonalDataDeletionDue: addDays(
+            jurisdiction.irrelevantDataDeletionDays,
+          ),
         },
         riskFlags: isHrHandoff
           ? ["Outside whistleblower scope", "HR confidentiality required"]
@@ -293,21 +356,24 @@ export default function App() {
         timeline: [
           {
             id: `tl-${Date.now()}`,
-            title: isHrHandoff ? "HR grievance handoff recorded" : "Anonymous report received",
+            title: isHrHandoff
+              ? "HR grievance handoff recorded"
+              : "Anonymous report received",
             description: isHrHandoff
               ? "No tracking code was generated. The workflow separates HR grievances from the whistleblower channel."
               : "Report accepted without storing reporter IP, user-agent, device fingerprint, browser fingerprint, or geolocation.",
             timestamp: submissionDate,
-            type: "system"
+            type: "system",
           },
           {
             id: `tl-del-${Date.now()}`,
             title: "Irrelevant data deletion timer started",
-            description: "Any accidentally collected non-relevant personal data must be removed within 14 days of discovery.",
+            description:
+              "Any accidentally collected non-relevant personal data must be removed within 14 days of discovery.",
             timestamp: submissionDate,
-            type: "retention"
-          }
-        ]
+            type: "retention",
+          },
+        ],
       };
 
       SafeVoiceDb.saveReports([newReport, ...reports]);
@@ -320,9 +386,9 @@ export default function App() {
             sender: "System",
             text: "Your report has been received. Use this anonymous channel for acknowledgement, follow-up questions, and final feedback.",
             timestamp: submissionDate,
-            attachments: []
+            attachments: [],
           },
-          ...SafeVoiceDb.getMessages()
+          ...SafeVoiceDb.getMessages(),
         ]);
       }
 
@@ -332,7 +398,8 @@ export default function App() {
         actionType: "REPORT_RECEIVED",
         subjectId: generatedId,
         outcome: "Recorded",
-        metadataNotice: "Reporter network and device metadata were not collected for case handling."
+        metadataNotice:
+          "Reporter network and device metadata were not collected for case handling.",
       });
 
       reloadFromDb();
@@ -342,11 +409,13 @@ export default function App() {
       navigateTo("/report/success");
     } catch (err) {
       console.error(err);
-      alert("Failed to submit the whistleblower report to the backend. Please verify that the SafeVoice backend is running.");
+      alert(
+        "Failed to submit the whistleblower report to the backend. Please verify that the SafeVoice backend is running.",
+      );
     }
   };
 
-  const handleReporterMessageSubmit = (caseId: string, text: string) => {
+  const handleReporterMessageSubmit = (caseId, text) => {
     const msgTime = nowStamp();
     SafeVoiceDb.saveMessages([
       {
@@ -354,9 +423,9 @@ export default function App() {
         caseId,
         sender: "Reporter",
         text,
-        timestamp: msgTime
+        timestamp: msgTime,
       },
-      ...SafeVoiceDb.getMessages()
+      ...SafeVoiceDb.getMessages(),
     ]);
 
     const allReports = SafeVoiceDb.getReports();
@@ -365,11 +434,13 @@ export default function App() {
       target.timeline.unshift({
         id: `tl-rep-${Date.now()}`,
         title: "Reporter follow-up received",
-        description: "Additional information posted through the anonymous communication channel.",
+        description:
+          "Additional information posted through the anonymous communication channel.",
         timestamp: msgTime,
-        type: "message"
+        type: "message",
       });
-      target.status = target.status === "Received" ? "Acknowledged" : target.status;
+      target.status =
+        target.status === "Received" ? "Acknowledged" : target.status;
       SafeVoiceDb.saveReports(allReports);
     }
 
@@ -379,18 +450,23 @@ export default function App() {
       actionType: "MESSAGE_POSTED",
       subjectId: caseId,
       outcome: "Recorded",
-      metadataNotice: "Reporter message accepted without network or device identifiers."
+      metadataNotice:
+        "Reporter message accepted without network or device identifiers.",
     });
     reloadFromDb();
   };
 
-  const handleReporterEvidenceSubmit = (caseId: string, attachments: EvidenceAttachment[]) => {
+  const handleReporterEvidenceSubmit = (caseId, attachments) => {
     const allReports = SafeVoiceDb.getReports();
     const target = allReports.find((report) => report.id === caseId);
     if (!target) return;
 
-    const existing = new Set(target.attachments.map((attachment) => attachment.id));
-    const additions = attachments.filter((attachment) => !existing.has(attachment.id));
+    const existing = new Set(
+      target.attachments.map((attachment) => attachment.id),
+    );
+    const additions = attachments.filter(
+      (attachment) => !existing.has(attachment.id),
+    );
     if (additions.length === 0) return;
 
     target.attachments = [...target.attachments, ...additions];
@@ -399,7 +475,7 @@ export default function App() {
       title: "Supplemental evidence added",
       description: `${additions.length} evidence reference(s) added after file-type validation, malware scan, and metadata stripping.`,
       timestamp: nowStamp(),
-      type: "attachment"
+      type: "attachment",
     });
     SafeVoiceDb.saveReports(allReports);
     SafeVoiceDb.addAuditLog({
@@ -408,12 +484,12 @@ export default function App() {
       actionType: "EVIDENCE_ADDED",
       subjectId: caseId,
       outcome: "Recorded",
-      metadataNotice: "Original filenames are not shown to administrators."
+      metadataNotice: "Original filenames are not shown to administrators.",
     });
     reloadFromDb();
   };
 
-  const handleUpdateCaseStatus = (caseId: string, status: CaseStatus) => {
+  const handleUpdateCaseStatus = (caseId, status) => {
     const allReports = SafeVoiceDb.getReports();
     const target = allReports.find((report) => report.id === caseId);
     if (!target) return;
@@ -425,7 +501,7 @@ export default function App() {
       title: "Case status changed",
       description: `Status changed from ${oldValue} to ${status}.`,
       timestamp: nowStamp(),
-      type: "status"
+      type: "status",
     });
     if (status === "Closed" && target.retention.state !== "Legal Hold") {
       target.retention.state = "Deletion Scheduled";
@@ -436,15 +512,18 @@ export default function App() {
       actorRef: activeUser?.id || "system",
       actionType: "CASE_STATUS_CHANGED",
       subjectId: caseId,
-      outcome: SafeVoiceDb.can((activeRole as AppRole) || "Auditor", "closeCases") ? "Allowed" : "Recorded",
+      outcome: SafeVoiceDb.can(activeRole || "Auditor", "closeCases")
+        ? "Allowed"
+        : "Recorded",
       oldValue,
       newValue: status,
-      metadataNotice: "Audit entry contains case state only, not reporter identity or technical metadata."
+      metadataNotice:
+        "Audit entry contains case state only, not reporter identity or technical metadata.",
     });
     reloadFromDb();
   };
 
-  const handleUpdateCaseSeverity = (caseId: string, severity: CaseSeverity) => {
+  const handleUpdateCaseSeverity = (caseId, severity) => {
     const allReports = SafeVoiceDb.getReports();
     const target = allReports.find((report) => report.id === caseId);
     if (!target) return;
@@ -456,7 +535,7 @@ export default function App() {
       title: "Severity changed",
       description: `Severity changed from ${oldValue} to ${severity}.`,
       timestamp: nowStamp(),
-      type: "status"
+      type: "status",
     });
     SafeVoiceDb.saveReports(allReports);
     SafeVoiceDb.addAuditLog({
@@ -467,12 +546,12 @@ export default function App() {
       outcome: "Allowed",
       oldValue,
       newValue: severity,
-      metadataNotice: "No reporter metadata is present in this audit event."
+      metadataNotice: "No reporter metadata is present in this audit event.",
     });
     reloadFromDb();
   };
 
-  const handleAssignInvestigator = (caseId: string, investigatorName: string) => {
+  const handleAssignInvestigator = (caseId, investigatorName) => {
     const allReports = SafeVoiceDb.getReports();
     const target = allReports.find((report) => report.id === caseId);
     if (!target) return;
@@ -486,7 +565,7 @@ export default function App() {
         ? `${investigatorName} assigned under written confidentiality duties.`
         : "Investigator removed from case.",
       timestamp: nowStamp(),
-      type: "system"
+      type: "system",
     });
     SafeVoiceDb.saveReports(allReports);
     SafeVoiceDb.addAuditLog({
@@ -497,12 +576,13 @@ export default function App() {
       outcome: "Allowed",
       oldValue,
       newValue: investigatorName || "Unassigned",
-      metadataNotice: "Assignment event excludes reporter identity and network metadata."
+      metadataNotice:
+        "Assignment event excludes reporter identity and network metadata.",
     });
     reloadFromDb();
   };
 
-  const handleAddInternalNote = (caseId: string, text: string) => {
+  const handleAddInternalNote = (caseId, text) => {
     const allReports = SafeVoiceDb.getReports();
     const target = allReports.find((report) => report.id === caseId);
     if (!target) return;
@@ -512,7 +592,7 @@ export default function App() {
       title: "Restricted investigation note",
       description: text,
       timestamp: nowStamp(),
-      type: "comment"
+      type: "comment",
     });
     SafeVoiceDb.saveReports(allReports);
     SafeVoiceDb.addAuditLog({
@@ -521,54 +601,58 @@ export default function App() {
       actionType: "ACCESS_REVIEW",
       subjectId: caseId,
       outcome: "Recorded",
-      metadataNotice: "Audit records note creation, not the note body."
+      metadataNotice: "Audit records note creation, not the note body.",
     });
     reloadFromDb();
   };
 
-  const handleAddAdminReplyMessage = (caseId: string, text: string) => {
+  const handleAddAdminReplyMessage = (caseId, text) => {
     const replyTime = nowStamp();
-    const authorRole = activeRole === "Public User" ? "Compliance Officer" : activeRole;
+    const authorRole =
+      activeRole === "Public User" ? "Compliance Officer" : activeRole;
 
     SafeVoiceDb.saveMessages([
       {
         id: `msg-admin-${Date.now()}`,
         caseId,
-        sender: authorRole as CaseMessage["sender"],
+        sender: authorRole,
         text,
         timestamp: replyTime,
         readByReporter: false,
-        readByAdmin: true
+        readByAdmin: true,
       },
-      ...SafeVoiceDb.getMessages()
+      ...SafeVoiceDb.getMessages(),
     ]);
 
     const allReports = SafeVoiceDb.getReports();
     const target = allReports.find((report) => report.id === caseId);
     if (target) {
-      target.status = target.status === "Received" ? "Acknowledged" : target.status;
+      target.status =
+        target.status === "Received" ? "Acknowledged" : target.status;
       target.timeline.unshift({
         id: `tl-reply-${Date.now()}`,
         title: "Staff reply posted",
-        description: "A follow-up message was posted through the anonymous communication channel.",
+        description:
+          "A follow-up message was posted through the anonymous communication channel.",
         timestamp: replyTime,
-        type: "message"
+        type: "message",
       });
       SafeVoiceDb.saveReports(allReports);
     }
 
     SafeVoiceDb.addAuditLog({
-      actorRole: authorRole as AppRole,
+      actorRole: authorRole,
       actorRef: activeUser?.id || "role-simulator",
       actionType: "MESSAGE_POSTED",
       subjectId: caseId,
       outcome: "Allowed",
-      metadataNotice: "Message audit excludes message body and reporter technical data."
+      metadataNotice:
+        "Message audit excludes message body and reporter technical data.",
     });
     reloadFromDb();
   };
 
-  const handleInviteOfficerObj = (name: string, email: string, role: AppRole) => {
+  const handleInviteOfficerObj = (name, email, role) => {
     SafeVoiceDb.saveUsers([
       ...SafeVoiceDb.getUsers(),
       {
@@ -579,8 +663,8 @@ export default function App() {
         status: "Pending",
         joinedDate: new Date().toISOString().split("T")[0],
         mfaRequired: true,
-        lastLoginReview: "Pending activation"
-      }
+        lastLoginReview: "Pending activation",
+      },
     ]);
 
     SafeVoiceDb.addAuditLog({
@@ -588,19 +672,26 @@ export default function App() {
       actorRef: activeUser?.id || "system",
       actionType: "OFFICER_INVITED",
       outcome: "Allowed",
-      metadataNotice: "Officer invite stores business contact only; MFA is mandatory before access."
+      metadataNotice:
+        "Officer invite stores business contact only; MFA is mandatory before access.",
     });
     reloadFromDb();
   };
 
-  const handleRetentionUpdate = (caseId: string, legalHold: boolean, reason?: string) => {
+  const handleRetentionUpdate = (caseId, legalHold, reason) => {
     const allReports = SafeVoiceDb.getReports();
     const target = allReports.find((report) => report.id === caseId);
     if (!target) return;
 
     const oldValue = target.retention.state;
-    target.retention.state = legalHold ? "Legal Hold" : target.status === "Closed" ? "Deletion Scheduled" : "Active";
-    target.retention.legalHoldReason = legalHold ? reason || "Legal review pending" : undefined;
+    target.retention.state = legalHold
+      ? "Legal Hold"
+      : target.status === "Closed"
+        ? "Deletion Scheduled"
+        : "Active";
+    target.retention.legalHoldReason = legalHold
+      ? reason || "Legal review pending"
+      : undefined;
     target.timeline.unshift({
       id: `tl-ret-${Date.now()}`,
       title: legalHold ? "Legal hold applied" : "Legal hold removed",
@@ -608,7 +699,7 @@ export default function App() {
         ? "Automatic deletion paused for a documented legal reason."
         : "Retention schedule restored.",
       timestamp: nowStamp(),
-      type: "retention"
+      type: "retention",
     });
     SafeVoiceDb.saveReports(allReports);
     SafeVoiceDb.addAuditLog({
@@ -619,7 +710,7 @@ export default function App() {
       outcome: "Allowed",
       oldValue,
       newValue: target.retention.state,
-      metadataNotice: "Retention event contains no reporter identifiers."
+      metadataNotice: "Retention event contains no reporter identifiers.",
     });
     reloadFromDb();
   };
@@ -647,28 +738,59 @@ export default function App() {
         <AppNavbar activeRole={activeRole} setActiveRole={setRole} />
 
         {activeRole === "Public User" && currentPath === "/access-denied" && (
-          <div className="bg-amber-50 border-b border-amber-250 px-6 py-2.5 text-xs text-amber-850 flex items-center gap-2" role="status">
+          <div
+            className="bg-amber-50 border-b border-amber-250 px-6 py-2.5 text-xs text-amber-850 flex items-center gap-2"
+            role="status"
+          >
             <Info className="w-4 h-4 shrink-0" aria-hidden="true" />
             {t("accessDenied.staffBanner")}
           </div>
         )}
 
-        <main id="main-content" className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto pb-20">
+        <main
+          id="main-content"
+          className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto pb-20"
+        >
           <AnimatePresence mode="wait">
             {currentPath === "/report" && (
-              <motion.div key="report" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
+              <motion.div
+                key="report"
+                {...m({
+                  initial: { opacity: 0, y: 10 },
+                  animate: { opacity: 1, y: 0 },
+                  exit: { opacity: 0, y: -10 },
+                })}
+              >
                 <PublicReportPortal onSubmitReport={handleFormReportSubmit} />
               </motion.div>
             )}
 
             {currentPath === "/report/success" && (
-              <motion.div key="success" {...m({ initial: { opacity: 0, scale: 0.98 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, y: -10 } })}>
-                <ReportSuccessView generatedCode={lastSuccessCode} pin={lastSuccessPin} category={lastSuccessCategory} />
+              <motion.div
+                key="success"
+                {...m({
+                  initial: { opacity: 0, scale: 0.98 },
+                  animate: { opacity: 1, scale: 1 },
+                  exit: { opacity: 0, y: -10 },
+                })}
+              >
+                <ReportSuccessView
+                  generatedCode={lastSuccessCode}
+                  pin={lastSuccessPin}
+                  category={lastSuccessCategory}
+                />
               </motion.div>
             )}
 
             {currentPath === "/track" && (
-              <motion.div key="track" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
+              <motion.div
+                key="track"
+                {...m({
+                  initial: { opacity: 0, y: 10 },
+                  animate: { opacity: 1, y: 0 },
+                  exit: { opacity: 0, y: -10 },
+                })}
+              >
                 <TrackCaseView
                   reports={reports}
                   messages={messages}
@@ -679,60 +801,138 @@ export default function App() {
             )}
 
             {currentPath === "/access-denied" && (
-              <motion.div key="denied" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
+              <motion.div
+                key="denied"
+                {...m({
+                  initial: { opacity: 0, y: 10 },
+                  animate: { opacity: 1, y: 0 },
+                  exit: { opacity: 0, y: -10 },
+                })}
+              >
                 <AccessDeniedView onGoReport={() => navigateTo("/report")} />
               </motion.div>
             )}
 
             {currentPath === "/dashboard" && staffPermission && (
-              <motion.div key="dashboard" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
-                <AdminDashboard reports={reports} activeRole={staffPermission} onNavigateToCases={() => navigateTo("/cases")} />
-              </motion.div>
-            )}
-
-            {currentPath === "/cases" && staffPermission && (
-              <motion.div key="cases" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
-                <CaseManagementGrid reports={reports} activeRole={staffPermission} onSelectCase={handleSelectCase} />
-              </motion.div>
-            )}
-
-            {currentPath === "/cases/:id" && currentDetailsCase && staffPermission && (
-              <motion.div key={`case-detail-${selectedCaseId}`} {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
-                <CaseDetailsView
-                  caseItem={currentDetailsCase}
-                  messages={messages}
-                  users={users}
+              <motion.div
+                key="dashboard"
+                {...m({
+                  initial: { opacity: 0, y: 10 },
+                  animate: { opacity: 1, y: 0 },
+                  exit: { opacity: 0, y: -10 },
+                })}
+              >
+                <AdminDashboard
+                  reports={reports}
                   activeRole={staffPermission}
-                  onUpdateStatus={handleUpdateCaseStatus}
-                  onUpdateSeverity={handleUpdateCaseSeverity}
-                  onAssignInvestigator={handleAssignInvestigator}
-                  onAddInternalNote={handleAddInternalNote}
-                  onAddAdminMessage={handleAddAdminReplyMessage}
-                  onRetentionUpdate={handleRetentionUpdate}
+                  onNavigateToCases={() => navigateTo("/cases")}
                 />
               </motion.div>
             )}
 
+            {currentPath === "/cases" && staffPermission && (
+              <motion.div
+                key="cases"
+                {...m({
+                  initial: { opacity: 0, y: 10 },
+                  animate: { opacity: 1, y: 0 },
+                  exit: { opacity: 0, y: -10 },
+                })}
+              >
+                <CaseManagementGrid
+                  reports={reports}
+                  activeRole={staffPermission}
+                  onSelectCase={handleSelectCase}
+                />
+              </motion.div>
+            )}
+
+            {currentPath === "/cases/:id" &&
+              currentDetailsCase &&
+              staffPermission && (
+                <motion.div
+                  key={`case-detail-${selectedCaseId}`}
+                  {...m({
+                    initial: { opacity: 0, y: 10 },
+                    animate: { opacity: 1, y: 0 },
+                    exit: { opacity: 0, y: -10 },
+                  })}
+                >
+                  <CaseDetailsView
+                    caseItem={currentDetailsCase}
+                    messages={messages}
+                    users={users}
+                    activeRole={staffPermission}
+                    onUpdateStatus={handleUpdateCaseStatus}
+                    onUpdateSeverity={handleUpdateCaseSeverity}
+                    onAssignInvestigator={handleAssignInvestigator}
+                    onAddInternalNote={handleAddInternalNote}
+                    onAddAdminMessage={handleAddAdminReplyMessage}
+                    onRetentionUpdate={handleRetentionUpdate}
+                  />
+                </motion.div>
+              )}
+
             {currentPath === "/messages" && staffPermission && (
-              <motion.div key="messages" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
-                <CentralEncryptedInbox reports={reports} messages={messages} activeRole={staffPermission} onAddAdminMessage={handleAddAdminReplyMessage} />
+              <motion.div
+                key="messages"
+                {...m({
+                  initial: { opacity: 0, y: 10 },
+                  animate: { opacity: 1, y: 0 },
+                  exit: { opacity: 0, y: -10 },
+                })}
+              >
+                <CentralEncryptedInbox
+                  reports={reports}
+                  messages={messages}
+                  activeRole={staffPermission}
+                  onAddAdminMessage={handleAddAdminReplyMessage}
+                />
               </motion.div>
             )}
 
             {currentPath === "/audits" && staffPermission && (
-              <motion.div key="audits" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
-                <SecurityAuditTrailLogs logs={auditLogs} activeRole={staffPermission} />
+              <motion.div
+                key="audits"
+                {...m({
+                  initial: { opacity: 0, y: 10 },
+                  animate: { opacity: 1, y: 0 },
+                  exit: { opacity: 0, y: -10 },
+                })}
+              >
+                <SecurityAuditTrailLogs
+                  logs={auditLogs}
+                  activeRole={staffPermission}
+                />
               </motion.div>
             )}
 
             {currentPath === "/users" && staffPermission && (
-              <motion.div key="users" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
-                <UsersPermissionsMatrix users={users} activeRole={staffPermission} onInviteUser={handleInviteOfficerObj} />
+              <motion.div
+                key="users"
+                {...m({
+                  initial: { opacity: 0, y: 10 },
+                  animate: { opacity: 1, y: 0 },
+                  exit: { opacity: 0, y: -10 },
+                })}
+              >
+                <UsersPermissionsMatrix
+                  users={users}
+                  activeRole={staffPermission}
+                  onInviteUser={handleInviteOfficerObj}
+                />
               </motion.div>
             )}
 
             {currentPath === "/settings" && staffPermission && (
-              <motion.div key="settings" {...m({ initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 } })}>
+              <motion.div
+                key="settings"
+                {...m({
+                  initial: { opacity: 0, y: 10 },
+                  animate: { opacity: 1, y: 0 },
+                  exit: { opacity: 0, y: -10 },
+                })}
+              >
                 <BrandedSettingsView />
               </motion.div>
             )}

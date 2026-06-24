@@ -20,8 +20,8 @@ import pl from "./locales/pl/common.json";
 // Each language gets its own bundle of strings under the "common" namespace.
 export const resources = {
   en: { common: en },
-  pl: { common: pl }
-} as const;
+  pl: { common: pl },
+};
 
 i18n
   // Detects a previously chosen language from localStorage / the browser.
@@ -36,19 +36,19 @@ i18n
     defaultNS: "common",
     interpolation: {
       // React already escapes output, so i18next does not need to.
-      escapeValue: false
+      escapeValue: false,
     },
     detection: {
       // Remember the choice in localStorage only; never in cookies sent to a server.
       order: ["localStorage", "navigator"],
       caches: ["localStorage"],
-      lookupLocalStorage: "safevoice_lang"
-    }
+      lookupLocalStorage: "safevoice_lang",
+    },
   });
 
 // Keep the <html lang="..."> attribute in step with the chosen language. Screen readers
 // and search tools rely on this to pronounce and index the page correctly (WCAG 3.1.1).
-const applyHtmlLang = (lng: string) => {
+const applyHtmlLang = (lng) => {
   if (typeof document !== "undefined") {
     document.documentElement.lang = lng;
   }

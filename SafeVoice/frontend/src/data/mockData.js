@@ -1,16 +1,4 @@
-import {
-  AppRole,
-  AuditLog,
-  CaseMessage,
-  CaseReport,
-  CaseStatus,
-  EvidenceAttachment,
-  ReportCategory,
-  ReviewRecommendation,
-  RolePermissions,
-  SaaSUser,
-  TechnicalMetadataPolicy
-} from "../types";
+import { ReportCategory } from "../types";
 import { activeJurisdiction } from "../config/activeJurisdiction";
 
 // The example cases below use the active country's controller, processor, and retention
@@ -23,15 +11,15 @@ const RETENTION_YEARS = activeJurisdiction.retentionYears;
 // jurisdiction so switching country shows that country's demo controller/processor.
 const STORAGE_VERSION = `safevoice-compliance-v3-${activeJurisdiction.code}`;
 
-export const reporterMetadataPolicy: TechnicalMetadataPolicy = {
+export const reporterMetadataPolicy = {
   reporterIpStored: false,
   userAgentStored: false,
   deviceFingerprintStored: false,
   geolocationStored: false,
-  browserFingerprintStored: false
+  browserFingerprintStored: false,
 };
 
-export const rolePermissions: RolePermissions[] = [
+export const rolePermissions = [
   {
     role: "Super Admin",
     viewReports: true,
@@ -40,7 +28,7 @@ export const rolePermissions: RolePermissions[] = [
     exportData: true,
     accessAudits: true,
     manageUsers: true,
-    manageRetention: true
+    manageRetention: true,
   },
   {
     role: "Compliance Officer",
@@ -50,7 +38,7 @@ export const rolePermissions: RolePermissions[] = [
     exportData: false,
     accessAudits: true,
     manageUsers: false,
-    manageRetention: true
+    manageRetention: true,
   },
   {
     role: "Investigator",
@@ -60,7 +48,7 @@ export const rolePermissions: RolePermissions[] = [
     exportData: false,
     accessAudits: false,
     manageUsers: false,
-    manageRetention: false
+    manageRetention: false,
   },
   {
     role: "HR Manager",
@@ -70,7 +58,7 @@ export const rolePermissions: RolePermissions[] = [
     exportData: false,
     accessAudits: false,
     manageUsers: false,
-    manageRetention: false
+    manageRetention: false,
   },
   {
     role: "Auditor",
@@ -80,17 +68,17 @@ export const rolePermissions: RolePermissions[] = [
     exportData: true,
     accessAudits: true,
     manageUsers: false,
-    manageRetention: false
-  }
+    manageRetention: false,
+  },
 ];
 
 const evidence = (
-  id: string,
-  displayName: string,
-  extension: EvidenceAttachment["extension"],
-  sizeLabel: string,
-  status: EvidenceAttachment["status"] = "Metadata stripped"
-): EvidenceAttachment => ({
+  id,
+  displayName,
+  extension,
+  sizeLabel,
+  status = "Metadata stripped",
+) => ({
   id,
   displayName,
   extension,
@@ -99,10 +87,10 @@ const evidence = (
   metadataStripped: status === "Metadata stripped",
   originalNameStored: false,
   uploadedAt: "2026-06-01 10:00",
-  storageVaultRef: `vault://safevoice/evidence/${id}`
+  storageVaultRef: `vault://safevoice/evidence/${id}`,
 });
 
-export const initialUsers: SaaSUser[] = [
+export const initialUsers = [
   {
     id: "usr-1",
     name: "Jan Kowalski",
@@ -111,7 +99,7 @@ export const initialUsers: SaaSUser[] = [
     status: "Active",
     joinedDate: "2026-01-10",
     mfaRequired: true,
-    lastLoginReview: "2026-06-14 09:12"
+    lastLoginReview: "2026-06-14 09:12",
   },
   {
     id: "usr-2",
@@ -121,7 +109,7 @@ export const initialUsers: SaaSUser[] = [
     status: "Active",
     joinedDate: "2026-02-15",
     mfaRequired: true,
-    lastLoginReview: "2026-06-16 08:45"
+    lastLoginReview: "2026-06-16 08:45",
   },
   {
     id: "usr-3",
@@ -131,7 +119,7 @@ export const initialUsers: SaaSUser[] = [
     status: "Active",
     joinedDate: "2026-03-01",
     mfaRequired: true,
-    lastLoginReview: "2026-06-15 11:20"
+    lastLoginReview: "2026-06-15 11:20",
   },
   {
     id: "usr-4",
@@ -141,7 +129,7 @@ export const initialUsers: SaaSUser[] = [
     status: "Active",
     joinedDate: "2026-04-12",
     mfaRequired: true,
-    lastLoginReview: "2026-06-12 10:02"
+    lastLoginReview: "2026-06-12 10:02",
   },
   {
     id: "usr-5",
@@ -151,11 +139,11 @@ export const initialUsers: SaaSUser[] = [
     status: "Pending",
     joinedDate: "2026-05-20",
     mfaRequired: true,
-    lastLoginReview: "Not activated"
-  }
+    lastLoginReview: "Not activated",
+  },
 ];
 
-export const initialReports: CaseReport[] = [
+export const initialReports = [
   {
     id: "SV-2026-001",
     trackingCode: "SV-W4R9-M2Q7",
@@ -166,7 +154,7 @@ export const initialReports: CaseReport[] = [
     department: "Procurement",
     attachments: [
       evidence("ev-001-a", "Evidence 1 (PDF)", "PDF", "1.8 MB"),
-      evidence("ev-001-b", "Evidence 2 (PNG)", "PNG", "420 KB")
+      evidence("ev-001-b", "Evidence 2 (PNG)", "PNG", "420 KB"),
     ],
     status: "Investigating",
     severity: "Critical",
@@ -185,9 +173,13 @@ export const initialReports: CaseReport[] = [
       state: "Active",
       retentionYears: RETENTION_YEARS,
       deleteAfter: "2029-12-31",
-      irrelevantPersonalDataDeletionDue: "2026-05-26"
+      irrelevantPersonalDataDeletionDue: "2026-05-26",
     },
-    riskFlags: ["Public procurement", "Anti-retaliation", "Evidence preservation"],
+    riskFlags: [
+      "Public procurement",
+      "Anti-retaliation",
+      "Evidence preservation",
+    ],
     timeline: [
       {
         id: "tl-001-1",
@@ -195,7 +187,7 @@ export const initialReports: CaseReport[] = [
         description:
           "Intake accepted without IP, user-agent, device, browser, or geolocation storage.",
         timestamp: "2026-05-12 11:24",
-        type: "system"
+        type: "system",
       },
       {
         id: "tl-001-2",
@@ -203,7 +195,7 @@ export const initialReports: CaseReport[] = [
         description:
           "7-day acknowledgement obligation satisfied through the tracking channel.",
         timestamp: "2026-05-13 09:00",
-        type: "status"
+        type: "status",
       },
       {
         id: "tl-001-3",
@@ -211,7 +203,7 @@ export const initialReports: CaseReport[] = [
         description:
           "Original filenames were not persisted; files are referenced by vault IDs after malware and metadata checks.",
         timestamp: "2026-05-13 09:15",
-        type: "attachment"
+        type: "attachment",
       },
       {
         id: "tl-001-4",
@@ -219,9 +211,9 @@ export const initialReports: CaseReport[] = [
         description:
           "Case assigned to an authorized investigator with written confidentiality duties.",
         timestamp: "2026-05-17 10:30",
-        type: "status"
-      }
-    ]
+        type: "status",
+      },
+    ],
   },
   {
     id: "SV-2026-002",
@@ -240,7 +232,8 @@ export const initialReports: CaseReport[] = [
     assignedInvestigator: "Zofia Wisniewska",
     disclosureMode: "Anonymous",
     intakeChannel: "Anonymous web portal",
-    lawfulBasis: "Legal obligation, regulatory investigation, and protection of data subjects",
+    lawfulBasis:
+      "Legal obligation, regulatory investigation, and protection of data subjects",
     controller: CONTROLLER,
     processor: PROCESSOR,
     slaHoursRemaining: 1656,
@@ -249,7 +242,7 @@ export const initialReports: CaseReport[] = [
       state: "Active",
       retentionYears: RETENTION_YEARS,
       deleteAfter: "2029-12-31",
-      irrelevantPersonalDataDeletionDue: "2026-06-02"
+      irrelevantPersonalDataDeletionDue: "2026-06-02",
     },
     riskFlags: ["GDPR", "Possible breach notification", "Access review"],
     timeline: [
@@ -259,7 +252,7 @@ export const initialReports: CaseReport[] = [
         description:
           "Personal data minimization checks started; non-relevant identifiers are due for deletion within 14 days.",
         timestamp: "2026-05-19 16:42",
-        type: "system"
+        type: "system",
       },
       {
         id: "tl-002-2",
@@ -267,9 +260,9 @@ export const initialReports: CaseReport[] = [
         description:
           "Compliance officer opened breach-risk triage without exposing reporter metadata to admins.",
         timestamp: "2026-05-20 08:15",
-        type: "status"
-      }
-    ]
+        type: "status",
+      },
+    ],
   },
   {
     id: "SV-2026-003",
@@ -287,7 +280,8 @@ export const initialReports: CaseReport[] = [
     assignedInvestigator: "Katarzyna Mazur",
     disclosureMode: "HR Handoff",
     intakeChannel: "HR grievance handoff",
-    lawfulBasis: "HR grievance handling under internal labour procedure; no SafeVoice tracking code issued",
+    lawfulBasis:
+      "HR grievance handling under internal labour procedure; no SafeVoice tracking code issued",
     controller: CONTROLLER,
     processor: "Internal HR desk",
     slaHoursRemaining: 2160,
@@ -296,7 +290,7 @@ export const initialReports: CaseReport[] = [
       state: "Active",
       retentionYears: RETENTION_YEARS,
       deleteAfter: "2029-12-31",
-      irrelevantPersonalDataDeletionDue: "2026-06-07"
+      irrelevantPersonalDataDeletionDue: "2026-06-07",
     },
     riskFlags: ["Outside whistleblower scope", "HR confidentiality required"],
     timeline: [
@@ -306,37 +300,35 @@ export const initialReports: CaseReport[] = [
         description:
           "No anonymous tracking PIN was generated. The UI clearly separates this from the whistleblower channel.",
         timestamp: "2026-05-24 07:12",
-        type: "system"
-      }
-    ]
-  }
+        type: "system",
+      },
+    ],
+  },
 ];
 
-export const initialMessages: CaseMessage[] = [
+export const initialMessages = [
   {
     id: "msg-1-1",
     caseId: "SV-2026-001",
     sender: "Compliance Officer",
-    text:
-      "We acknowledged your report. If you can provide the approximate meeting date or procurement stage, do so without adding details that could identify you.",
+    text: "We acknowledged your report. If you can provide the approximate meeting date or procurement stage, do so without adding details that could identify you.",
     timestamp: "2026-05-15 10:00",
     readByReporter: true,
-    readByAdmin: true
+    readByAdmin: true,
   },
   {
     id: "msg-1-2",
     caseId: "SV-2026-001",
     sender: "Reporter",
-    text:
-      "The final specification call took place in the second week of May. The uploaded evidence points to the unique optical component requirement.",
+    text: "The final specification call took place in the second week of May. The uploaded evidence points to the unique optical component requirement.",
     timestamp: "2026-05-15 14:24",
     readByReporter: true,
     readByAdmin: true,
-    attachments: [initialReports[0].attachments[0]]
-  }
+    attachments: [initialReports[0].attachments[0]],
+  },
 ];
 
-export const initialAuditLogs: AuditLog[] = [
+export const initialAuditLogs = [
   {
     id: "aud-1",
     actorRole: "System",
@@ -347,7 +339,7 @@ export const initialAuditLogs: AuditLog[] = [
     outcome: "Recorded",
     metadataNotice:
       "Reporter IP, user-agent, browser fingerprint, device fingerprint, and geolocation are not available to administrators.",
-    hashChain: "seal-001"
+    hashChain: "seal-001",
   },
   {
     id: "aud-2",
@@ -359,8 +351,9 @@ export const initialAuditLogs: AuditLog[] = [
     outcome: "Allowed",
     oldValue: "Unassigned",
     newValue: "Tomasz Wojcik",
-    metadataNotice: "Administrative session details are restricted to security operations, not case investigators.",
-    hashChain: "seal-002"
+    metadataNotice:
+      "Administrative session details are restricted to security operations, not case investigators.",
+    hashChain: "seal-002",
   },
   {
     id: "aud-3",
@@ -371,26 +364,28 @@ export const initialAuditLogs: AuditLog[] = [
     timestamp: "2026-05-20 08:17:00",
     outcome: "Recorded",
     metadataNotice: "14-day irrelevant personal data deletion timer started.",
-    hashChain: "seal-003"
-  }
+    hashChain: "seal-003",
+  },
 ];
 
-export const complianceReview: ReviewRecommendation[] = [
+export const complianceReview = [
   {
     area: "Public report intake",
-    currentFeature: "Category, incident date, department, narrative, optional evidence",
+    currentFeature:
+      "Category, incident date, department, narrative, optional evidence",
     classification: "Modify",
     justification:
       "Keep only data needed to assess the report; add clear privacy notice, lawful basis, external reporting information, and anonymous defaults.",
-    risk: "Overly specific department names or narrative text can re-identify reporters in small teams."
+    risk: "Overly specific department names or narrative text can re-identify reporters in small teams.",
   },
   {
     area: "Reporter identity fields",
-    currentFeature: "Legal name and corporate email were requested when anonymity was disabled",
+    currentFeature:
+      "Legal name and corporate email were requested when anonymity was disabled",
     classification: "Remove",
     justification:
       "A whistleblower channel should not require direct identifiers. Contact should be through a tracking code or vault-backed relay only when voluntarily chosen.",
-    risk: "Administrators could infer or disclose reporter identity."
+    risk: "Administrators could infer or disclose reporter identity.",
   },
   {
     area: "Labour dispute handling",
@@ -398,7 +393,7 @@ export const complianceReview: ReviewRecommendation[] = [
     classification: "Modify",
     justification:
       "Separate ordinary HR grievances from whistleblower reports, do not promise anonymous whistleblower protections for out-of-scope grievances, and avoid collecting unnecessary identifiers.",
-    risk: "Mislabeling HR grievances as whistleblower cases creates legal confusion and confidentiality risk."
+    risk: "Mislabeling HR grievances as whistleblower cases creates legal confusion and confidentiality risk.",
   },
   {
     area: "Tracking workflow",
@@ -406,7 +401,7 @@ export const complianceReview: ReviewRecommendation[] = [
     classification: "Keep",
     justification:
       "Anonymous tracking supports acknowledgement, follow-up questions, and feedback without direct identity collection.",
-    risk: "Tracking code must be high entropy, rate-limited, and never described as a decryption key."
+    risk: "Tracking code must be high entropy, rate-limited, and never described as a decryption key.",
   },
   {
     area: "File upload",
@@ -414,7 +409,7 @@ export const complianceReview: ReviewRecommendation[] = [
     classification: "Modify",
     justification:
       "Restrict uploads to PDF, PNG, JPG, XML, and DOCX; remove original filenames from admin views; model metadata stripping, malware scanning, signed URLs, and encrypted storage.",
-    risk: "Original filenames, document metadata, and spreadsheet content can reveal identity."
+    risk: "Original filenames, document metadata, and spreadsheet content can reveal identity.",
   },
   {
     area: "Audit logs",
@@ -422,7 +417,7 @@ export const complianceReview: ReviewRecommendation[] = [
     classification: "Modify",
     justification:
       "Reporter IP and user-agent should not be collected for case handling. Admin security telemetry should be restricted to security operations and not shown to case handlers.",
-    risk: "Technical metadata can defeat anonymity."
+    risk: "Technical metadata can defeat anonymity.",
   },
   {
     area: "Dashboards and analytics",
@@ -430,15 +425,16 @@ export const complianceReview: ReviewRecommendation[] = [
     classification: "Remove",
     justification:
       "Aggregate analytics are not necessary for handling reports in the mock and can re-identify reporters in low-volume teams.",
-    risk: "Small-cell analytics can expose reporting patterns."
+    risk: "Small-cell analytics can expose reporting patterns.",
   },
   {
     area: "RBAC",
-    currentFeature: "Public users were auto-upgraded to admin roles in simulator mode",
+    currentFeature:
+      "Public users were auto-upgraded to admin roles in simulator mode",
     classification: "Modify",
     justification:
       "Role changes must be explicit and access denied by default. Least privilege must govern case, audit, retention, and user-management actions.",
-    risk: "Privilege confusion and accidental unauthorized case access."
+    risk: "Privilege confusion and accidental unauthorized case access.",
   },
   {
     area: "Retention",
@@ -446,7 +442,7 @@ export const complianceReview: ReviewRecommendation[] = [
     classification: "Add",
     justification:
       "Add configurable retention, legal hold, 14-day irrelevant-data deletion timer, and closed-case deletion scheduling.",
-    risk: "Keeping reports longer than necessary conflicts with storage limitation."
+    risk: "Keeping reports longer than necessary conflicts with storage limitation.",
   },
   {
     area: "Administrative security",
@@ -454,16 +450,16 @@ export const complianceReview: ReviewRecommendation[] = [
     classification: "Add",
     justification:
       "Display MFA, account lockout, session expiration, session revocation, login monitoring, and password policy requirements.",
-    risk: "Compromised back-office accounts can expose sensitive case material."
-  }
+    risk: "Compromised back-office accounts can expose sensitive case material.",
+  },
 ];
 
-const readJson = <T,>(key: string, fallback: T): T => {
+const readJson = (key, fallback) => {
   SafeVoiceDb.ensureSeeded();
   const raw = localStorage.getItem(key);
   if (!raw) return fallback;
   try {
-    return JSON.parse(raw) as T;
+    return JSON.parse(raw);
   } catch {
     localStorage.setItem(key, JSON.stringify(fallback));
     return fallback;
@@ -483,51 +479,51 @@ export class SafeVoiceDb {
     localStorage.setItem("sv_users", JSON.stringify(initialUsers));
   }
 
-  static getReports(): CaseReport[] {
+  static getReports() {
     return readJson("sv_reports", initialReports);
   }
 
-  static saveReports(reports: CaseReport[]) {
+  static saveReports(reports) {
     localStorage.setItem("sv_reports", JSON.stringify(reports));
   }
 
-  static getAuditLogs(): AuditLog[] {
+  static getAuditLogs() {
     return readJson("sv_audit_logs", initialAuditLogs);
   }
 
-  static saveAuditLogs(logs: AuditLog[]) {
+  static saveAuditLogs(logs) {
     localStorage.setItem("sv_audit_logs", JSON.stringify(logs));
   }
 
-  static getMessages(): CaseMessage[] {
+  static getMessages() {
     return readJson("sv_messages", initialMessages);
   }
 
-  static saveMessages(messages: CaseMessage[]) {
+  static saveMessages(messages) {
     localStorage.setItem("sv_messages", JSON.stringify(messages));
   }
 
-  static getUsers(): SaaSUser[] {
+  static getUsers() {
     return readJson("sv_users", initialUsers);
   }
 
-  static saveUsers(users: SaaSUser[]) {
+  static saveUsers(users) {
     localStorage.setItem("sv_users", JSON.stringify(users));
   }
 
-  static addAuditLog(log: Omit<AuditLog, "id" | "timestamp" | "hashChain">) {
+  static addAuditLog(log) {
     const logs = this.getAuditLogs();
-    const newLog: AuditLog = {
+    const newLog = {
       id: `aud-${Date.now()}`,
       timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
       hashChain: seal(),
-      ...log
+      ...log,
     };
     this.saveAuditLogs([newLog, ...logs]);
     return newLog;
   }
 
-  static can(role: AppRole, permission: keyof Omit<RolePermissions, "role">) {
+  static can(role, permission) {
     const match = rolePermissions.find((p) => p.role === role);
     return Boolean(match?.[permission]);
   }

@@ -12,42 +12,8 @@
 import { ReportCategory } from "../types";
 
 // One external authority a reporter can go to outside the company.
-export interface ExternalAuthority {
-  // Short label shown to the user, e.g. "Commissioner for Human Rights (RPO)".
-  name: string;
-  // Official website so the reporter can reach the authority directly.
-  url: string;
-}
 
 // All the rules that change from one EU country to another.
-export interface Jurisdiction {
-  // ISO 3166-1 alpha-2 country code, e.g. "PL".
-  code: string;
-  // Human-readable country name in English (used for admin tooling).
-  countryName: string;
-  // The organisation that decides why and how report data is processed (GDPR controller).
-  controllerName: string;
-  // The internal team/processor that handles the reports day to day.
-  processorName: string;
-  // Where a reporter can report OUTSIDE the company (national authority).
-  externalAuthority: ExternalAuthority;
-  // How many days the company has to confirm it received the report.
-  acknowledgementDays: number;
-  // How many months the company has to give feedback on what it did.
-  feedbackMonths: number;
-  // Extra months allowed for feedback in justified, complex cases (0 if not allowed).
-  feedbackExtensionMonths: number;
-  // How many years the report register is kept after the case year ends.
-  retentionYears: number;
-  // How many days to delete personal data that turns out to be irrelevant.
-  irrelevantDataDeletionDays: number;
-  // The language the portal shows first in this country.
-  defaultLocale: string;
-  // All languages this country deployment offers.
-  supportedLocales: string[];
-  // Short note naming the law(s) this deployment follows (shown in the footer/notices).
-  legalBasisLabel: string;
-}
 
 // ---------------------------------------------------------------------------
 // EU-wide baseline.
@@ -58,7 +24,7 @@ export interface Jurisdiction {
 // Source: Directive (EU) 2019/1937 Art. 9(1)(b) (7 days) and Art. 9(1)(f) (3 months).
 // https://eur-lex.europa.eu/eli/dir/2019/1937/oj/eng
 // ---------------------------------------------------------------------------
-export const EU_DEFAULT: Jurisdiction = {
+export const EU_DEFAULT = {
   code: "EU",
   countryName: "European Union (baseline)",
   controllerName: "RegulaOne (tenant controller)",
@@ -66,7 +32,7 @@ export const EU_DEFAULT: Jurisdiction = {
   externalAuthority: {
     // Each country must point this at its own competent authority before launch.
     name: "National competent authority",
-    url: "https://commission.europa.eu/about-european-commission/contact_en"
+    url: "https://commission.europa.eu/about-european-commission/contact_en",
   },
   acknowledgementDays: 7, // Directive Art. 9(1)(b)
   feedbackMonths: 3, // Directive Art. 9(1)(f)
@@ -75,7 +41,7 @@ export const EU_DEFAULT: Jurisdiction = {
   irrelevantDataDeletionDays: 14, // Conservative default; confirm per country.
   defaultLocale: "en",
   supportedLocales: ["en"],
-  legalBasisLabel: "Directive (EU) 2019/1937 and GDPR"
+  legalBasisLabel: "Directive (EU) 2019/1937 and GDPR",
 };
 
 // ---------------------------------------------------------------------------
@@ -91,14 +57,14 @@ export const EU_DEFAULT: Jurisdiction = {
 //   - Art. 7(1): anonymous reports may be accepted.
 // https://bip.brpo.gov.pl/en/content/act-protection-whistleblowers
 // ---------------------------------------------------------------------------
-export const POLAND: Jurisdiction = {
+export const POLAND = {
   code: "PL",
   countryName: "Poland",
   controllerName: "RegulaOne Poland S.A.",
   processorName: "SafeVoice EU hosting processor",
   externalAuthority: {
     name: "Commissioner for Human Rights (Rzecznik Praw Obywatelskich)",
-    url: "https://bip.brpo.gov.pl/en"
+    url: "https://bip.brpo.gov.pl/en",
   },
   acknowledgementDays: 7, // Polish Act Art. 37
   feedbackMonths: 3, // Polish Act Art. 41(1)
@@ -108,7 +74,7 @@ export const POLAND: Jurisdiction = {
   defaultLocale: "pl",
   supportedLocales: ["pl", "en"],
   legalBasisLabel:
-    "Directive (EU) 2019/1937 and the Polish Act of 14 June 2024 on the Protection of Whistleblowers"
+    "Directive (EU) 2019/1937 and the Polish Act of 14 June 2024 on the Protection of Whistleblowers",
 };
 
 // ---------------------------------------------------------------------------
@@ -119,7 +85,7 @@ export const POLAND: Jurisdiction = {
 // counsel confirm them before going live. Until verified they fall back to EU baseline
 // values, which are safe defaults.
 // ---------------------------------------------------------------------------
-export const GERMANY: Jurisdiction = {
+export const GERMANY = {
   ...EU_DEFAULT,
   code: "DE",
   countryName: "Germany",
@@ -127,14 +93,15 @@ export const GERMANY: Jurisdiction = {
   externalAuthority: {
     // Hinweisgeberschutzgesetz (HinSchG) — confirm before production.
     name: "Federal Office of Justice external reporting office (Bundesamt für Justiz)",
-    url: "https://www.bundesjustizamt.de"
+    url: "https://www.bundesjustizamt.de",
   },
   defaultLocale: "de",
   supportedLocales: ["de", "en"],
-  legalBasisLabel: "Directive (EU) 2019/1937 and the German Hinweisgeberschutzgesetz (HinSchG)"
+  legalBasisLabel:
+    "Directive (EU) 2019/1937 and the German Hinweisgeberschutzgesetz (HinSchG)",
 };
 
-export const FRANCE: Jurisdiction = {
+export const FRANCE = {
   ...EU_DEFAULT,
   code: "FR",
   countryName: "France",
@@ -142,21 +109,21 @@ export const FRANCE: Jurisdiction = {
   externalAuthority: {
     // Loi Sapin II / Défenseur des droits — confirm before production.
     name: "Défenseur des droits",
-    url: "https://www.defenseurdesdroits.fr"
+    url: "https://www.defenseurdesdroits.fr",
   },
   defaultLocale: "fr",
   supportedLocales: ["fr", "en"],
-  legalBasisLabel: "Directive (EU) 2019/1937 and the French Loi Sapin II"
+  legalBasisLabel: "Directive (EU) 2019/1937 and the French Loi Sapin II",
 };
 
 // Lookup table of every jurisdiction we ship, keyed by country code.
-export const JURISDICTIONS: Record<string, Jurisdiction> = {
+export const JURISDICTIONS = {
   EU: EU_DEFAULT,
   PL: POLAND,
   DE: GERMANY,
-  FR: FRANCE
+  FR: FRANCE,
 };
 
 // The set of report categories follows the material scope of Directive (EU) 2019/1937
 // (Art. 2) and is the same across EU countries, so it is defined once here.
-export const REPORT_CATEGORIES: ReportCategory[] = Object.values(ReportCategory);
+export const REPORT_CATEGORIES = Object.values(ReportCategory);

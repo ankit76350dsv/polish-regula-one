@@ -12,18 +12,12 @@
 import { useReducedMotion } from "motion/react";
 
 // The shape of the animation props we pass to a <motion.*> element.
-export interface MotionProps {
-  initial?: any;
-  animate?: any;
-  exit?: any;
-  transition?: any;
-}
 
-export function useMotionProps(): (props: MotionProps) => MotionProps {
+export function useMotionProps() {
   // true when the user asked the system to reduce motion.
   const prefersReduced = useReducedMotion();
 
-  return (props: MotionProps): MotionProps => {
+  return (props) => {
     if (!prefersReduced) return props;
     // Reduced motion: keep the final ("animate") state but skip the moving start state
     // and make any transition instant, so content appears without sliding or fading.
@@ -31,7 +25,7 @@ export function useMotionProps(): (props: MotionProps) => MotionProps {
       initial: false,
       animate: props.animate ?? {},
       exit: props.exit ? {} : undefined,
-      transition: { duration: 0 }
+      transition: { duration: 0 },
     };
   };
 }
