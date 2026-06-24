@@ -1,6 +1,6 @@
 // React Query hooks for the notification Hub. Mirrors the pattern in useTeam.js.
 //
-// - useUnreadCount(): badge number, auto-refreshes every 30s (poll until SSE lands in Phase 4).
+// - useUnreadCount(): badge number, refreshed through query invalidation after mutations.
 // - useNotifications(): paginated list, optionally filtered by status.
 // - mutations: mark read / mark all read / archive / delete — all invalidate the caches.
 // - usePreferences() / useUpdatePreferences(): per-user channel settings.
@@ -16,13 +16,11 @@ export const NOTIF_KEYS = {
   prefs:  ['notifications', 'prefs'],
 };
 
-// Unread badge count. Polls every 30s and on window focus so the bell stays current.
+// Unread badge count. Mutations invalidate this cache when needed.
 export function useUnreadCount() {
   return useQuery({
     queryKey: NOTIF_KEYS.unread,
     queryFn:  () => notificationService.unreadCount(),
-    refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
     select: (d) => d?.unread ?? 0,
   });
 }
