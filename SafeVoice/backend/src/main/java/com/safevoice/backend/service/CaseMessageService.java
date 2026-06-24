@@ -42,7 +42,7 @@ public class CaseMessageService {
      * Appends a timeline event and writes a MESSAGE_POSTED audit log.
      */
     public CaseMessage postMessage(
-            UUID caseId,
+            String caseId,
             String text,
             String sender,
             String tenantId,
@@ -75,7 +75,7 @@ public class CaseMessageService {
 
         // Append message event to parent case report timeline
         report.getTimeline().add(new TimelineEvent(
-                UUID.randomUUID(),
+                new org.bson.types.ObjectId().toHexString(),
                 "New Message",
                 "Chat message posted by " + sender,
                 Instant.now(),
@@ -92,7 +92,7 @@ public class CaseMessageService {
                 caseId,
                 AuditOutcome.RECORDED,
                 null,
-                saved.getId().toString(),
+                saved.getId(),
                 "Message posted inside case channel."
         );
 
@@ -103,7 +103,7 @@ public class CaseMessageService {
      * Retrieves all chat messages for a case report.
      * Enforces tenant isolation.
      */
-    public List<CaseMessage> getMessages(UUID caseId, String tenantId) {
+    public List<CaseMessage> getMessages(String caseId, String tenantId) {
         // Enforce validation by fetching case details first (triggers NoSuchElement if invalid/cross-tenant)
         caseReportService.getById(caseId, tenantId);
         return caseMessageRepository.findAllByTenantIdAndCaseIdOrderByTimestampAsc(tenantId, caseId);

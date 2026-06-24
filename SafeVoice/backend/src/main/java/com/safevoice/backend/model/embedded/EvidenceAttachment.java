@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
-import java.util.UUID;
+import org.bson.types.ObjectId;
 
 /**
  * Embedded document representing whistleblower evidence attachments,
@@ -18,7 +18,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class EvidenceAttachment {
 
-    private UUID id = UUID.randomUUID();
+    private String id = new ObjectId().toHexString();
     private String displayName;
     private AllowedFileExtension extension; // PDF, PNG, JPG, XML, DOCX
     private String sizeLabel;

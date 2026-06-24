@@ -19,7 +19,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class CaseSubmissionResponse {
 
-    private UUID id;
+    private String id;
 
     private String trackingCode;
 

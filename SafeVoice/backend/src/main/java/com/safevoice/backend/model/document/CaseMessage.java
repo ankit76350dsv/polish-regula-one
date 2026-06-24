@@ -24,7 +24,7 @@ import java.util.UUID;
 public class CaseMessage extends BaseDocument {
 
     @Indexed
-    private UUID caseId;
+    private String caseId;
 
     private String sender; // e.g., Reporter, Compliance Officer, Investigator, HR Manager, System
 

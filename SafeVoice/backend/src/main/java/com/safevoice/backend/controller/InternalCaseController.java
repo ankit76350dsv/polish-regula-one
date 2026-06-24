@@ -54,7 +54,7 @@ public class InternalCaseController {
      */
     @GetMapping("/{caseId}")
     public ResponseEntity<CaseReport> getById(
-            @PathVariable UUID caseId,
+            @PathVariable String caseId,
             @RequestHeader("X-Tenant-ID") String tenantId) {
         CaseReport report = caseReportService.getById(caseId, tenantId);
         return ResponseEntity.ok(report);
@@ -65,7 +65,7 @@ public class InternalCaseController {
      */
     @PatchMapping("/{caseId}/status")
     public ResponseEntity<CaseReport> updateStatus(
-            @PathVariable UUID caseId,
+            @PathVariable String caseId,
             @RequestParam("status") CaseStatus status,
             @RequestHeader("X-Tenant-ID") String tenantId,
             @RequestHeader("X-Actor-Role") String actorRole,
@@ -79,7 +79,7 @@ public class InternalCaseController {
      */
     @PatchMapping("/{caseId}/severity")
     public ResponseEntity<CaseReport> updateSeverity(
-            @PathVariable UUID caseId,
+            @PathVariable String caseId,
             @RequestParam("severity") CaseSeverity severity,
             @RequestHeader("X-Tenant-ID") String tenantId,
             @RequestHeader("X-Actor-Role") String actorRole,
@@ -93,7 +93,7 @@ public class InternalCaseController {
      */
     @PatchMapping("/{caseId}/assign")
     public ResponseEntity<CaseReport> assignInvestigator(
-            @PathVariable UUID caseId,
+            @PathVariable String caseId,
             @RequestParam("investigator") String investigator,
             @RequestHeader("X-Tenant-ID") String tenantId,
             @RequestHeader("X-Actor-Role") String actorRole,
@@ -107,7 +107,7 @@ public class InternalCaseController {
      */
     @PostMapping("/{caseId}/messages")
     public ResponseEntity<CaseMessage> postMessage(
-            @PathVariable UUID caseId,
+            @PathVariable String caseId,
             @RequestBody String text,
             @RequestHeader("X-Tenant-ID") String tenantId,
             @RequestHeader("X-Actor-Role") String actorRole,
@@ -128,7 +128,7 @@ public class InternalCaseController {
      */
     @GetMapping("/{caseId}/messages")
     public ResponseEntity<List<CaseMessage>> getMessages(
-            @PathVariable UUID caseId,
+            @PathVariable String caseId,
             @RequestHeader("X-Tenant-ID") String tenantId) {
         List<CaseMessage> messages = caseMessageService.getMessages(caseId, tenantId);
         return ResponseEntity.ok(messages);
@@ -139,8 +139,8 @@ public class InternalCaseController {
      */
     @GetMapping("/{caseId}/attachments/{attachmentId}")
     public ResponseEntity<byte[]> downloadAttachment(
-            @PathVariable UUID caseId,
-            @PathVariable UUID attachmentId,
+            @PathVariable String caseId,
+            @PathVariable String attachmentId,
             @RequestHeader("X-Tenant-ID") String tenantId) {
         // Enforce tenant authorization and case existence
         CaseReport report = caseReportService.getById(caseId, tenantId);

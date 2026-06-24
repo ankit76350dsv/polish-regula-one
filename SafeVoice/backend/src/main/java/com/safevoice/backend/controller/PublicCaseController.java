@@ -70,7 +70,7 @@ public class PublicCaseController {
      */
     @PostMapping("/{caseId}/messages")
     public ResponseEntity<CaseMessage> postMessage(
-            @PathVariable UUID caseId,
+            @PathVariable String caseId,
             @RequestParam("trackingCode") String trackingCode,
             @RequestParam(value = "pin", required = false) String pin,
             @RequestBody String text,
@@ -95,7 +95,7 @@ public class PublicCaseController {
      */
     @GetMapping("/{caseId}/messages")
     public ResponseEntity<List<CaseMessage>> getMessages(
-            @PathVariable UUID caseId,
+            @PathVariable String caseId,
             @RequestParam("trackingCode") String trackingCode,
             @RequestParam(value = "pin", required = false) String pin,
             @RequestHeader("X-Tenant-ID") String tenantId) {
@@ -112,7 +112,7 @@ public class PublicCaseController {
      */
     @PostMapping(value = "/{caseId}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<EvidenceAttachment> uploadAttachment(
-            @PathVariable UUID caseId,
+            @PathVariable String caseId,
             @RequestParam("trackingCode") String trackingCode,
             @RequestParam(value = "pin", required = false) String pin,
             @RequestParam("file") MultipartFile file,

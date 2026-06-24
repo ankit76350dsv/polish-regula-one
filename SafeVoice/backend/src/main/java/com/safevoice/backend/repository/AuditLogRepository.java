@@ -11,7 +11,7 @@ import java.util.UUID;
  * MongoDB repository for managing immutable AuditLog documents.
  */
 @Repository
-public interface AuditLogRepository extends MongoRepository<AuditLog, UUID> {
+public interface AuditLogRepository extends MongoRepository<AuditLog, String> {
 
     /**
      * Retrieves all audit logs for a tenant.

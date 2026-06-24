@@ -25,8 +25,7 @@ import java.util.UUID;
 public class AuditLog {
 
     @Id
-    @Builder.Default
-    private UUID id = UUID.randomUUID();
+    private String id;
 
     @Indexed
     private String tenantId;
@@ -37,7 +36,7 @@ public class AuditLog {
 
     private AuditActionType actionType;
 
-    private UUID subjectId;
+    private String subjectId;
 
     @Builder.Default
     private Instant timestamp = Instant.now();

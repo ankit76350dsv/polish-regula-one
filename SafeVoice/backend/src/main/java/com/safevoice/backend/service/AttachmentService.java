@@ -70,14 +70,14 @@ public class AttachmentService {
             String checksum = HexFormat.of().formatHex(hash);
 
             // Generate UUID storage filename to strip metadata and prevent tracing original names
-            UUID storageRef = UUID.randomUUID();
-            Path filePath = targetDir.resolve(storageRef.toString());
+            String storageRef = UUID.randomUUID().toString();
+            Path filePath = targetDir.resolve(storageRef);
             Files.write(filePath, fileBytes);
 
             String sizeLabel = getHumanReadableSize(file.getSize());
 
             return new EvidenceAttachment(
-                    UUID.randomUUID(),
+                    new org.bson.types.ObjectId().toHexString(),
                     originalFilename,
                     extension,
                     sizeLabel,

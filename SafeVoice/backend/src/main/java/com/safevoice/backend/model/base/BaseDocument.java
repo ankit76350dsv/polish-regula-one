@@ -22,7 +22,7 @@ import java.util.UUID;
 public abstract class BaseDocument {
 
     @Id
-    private UUID id = UUID.randomUUID();
+    private String id;
 
     @Indexed
     private String tenantId;

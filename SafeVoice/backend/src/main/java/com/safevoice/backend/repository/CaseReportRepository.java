@@ -12,7 +12,7 @@ import java.util.UUID;
  * MongoDB repository for managing CaseReport documents.
  */
 @Repository
-public interface CaseReportRepository extends MongoRepository<CaseReport, UUID> {
+public interface CaseReportRepository extends MongoRepository<CaseReport, String> {
 
     /**
      * Finds a case report within a specific tenant context by its tracking code.
