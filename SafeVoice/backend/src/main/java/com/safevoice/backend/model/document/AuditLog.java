@@ -21,7 +21,7 @@ import java.util.UUID;
 @EqualsAndHashCode
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "audit_logs")
+@Document(collection = "safevoice_audit_logs")
 public class AuditLog {
 
     @Id

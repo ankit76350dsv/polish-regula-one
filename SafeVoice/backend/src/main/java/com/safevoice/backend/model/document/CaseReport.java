@@ -24,7 +24,7 @@ import java.util.List;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@Document(collection = "case_reports")
+@Document(collection = "safevoice_case_reports")
 @CompoundIndexes({
     @CompoundIndex(name = "tenant_tracking_idx", def = "{'tenantId': 1, 'trackingCode': 1}", unique = true, sparse = true)
 })

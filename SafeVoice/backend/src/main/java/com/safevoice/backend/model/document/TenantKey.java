@@ -13,7 +13,7 @@ import lombok.AllArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "tenant_keys")
+@Document(collection = "safevoice_tenant_keys")
 public class TenantKey {
 
     @Id

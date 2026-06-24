@@ -20,7 +20,7 @@ import java.util.UUID;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@Document(collection = "case_messages")
+@Document(collection = "safevoice_case_messages")
 public class CaseMessage extends BaseDocument {
 
     @Indexed
