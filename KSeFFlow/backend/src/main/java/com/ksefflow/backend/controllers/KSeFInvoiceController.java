@@ -176,6 +176,27 @@ public class KSeFInvoiceController {
         return ResponseEntity.status(HttpStatus.CREATED).body(correction);
     }
 
+    // ── Manual offline retry ─────────────────────────────────────────────────────
+
+    /**
+     * Retry an offline-parked invoice NOW (user-triggered from the Offline Queue UI), instead of
+     * waiting for the scheduled background retry job. Really re-attempts submission to KSeF and
+     * returns the updated invoice (SENT on success, or still OFFLINE_MODE on failure).
+     */
+    // Permissions: KSEF_TENANT_ADMIN (full access), KSEF_CASE_MANAGER (issue/submit invoices).
+    @PostMapping("/{invoiceId}/retry")
+    public ResponseEntity<KsefInvoice> retryInvoice(
+            AuthenticatedUser caller,
+            @PathVariable String invoiceId,
+            HttpServletRequest httpRequest) {
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER);
+        log.info("[retryInvoice]:1 POST /{}/retry — tenant={}", invoiceId, caller.tenantId());
+        KsefInvoice result = invoiceService.retryOfflineInvoice(
+                caller.tenantId(), invoiceId, caller.email(), extractClientIp(httpRequest));
+        log.info("[retryInvoice]:2 retry finished — id={} status={}", result.getId(), result.getStatus());
+        return ResponseEntity.ok(result);
+    }
+
     // ── Read ───────────────────────────────────────────────────────────────────
 
     /**

@@ -177,6 +177,12 @@ public class KsefInvoice {
     // Timestamp of the most recent retry attempt — used for backoff calculations
     private LocalDateTime lastRetryAt;
 
+    // COMPUTED, NOT STORED: the earliest time the automatic retry job will next try to send this
+    // invoice to KSeF (lastRetryAt + exponential backoff). Populated on the read path for
+    // OFFLINE_MODE/RETRYING invoices so the Offline Queue can show "next automatic retry at …".
+    @org.springframework.data.annotation.Transient
+    private LocalDateTime nextRetryAt;
+
     // ── Correction (faktura korygująca, FA(3) RodzajFaktury = KOR) ──────────────
     // When true, this invoice CORRECTS an earlier invoice. The fields below point at the
     // original invoice and explain the correction — they fill the FA(3) DaneFaKorygowanej

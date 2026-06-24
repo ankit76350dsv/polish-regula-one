@@ -257,7 +257,9 @@ export default function App() {
     if (isAuthenticated) loadHub();
   }, [isAuthenticated, loadHub]);
 
-  useEffect(() => {
+  // Loads the tenant's invoices from the real KSeFFlow backend. Exposed as a callback so the
+  // Offline Queue can refresh the list after a real manual retry.
+  const loadInvoices = useCallback(() => {
     const tenantId = urlTenantId ?? activeTenant.id;
     if (!isAuthenticated || !tenantId) return;
     setIsLoadingInvoices(true);
@@ -272,6 +274,8 @@ export default function App() {
       })
       .catch(() => { setIsLoadingInvoices(false); });
   }, [urlTenantId, isAuthenticated, activeTenant.id]);
+
+  useEffect(() => { loadInvoices(); }, [loadInvoices]);
 
   // ── SSO loop detector ───────────────────────────────────────────────────────
   // lib/api.js fires "ksef:sso-loop" when a 401 keeps redirecting us in circles
@@ -720,10 +724,10 @@ export default function App() {
                 <OfflineQueue
                   tenant={activeTenant}
                   role={activeRole}
+                  permissions={userPermissions}
                   invoices={invoices}
-                  govStatus={govStatus}
-                  onSetGovStatus={setGovStatus}
-                  onProcessOfflineItem={processOfflineItem}
+                  isLoading={isLoadingInvoices}
+                  onRefreshInvoices={loadInvoices}
                   onAddNotification={addNotification}
                 />
               )}

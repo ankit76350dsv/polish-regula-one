@@ -77,6 +77,9 @@ export const mapBackendInvoice = (b) => ({
   offlineMode:            b.offlineMode            ?? null,
   offlineIssuedAt:        b.offlineIssuedAt        ?? null,
   ksefSubmissionDeadline: b.ksefSubmissionDeadline ?? null,
+  lastRetryAt:            b.lastRetryAt            ?? null,
+  // Computed server-side: earliest time the automatic retry job will next try KSeF.
+  nextRetryAt:            b.nextRetryAt            ?? null,
   qrCodeInvoice:          b.qrCodeInvoice          ?? null,
   qrCodeCertificate:      b.qrCodeCertificate      ?? null,
 
@@ -235,6 +238,15 @@ export const submitInvoice = async (_tenantId, invoiceId, nip) => {
   return ksefFetch(`${INVOICE_PATH}/${invoiceId}/submit?nip=${encodeURIComponent(nip ?? '')}`, {
     method: 'POST',
   });
+};
+
+/**
+ * Manually retry an OFFLINE_MODE invoice NOW (POST /api/v1/invoices/{id}/retry).
+ * Really re-attempts submission to KSeF server-side and returns the updated invoice
+ * (SENT on success, or still OFFLINE_MODE on failure).
+ */
+export const retryOfflineInvoice = async (invoiceId) => {
+  return mapBackendInvoice(await ksefFetch(`${INVOICE_PATH}/${invoiceId}/retry`, { method: 'POST' }));
 };
 
 /**

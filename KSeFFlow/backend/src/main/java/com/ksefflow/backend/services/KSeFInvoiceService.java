@@ -84,6 +84,8 @@ public class KSeFInvoiceService {
     private final KsefAvailabilityService availabilityService;
     // Publishes problems during the submission pipeline to the centralized notification Hub.
     private final HubNotificationPublisher hubPublisher;
+    // Computes the next automatic-retry time shown to the user (shared with the retry job).
+    private final com.ksefflow.backend.services.retry.KsefRetryScheduleCalculator retryScheduleCalculator;
 
     // KSeF 2.0 usage flag identifying the MF public key that wraps the session AES key.
     private static final String SYMMETRIC_KEY_ENCRYPTION_USAGE = "SymmetricKeyEncryption";
@@ -281,6 +283,15 @@ public class KSeFInvoiceService {
 
             KsefInvoice submittedInvoice = executeKsefSubmission(invoice, xmlResult.xmlContent(), nip, userEmail, ipAddress);
             log.info("[submitInvoice]:4 Invoice [{}] submitted successfully to KSeF", invoice.getInvoiceNumber());
+
+            // Notify the issuer of the successful direct submission. (Retry-queue successes are
+            // notified separately by KsefRetryQueueService, so this covers the DIRECT path only.)
+            hubPublisher.publishInvoiceEvent("INVOICE_SENT", tenantId,
+                    "Invoice accepted by KSeF",
+                    "Invoice " + submittedInvoice.getInvoiceNumber() + " was submitted successfully (ksefId "
+                            + submittedInvoice.getKsefId() + ").",
+                    invoiceId, "INVOICE_SENT:" + invoiceId);
+
             return submittedInvoice;
 
         } catch (KsefSubmissionException | KsefAuthException e) {
@@ -303,6 +314,39 @@ public class KSeFInvoiceService {
 
             return handleOfflineMode(invoice, mode, e.getMessage(), userEmail, ipAddress);
         }
+    }
+
+    //! ── Manual retry of an offline invoice (user-triggered from the Offline Queue UI) ──
+
+    /**
+     * Retry NOW an invoice that is parked OFFLINE_MODE (or already RETRYING), instead of waiting
+     * for the scheduled background job. Really re-attempts the KSeF submission and notifies the
+     * outcome to the Hub. Returns the updated invoice (SENT on success, else still OFFLINE_MODE).
+     */
+    public KsefInvoice retryOfflineInvoice(String tenantId, String invoiceId, String userEmail, String ipAddress) {
+        KsefInvoice invoice = getInvoice(tenantId, invoiceId);
+        if (invoice.getStatus() != KsefInvoiceStatus.OFFLINE_MODE
+                && invoice.getStatus() != KsefInvoiceStatus.RETRYING) {
+            throw new IllegalStateException("Invoice [" + invoiceId
+                    + "] is not awaiting retry (status " + invoice.getStatus() + ")");
+        }
+
+        KsefInvoice result = resubmitOffline(invoice, userEmail, ipAddress);
+
+        if (result.getStatus() == KsefInvoiceStatus.SENT) {
+            hubPublisher.publishInvoiceEvent("INVOICE_SENT", result.getTenantId(),
+                    "Invoice accepted by KSeF",
+                    "Invoice " + result.getInvoiceNumber() + " was sent to KSeF (ksefId "
+                            + result.getKsefId() + ") on a manual retry.",
+                    result.getId(), "INVOICE_SENT:" + result.getId());
+        } else {
+            hubPublisher.publishInvoiceEvent("INVOICE_SUBMISSION_FAILED", result.getTenantId(),
+                    "Invoice still could not be sent to KSeF",
+                    "Manual retry of invoice " + result.getInvoiceNumber() + " failed ("
+                            + result.getLastErrorMessage() + "). It remains queued.",
+                    result.getId(), "INVOICE_RETRY_ATTEMPT_FAILED:" + result.getId() + ":" + result.getSubmissionAttempts());
+        }
+        return result;
     }
 
     //! ── Retry an offline-parked invoice ─────────────────────────────────────────
@@ -375,19 +419,31 @@ public class KSeFInvoiceService {
 
     public KsefInvoice getInvoice(String tenantId, String invoiceId) {
         log.info("[getInvoice]:1 Loading invoice [{}] for tenant [{}]", invoiceId, tenantId);
-        return ksef_invoices_repository.findById(invoiceId)
+        KsefInvoice invoice = ksef_invoices_repository.findById(invoiceId)
                 .filter(inv -> tenantId.equals(inv.getTenantId()))
                 .filter(inv -> !inv.isSoftDeleted())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Invoice [" + invoiceId + "] not found for tenant [" + tenantId + "]"));
+        applyNextRetryAt(invoice);
+        return invoice;
     }
 
     public Page<KsefInvoice> listInvoices(String tenantId, KsefInvoiceStatus status, Pageable pageable) {
         log.info("[listInvoices]:1 Listing invoices for tenant [{}] status [{}]", tenantId, status);
-        if (status != null) {
-            return ksef_invoices_repository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status, pageable);
+        Page<KsefInvoice> page = (status != null)
+                ? ksef_invoices_repository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status, pageable)
+                : ksef_invoices_repository.findByTenantIdOrderByCreatedAtDesc(tenantId, pageable);
+        page.getContent().forEach(this::applyNextRetryAt);
+        return page;
+    }
+
+    // For invoices still awaiting KSeF (offline/retrying), compute the earliest time the
+    // automatic retry job will next try to send them, so the UI can show the real time.
+    private void applyNextRetryAt(KsefInvoice invoice) {
+        if (invoice.getStatus() == KsefInvoiceStatus.OFFLINE_MODE
+                || invoice.getStatus() == KsefInvoiceStatus.RETRYING) {
+            invoice.setNextRetryAt(retryScheduleCalculator.nextEligibleAt(invoice));
         }
-        return ksef_invoices_repository.findByTenantIdOrderByCreatedAtDesc(tenantId, pageable);
     }
 
     // ! ── Private: KSeF network pipeline ─────────────────────────────────────────
