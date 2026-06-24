@@ -711,7 +711,55 @@ Domain Layer
 Repository Layer
 ↓
 Database
+```
 
+---
+
+# 24. REDUX TOOLKIT DEVELOPMENT INSTRUCTIONS
+
+Throughout this entire project, use Redux Toolkit for state management and API integration.
+
+## State Management Rules
+
+- Use Redux Toolkit (RTK) as the standard state management solution.
+- Create a dedicated Redux store.
+- Organize state into feature-based slices.
+- For every API integration, create or update the appropriate Redux slice to manage:
+  - Loading state
+  - Success state
+  - Error state
+  - Response data
+- Components MUST access and update shared/API state through Redux slices.
+- Components MUST NOT manage API response data in local component state unless it is purely local UI state.
+
+## API Integration Rules
+
+- All API calls MUST be integrated through Redux Toolkit.
+- Create separate service/API files for network requests.
+- Dispatch Redux actions from components.
+- Update the store through reducers and async thunk lifecycle handlers.
+- Ensure proper error handling, loading indicators, and state updates for all API requests.
+
+## Project Structure
+
+- `store/` -> Redux store configuration
+- `slices/` -> Feature-based Redux slices
+- `services/` -> API service functions
+- `components/` -> UI components
+- `pages/` -> Page-level components
+
+## Mandatory Instruction for All AI Agents
+
+If any AI coding agent, including Claude, Codex, Antigravity, Cursor AI, GitHub Copilot, or any other coding assistant, works on this project, it MUST follow these rules:
+
+- Always use Redux Toolkit for state management.
+- Always create or update Redux slices when integrating APIs.
+- Always connect API responses through Redux state.
+- Never bypass Redux by storing API data directly in component state unless it is purely local UI state.
+- Reuse existing slices and store configuration whenever possible.
+- Follow the established Redux architecture consistently across the entire codebase.
+
+These instructions are mandatory and MUST be followed for all future development tasks in this project.
 
 ---
 
