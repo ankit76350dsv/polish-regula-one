@@ -431,6 +431,14 @@ export const deactivateCertificate = async (_tenantId, certId) => {
 };
 
 /**
+ * Download the PUBLIC certificate (X.509, PEM) for a stored certificate.
+ * Returns PEM text — the backend never returns the private key or password.
+ */
+export const getCertificatePublicPem = async (certId) => {
+  return ksefFetch(`/api/v1/certificates/${certId}/public`);
+};
+
+/**
  * Enroll a brand-new KSeF-issued certificate (the backend generates the key pair, asks KSeF
  * to issue the certificate, and stores it encrypted). POST /api/v1/certificates/enroll.
  *

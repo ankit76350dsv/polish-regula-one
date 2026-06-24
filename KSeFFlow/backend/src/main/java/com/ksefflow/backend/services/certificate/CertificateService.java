@@ -17,8 +17,10 @@ import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.List;
 
 /**
@@ -438,6 +440,59 @@ public class CertificateService {
 
                 writeAuditLog(tenantId, "CERTIFICATE_DEACTIVATED", cert.getId(),
                                 cert.getUploadedByUserId(), describeCertificate(cert));
+        }
+
+        /**
+         * Exports the PUBLIC certificate (X.509) of one certificate as PEM text, so a user can
+         * download it for sharing or verification.
+         *
+         * SECURITY: returns ONLY the public certificate — never the private key, the password,
+         * or the full PFX. The private key stays encrypted on the server (data minimization).
+         */
+        public String exportPublicCertificatePem(String tenantId, String certId) {
+                KsefCertificate cert = ksef_certificates_repo.findById(certId)
+                                .orElseThrow(() -> new KsefCertificateException("Certificate not found: " + certId));
+                if (!cert.getTenantId().equals(tenantId)) {
+                        throw new KsefCertificateException(
+                                        "Certificate [" + certId + "] does not belong to tenant [" + tenantId + "]");
+                }
+
+                byte[] bytes = storage.readPfxDecrypted(cert.getEncryptedStoragePath());
+                X509Certificate x509;
+                if (cert.getVaultPasswordReference() == null) {
+                        // PEM upload: the stored bytes are already a public certificate — just parse it.
+                        x509 = parseX509(bytes);
+                } else {
+                        // PFX/P12: open the keystore in memory and take ONLY the public certificate.
+                        String password = crypto.decryptPassword(cert.getVaultPasswordReference());
+                        KeyStore keyStore = KeyStoreUtils.loadKeyStoreFromBytes(bytes, password);
+                        x509 = KeyStoreUtils.extractX509Certificate(keyStore);
+                }
+
+                writeAuditLog(tenantId, "CERTIFICATE_EXPORTED", cert.getId(),
+                                cert.getUploadedByUserId(), describeCertificate(cert));
+                return toPem(x509);
+        }
+
+        // Parses a PEM- or DER-encoded X.509 certificate from raw bytes.
+        private X509Certificate parseX509(byte[] bytes) {
+                try {
+                        CertificateFactory factory = CertificateFactory.getInstance("X.509");
+                        return (X509Certificate) factory.generateCertificate(new ByteArrayInputStream(bytes));
+                } catch (Exception e) {
+                        throw new KsefCertificateException("Could not read the stored certificate: " + e.getMessage(), e);
+                }
+        }
+
+        // PEM-encodes a public X.509 certificate (public part only — no key material).
+        private String toPem(X509Certificate cert) {
+                try {
+                        String b64 = Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.US_ASCII))
+                                        .encodeToString(cert.getEncoded());
+                        return "-----BEGIN CERTIFICATE-----\n" + b64 + "\n-----END CERTIFICATE-----\n";
+                } catch (Exception e) {
+                        throw new KsefCertificateException("Could not encode certificate: " + e.getMessage(), e);
+                }
         }
 
         /**

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShieldCheck, UploadCloud, BadgePlus, PowerOff, Lock, Loader2, XCircle } from 'lucide-react';
-import { uploadCertificate, listCertificates, deactivateCertificate, enrollCertificate } from '../api/ksefApi';
+import { ShieldCheck, UploadCloud, BadgePlus, PowerOff, Lock, Loader2, XCircle, Download } from 'lucide-react';
+import { uploadCertificate, listCertificates, deactivateCertificate, enrollCertificate, getCertificatePublicPem } from '../api/ksefApi';
 import { useLanguage } from '../context/LanguageContext';
 import { can } from '../lib/permissions';
 
@@ -36,6 +36,9 @@ export default function CertificateManager({ tenant, permissions, onAddNotificat
   // Deactivate confirmation
   const [confirmCert, setConfirmCert] = useState(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
+
+  // Public-certificate download
+  const [downloadingId, setDownloadingId] = useState(null);
 
   const fetchCerts = useCallback(async () => {
     if (!tenant?.id) return;
@@ -139,6 +142,29 @@ export default function CertificateManager({ tenant, permissions, onAddNotificat
       );
     } finally {
       setIsDeactivating(false);
+    }
+  };
+
+  // Download the PUBLIC certificate (no private key) as a .cer file.
+  const handleDownload = async (cert) => {
+    setDownloadingId(cert.id);
+    try {
+      const pem = await getCertificatePublicPem(cert.id);
+      const blob = new Blob([pem], { type: 'application/x-pem-file' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(cert.fileName || 'certificate').replace(/\.(pfx|p12|pem|crt)$/i, '')}.cer`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      onAddNotification(
+        T('Download failed', 'Pobieranie nie powiodło się'),
+        err.message ?? T('Could not download the certificate.', 'Nie udało się pobrać certyfikatu.'),
+        'error',
+      );
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -318,7 +344,7 @@ export default function CertificateManager({ tenant, permissions, onAddNotificat
                   <th className="px-3 py-3 font-bold">{T('Expiry date', 'Data ważności')}</th>
                   <th className="px-3 py-3 font-bold">{T('Days left', 'Pozostało dni')}</th>
                   <th className="px-3 py-3 font-bold">{T('Last used', 'Ostatnio użyty')}</th>
-                  {canModify && <th className="px-6 py-3 font-bold text-right">{T('Action', 'Akcja')}</th>}
+                  <th className="px-6 py-3 font-bold text-right">{T('Actions', 'Akcje')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -339,9 +365,18 @@ export default function CertificateManager({ tenant, permissions, onAddNotificat
                         </span>
                       </td>
                       <td className="px-3 py-3 text-slate-500 font-mono text-xs">{fmtDateTime(cert.lastAuthTime)}</td>
-                      {canModify && (
-                        <td className="px-6 py-3 text-right">
-                          {cert.active && s.key !== 'EXPIRED' && (
+                      <td className="px-6 py-3 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-3">
+                          <button
+                            onClick={() => handleDownload(cert)}
+                            disabled={downloadingId === cert.id}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 hover:text-slate-800 transition disabled:opacity-50"
+                            title={T('Download public certificate', 'Pobierz certyfikat publiczny')}
+                          >
+                            {downloadingId === cert.id ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                            {T('Download', 'Pobierz')}
+                          </button>
+                          {canModify && cert.active && s.key !== 'EXPIRED' && (
                             <button
                               onClick={() => setConfirmCert(cert)}
                               className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 hover:text-rose-600 transition"
@@ -350,8 +385,8 @@ export default function CertificateManager({ tenant, permissions, onAddNotificat
                               <PowerOff size={13} /> {T('Deactivate', 'Dezaktywuj')}
                             </button>
                           )}
-                        </td>
-                      )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}

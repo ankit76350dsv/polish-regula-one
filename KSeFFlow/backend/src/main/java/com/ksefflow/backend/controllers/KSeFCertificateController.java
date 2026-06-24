@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -185,6 +186,23 @@ public class KSeFCertificateController {
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(certs);
+    }
+
+    // ── GET /api/v1/certificates/{id}/public ──────────────────────────────────
+    /**
+     * Downloads the PUBLIC certificate (X.509, PEM) for sharing or verification.
+     * Returns ONLY the public certificate — never the private key, password, or PFX.
+     */
+    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_AUDITOR (same as listing).
+    @GetMapping(value = "/{id}/public", produces = "application/x-pem-file")
+    public ResponseEntity<String> downloadPublicCertificate(
+            AuthenticatedUser caller, @PathVariable String id) {
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_AUDITOR);
+        log.info("[downloadPublicCertificate]:1 GET /{}/public — tenant={}", id, caller.tenantId());
+        String pem = certificateService.exportPublicCertificatePem(caller.tenantId(), id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"certificate.cer\"")
+                .body(pem);
     }
 
     // ── PATCH /api/v1/certificates/{id}/deactivate ────────────────────────────
