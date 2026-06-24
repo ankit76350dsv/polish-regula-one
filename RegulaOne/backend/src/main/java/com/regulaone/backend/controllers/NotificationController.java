@@ -43,8 +43,12 @@ public class NotificationController {
     @Value("${notification.test.enabled:false}")
     private boolean testEndpointEnabled;
 
+    // NOTE: `module` (the sourceModule, e.g. "KSEFFLOW") is MANDATORY on every notification
+    // endpoint below. Each app must declare which application it is acting within; a missing or
+    // unknown module is rejected with 400. This keeps notifications strictly scoped per app —
+    // an app can never read or act on another app's notifications.
+
     // GET /api/notifications?module=&status=&page=&size=
-    // `module` (e.g. "KSEFFLOW") restricts to one application; omit it to see all apps.
     @GetMapping
     public ResponseEntity<AppResponse<Page<NotificationResponse>>> list(
             @AuthenticationPrincipal Jwt jwt,
@@ -52,7 +56,7 @@ public class NotificationController {
             @RequestParam(required = false) String status,
             @PageableDefault(size = 20) Pageable pageable) {
         User u = currentUser(jwt);
-        Page<NotificationResponse> page = notificationService.list(tenantId(u), u.getId(), parseModule(module), status, pageable);
+        Page<NotificationResponse> page = notificationService.list(tenantId(u), u.getId(), requireModule(module), status, pageable);
         return ResponseEntity.ok(AppResponse.success("Notifications loaded", page));
     }
 
@@ -62,24 +66,28 @@ public class NotificationController {
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String module) {
         User u = currentUser(jwt);
-        long count = notificationService.unreadCount(tenantId(u), u.getId(), parseModule(module));
+        long count = notificationService.unreadCount(tenantId(u), u.getId(), requireModule(module));
         return ResponseEntity.ok(AppResponse.success("Unread count", Map.of("unread", count)));
     }
 
-    // GET /api/notifications/{id}
+    // GET /api/notifications/{id}?module=
     @GetMapping("/{id}")
     public ResponseEntity<AppResponse<NotificationResponse>> get(
-            @AuthenticationPrincipal Jwt jwt, @PathVariable String id) {
+            @AuthenticationPrincipal Jwt jwt, @PathVariable String id,
+            @RequestParam(required = false) String module) {
         User u = currentUser(jwt);
-        return ResponseEntity.ok(AppResponse.success("Notification", notificationService.get(tenantId(u), u.getId(), id)));
+        return ResponseEntity.ok(AppResponse.success("Notification",
+                notificationService.get(tenantId(u), u.getId(), requireModule(module), id)));
     }
 
-    // PATCH /api/notifications/{id}/read
+    // PATCH /api/notifications/{id}/read?module=
     @PatchMapping("/{id}/read")
     public ResponseEntity<AppResponse<NotificationResponse>> markRead(
-            @AuthenticationPrincipal Jwt jwt, @PathVariable String id) {
+            @AuthenticationPrincipal Jwt jwt, @PathVariable String id,
+            @RequestParam(required = false) String module) {
         User u = currentUser(jwt);
-        return ResponseEntity.ok(AppResponse.success("Marked read", notificationService.markRead(tenantId(u), u.getId(), id)));
+        return ResponseEntity.ok(AppResponse.success("Marked read",
+                notificationService.markRead(tenantId(u), u.getId(), requireModule(module), id)));
     }
 
     // PATCH /api/notifications/read-all?module=
@@ -88,24 +96,27 @@ public class NotificationController {
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String module) {
         User u = currentUser(jwt);
-        int updated = notificationService.markAllRead(tenantId(u), u.getId(), parseModule(module));
+        int updated = notificationService.markAllRead(tenantId(u), u.getId(), requireModule(module));
         return ResponseEntity.ok(AppResponse.success("All marked read", Map.of("updated", updated)));
     }
 
-    // PATCH /api/notifications/{id}/archive
+    // PATCH /api/notifications/{id}/archive?module=
     @PatchMapping("/{id}/archive")
     public ResponseEntity<AppResponse<NotificationResponse>> archive(
-            @AuthenticationPrincipal Jwt jwt, @PathVariable String id) {
+            @AuthenticationPrincipal Jwt jwt, @PathVariable String id,
+            @RequestParam(required = false) String module) {
         User u = currentUser(jwt);
-        return ResponseEntity.ok(AppResponse.success("Archived", notificationService.archive(tenantId(u), u.getId(), id)));
+        return ResponseEntity.ok(AppResponse.success("Archived",
+                notificationService.archive(tenantId(u), u.getId(), requireModule(module), id)));
     }
 
-    // DELETE /api/notifications/{id}
+    // DELETE /api/notifications/{id}?module=
     @DeleteMapping("/{id}")
     public ResponseEntity<AppResponse<Void>> delete(
-            @AuthenticationPrincipal Jwt jwt, @PathVariable String id) {
+            @AuthenticationPrincipal Jwt jwt, @PathVariable String id,
+            @RequestParam(required = false) String module) {
         User u = currentUser(jwt);
-        notificationService.delete(tenantId(u), u.getId(), id);
+        notificationService.delete(tenantId(u), u.getId(), requireModule(module), id);
         return ResponseEntity.ok(AppResponse.success("Deleted"));
     }
 
@@ -145,11 +156,15 @@ public class NotificationController {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    // Parse the optional ?module= filter into a SourceModule; unknown/blank → null (all apps).
-    private SourceModule parseModule(String module) {
-        if (module == null || module.isBlank()) return null;
-        try { return SourceModule.valueOf(module.trim().toUpperCase()); }
-        catch (IllegalArgumentException e) { return null; }
+    private SourceModule requireModule(String module) {
+        if (module == null || module.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "module is required");
+        }
+        try {
+            return SourceModule.valueOf(module.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid module");
+        }
     }
 
     private User currentUser(Jwt jwt) {

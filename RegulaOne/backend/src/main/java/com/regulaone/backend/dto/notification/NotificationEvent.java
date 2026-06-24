@@ -2,6 +2,7 @@ package com.regulaone.backend.dto.notification;
 
 import com.regulaone.backend.models.notification.enums.SourceModule;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -28,6 +29,7 @@ public class NotificationEvent {
     @NotBlank
     private String tenantId;
 
+    @NotNull(message = "sourceModule is mandatory")
     private SourceModule sourceModule;
 
     // Human-readable content. Keep titles/bodies data-minimized; the Hub will not put

@@ -26,6 +26,9 @@ public interface NotificationRepository extends MongoRepository<Notification, St
     Optional<Notification> findByIdAndTenantIdAndRecipientUserId(
             String id, String tenantId, String recipientUserId);
 
+    Optional<Notification> findByIdAndTenantIdAndRecipientUserIdAndSourceModuleAndSoftDeletedFalse(
+            String id, String tenantId, String recipientUserId, SourceModule sourceModule);
+
     // Used by mark-all-read.
     List<Notification> findByTenantIdAndRecipientUserIdAndStatus(
             String tenantId, String recipientUserId, NotificationStatus status);

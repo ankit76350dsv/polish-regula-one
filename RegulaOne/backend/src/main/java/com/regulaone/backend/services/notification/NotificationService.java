@@ -150,12 +150,12 @@ public class NotificationService {
                 .countByTenantIdAndRecipientUserIdAndStatusAndSoftDeletedFalse(tenantId, userId, NotificationStatus.UNREAD);
     }
 
-    public NotificationResponse get(String tenantId, String userId, String id) {
-        return NotificationResponse.from(load(tenantId, userId, id));
+    public NotificationResponse get(String tenantId, String userId, SourceModule module, String id) {
+        return NotificationResponse.from(load(tenantId, userId, module, id));
     }
 
-    public NotificationResponse markRead(String tenantId, String userId, String id) {
-        Notification n = load(tenantId, userId, id);
+    public NotificationResponse markRead(String tenantId, String userId, SourceModule module, String id) {
+        Notification n = load(tenantId, userId, module, id);
         if (n.getStatus() == NotificationStatus.UNREAD) {
             n.setStatus(NotificationStatus.READ);
             n.setReadAt(LocalDateTime.now());
@@ -176,22 +176,23 @@ public class NotificationService {
         return unread.size();
     }
 
-    public NotificationResponse archive(String tenantId, String userId, String id) {
-        Notification n = load(tenantId, userId, id);
+    public NotificationResponse archive(String tenantId, String userId, SourceModule module, String id) {
+        Notification n = load(tenantId, userId, module, id);
         n.setStatus(NotificationStatus.ARCHIVED);
         notificationRepository.save(n);
         return NotificationResponse.from(n);
     }
 
-    public void delete(String tenantId, String userId, String id) {
-        Notification n = load(tenantId, userId, id);
+    public void delete(String tenantId, String userId, SourceModule module, String id) {
+        Notification n = load(tenantId, userId, module, id);
         n.setSoftDeleted(true);
         n.setDeletedAt(LocalDateTime.now());
         notificationRepository.save(n);
     }
 
-    private Notification load(String tenantId, String userId, String id) {
-        return notificationRepository.findByIdAndTenantIdAndRecipientUserId(id, tenantId, userId)
+    private Notification load(String tenantId, String userId, SourceModule module, String id) {
+        return notificationRepository.findByIdAndTenantIdAndRecipientUserIdAndSourceModuleAndSoftDeletedFalse(
+                        id, tenantId, userId, module)
                 .orElseThrow(() -> new IllegalArgumentException("Notification not found"));
     }
 
