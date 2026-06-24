@@ -10,7 +10,7 @@
 #   WasteSync   backend :8083   frontend :3003
 #   SafeWork    backend :8082   frontend :3002
 #   WorkPulse   backend :8085   frontend :3005
-#   PrivacyPilot backend :8086  frontend :3006
+#   PrivacyPilot backend :9004  frontend :1004
 # ─────────────────────────────────────────────────────────────────────────────
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -170,8 +170,8 @@ sleep 0.4
 
 # ── PrivacyPilot (GDPR/RODO) ────────────────────────────────────────────────
 echo "► PrivacyPilot"
-start_backend  "PrivacyPilot" 8086
-start_frontend "PrivacyPilot" 3006
+start_backend  "PrivacyPilot" 9004
+start_frontend "PrivacyPilot" 1004
 sleep 0.4
 
 echo ""
@@ -183,5 +183,5 @@ echo "  SafeVoice     → http://localhost:1003"
 echo "  WasteSync     → http://localhost:3003"
 echo "  SafeWork      → http://localhost:3002"
 echo "  WorkPulse     → http://localhost:3005"
-echo "  PrivacyPilot  → http://localhost:3006"
+echo "  PrivacyPilot  → http://localhost:1004"
 echo ""
