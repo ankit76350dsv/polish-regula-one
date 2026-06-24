@@ -12,7 +12,7 @@
  * lands back here after authenticating on the main app.
  */
 
-const API_URL       = import.meta.env.VITE_API_URL          ?? 'http://localhost:8080';
+const REGULA_ONE_API_URL        = import.meta.env.VITE_REGULA_ONE_API_URL          ?? 'http://localhost:8080';
 const KSEF_API_URL  = import.meta.env.VITE_KSEF_API_URL      ?? 'http://localhost:8081';
 const APP_URL       = import.meta.env.VITE_APP_URL           ?? 'http://localhost:3001';
 const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
@@ -108,7 +108,7 @@ let refreshInProgress = null;
 export async function tryRefreshSession() {
   try {
     if (!refreshInProgress) {
-      refreshInProgress = fetch(`${API_URL}/api/sso/refresh`, {
+      refreshInProgress = fetch(`${REGULA_ONE_API_URL }/api/sso/refresh`, {
         method: 'POST',
         credentials: 'include',
       }).finally(() => { refreshInProgress = null; });
@@ -201,7 +201,7 @@ export async function ksefFetch(path, options = {}, _retry = false) {
 }
 
 export async function apiFetch(path, options = {}, _retry = false) {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${REGULA_ONE_API_URL }${path}`, {
     ...options,
     credentials: 'include',
     headers: {

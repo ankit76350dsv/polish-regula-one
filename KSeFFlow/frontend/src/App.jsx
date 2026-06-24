@@ -4,7 +4,7 @@ import {
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS
 } from './data/mockData';
-import { listInvoices, getMyTenant } from './api/ksefApi';
+import { listInvoices, getMyTenant, getHubNotifications, getHubUnreadCount, markAllHubNotificationsRead } from './api/ksefApi';
 import { SSO_CALLBACK_URL, clearSsoRedirectGuard, tryRefreshSession } from './lib/api';
 import { useLanguage } from './context/LanguageContext';
 
@@ -73,7 +73,11 @@ export default function App() {
   const [invoices, setInvoices] = useState([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
   const [, setAuditLogs] = useState(INITIAL_AUDIT_LOGS);
+  // Transient, client-only signals raised by components via addNotification (form errors etc.).
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  // Persistent notifications from the centralized Hub (RegulaOne), scoped to this user.
+  const [hubNotifications, setHubNotifications] = useState([]);
+  const [hubUnread, setHubUnread] = useState(0);
   const [govStatus, setGovStatus] = useState('Connected');
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -236,6 +240,23 @@ export default function App() {
     }
   }, [isAuthenticated, location.pathname, activeTenant.id]);
 
+  // ── Centralized notifications ───────────────────────────────────────────────
+  // Load the user's notifications from the Hub once after login. Failures are non-fatal —
+  // the bell just keeps its last known state. (Real-time SSE updates arrive in a later phase.)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+
+    getHubNotifications({ size: 20 })
+      .then(list => { if (!cancelled) setHubNotifications(list); })
+      .catch(() => { /* non-fatal */ });
+    getHubUnreadCount()
+      .then(count => { if (!cancelled) setHubUnread(count); })
+      .catch(() => { /* non-fatal */ });
+
+    return () => { cancelled = true; };
+  }, [isAuthenticated]);
+
   useEffect(() => {
     const tenantId = urlTenantId ?? activeTenant.id;
     if (!isAuthenticated || !tenantId) return;
@@ -333,8 +354,25 @@ export default function App() {
     }));
   };
 
-  const clearNotificationsUnread = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // The bell shows Hub notifications (persistent, from the server) merged with transient
+  // local signals, newest first. Local signals are tenant-filtered; Hub items are already
+  // scoped to this user by the backend.
+  const visibleNotifications = [
+    ...hubNotifications,
+    ...notifications.filter(n => n.tenantId === activeTenant.id),
+  ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  // Opening the bell marks everything read: the Hub server-side, plus local signals.
+  const clearNotificationsUnread = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    if (hubUnread > 0) {
+      markAllHubNotificationsRead().catch(() => { /* non-fatal */ });
+      setHubNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setHubUnread(0);
+    }
+  };
+
+  const unreadCount = hubUnread + notifications.filter(n => !n.read).length;
 
   const PAGE_ROLES_REQUIRED = {
     dashboard:       ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
@@ -475,7 +513,7 @@ export default function App() {
                   <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer">{t('common.close')}</button>
                 </div>
                 <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
-                  {notifications.filter(n => n.tenantId === activeTenant.id).map((notif) => (
+                  {visibleNotifications.map((notif) => (
                     <div key={notif.id} className="p-2.5 bg-slate-50 rounded-lg border border-slate-150 leading-relaxed">
                       <div className="flex justify-between font-semibold text-[11px]">
                         <span className={notif.type === 'error' ? 'text-red-650' : 'text-slate-705'}>{notif.title}</span>
@@ -484,7 +522,7 @@ export default function App() {
                       <p className="text-[10px] text-slate-500 mt-1 leading-snug">{notif.message}</p>
                     </div>
                   ))}
-                  {notifications.filter(n => n.tenantId === activeTenant.id).length === 0 && (
+                  {visibleNotifications.length === 0 && (
                     <p className="text-center text-slate-400 py-6">{t('header.clearSignals')}</p>
                   )}
                 </div>

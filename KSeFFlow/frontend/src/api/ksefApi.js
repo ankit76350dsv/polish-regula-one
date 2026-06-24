@@ -297,6 +297,45 @@ export const listAuditLogs = async (_tenantId, opts = {}) => {
   };
 };
 
+// ── Centralized notifications (RegulaOne Hub, :8080 via apiFetch) ───────────────
+// KSeFFlow doesn't store notifications itself — it reads the user's notifications from
+// the central Hub, which already scoped them to this user + tenant by permission.
+
+// Maps the Hub's severity to this app's notification "type" (drives the bell colour).
+const HUB_SEVERITY_TO_TYPE = {
+  CRITICAL: 'error', ERROR: 'error', WARNING: 'warn', SUCCESS: 'success', INFO: 'info',
+};
+
+// Maps a Hub NotificationResponse onto the shape the KSeFFlow bell already renders.
+const mapHubNotification = (n) => ({
+  id:        n.id,
+  title:     n.title,
+  message:   n.body,
+  type:      HUB_SEVERITY_TO_TYPE[n.severity] ?? 'info',
+  timestamp: n.createdAt,
+  read:      n.status !== 'UNREAD',
+  hub:       true,
+});
+
+/** Recent notifications for the signed-in user (newest first). */
+export const getHubNotifications = async ({ size = 20 } = {}) => {
+  const page = await apiFetch(`/api/notifications?page=0&size=${size}`);
+  const content = Array.isArray(page?.content) ? page.content : (Array.isArray(page) ? page : []);
+  return content.map(mapHubNotification);
+};
+
+/** Unread badge count → number. */
+export const getHubUnreadCount = async () => {
+  const res = await apiFetch('/api/notifications/unread-count');
+  return res?.unread ?? 0;
+};
+
+/** Mark every notification read; returns how many were updated. */
+export const markAllHubNotificationsRead = async () => {
+  const res = await apiFetch('/api/notifications/read-all', { method: 'PATCH' });
+  return res?.updated ?? 0;
+};
+
 /**
  * Fetch the current user's own tenant/organisation from the RegulaOne backend.
  *

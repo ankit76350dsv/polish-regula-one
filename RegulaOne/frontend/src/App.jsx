@@ -15,6 +15,10 @@ import SSOCallbackPage      from './pages/Auth/SSOCallbackPage';
 import Overview    from './pages/Dashboard/Overview';
 import ProfilePage from './pages/Dashboard/ProfilePage';
 
+// Notifications
+import NotificationCenter      from './pages/Notifications/NotificationCenter';
+import NotificationPreferences from './pages/Notifications/NotificationPreferences';
+
 // Admin pages
 import TenantManagement from './pages/Admin/TenantManagement';
 import TenantDetailPage from './pages/Admin/TenantDetailPage';
@@ -115,6 +119,10 @@ export default function App() {
           <Route path="/company/:tenantId/overview"        element={<Overview />} />
           <Route path="/company/:tenantId/profile"         element={<ProfilePage />} />
           <Route path="/company/:tenantId/change-password" element={<ChangePasswordPage />} />
+
+          {/* Notifications — available to every authenticated role */}
+          <Route path="/company/:tenantId/notifications"             element={<NotificationCenter />} />
+          <Route path="/company/:tenantId/notifications/preferences" element={<NotificationPreferences />} />
 
           {user?.role === 'ROLE_SUPER_ADMIN' && (
             <>

@@ -12,13 +12,14 @@ import {
   SidebarInset, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarGroupContent
 } from '@/components/ui/sidebar';
 import {
-  LayoutDashboard, Building2, ReceiptText, Clock, ShieldAlert, LogOut, Search, Bell, Settings,
+  LayoutDashboard, Building2, ReceiptText, Clock, ShieldAlert, LogOut, Search, Settings,
   MessageSquare, Trash2, ShieldCheck, Users, Package
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Toaster } from '@/components/ui/sonner';
+import NotificationBell from '../notifications/NotificationBell';
 
 export default function DashboardLayout() {
   const { user } = useAuthStore();
@@ -199,10 +200,7 @@ export default function DashboardLayout() {
                 <span className="text-[11px] font-bold uppercase tracking-wider">EU-CENTRAL-1 ACTIVE</span>
               </div>
               <div className="h-4 w-[1px] bg-slate-200"></div>
-              <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-700 relative">
-                <Bell className="h-5 w-5" />
-                <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-              </Button>
+              <NotificationBell />
               <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-700">
                 <Settings className="h-5 w-5" />
               </Button>

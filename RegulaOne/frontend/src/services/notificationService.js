@@ -26,4 +26,7 @@ export const notificationService = {
 
   getPreferences:    ()     => api.get(`${BASE}/preferences`),
   updatePreferences: (body) => api.put(`${BASE}/preferences`, body),
+
+  // Dev/QA only — creates sample notifications for the current user (backend-gated).
+  sendTest: () => api.post(`${BASE}/test`),
 };

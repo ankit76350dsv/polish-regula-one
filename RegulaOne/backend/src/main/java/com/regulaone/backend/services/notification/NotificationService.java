@@ -201,4 +201,48 @@ public class NotificationService {
         try { return NotificationSeverity.valueOf(override.toUpperCase()); }
         catch (IllegalArgumentException e) { return fallback; }
     }
+
+    //! ── Test helper (dev/QA only — gated by a config flag in the controller) ──────
+    //
+    // Creates one sample notification per event type, addressed ONLY to the calling user,
+    // so the UI can be exercised end-to-end (every severity colour, category, read/unread,
+    // archive, delete, filters) without needing a real business event. Self-targeted, so it
+    // cannot reach anyone else's mailbox.
+    public int createSelfTestNotifications(String tenantId, String userId) {
+        NotificationEventType[] samples = {
+                NotificationEventType.INVOICE_SUBMISSION_FAILED,
+                NotificationEventType.INVOICE_RETRY_FAILED,
+                NotificationEventType.INVOICE_SENT,
+                NotificationEventType.KSEF_COMMUNICATION_FAILURE,
+                NotificationEventType.KSEF_EMERGENCY_DECLARED,
+                NotificationEventType.CERTIFICATE_ISSUE,
+                NotificationEventType.WORKFLOW_APPROVAL_PENDING,
+                NotificationEventType.TASK_ASSIGNED,
+                NotificationEventType.COMPLIANCE_DEADLINE_APPROACHING,
+                NotificationEventType.AUTH_SECURITY_EVENT,
+        };
+        int created = 0;
+        for (NotificationEventType t : samples) {
+            Notification n = Notification.builder()
+                    .tenantId(tenantId)
+                    .recipientUserId(userId)
+                    .eventType(t)
+                    .sourceModule(SourceModule.REGULAONE)
+                    .category(t.getCategory())
+                    .severity(t.getSeverity())
+                    .sensitivity(t.getSensitivity())
+                    .title("[TEST] " + t.name())
+                    .body("Sample " + t.getSeverity() + " notification (" + t.getCategory()
+                            + ") generated for UI testing.")
+                    .relatedEntityType("TEST")
+                    .relatedEntityId("test-" + t.name())
+                    .status(NotificationStatus.UNREAD)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            notificationRepository.save(n);
+            created++;
+        }
+        log.info("[createSelfTestNotifications] created {} test notifications for user {}", created, userId);
+        return created;
+    }
 }

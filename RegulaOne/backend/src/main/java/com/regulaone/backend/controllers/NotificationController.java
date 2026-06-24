@@ -9,6 +9,7 @@ import com.regulaone.backend.repository.UserRepository;
 import com.regulaone.backend.services.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -36,6 +37,10 @@ public class NotificationController {
 
     private final NotificationService notificationService;
     private final UserRepository userRepository;
+
+    // Dev/QA only — when true, exposes POST /api/notifications/test (default off in prod).
+    @Value("${notification.test.enabled:false}")
+    private boolean testEndpointEnabled;
 
     // GET /api/notifications?status=&page=&size=
     @GetMapping
@@ -111,6 +116,19 @@ public class NotificationController {
         User u = currentUser(jwt);
         return ResponseEntity.ok(AppResponse.success("Preferences updated",
                 notificationService.updatePreferences(tenantId(u), u.getId(), request)));
+    }
+
+    // POST /api/notifications/test  (dev/QA only)
+    // Creates one sample notification per type for the CURRENT user, so the whole UI can be
+    // exercised without a real business event. Disabled unless notification.test.enabled=true.
+    @PostMapping("/test")
+    public ResponseEntity<AppResponse<Map<String, Integer>>> sendTest(@AuthenticationPrincipal Jwt jwt) {
+        if (!testEndpointEnabled) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Test notifications are disabled");
+        }
+        User u = currentUser(jwt);
+        int created = notificationService.createSelfTestNotifications(tenantId(u), u.getId());
+        return ResponseEntity.ok(AppResponse.success("Test notifications created", Map.of("created", created)));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
