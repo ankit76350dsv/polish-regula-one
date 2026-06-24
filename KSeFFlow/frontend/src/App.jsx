@@ -24,11 +24,11 @@ import IntegrationCenter from './components/IntegrationCenter';
 import CertificateManager from './components/CertificateManager';
 import OfflineQueue from './components/OfflineQueue';
 import AuditCenter from './components/AuditCenter';
-import ArchitectureDocs from './components/ArchitectureDocs';
 import ReceivedInvoices from './components/ReceivedInvoices';
 import PermissionsManager from './components/PermissionsManager';
 import NotificationCenter from './components/NotificationCenter';
 import Login from './components/Login';
+// (ArchitectureDocs removed — it was a static, inaccurate showcase, not a KSeF/government requirement.)
 
 import {
   Building2,
@@ -39,7 +39,6 @@ import {
   Cpu,
   ShieldCheck,
   BookOpen,
-  FileClock,
   Bell,
   LogOut,
   LayoutDashboard,
@@ -389,8 +388,7 @@ export default function App() {
     integration:     ['Super Admin', 'Company Admin'],
     certificates:    ['Super Admin', 'Company Admin', 'Accountant'],
     audit:           ['Super Admin', 'Company Admin', 'Auditor'],
-    notifications:   ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
-    architecture:    ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor']
+    notifications:   ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor']
   };
 
   // Show a spinner while the SSO cookie check is in flight
@@ -601,7 +599,6 @@ export default function App() {
                   </span>
                 ) : undefined
               )}
-              {navItem('architecture', t('sidebar.blueprints'), FileClock)}
             </nav>
           </div>
 
@@ -762,10 +759,6 @@ export default function App() {
 
               {currentSection === 'notifications' && (
                 <NotificationCenter onChanged={loadHub} />
-              )}
-
-              {currentSection === 'architecture' && (
-                <ArchitectureDocs />
               )}
             </>
           )}
