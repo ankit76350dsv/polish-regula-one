@@ -169,6 +169,15 @@ export const getInvoice = async (_tenantId, invoiceId) => {
 };
 
 /**
+ * The EXACT official FA(3) XML for one invoice — generated server-side by the same builder used
+ * for KSeF submission (namespace http://crd.gov.pl/wzor/2025/06/25/13775/). Returns the raw XML
+ * string (ksefFetch returns text when the body isn't JSON). GET /api/v1/invoices/{id}/xml.
+ */
+export const getInvoiceXml = async (invoiceId) => {
+  return ksefFetch(`${INVOICE_PATH}/${encodeURIComponent(invoiceId)}/xml`);
+};
+
+/**
  * Fetch an invoice's status timeline: current status, the "what to do next" hint, and the
  * full ordered history of status changes (DRAFT → PENDING → SENT → ...) with timestamps.
  * GET /api/v1/invoices/{invoiceId}/status. Returns the backend InvoiceStatusResponse shape:

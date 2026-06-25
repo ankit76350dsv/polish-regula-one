@@ -460,6 +460,16 @@ public class KSeFInvoiceService {
     }
 
     /**
+     * Generates the official FA(3) XML for one invoice — the EXACT document the KSeF submission
+     * pipeline produces (same FA3XmlGeneratorService / schema), so the UI can preview/download the
+     * real thing instead of a hand-rolled approximation. Tenant-scoped via getInvoice().
+     */
+    public String generateInvoiceXml(String tenantId, String invoiceId) {
+        KsefInvoice invoice = getInvoice(tenantId, invoiceId);
+        return xmlGeneratorService.generateXml(invoice).xmlContent();
+    }
+
+    /**
      * Server-side paginated list of a tenant's invoices, with an optional status filter and an
      * optional text search (matches invoice number, buyer name, or buyer NIP — case-insensitive).
      * Always newest-first. Built with MongoTemplate so every filter is optional and combined in

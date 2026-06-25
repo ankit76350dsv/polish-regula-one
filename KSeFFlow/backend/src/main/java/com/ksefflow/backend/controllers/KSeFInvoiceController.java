@@ -18,6 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -249,6 +250,24 @@ public class KSeFInvoiceController {
         log.info("[getInvoiceStatus]:1 ▶ GET /{}/status — tenant={}", invoiceId, caller.tenantId());
         KsefInvoice invoice = invoiceService.getInvoice(caller.tenantId(), invoiceId);
         return ResponseEntity.ok(InvoiceStatusResponse.from(invoice));
+    }
+
+    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER,
+    //              KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR.
+    /**
+     * Returns the EXACT official FA(3) XML this invoice produces — the same document the submission
+     * pipeline builds (FA3XmlGeneratorService, namespace http://crd.gov.pl/wzor/2025/06/25/13775/).
+     * Lets the UI preview/download the real schema-valid XML instead of an approximation.
+     */
+    @GetMapping(value = "/{invoiceId}/xml", produces = MediaType.APPLICATION_XML_VALUE)
+    public ResponseEntity<String> getInvoiceXml(
+            AuthenticatedUser caller,
+            @PathVariable String invoiceId) {
+        // Read access — issuers, oversight roles, or the tenant admin.
+        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
+                KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
+        log.info("[getInvoiceXml]:1 ▶ GET /{}/xml — tenant={}", invoiceId, caller.tenantId());
+        return ResponseEntity.ok(invoiceService.generateInvoiceXml(caller.tenantId(), invoiceId));
     }
 
     /**

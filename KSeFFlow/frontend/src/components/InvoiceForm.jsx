@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { createInvoice, submitInvoice, getInvoice } from '../api/ksefApi';
+import { createInvoice, submitInvoice, getInvoice, getInvoiceXml } from '../api/ksefApi';
 import { openInvoicePrint } from '../lib/offlineInvoice';
 import {
   Plus,
@@ -26,7 +26,13 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
   const { pathname } = useLocation();
   const tenantIdFromUrl = pathname.split('/').filter(Boolean)[1] ?? tenant.id;
 
+  // Only a DRAFT invoice may be edited. Anything already submitted (SENT / OFFLINE_MODE / PENDING /
+  // RETRYING / FAILED / CORRECTED) is locked — opening "View Full Invoice Details" shows it read-only.
   const isViewOnly = !!existingInvoice && existingInvoice.status !== 'DRAFT';
+
+  // Fields are editable only when the user CAN modify (permission) AND the invoice is not locked.
+  // Use this everywhere instead of just !canModify so non-DRAFT invoices can't be edited at all.
+  const isReadOnly = !canModify || isViewOnly;
 
   const [buyerName, setBuyerName] = useState(existingInvoice?.buyerName ?? 'Central Trade Poland Sp. z o.o.');
   const [buyerNip, setBuyerNip] = useState(existingInvoice?.buyerNIP ?? '5229983144');
@@ -87,6 +93,116 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
   // Last error from a Save-Draft / Submit / Offline action — shown inline in the
   // Government Execution Deck so the user always sees why an action failed.
   const [formError, setFormError] = useState(null);
+
+  // Real, official FA(3) XML fetched from the backend (the same XML KSeF receives). We show this
+  // instead of a hand-built approximation. Only available once the invoice is saved (has an id).
+  const [realXml, setRealXml] = useState(null);
+  const [xmlLoading, setXmlLoading] = useState(false);
+  const [xmlError, setXmlError] = useState(null);
+
+  // Lazily load the official XML the first time the user opens the XML tab for a saved invoice.
+  useEffect(() => {
+    if (activeTab !== 'xml' || !existingInvoice?.id || realXml || xmlLoading) return;
+    setXmlLoading(true);
+    setXmlError(null);
+    getInvoiceXml(existingInvoice.id)
+      .then((xml) => setRealXml(typeof xml === 'string' ? xml : String(xml ?? '')))
+      .catch((err) => setXmlError(err.message || (language === 'pl' ? 'Nie udało się pobrać XML.' : 'Failed to load XML.')))
+      .finally(() => setXmlLoading(false));
+  }, [activeTab, existingInvoice?.id, realXml, xmlLoading, language]);
+
+  // Save the official XML to a .xml file.
+  const downloadXmlFile = () => {
+    if (!realXml) return;
+    const blob = new Blob([realXml], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(existingInvoice?.invoiceNumber || invoiceNumber).replace(/[^a-zA-Z0-9._-]/g, '_')}.xml`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Build an OFFICIAL Polish "Faktura VAT" (the Art. 106e legally-required fields) from the current
+  // form data and open the browser's print dialog (Save as PDF). No app/company branding — only the
+  // legal invoice content. The legal record remains the FA(3) XML in KSeF; this is the human-readable
+  // visualization. Works for both new and saved invoices.
+  const downloadInvoicePdf = () => {
+    const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const m = (v) => (Number(v) || 0).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const rateLabel = (r) => (r === 'exempt' ? 'zw' : `${r}%`);
+    const ccy = currency;
+
+    // VAT breakdown grouped by rate (required summary on a VAT invoice).
+    const byRate = {};
+    items.forEach((it) => {
+      const k = String(it.vatRate);
+      byRate[k] = byRate[k] || { net: 0, vat: 0, gross: 0 };
+      byRate[k].net += it.netAmount; byRate[k].vat += it.vatAmount; byRate[k].gross += it.grossAmount;
+    });
+    const vatRows = Object.entries(byRate).map(([rate, v]) =>
+      `<tr><td>${rateLabel(rate)}</td><td style="text-align:right">${m(v.net)}</td><td style="text-align:right">${m(v.vat)}</td><td style="text-align:right">${m(v.gross)}</td></tr>`).join('');
+
+    const itemRows = items.map((it, i) =>
+      `<tr><td>${i + 1}</td><td>${esc(it.productName) || '—'}</td><td style="text-align:right">${esc(it.quantity)} szt.</td><td style="text-align:right">${m(it.unitPrice)}</td><td style="text-align:center">${rateLabel(it.vatRate)}</td><td style="text-align:right">${m(it.netAmount)}</td><td style="text-align:right">${m(it.grossAmount)}</td></tr>`).join('');
+
+    const statusLine = existingInvoice?.ksefId
+      ? `Numer KSeF: ${esc(existingInvoice.ksefId)}`
+      : (existingInvoice && existingInvoice.status !== 'DRAFT'
+          ? `Status: ${esc(existingInvoice.status)}`
+          : 'Dokument roboczy — niewysłany do KSeF');
+
+    const html = `<!doctype html><html lang="pl"><head><meta charset="utf-8"/><title>Faktura ${esc(invoiceNumber)}</title>
+    <style>
+      body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:32px;font-size:12px}
+      h1{font-size:20px;margin:0}
+      .muted{color:#666;font-size:10px}
+      .row{display:flex;justify-content:space-between;gap:40px;margin:14px 0}
+      .box h3{font-size:10px;text-transform:uppercase;color:#888;margin:0 0 4px;letter-spacing:.04em}
+      table{width:100%;border-collapse:collapse;margin:10px 0}
+      th,td{border:1px solid #e5e5e5;padding:5px 7px;font-size:11px}
+      th{background:#f5f5f5;text-align:left;color:#555}
+      .totals{margin-left:auto;width:300px}
+      .totals td{border:none;padding:3px 6px}
+      .totals .grand td{font-size:15px;font-weight:bold;border-top:2px solid #111}
+      @media print{button{display:none}}
+    </style></head><body>
+      <div class="row" style="align-items:flex-start">
+        <div><h1>Faktura VAT</h1><div class="muted">Faktura ustrukturyzowana FA(3)</div></div>
+        <div style="text-align:right"><div style="font-weight:bold">${esc(invoiceNumber)}</div><div class="muted">${esc(statusLine)}</div></div>
+      </div>
+      <div class="row">
+        <div class="box"><h3>Sprzedawca</h3><div>${esc(tenant.name)}</div><div>${esc(sellerAddress)}</div><div>${esc(sellerPostalCode)} ${esc(sellerCity)}</div><div>NIP: ${esc(tenant.nip)}</div></div>
+        <div class="box"><h3>Nabywca</h3><div>${esc(buyerName)}</div><div>${esc(buyerAddress)}</div><div>${esc(buyerPostalCode)} ${esc(buyerCity)}</div><div>NIP: ${esc(buyerNip)}</div></div>
+      </div>
+      <div class="row">
+        <div>Data wystawienia: <strong>${esc(issueDate)}</strong></div>
+        <div>Termin płatności: <strong>${esc(dueDate)}</strong></div>
+        <div>Waluta: <strong>${esc(ccy)}</strong> · Płatność: <strong>${esc(paymentMethod)}</strong></div>
+      </div>
+      <table><thead><tr><th>Lp.</th><th>Nazwa towaru / usługi</th><th style="text-align:right">Ilość</th><th style="text-align:right">Cena netto</th><th style="text-align:center">VAT</th><th style="text-align:right">Wartość netto</th><th style="text-align:right">Wartość brutto</th></tr></thead><tbody>${itemRows}</tbody></table>
+      <div class="muted" style="text-transform:uppercase;margin:14px 0 4px">Podsumowanie VAT</div>
+      <table style="width:360px"><thead><tr><th>Stawka</th><th style="text-align:right">Netto</th><th style="text-align:right">VAT</th><th style="text-align:right">Brutto</th></tr></thead><tbody>${vatRows}</tbody></table>
+      <table class="totals"><tbody>
+        <tr><td>Razem netto</td><td style="text-align:right">${m(totalNet)} ${esc(ccy)}</td></tr>
+        <tr><td>Razem VAT</td><td style="text-align:right">${m(totalVat)} ${esc(ccy)}</td></tr>
+        <tr class="grand"><td>Do zapłaty</td><td style="text-align:right">${m(totalGross)} ${esc(ccy)}</td></tr>
+      </tbody></table>
+      <div style="margin-top:14px"><div>Numer konta: <strong>${esc(bankAccount)}</strong></div>${notes ? `<div class="muted" style="margin-top:6px">Uwagi: ${esc(notes)}</div>` : ''}</div>
+      <button onclick="window.print()" style="margin-top:24px;padding:8px 14px">Drukuj / Zapisz jako PDF</button>
+      <script>window.onload=()=>setTimeout(()=>window.print(),300)</script>
+    </body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) {
+      onAddNotification(
+        language === 'pl' ? 'Zablokowano okno' : 'Popup blocked',
+        language === 'pl' ? 'Odblokuj wyskakujące okna, aby pobrać PDF.' : 'Allow popups for this site to download the PDF.',
+        'error');
+      return;
+    }
+    win.document.open(); win.document.write(html); win.document.close();
+  };
 
   const calculateTotals = (currentItems) => {
     let netSum = 0;
@@ -162,63 +278,6 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
     setTimeout(() => {
       setIsAutosaving(false);
     }, 800);
-  };
-
-  const generateXmlString = () => {
-    const currentDateIso = new Date().toISOString();
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<Faktura xmlns="http://crd.gov.pl/wzor/2024/02/08/13310/">
-  <Naglowek>
-    <KodFormularza kodSystemowy="Faktura (3)" wersjaSchemy="1-0E">FA</KodFormularza>
-    <WariantFormularza>3</WariantFormularza>
-    <DataWytworzeniaFa>${currentDateIso}</DataWytworzeniaFa>
-  </Naglowek>
-  <Podmioty>
-    <Podmiot1 Rola="Sprzedawca">
-      <DaneIdentyfikacyjne>
-        <NIP>${tenant.nip}</NIP>
-        <PelnaNazwa>${tenant.name}</PelnaNazwa>
-      </DaneIdentyfikacyjne>
-    </Podmiot1>
-    <Podmiot2 Rola="Nabywca">
-      <DaneIdentyfikacyjne>
-        <NIP>${buyerNip}</NIP>
-        <PelnaNazwa>${buyerName}</PelnaNazwa>
-      </DaneIdentyfikacyjne>
-    </Podmiot2>
-  </Podmioty>
-  <Fa>
-    <KodWaluty>${currency}</KodWaluty>
-    <P_1>${issueDate}</P_1>
-    <P_2A>${invoiceNumber}</P_2A>
-    <P_13_1>${totalNet.toFixed(2)}</P_13_1>
-    <P_14_1>${totalVat.toFixed(2)}</P_14_1>
-    <P_15>${totalGross.toFixed(2)}</P_15>
-    <Platnosc>
-      <Termin>${dueDate}</Termin>
-      <FormaPlatnosci>${paymentMethod}</FormaPlatnosci>
-      <RachunekBankowy>${bankAccount.replace(/\s/g, '')}</RachunekBankowy>
-    </Platnosc>
-    <Pozycje>`;
-
-    items.forEach((item, idx) => {
-      xml += `
-      <Pozycja>
-        <NrKolejny>${idx + 1}</NrKolejny>
-        <P_7>${item.productName || 'Line item'}</P_7>
-        <P_8A>szt</P_8A>
-        <P_8B>${item.quantity}</P_8B>
-        <P_9A>${item.unitPrice.toFixed(2)}</P_9A>
-        <P_11>${item.netAmount.toFixed(2)}</P_11>
-        <P_12>${item.vatRate}</P_12>
-      </Pozycja>`;
-    });
-
-    xml += `
-    </Pozycje>
-  </Fa>
-</Faktura>`;
-    return xml;
   };
 
   const getSessionUserId = () => {
@@ -500,6 +559,17 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
         </div>
       )}
 
+      {isViewOnly && (
+        <div className="bg-slate-50 border border-slate-200 text-slate-700 p-3.5 rounded-xl text-xs flex gap-2.5 items-start">
+          <FileCheck2 size={16} className="text-slate-500 mt-0.5 shrink-0" />
+          <p>
+            <strong>{language === 'pl' ? 'Tryb tylko do odczytu' : 'Read-only'}</strong>. {language === 'pl'
+              ? `Ta faktura ma status ${existingInvoice.status} i została już przetworzona, więc nie można jej edytować. Tylko faktury robocze (DRAFT) są edytowalne. Aby coś zmienić, wystaw fakturę korygującą.`
+              : `This invoice is ${existingInvoice.status} and has already been processed, so it cannot be edited. Only DRAFT invoices are editable — to change a processed invoice, issue a correction.`}
+          </p>
+        </div>
+      )}
+
       {activeTab === 'form' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 bg-white border border-stone-200/90 rounded-xl p-6 shadow-xs space-y-6">
@@ -535,7 +605,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                       type="text"
                       value={sellerAddress}
                       onChange={(e) => { setSellerAddress(e.target.value); simulateAutosave(); }}
-                      disabled={!canModify}
+                      disabled={isReadOnly}
                       placeholder={language === 'pl' ? 'Ulica i numer budynku' : 'Street and building number'}
                       className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded"
                     />
@@ -546,7 +616,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                       type="text"
                       value={sellerPostalCode}
                       onChange={(e) => { setSellerPostalCode(e.target.value); simulateAutosave(); }}
-                      disabled={!canModify}
+                      disabled={isReadOnly}
                       placeholder="00-000"
                       className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded font-mono"
                     />
@@ -557,7 +627,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                       type="text"
                       value={sellerCity}
                       onChange={(e) => { setSellerCity(e.target.value); simulateAutosave(); }}
-                      disabled={!canModify}
+                      disabled={isReadOnly}
                       placeholder="City"
                       className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded"
                     />
@@ -577,7 +647,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                       type="text"
                       value={buyerNip}
                       onChange={(e) => { setBuyerNip(e.target.value); simulateAutosave(); }}
-                      disabled={!canModify}
+                      disabled={isReadOnly}
                       placeholder="NIP"
                       className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded font-mono font-semibold"
                     />
@@ -588,7 +658,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                       type="text"
                       value={buyerName}
                       onChange={(e) => { setBuyerName(e.target.value); simulateAutosave(); }}
-                      disabled={!canModify}
+                      disabled={isReadOnly}
                       placeholder="Buyer legal name"
                       className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded font-semibold"
                     />
@@ -599,7 +669,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                       type="text"
                       value={buyerAddress}
                       onChange={(e) => { setBuyerAddress(e.target.value); simulateAutosave(); }}
-                      disabled={!canModify}
+                      disabled={isReadOnly}
                       placeholder={language === 'pl' ? 'Ulica i numer budynku' : 'Street and building number'}
                       className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded"
                     />
@@ -610,7 +680,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                       type="text"
                       value={buyerPostalCode}
                       onChange={(e) => { setBuyerPostalCode(e.target.value); simulateAutosave(); }}
-                      disabled={!canModify}
+                      disabled={isReadOnly}
                       placeholder="00-000"
                       className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded font-mono"
                     />
@@ -621,7 +691,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                       type="text"
                       value={buyerCity}
                       onChange={(e) => { setBuyerCity(e.target.value); simulateAutosave(); }}
-                      disabled={!canModify}
+                      disabled={isReadOnly}
                       placeholder="City"
                       className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded"
                     />
@@ -637,7 +707,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                   type="text"
                   value={invoiceNumber}
                   onChange={(e) => setInvoiceNumber(e.target.value)}
-                  disabled={!canModify}
+                  disabled={isReadOnly}
                   className="w-full bg-white px-2 py-1.5 border border-stone-200 rounded font-mono font-semibold"
                 />
               </div>
@@ -647,7 +717,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                   type="date"
                   value={issueDate}
                   onChange={(e) => setIssueDate(e.target.value)}
-                  disabled={!canModify}
+                  disabled={isReadOnly}
                   className="w-full bg-white px-2 py-1.5 border border-stone-200 rounded font-mono"
                 />
               </div>
@@ -657,7 +727,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  disabled={!canModify}
+                  disabled={isReadOnly}
                   className="w-full bg-white px-2 py-1.5 border border-stone-200 rounded font-mono"
                 />
               </div>
@@ -666,7 +736,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                 <select
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value)}
-                  disabled={!canModify}
+                  disabled={isReadOnly}
                   className="w-full bg-white px-2 py-1.5 border border-stone-200 rounded font-semibold text-stone-850 cursor-pointer"
                 >
                   <option value="PLN">PLN - złoty</option>
@@ -682,7 +752,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                 <div className="flex items-center gap-2">
                   <button
                     onClick={triggerAiAssist}
-                    disabled={isAiLoading || !canModify}
+                    disabled={isAiLoading || isReadOnly}
                     className="text-red-700 border border-red-200 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-md text-xs font-semibold inline-flex items-center gap-1 transition cursor-pointer"
                   >
                     <Sparkles size={12} className="animate-pulse" />
@@ -690,7 +760,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                   </button>
                   <button
                     onClick={addItem}
-                    disabled={!canModify}
+                    disabled={isReadOnly}
                     className="bg-stone-900 hover:bg-stone-800 text-white px-3 py-1 rounded-md text-xs font-semibold inline-flex items-center gap-1 transition cursor-pointer"
                   >
                     <Plus size={12} /> {language === 'pl' ? 'Dodaj pozycję' : 'Add Item Row'}
@@ -706,7 +776,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                         type="text"
                         value={item.productName}
                         onChange={(e) => updateItem(index, 'productName', e.target.value)}
-                        disabled={!canModify}
+                        disabled={isReadOnly}
                         placeholder={language === 'pl' ? 'Nazwa towaru lub usługi' : 'Service name description'}
                         className="w-full bg-white px-2 py-1.5 border border-stone-200 rounded font-medium"
                       />
@@ -716,7 +786,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                         type="number"
                         value={item.quantity}
                         onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                        disabled={!canModify}
+                        disabled={isReadOnly}
                         className="w-full bg-white px-2 py-1.5 border border-stone-200 rounded text-center font-mono"
                       />
                     </div>
@@ -725,7 +795,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                         type="number"
                         value={item.unitPrice}
                         onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
-                        disabled={!canModify}
+                        disabled={isReadOnly}
                         className="w-full bg-white px-2 py-1.5 border border-stone-200 rounded text-right font-mono font-semibold text-stone-800"
                       />
                     </div>
@@ -733,7 +803,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                       <select
                         value={item.vatRate}
                         onChange={(e) => updateItem(index, 'vatRate', e.target.value)}
-                        disabled={!canModify}
+                        disabled={isReadOnly}
                         className="w-full bg-white px-1.5 py-1.5 border border-stone-200 rounded font-semibold text-stone-700 cursor-pointer"
                       >
                         <option value="23">23% (Std)</option>
@@ -758,7 +828,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                       </div>
                       <button
                         onClick={() => removeItem(item.id)}
-                        disabled={items.length <= 1 || !canModify}
+                        disabled={items.length <= 1 || isReadOnly}
                         className="text-stone-400 hover:text-red-650 p-1 rounded-md ml-1 cursor-pointer"
                       >
                         <Trash2 size={13} />
@@ -776,7 +846,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
-                    disabled={!canModify}
+                    disabled={isReadOnly}
                     className="col-span-1 bg-stone-550 px-2 py-1.5 border border-stone-200 rounded text-xs font-semibold text-stone-800 cursor-pointer"
                   >
                     <option value="Split Payment">Split Payment</option>
@@ -788,7 +858,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                     type="text"
                     value={bankAccount}
                     onChange={(e) => setBankAccount(e.target.value)}
-                    disabled={!canModify}
+                    disabled={isReadOnly}
                     className="col-span-2 bg-stone-50 px-2 py-1.5 border border-stone-200 rounded text-xs font-mono"
                   />
                 </div>
@@ -799,7 +869,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  disabled={!canModify}
+                  disabled={isReadOnly}
                   className="w-full bg-stone-50 px-2 py-1.5 border border-stone-200 rounded text-xs"
                   placeholder={language === 'pl' ? 'Wpisz uwagi...' : 'Insert notes, e.g., Split payment references code...'}
                 />
@@ -970,53 +1040,98 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
 
       {activeTab === 'xml' && (
         <div className="space-y-4">
-          <div className="bg-stone-900 rounded-xl p-5 shadow-inner border border-stone-850 font-mono text-stone-300 text-xs space-y-4">
-            <div className="flex justify-between items-center bg-stone-850 p-3 rounded-lg border border-stone-800 text-[11px] text-stone-400">
-              <span className="flex items-center gap-1">
-                <FileCode2 size={13} className="text-red-400" />
-                FA_Version_3_Schema_Payload.xml
-              </span>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(generateXmlString());
-                  onAddNotification('Copied', 'FA(3) XML structure copied to clipboard successfully.', 'success');
-                }}
-                className="hover:text-white flex items-center gap-1 text-[10px] bg-stone-900 px-2 py-1 rounded border border-stone-800 transition cursor-pointer"
-              >
-                {language === 'pl' ? 'Kopiuj XML' : 'Copy XML Code'}
-              </button>
+          {!existingInvoice?.id ? (
+            // No saved invoice yet → the official XML is generated by the server from saved data.
+            <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-xl text-xs flex gap-2.5 items-start">
+              <AlertCircle size={16} className="text-amber-700 mt-0.5 shrink-0" />
+              <p>
+                {language === 'pl'
+                  ? 'Oficjalny XML FA(3) jest generowany przez serwer na podstawie zapisanej faktury. Zapisz fakturę jako roboczą, aby zobaczyć i pobrać dokładny XML, który trafi do KSeF.'
+                  : 'The official FA(3) XML is generated by the server from the saved invoice. Save this invoice as a draft to view and download the exact XML that will be sent to KSeF.'}
+              </p>
             </div>
+          ) : (
+            <div className="bg-stone-900 rounded-xl p-5 shadow-inner border border-stone-850 font-mono text-stone-300 text-xs space-y-4">
+              <div className="flex justify-between items-center bg-stone-850 p-3 rounded-lg border border-stone-800 text-[11px] text-stone-400">
+                <span className="flex items-center gap-1">
+                  <FileCode2 size={13} className="text-red-400" />
+                  {(existingInvoice.invoiceNumber || 'FA3').replace(/[^a-zA-Z0-9._-]/g, '_')}.xml
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { if (realXml) { navigator.clipboard.writeText(realXml); onAddNotification(language === 'pl' ? 'Skopiowano' : 'Copied', language === 'pl' ? 'Oficjalny XML FA(3) skopiowany do schowka.' : 'Official FA(3) XML copied to clipboard.', 'success'); } }}
+                    disabled={!realXml}
+                    className="hover:text-white flex items-center gap-1 text-[10px] bg-stone-900 px-2 py-1 rounded border border-stone-800 transition cursor-pointer disabled:opacity-40"
+                  >
+                    {language === 'pl' ? 'Kopiuj XML' : 'Copy XML'}
+                  </button>
+                  <button
+                    onClick={downloadXmlFile}
+                    disabled={!realXml}
+                    className="hover:text-white flex items-center gap-1 text-[10px] bg-stone-900 px-2 py-1 rounded border border-stone-800 transition cursor-pointer disabled:opacity-40"
+                  >
+                    <Download size={11} /> {language === 'pl' ? 'Pobierz XML' : 'Download XML'}
+                  </button>
+                </div>
+              </div>
 
-            <pre className="overflow-x-auto max-h-96 text-amber-100 p-2 bg-stone-950 rounded border border-stone-900 leading-relaxed font-sans text-xs">
-              <code className="font-mono text-[11px] block whitespace-pre">
-                {generateXmlString()}
-              </code>
-            </pre>
-          </div>
+              {xmlLoading ? (
+                <div className="flex items-center justify-center h-40 text-stone-400 gap-2 font-sans">
+                  <span className="w-3 h-3 rounded-full border-2 border-stone-600 border-t-red-400 animate-spin" />
+                  {language === 'pl' ? 'Generowanie XML z serwera…' : 'Generating XML from server…'}
+                </div>
+              ) : xmlError ? (
+                <div className="text-red-300 font-sans text-[11px] p-2 bg-stone-950 rounded border border-red-900/50">{xmlError}</div>
+              ) : (
+                <pre className="overflow-x-auto max-h-[28rem] text-amber-100 p-2 bg-stone-950 rounded border border-stone-900 leading-relaxed font-sans text-xs">
+                  <code className="font-mono text-[11px] block whitespace-pre">
+                    {realXml}
+                  </code>
+                </pre>
+              )}
+            </div>
+          )}
           <div className="text-xs text-stone-500 leading-relaxed">
-            {language === 'pl' 
-              ? '* Prezentowana struktura XML jest w pełni zgodna z oficjalną strukturą FA(3) opublikowaną przez Ministerstwo Finansów RP.' 
-              : '* This legal XML structure strictly matches the official FA(3) XML definition issued by the Polish Sejm for tax declarations.'}
+            {language === 'pl'
+              ? '* To jest dokładny, oficjalny XML FA(3) (przestrzeń nazw http://crd.gov.pl/wzor/2025/06/25/13775/) generowany przez serwer — ten sam dokument, który jest wysyłany do KSeF.'
+              : '* This is the exact, official FA(3) XML (namespace http://crd.gov.pl/wzor/2025/06/25/13775/) generated by the server — the very same document submitted to KSeF.'}
           </div>
         </div>
       )}
 
       {activeTab === 'pdf' && (
-        <div className="bg-white border-2 border-stone-200/90 p-8 rounded-xl max-w-4xl mx-auto shadow-md text-stone-800 text-sm space-y-6">
-          <div className="flex justify-between items-start border-b pb-6 border-stone-200">
-            <div>
-              <div className="text-stone-400 uppercase text-xs tracking-wider font-semibold">{language === 'pl' ? 'Prezentacja dokumentu' : 'Regulatory Standard Representation'}</div>
-              <h2 className="text-2xl font-bold text-stone-900 tracking-tight">FAKTURA VAT (FA-3)</h2>
-              <div className="text-xs font-mono text-stone-500 mt-1">{language === 'pl' ? 'Numer faktury:' : 'Invoice Number:'} <strong className="text-stone-800">{invoiceNumber}</strong></div>
-            </div>
-            <div className="text-right">
-              <div className="font-bold text-red-700 text-lg">RegulaOne</div>
-              <div className="text-xs text-stone-500 mt-1">Poland e-Compliance Node</div>
-              <div className="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-50 text-amber-800 border border-amber-200">
-                {language === 'pl' ? 'SZKIC - NIEPRZESŁANO DO KSeF' : 'DRAFT - NOT COMMITTED TO KSeF'}
+        <div className="max-w-4xl mx-auto space-y-4">
+          <div className="flex justify-end">
+            <button
+              onClick={downloadInvoicePdf}
+              className="inline-flex items-center gap-2 bg-stone-900 hover:bg-stone-800 text-white font-semibold py-2 px-4 rounded-xl text-xs transition cursor-pointer"
+            >
+              <Download size={14} /> {language === 'pl' ? 'Pobierz PDF' : 'Download PDF'}
+            </button>
+          </div>
+          <div className="bg-white border-2 border-stone-200/90 p-8 rounded-xl shadow-md text-stone-800 text-sm space-y-6">
+            <div className="flex justify-between items-start border-b pb-6 border-stone-200">
+              <div>
+                <div className="text-stone-400 uppercase text-xs tracking-wider font-semibold">{language === 'pl' ? 'Prezentacja dokumentu' : 'Document visualization'}</div>
+                <h2 className="text-2xl font-bold text-stone-900 tracking-tight">FAKTURA VAT</h2>
+                <div className="text-xs font-mono text-stone-500 mt-1">{language === 'pl' ? 'Numer faktury:' : 'Invoice Number:'} <strong className="text-stone-800">{invoiceNumber}</strong></div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] text-stone-400 uppercase tracking-wider">{language === 'pl' ? 'Struktura' : 'Schema'}</div>
+                <div className="font-semibold text-stone-700 text-sm">FA(3)</div>
+                <div className={`inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-mono border ${
+                  existingInvoice?.status === 'SENT' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                  existingInvoice?.status === 'OFFLINE_MODE' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                  'bg-amber-50 text-amber-800 border-amber-200'
+                }`}>
+                  {existingInvoice?.ksefId
+                    ? `KSeF: ${existingInvoice.ksefId}`
+                    : (existingInvoice && existingInvoice.status !== 'DRAFT'
+                        ? existingInvoice.status
+                        : (language === 'pl' ? 'SZKIC — NIEWYSŁANO DO KSeF' : 'DRAFT — NOT SENT TO KSeF'))}
+                </div>
               </div>
             </div>
-          </div>
 
           <div className="grid grid-cols-2 gap-8 text-xs leading-normal">
             <div>
@@ -1099,11 +1214,11 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
               <p>{language === 'pl' ? 'Konto bankowe:' : 'Bank Account:'} <strong>{bankAccount}</strong></p>
               <p>{language === 'pl' ? 'Uwagi:' : 'Official Note:'} <em>{notes}</em></p>
             </div>
-            <div className="text-center font-mono text-[9px] bg-stone-50 p-2 rounded border border-stone-100">
-              <p>RODO / GDPR CRYPTO SEAL: SHA-256 ENCRYPTED-STORAGE</p>
-              <p>UPO Receipt storage verified under Regulation Art. 106e</p>
+            <div className="text-center font-mono text-[9px] text-stone-400">
+              <p>{language === 'pl' ? 'Faktura ustrukturyzowana KSeF — struktura FA(3)' : 'KSeF structured invoice — FA(3) schema'}</p>
             </div>
           </div>
+        </div>
         </div>
       )}
     </div>
