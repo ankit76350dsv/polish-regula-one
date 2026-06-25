@@ -278,6 +278,25 @@ public class KSeFInvoiceService {
         invoice.setFa3XmlHash(xmlResult.sha256Hash());
         ksef_invoices_repository.save(invoice);
 
+        // ! Government rule — special modes must NOT use the online submission flow.
+        // The Ministry of Finance KSeF 2.0 rules say that during a declared EMERGENCY ("tryb
+        // awaryjny") or UNAVAILABILITY ("niedostępność") invoices are issued OFFLINE (FA(3) + QR
+        // code) and only later transmitted to KSeF — within the next business day, or within
+        // 7 business days for an emergency. So when KSeF is NOT in the ONLINE state we do not even
+        // attempt the live call; we route the invoice straight to offline issuance. The legal
+        // deadline, QR sealing and the background retry queue are all handled by handleOfflineMode.
+        // (Sources: ksef.podatki.gov.pl — "Tryby szczególne wystawiania faktur" / "Tryb offline".)
+        if (!availabilityService.isOnline()) {
+            KsefAvailabilityService.Status state = availabilityService.getStatus();
+            KsefOfflineMode offlineMode = availabilityService.currentOfflineMode();
+            String reason = "KSeF is in " + state.mode() + " mode (" + state.reason()
+                    + ") — invoice issued offline per the declared state";
+            log.warn("[submitInvoice]:3b KSeF not ONLINE (mode={}) — skipping the online flow and "
+                    + "issuing invoice [{}] offline. Reason=[{}]",
+                    state.mode(), invoice.getInvoiceNumber(), state.reason());
+            return handleOfflineMode(invoice, offlineMode, reason, userEmail, ipAddress);
+        }
+
         // Step 5–8 — Submit invoice to KSeF
         try {
 
