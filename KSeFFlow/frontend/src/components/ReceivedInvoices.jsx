@@ -113,7 +113,7 @@ export default function ReceivedInvoices({ tenant, permissions, onAddNotificatio
   const shortDate = (iso) => (iso ? String(iso).slice(0, 10) : '—');
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6">
       {/* Header + sync action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
