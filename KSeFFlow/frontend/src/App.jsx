@@ -1,11 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import {
-  INITIAL_AUDIT_LOGS
-} from './data/mockData';
-import { listInvoices, getMyTenant, getHubNotifications, getHubUnreadCount, markAllHubNotificationsRead } from './api/ksefApi';
-import { SSO_CALLBACK_URL, clearSsoRedirectGuard, tryRefreshSession } from './lib/api';
+import { INITIAL_AUDIT_LOGS } from './data/mockData';
+import { getMyTenant } from './api/ksefApi';
+import { SSO_CALLBACK_URL, tryRefreshSession } from './lib/api';
 import { useLanguage } from './context/LanguageContext';
+import { PAGE_ROLES_REQUIRED } from './constants/navigation';
+
+import ProtectedRoute from './components/ProtectedRoute';
+import LandingPage from './components/LandingPage';
+import NotFoundPage from './components/NotFoundPage';
+import Workspace from './components/Workspace';
 
 const API_URL       = import.meta.env.VITE_API_URL          ?? 'http://localhost:8080';
 const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
@@ -17,54 +21,28 @@ const mapRole = (r) => {
   return 'Accountant';  // ROLE_USER
 };
 
-import Dashboard from './components/Dashboard';
-import Profile from './components/Profile';
-import ProtectedRoute from './components/ProtectedRoute';
-import InvoiceForm from './components/InvoiceForm';
-import InvoiceList from './components/InvoiceList';
-import IntegrationCenter from './components/IntegrationCenter';
-import CertificateManager from './components/CertificateManager';
-import OfflineQueue from './components/OfflineQueue';
-import AuditCenter from './components/AuditCenter';
-import ReceivedInvoices from './components/ReceivedInvoices';
-import PermissionsManager from './components/PermissionsManager';
-import NotificationCenter from './components/NotificationCenter';
-import LandingPage from './components/LandingPage';
-import NotFoundPage from './components/NotFoundPage';
-// (ArchitectureDocs removed — it was a static, inaccurate showcase, not a KSeF/government requirement.)
-
-import {
-  Building2,
-  UserSquare,
-  FileEdit,
-  FolderSearch,
-  AlertTriangle,
-  Cpu,
-  ShieldCheck,
-  BookOpen,
-  Bell,
-  LogOut,
-  LayoutDashboard,
-  Lock,
-  Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
-  UserCheck,
-  X,
-  Inbox,
-  KeyRound,
-  Languages
-} from 'lucide-react';
-
+// ── App ─────────────────────────────────────────────────────────────────────
+// App is intentionally thin. It is responsible for ONLY two things:
+//   1. Authentication — checking the shared-domain SSO session, refreshing it,
+//      and handling logout (this is the logic that decides "can you be here?").
+//   2. Routing — reading the URL, deciding which tenant/section it points at,
+//      and rejecting unknown paths.
+//
+// Everything the user actually *sees and uses* once logged in lives in
+// <Workspace>: the sidebar, the header, and every feature screen. App just
+// wraps it in <ProtectedRoute> (which renders Login / the access modal when
+// the user is not allowed in).
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { language, setLanguage, t } = useLanguage();
+  const { language, t } = useLanguage();
   const isLandingPath = location.pathname === '/';
 
+  // ── Parse the URL ─────────────────────────────────────────────────────────
+  // Routes look like: /company/<tenantId>/<section>/<optional invoiceId>
   const pathParts = location.pathname.split('/').filter(Boolean);
-  const urlTenantId   = pathParts[1] ?? null;
-  const currentSection  = pathParts[2] || 'dashboard';
+  const urlTenantId      = pathParts[1] ?? null;
+  const currentSection   = pathParts[2] || 'dashboard';
   const currentInvoiceId = (pathParts[2] === 'invoices' && pathParts[3]) ? pathParts[3] : null;
   const pageKey = currentSection === 'invoices' && currentInvoiceId ? 'invoice-detail' : currentSection;
 
@@ -82,26 +60,9 @@ export default function App() {
   const [sessionReloadKey, setSessionReloadKey] = useState(0);
   const [activeTenant,    setActiveTenant]    = useState({ id: '', name: 'My Organisation', nip: '', subscriptionPlan: 'Active' });
   const [activeRole,      setActiveRole]      = useState('Company Admin');
-  const [invoices, setInvoices] = useState([]);
-  const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
+  // Local audit trail. Write-only here (kept for traceability); fed by logout and
+  // by the Workspace's invoice actions through the shared logAuditAction below.
   const [, setAuditLogs] = useState(INITIAL_AUDIT_LOGS);
-  // Transient, client-only signals raised by components via addNotification (form errors etc.).
-  // Starts empty — persistent notifications come from the Hub, not mock data.
-  const [notifications, setNotifications] = useState([]);
-  // Persistent notifications from the centralized Hub (RegulaOne), scoped to this user.
-  const [hubNotifications, setHubNotifications] = useState([]);
-  const [hubUnread, setHubUnread] = useState(0);
-  const [govStatus, setGovStatus] = useState('Connected');
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
-  const navigateTo = (page) => navigate(`/company/${activeTenant.id}/${page}`);
-
-  useEffect(() => {
-    setIsMobileSidebarOpen(false);
-    setShowNotifications(false);
-  }, [location.pathname]);
 
   // ── SSO session init ────────────────────────────────────────────────────────
   // On every page load: ask the RegulaOne backend if the shared-domain
@@ -172,8 +133,8 @@ export default function App() {
         // NOTE: we deliberately do NOT clear the SSO redirect-loop guard here.
         // /api/auth/me (RegulaOne :8080) succeeds on EVERY turn of the reload loop, so
         // clearing the counter here would reset it every cycle and hide the loop forever.
-        // The guard is cleared only once a real KSeFFlow data call succeeds — see the
-        // listInvoices() effect below (that proves the :8081 cookie works too).
+        // The guard is cleared only once a real KSeFFlow data call succeeds — see
+        // Workspace's loadInvoices() (that proves the :8081 cookie works too).
 
         // Enrich the tenant with full organisation details (name, NIP, plan).
         // The tenant id is derived server-side from the authenticated JWT —
@@ -280,42 +241,6 @@ export default function App() {
     }
   }, [isAuthenticated, location.pathname, activeTenant.id]);
 
-  // ── Centralized notifications ───────────────────────────────────────────────
-  // Pull the user's KSeFFlow notifications + unread count straight from the Hub (no mock data).
-  // Exposed as a callback so the Notification Center can refresh the bell after acting on items.
-  const loadHub = useCallback(() => {
-    getHubNotifications({ size: 20 })
-      .then(setHubNotifications)
-      .catch(() => { /* non-fatal */ });
-    getHubUnreadCount()
-      .then(setHubUnread)
-      .catch(() => { /* non-fatal */ });
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) loadHub();
-  }, [isAuthenticated, loadHub]);
-
-  // Loads the tenant's invoices from the real KSeFFlow backend. Exposed as a callback so the
-  // Offline Queue can refresh the list after a real manual retry.
-  const loadInvoices = useCallback(() => {
-    const tenantId = urlTenantId ?? activeTenant.id;
-    if (!isAuthenticated || !tenantId) return;
-    setIsLoadingInvoices(true);
-    listInvoices(tenantId)
-      .then(fetched => {
-        setInvoices(fetched);
-        setIsLoadingInvoices(false);
-        // A real KSeFFlow (:8081) call just succeeded — the session cookie works for
-        // BOTH backends, so we are genuinely healthy. Reset the redirect-loop counter
-        // so a real logout/expiry much later starts counting from zero again.
-        clearSsoRedirectGuard();
-      })
-      .catch(() => { setIsLoadingInvoices(false); });
-  }, [urlTenantId, isAuthenticated, activeTenant.id]);
-
-  useEffect(() => { loadInvoices(); }, [loadInvoices]);
-
   // ── SSO loop detector ───────────────────────────────────────────────────────
   // lib/api.js fires "ksef:sso-loop" when a 401 keeps redirecting us in circles
   // (e.g. the :8080 auth check passes but the :8081 cookie is rejected). When that
@@ -327,14 +252,12 @@ export default function App() {
     return () => window.removeEventListener('ksef:sso-loop', onLoop);
   }, []);
 
-  const currentInvoiceObj = currentInvoiceId
-    ? invoices.find(inv => inv.id === currentInvoiceId) ?? null
-    : null;
+  // ── Navigation + audit helpers ────────────────────────────────────────────
+  const navigateTo    = (section) => navigate(`/company/${activeTenant.id}/${section}`);
+  const openInvoice   = (id)      => navigate(`/company/${activeTenant.id}/invoices/${id}`);
 
-  // KSeF permission codes for the logged-in user — passed to components so they can
-  // gate buttons/actions to match the backend's per-endpoint permission checks.
-  const userPermissions = currentUser?.permissions ?? [];
-
+  // Record one local audit entry. Shared by logout (below) and by the Workspace's
+  // invoice actions, so both write to the same trail.
   const logAuditAction = (action, detail, targetTenantId = activeTenant.id) => {
     const newLog = {
       id: `log-gen-${Date.now()}`,
@@ -346,22 +269,9 @@ export default function App() {
       action,
       ipAddress: '194.29.130.' + Math.floor(Math.random() * 250 + 1),
       newValue: detail,
-      complianceChecked: true
+      complianceChecked: true,
     };
     setAuditLogs(prev => [newLog, ...prev]);
-  };
-
-  const addNotification = (title, message, type) => {
-    const newNotif = {
-      id: `notif-${Date.now()}`,
-      tenantId: activeTenant.id,
-      title,
-      message,
-      type,
-      timestamp: new Date().toISOString(),
-      read: false
-    };
-    setNotifications(prev => [newNotif, ...prev]);
   };
 
   const handleLogout = () => {
@@ -378,60 +288,8 @@ export default function App() {
       .catch(() => { window.location.href = CENTRAL_LOGIN; });
   };
 
-  const addInvoice = (invoice, silentAuditAction) => {
-    setInvoices(prev => [invoice, ...prev]);
-    if (silentAuditAction) {
-      logAuditAction(silentAuditAction, `Invoice ${invoice.invoiceNumber} processed for Buyer ${invoice.buyerNIP}. Pre-tax: ${invoice.totalNet}.`);
-    }
-  };
-
-
-  const processOfflineItem = (invoiceId, success, newKsefId) => {
-    setInvoices(prev => prev.map(inv => {
-      if (inv.id !== invoiceId) return inv;
-      if (success) {
-        logAuditAction('OFFLINE_QUEUE_FLUSHED', `Invoice ${inv.invoiceNumber} transmitted to KSeF.`);
-        return { ...inv, status: 'SENT', ksefId: newKsefId, upoStatus: 'RECEIVED', upoTimestamp: new Date().toISOString(), submissionAttempts: inv.submissionAttempts + 1 };
-      }
-      return { ...inv, submissionAttempts: inv.submissionAttempts + 1, lastErrorMessage: 'HTTP 503 Service Unavailable - KSeF queue saturated.' };
-    }));
-  };
-
-  // The bell shows Hub notifications (persistent, from the server) merged with transient
-  // local signals, newest first. Local signals are tenant-filtered; Hub items are already
-  // scoped to this user by the backend.
-  const visibleNotifications = [
-    ...hubNotifications,
-    ...notifications.filter(n => n.tenantId === activeTenant.id),
-  ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-  // Opening the bell marks everything read: the Hub server-side, plus local signals.
-  const clearNotificationsUnread = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    if (hubUnread > 0) {
-      markAllHubNotificationsRead().catch(() => { /* non-fatal */ });
-      setHubNotifications(prev => prev.map(n => ({ ...n, read: true })));
-      setHubUnread(0);
-    }
-  };
-
-  const unreadCount = hubUnread + notifications.filter(n => !n.read).length;
-
-  const PAGE_ROLES_REQUIRED = {
-    dashboard:       ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
-    create:          ['Super Admin', 'Company Admin', 'Accountant'],
-    invoices:        ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
-    'invoice-detail':['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
-    received:        ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
-    permissions:     ['Super Admin', 'Company Admin'],
-    offline:         ['Super Admin', 'Company Admin', 'Accountant'],
-    integration:     ['Super Admin', 'Company Admin'],
-    certificates:    ['Super Admin', 'Company Admin', 'Accountant'],
-    audit:           ['Super Admin', 'Company Admin', 'Auditor'],
-    notifications:   ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
-    profile:         ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor']
-  };
-
+  // ── Route validity ──────────────────────────────────────────────────────────
+  // Decide whether the current URL is a path the app knows how to render.
   const isKnownRoute = (() => {
     if (location.pathname === '/' || location.pathname === '/login' || location.pathname === '/auth/sso-callback') {
       return true;
@@ -483,43 +341,9 @@ export default function App() {
     );
   }
 
-  // NOTE: authentication, transient-error/retry, and the KSeFFlow module + package gates are now
-  // all handled by <ProtectedRoute> wrapping the shell below (it renders <Login/> for an
-  // unauthenticated/looping session, an error screen for transient /me failures, and the access
-  // modal when the user lacks the KSeFFlow module or has an expired package).
-
-  const navItem = (section, label, Icon, extra) => {
-    const isActive = currentSection === section || (section === 'invoices' && currentSection === 'invoices');
-    const allowed  = PAGE_ROLES_REQUIRED[section]?.includes(activeRole);
-    return (
-      <button
-        type="button"
-        title={isSidebarCollapsed ? label : undefined}
-        aria-label={label}
-        aria-current={isActive ? 'page' : undefined}
-        onClick={() => { navigateTo(section); setShowNotifications(false); setIsMobileSidebarOpen(false); }}
-        className={`group relative w-full rounded-lg py-2.5 text-left text-xs font-semibold transition cursor-pointer ${
-          isSidebarCollapsed ? 'px-3 md:flex md:items-center md:justify-center md:px-2' : 'px-3'
-        } ${
-          isActive
-            ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none'
-            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-        }`}
-      >
-        <span className={`flex min-w-0 items-center gap-3 ${isSidebarCollapsed ? 'md:justify-center' : 'justify-between'}`}>
-          <span className="flex min-w-0 items-center gap-3">
-            <Icon size={16} className="shrink-0" />
-            <span className={`truncate ${isSidebarCollapsed ? 'md:hidden' : ''}`}>{label}</span>
-          </span>
-          <span className={`flex shrink-0 items-center gap-1.5 ${isSidebarCollapsed ? 'md:absolute md:right-1 md:top-1' : ''}`}>
-            {!allowed && <Lock size={11} className="text-slate-400" />}
-            {extra}
-          </span>
-        </span>
-      </button>
-    );
-  };
-
+  // Authentication, transient-error/retry, and the KSeFFlow module + package gates are all
+  // handled by <ProtectedRoute>. Once it lets the user through, <Workspace> renders the
+  // whole authenticated app (sidebar, header, and the current feature screen).
   return (
     <ProtectedRoute
       loading={isAuthLoading}
@@ -529,368 +353,19 @@ export default function App() {
       onRetry={() => setSessionReloadKey((k) => k + 1)}
       onSignOut={handleLogout}
     >
-    <div className="h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans antialiased md:flex">
-
-      {isMobileSidebarOpen && (
-        <button
-          type="button"
-          aria-label="Close navigation menu"
-          onClick={() => setIsMobileSidebarOpen(false)}
-          className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[2px] transition-opacity md:hidden"
-        />
-      )}
-
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 flex h-screen w-80 max-w-[86vw] shrink-0 transform flex-col border-r border-slate-200 bg-white font-sans shadow-2xl shadow-slate-900/15 transition-all duration-300 ease-out md:sticky md:top-0 md:z-30 md:max-w-none md:translate-x-0 md:shadow-none ${
-          isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        } ${isSidebarCollapsed ? 'md:w-20' : 'md:w-72'}`}
-      >
-        <div className={`flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 px-4 ${isSidebarCollapsed ? 'md:justify-center md:px-3' : 'justify-between'}`}>
-          <div className={`flex min-w-0 items-center gap-3 ${isSidebarCollapsed ? 'md:justify-center' : ''}`}>
-            <div className="bg-red-700 text-white rounded-lg p-1.5 font-sans font-black flex items-center justify-center text-sm shadow-xs leading-none shrink-0">
-              R1
-            </div>
-            <div className={`min-w-0 ${isSidebarCollapsed ? 'md:hidden' : ''}`}>
-              <div className="flex items-baseline gap-1.5">
-                <span className="font-extrabold text-[15px] tracking-tight text-slate-800 uppercase">RegulaOne</span>
-                <span className="text-[11px] bg-red-50 text-red-650 px-1.5 py-0.5 rounded font-mono font-bold leading-none">KSeFFlow</span>
-              </div>
-              <p className="truncate text-[10px] text-slate-400 font-medium">Poland e-Invoicing Compliance SaaS Node</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setIsSidebarCollapsed(prev => !prev)}
-              className="hidden rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 md:flex"
-              aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {isSidebarCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsMobileSidebarOpen(false)}
-              className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 md:hidden"
-              aria-label="Close sidebar"
-            >
-              <X size={15} />
-            </button>
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <div className="space-y-6">
-
-            <div className={`bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs shadow-xs ${isSidebarCollapsed ? 'md:hidden' : ''}`}>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">{t('sidebar.tenantVault')}</span>
-              <p className="font-semibold text-slate-700 truncate text-[11.5px] mt-1">{activeTenant.name}</p>
-              <div className="flex justify-between gap-2 text-[10px] text-slate-400 mt-1.5 pt-1 border-t border-slate-100">
-                <span className="min-w-0 truncate">{t('sidebar.nip')}: <strong className="text-slate-600">{activeTenant.nip}</strong></span>
-                <span className="text-emerald-600 font-bold shrink-0">{activeTenant.subscriptionPlan}</span>
-              </div>
-            </div>
-
-            <nav className="space-y-1" aria-label="KSeFFlow sections">
-              {navItem('dashboard', t('sidebar.dashboard'), LayoutDashboard)}
-              {navItem('create', t('sidebar.createInvoice'), FileEdit)}
-              {navItem('invoices', t('sidebar.repository'), FolderSearch)}
-              {navItem('received', t('sidebar.receivedInvoices'), Inbox)}
-              {navItem('permissions', t('sidebar.permissions'), KeyRound)}
-              {navItem('offline', t('sidebar.offlineQueue'), AlertTriangle,
-                invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length > 0 ? (
-                  <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
-                    {invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length}
-                  </span>
-                ) : undefined
-              )}
-              {navItem('integration', t('sidebar.apiCenter'), Cpu)}
-              {navItem('certificates', t('sidebar.certificates'), ShieldCheck)}
-              {navItem('audit', t('sidebar.auditCenter'), BookOpen)}
-              {navItem('notifications', language === 'pl' ? 'Powiadomienia' : 'Notifications', Bell,
-                hubUnread > 0 ? (
-                  <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
-                    {hubUnread}
-                  </span>
-                ) : undefined
-              )}
-            </nav>
-          </div>
-        </div>
-
-        <div className={`shrink-0 border-t border-slate-100 p-4 text-[10.5px] text-slate-400 ${isSidebarCollapsed ? 'md:px-3' : ''}`}>
-          <div className={`space-y-1 ${isSidebarCollapsed ? 'md:hidden' : ''}`}>
-            <p>{t('header.platformStatus')}: <strong>SECURE RODO_OK</strong></p>
-            <p>{t('header.database')}: <strong>Postgres schemas</strong></p>
-            <p className="truncate">{t('header.sla')}: <strong>Frankfurt AWS</strong></p>
-          </div>
-          <div className={`hidden ${isSidebarCollapsed ? 'md:flex' : ''} justify-center`}>
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" title="Platform secure" />
-          </div>
-        </div>
-      </aside>
-
-      <div className="flex h-screen min-w-0 flex-1 flex-col">
-        <header className="bg-white border-b border-slate-200 h-16 px-4 sm:px-6 flex shrink-0 items-center justify-between z-30">
-          <div className="flex min-w-0 items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setIsMobileSidebarOpen(true)}
-              className="flex rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 md:hidden"
-              aria-label="Open sidebar"
-              aria-expanded={isMobileSidebarOpen}
-            >
-              <Menu size={17} />
-            </button>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-extrabold tracking-tight text-slate-800">KSeFFlow Workspace</p>
-              <p className="truncate text-[10px] font-medium text-slate-400">{activeTenant.name || 'My Organisation'}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
-
-          {/* Language Switcher */}
-          <button
-            onClick={() => setLanguage(language === 'en' ? 'pl' : 'en')}
-            className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition text-slate-500 border border-slate-200 flex items-center justify-center gap-1.5 cursor-pointer font-bold text-xs shadow-xs"
-            title={language === 'en' ? 'Przełącz na język polski' : 'Switch to English'}
-          >
-            <Languages size={14} className="text-slate-400" />
-            <span className="text-[10px] text-slate-650 tracking-wide font-mono font-bold">{language.toUpperCase()}</span>
-          </button>
-
-          <div className="relative">
-            <button
-              onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) clearNotificationsUnread(); }}
-              className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition text-slate-500 border border-slate-200 flex items-center justify-center cursor-pointer"
-            >
-              <Bell size={15} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 text-[9px] font-bold text-white rounded-full flex items-center justify-center animate-pulse">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-            {showNotifications && (
-              <div className="absolute right-0 mt-2.5 w-85 bg-white border border-slate-200 rounded-xl shadow-lg z-50 p-4 space-y-3 font-sans text-xs">
-                <div className="flex justify-between items-center border-b pb-2 border-slate-100">
-                  <strong className="text-slate-800 font-bold text-xs uppercase tracking-wide">{t('header.signals')}</strong>
-                  <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-700 text-[10px] cursor-pointer">{t('common.close')}</button>
-                </div>
-                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
-                  {visibleNotifications.map((notif) => (
-                    <div key={notif.id} className="p-2.5 bg-slate-50 rounded-lg border border-slate-150 leading-relaxed">
-                      <div className="flex justify-between font-semibold text-[11px]">
-                        <span className={notif.type === 'error' ? 'text-red-650' : 'text-slate-705'}>{notif.title}</span>
-                        <span className="text-[9px] text-slate-400">{new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 mt-1 leading-snug">{notif.message}</p>
-                    </div>
-                  ))}
-                  {visibleNotifications.length === 0 && (
-                    <p className="text-center text-slate-400 py-6">{t('header.clearSignals')}</p>
-                  )}
-                </div>
-                <div className="border-t border-slate-100 pt-2">
-                  <button
-                    onClick={() => { setShowNotifications(false); navigateTo('notifications'); }}
-                    className="w-full text-center text-[11px] font-bold text-red-600 hover:underline cursor-pointer"
-                  >
-                    {language === 'pl' ? 'Zobacz wszystkie powiadomienia' : 'View all notifications'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {currentUser && (
-            <div className="flex items-center gap-3 pl-3 border-l border-slate-200">
-              <button
-                onClick={() => navigateTo('profile')}
-                title={language === 'pl' ? 'Zobacz profil' : 'View profile'}
-                className="flex items-center gap-2 cursor-pointer group"
-              >
-                <span className="h-8 w-8 rounded-full bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold flex items-center justify-center shrink-0">
-                  {(currentUser.name || '').trim().split(/\s+/).map(n => n[0]).join('').slice(0, 2).toUpperCase() || '—'}
-                </span>
-                <span className="hidden lg:block text-right">
-                  <span className="block text-xs font-black text-slate-800 leading-tight group-hover:text-red-700 transition">{currentUser.name}</span>
-                  <span className="block text-[10px] font-mono text-slate-400 leading-none mt-0.5">{currentUser.email}</span>
-                </span>
-              </button>
-              <button
-                onClick={handleLogout}
-                title={t('header.signOut')}
-                className="p-2 hover:bg-red-50 hover:text-red-700 text-slate-500 rounded-xl transition border border-slate-200 bg-slate-50 flex items-center justify-center cursor-pointer"
-              >
-                <LogOut size={15} />
-              </button>
-            </div>
-          )}
-        </div>
-        </header>
-
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
-
-          {!PAGE_ROLES_REQUIRED[pageKey]?.includes(activeRole) ? (
-            <div className="bg-white border border-slate-200 rounded-xl p-8 max-w-lg mx-auto mt-12 text-center space-y-4 shadow-xs">
-              <div className="mx-auto w-12 h-12 bg-red-50 text-red-650 rounded-full flex items-center justify-center">
-                <Lock size={20} />
-              </div>
-              <div className="space-y-1 border-slate-100 border-b pb-4">
-                <h3 className="text-base font-bold text-slate-800 font-sans tracking-tight">{t('header.restrictedTitle')}</h3>
-                <p className="text-xs text-slate-500 leading-normal">
-                  {t('header.restrictedDesc', { role: activeRole })} <strong>{activeTenant.name}</strong>
-                </p>
-              </div>
-              <div className="bg-slate-50 rounded-lg p-3 text-[11px] text-slate-450 font-mono text-left leading-normal border border-slate-150">
-                <p>Status Code: <strong className="text-red-600">403 Forbidden (JWT Signature Valid)</strong></p>
-                <p>Required: [{PAGE_ROLES_REQUIRED[pageKey]?.join(', ')}]</p>
-                <p>Identity: <span className="text-slate-600 break-all">{currentUser?.email}</span></p>
-              </div>
-              <button
-                onClick={() => navigateTo('dashboard')}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-xl text-xs transition cursor-pointer"
-              >
-                {t('header.restrictedReturn')}
-              </button>
-            </div>
-          ) : (
-            <>
-              {currentSection === 'dashboard' && (
-                <Dashboard
-                  tenant={activeTenant}
-                  role={activeRole}
-                  permissions={userPermissions}
-                  onNavigate={navigateTo}
-                  onOpenInvoice={(id) => navigate(`/company/${activeTenant.id}/invoices/${id}`)}
-                />
-              )}
-
-              {currentSection === 'create' && (
-                <InvoiceForm
-                  tenant={activeTenant}
-                  role={activeRole}
-                  permissions={userPermissions}
-                  onAddInvoice={addInvoice}
-                  onAddNotification={addNotification}
-                  onNavigate={navigateTo}
-                  govStatus={govStatus}
-                />
-              )}
-
-              {currentSection === 'invoices' && !currentInvoiceId && (
-                <InvoiceList
-                  tenant={activeTenant}
-                  role={activeRole}
-                  permissions={userPermissions}
-                  invoices={invoices}
-                  onAddNotification={addNotification}
-                  onAddInvoice={addInvoice}
-                  onViewInvoiceDetail={(inv) =>
-                    navigate(`/company/${activeTenant.id}/invoices/${inv.id}`)
-                  }
-                />
-              )}
-
-              {currentSection === 'invoices' && currentInvoiceId && (
-                isLoadingInvoices ? (
-                  <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
-                    {t('dashboard.loadingInvoice')}
-                  </div>
-                ) : currentInvoiceObj ? (
-                  <InvoiceForm
-                    tenant={activeTenant}
-                    role={activeRole}
-                    permissions={userPermissions}
-                    onAddInvoice={addInvoice}
-                    onAddNotification={addNotification}
-                    onNavigate={navigateTo}
-                    govStatus={govStatus}
-                    existingInvoice={currentInvoiceObj}
-                  />
-                ) : (
-                  <div className="bg-white border border-slate-200 rounded-xl p-8 max-w-lg mx-auto mt-12 text-center space-y-4 shadow-xs">
-                    <p className="text-slate-500 text-sm">{t('dashboard.invoiceNotFound', { id: currentInvoiceId })}</p>
-                    <button onClick={() => navigateTo('invoices')} className="bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-slate-800 transition">
-                      {t('dashboard.backToRepo')}
-                    </button>
-                  </div>
-                )
-              )}
-
-              {currentSection === 'received' && (
-                <ReceivedInvoices
-                  tenant={activeTenant}
-                  role={activeRole}
-                  permissions={userPermissions}
-                  onAddNotification={addNotification}
-                />
-              )}
-
-              {currentSection === 'permissions' && (
-                <PermissionsManager
-                  tenant={activeTenant}
-                  role={activeRole}
-                  permissions={userPermissions}
-                  onAddNotification={addNotification}
-                />
-              )}
-
-              {currentSection === 'offline' && (
-                <OfflineQueue
-                  tenant={activeTenant}
-                  role={activeRole}
-                  permissions={userPermissions}
-                  invoices={invoices}
-                  isLoading={isLoadingInvoices}
-                  onRefreshInvoices={loadInvoices}
-                  onAddNotification={addNotification}
-                />
-              )}
-
-              {currentSection === 'integration' && (
-                <IntegrationCenter
-                  tenant={activeTenant}
-                  role={activeRole}
-                  permissions={userPermissions}
-                  govStatus={govStatus}
-                  onSetGovStatus={setGovStatus}
-                  onAddNotification={addNotification}
-                />
-              )}
-
-              {currentSection === 'certificates' && (
-                <CertificateManager
-                  tenant={activeTenant}
-                  role={activeRole}
-                  permissions={userPermissions}
-                  onAddNotification={addNotification}
-                />
-              )}
-
-              {currentSection === 'audit' && (
-                <AuditCenter
-                  tenant={activeTenant}
-                  role={activeRole}
-                  onAddNotification={addNotification}
-                />
-              )}
-
-              {currentSection === 'notifications' && (
-                <NotificationCenter onChanged={loadHub} />
-              )}
-
-              {currentSection === 'profile' && (
-                <Profile />
-              )}
-            </>
-          )}
-        </main>
-      </div>
-    </div>
+      <Workspace
+        user={currentUser}
+        tenant={activeTenant}
+        role={activeRole}
+        urlTenantId={urlTenantId}
+        section={currentSection}
+        invoiceId={currentInvoiceId}
+        pageKey={pageKey}
+        onNavigate={navigateTo}
+        onOpenInvoice={openInvoice}
+        onLogout={handleLogout}
+        logAuditAction={logAuditAction}
+      />
     </ProtectedRoute>
   );
 }
