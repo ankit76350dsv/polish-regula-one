@@ -19,6 +19,7 @@ const mapRole = (r) => {
 
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
+import ProtectedRoute from './components/ProtectedRoute';
 import InvoiceForm from './components/InvoiceForm';
 import InvoiceList from './components/InvoiceList';
 import IntegrationCenter from './components/IntegrationCenter';
@@ -28,7 +29,6 @@ import AuditCenter from './components/AuditCenter';
 import ReceivedInvoices from './components/ReceivedInvoices';
 import PermissionsManager from './components/PermissionsManager';
 import NotificationCenter from './components/NotificationCenter';
-import Login from './components/Login';
 import LandingPage from './components/LandingPage';
 import NotFoundPage from './components/NotFoundPage';
 // (ArchitectureDocs removed — it was a static, inaccurate showcase, not a KSeF/government requirement.)
@@ -75,6 +75,11 @@ export default function App() {
   const [isAuthLoading,   setIsAuthLoading]   = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser,     setCurrentUser]     = useState(null);
+  // Transient /me failure (network/timeout) → ProtectedRoute shows an error + Retry.
+  // (A clean "not authenticated" is NOT an error — that goes through the Login redirect.)
+  const [authError,       setAuthError]       = useState(null);
+  // Bumping this re-runs the session check — used by the Retry button.
+  const [sessionReloadKey, setSessionReloadKey] = useState(0);
   const [activeTenant,    setActiveTenant]    = useState({ id: '', name: 'My Organisation', nip: '', subscriptionPlan: 'Active' });
   const [activeRole,      setActiveRole]      = useState('Company Admin');
   const [invoices, setInvoices] = useState([]);
@@ -104,6 +109,10 @@ export default function App() {
   // render the app. If no (401) — Login.jsx will redirect to the central
   // login page with ?redirect_uri pointing back to /auth/sso-callback here.
   useEffect(() => {
+    // (Re)start the session check — also runs when the Retry button bumps sessionReloadKey.
+    setIsAuthLoading(true);
+    setAuthError(null);
+
     // Guard against a dead / slow / wrong-IP backend. If /api/auth/me does not answer within a
     // few seconds, we abort it and fall through to the Login redirect — otherwise the app would
     // sit on the "Verifying session…" spinner forever (which is exactly what happens when
@@ -145,6 +154,12 @@ export default function App() {
           role: mappedRole,
           permissions: Array.isArray(user.permissions) ? user.permissions : [],
           tenantId,
+          tenantName: user.tenantName ?? null,
+          // Account + module + package fields drive the KSeFFlow access gate (see lib/access.js):
+          enabled: user.enabled,
+          moduleIds: Array.isArray(user.moduleIds) ? user.moduleIds : [],
+          planExpired: Boolean(user.planExpired),
+          planExpiresAt: user.planExpiresAt ?? null,
         });
         setActiveRole(mappedRole);
         setActiveTenant({
@@ -216,16 +231,27 @@ export default function App() {
           navigate(correctedPath, { replace: true });
         }
       })
-      .catch(() => {
-        // No valid session, or the request timed out / host was unreachable — Login.jsx
-        // handles the SSO redirect. Either way we never stay stuck on the loading spinner.
+      .catch((err) => {
+        // Two cases:
+        //   - "not authenticated" (no/invalid session) → Login.jsx handles the SSO redirect.
+        //   - network/timeout/host-unreachable → show an error + Retry (don't bounce to login).
         setIsAuthenticated(false);
+        const transient = err?.name === 'AbortError' || (err?.message && err.message !== 'not authenticated');
+        if (transient) {
+          setAuthError(
+            language === 'pl'
+              ? 'Nie można połączyć się z serwerem. Sprawdź połączenie i spróbuj ponownie.'
+              : 'Could not reach the server. Check your connection and try again.',
+          );
+        }
       })
       .finally(() => {
         clearTimeout(authTimeout);
         setIsAuthLoading(false);
       });
-  }, []);
+    // Re-runs on mount and whenever Retry bumps sessionReloadKey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionReloadKey]);
 
   // ── Proactive SSO session refresh ───────────────────────────────────────────
   // Cognito idToken and accessToken expire after 1 hour. Set a timer to silently
@@ -457,14 +483,10 @@ export default function App() {
     );
   }
 
-  // Not authenticated — Login.jsx redirects to central login with SSO redirect_uri.
-  // ssoLoop covers the trickier case: /api/auth/me (:8080) passes so we LOOK logged in,
-  // but a :8081 call keeps returning 401 and bouncing us through login. Rendering <Login />
-  // here shows its loop explanation (the shared guard is already tripped) instead of
-  // reloading the page over and over.
-  if (!isAuthenticated || ssoLoop) {
-    return <Login />;
-  }
+  // NOTE: authentication, transient-error/retry, and the KSeFFlow module + package gates are now
+  // all handled by <ProtectedRoute> wrapping the shell below (it renders <Login/> for an
+  // unauthenticated/looping session, an error screen for transient /me failures, and the access
+  // modal when the user lacks the KSeFFlow module or has an expired package).
 
   const navItem = (section, label, Icon, extra) => {
     const isActive = currentSection === section || (section === 'invoices' && currentSection === 'invoices');
@@ -499,6 +521,14 @@ export default function App() {
   };
 
   return (
+    <ProtectedRoute
+      loading={isAuthLoading}
+      error={authError}
+      isAuthenticated={isAuthenticated && !ssoLoop}
+      user={currentUser}
+      onRetry={() => setSessionReloadKey((k) => k + 1)}
+      onSignOut={handleLogout}
+    >
     <div className="h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans antialiased md:flex">
 
       {isMobileSidebarOpen && (
@@ -861,5 +891,6 @@ export default function App() {
         </main>
       </div>
     </div>
+    </ProtectedRoute>
   );
 }
