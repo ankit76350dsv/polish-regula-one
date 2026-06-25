@@ -95,6 +95,34 @@ Controller: [`KsefAvailabilityController.java`](../backend/src/main/java/com/kse
 The declare endpoints write an immutable audit entry (`KSEF_EMERGENCY_DECLARED`,
 `KSEF_UNAVAILABILITY_DECLARED`, `KSEF_ONLINE_DECLARED`) — see §6.
 
+### Which of our endpoints call the government KSeF API
+
+Important: **none of this page's HTTP endpoints call KSeF synchronously.** They only read/write the
+local in-memory state and config. The single thing that actually talks to the government here is the
+**background monitor** (a scheduled job, not a user request).
+
+| Our endpoint / job | Hits the government KSeF API? | Government endpoint |
+|---|---|---|
+| `GET /api/v1/ksef-status` | ❌ no | — reads the in-memory mode |
+| `GET /api/v1/ksef-status/connection` | ❌ no | — reads local config (`KsefApiProperties`) |
+| `POST /ksef-status/emergency` \| `/unavailability` \| `/online` | ❌ no | — sets the in-memory mode + writes an audit entry |
+| **`KsefAvailabilityService.monitor()`** (`@Scheduled`, ~every 2 min) | ✅ yes | **`GET {activeBaseUrl}/security/public-key-certificates`** |
+
+The monitor's probe is implemented by [`KsefApiClient.isApiReachable()`](../backend/src/main/java/com/ksefflow/backend/services/ksefauth/KsefApiClient.java):
+a **cheap, unauthenticated `GET`** to the KSeF public-key-certificates endpoint. It just checks
+reachability — a 2xx (or any non-5xx) means "KSeF is up", a 5xx / connection failure means "down".
+It never throws. With the dev sandbox config the full URL is:
+
+```
+GET https://api-test.ksef.mf.gov.pl/v2/security/public-key-certificates
+```
+
+So the mode you see on the page is maintained by that background probe (and by manual declarations) —
+not fetched live when you open the page or click **Refresh** (Refresh just re-reads the in-memory
+state). For the KSeF endpoints used by *other* flows (auth/session, invoice send/status, UPO,
+certificates), see [`KsefApiClient`](../backend/src/main/java/com/ksefflow/backend/services/ksefauth/KsefApiClient.java)
+and the [certificates guide](./certificates.md).
+
 ---
 
 ## 5. How the availability state works (important)
