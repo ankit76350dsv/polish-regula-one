@@ -29,6 +29,7 @@ import PermissionsManager from './components/PermissionsManager';
 import NotificationCenter from './components/NotificationCenter';
 import Login from './components/Login';
 import LandingPage from './components/LandingPage';
+import NotFoundPage from './components/NotFoundPage';
 // (ArchitectureDocs removed — it was a static, inaccurate showcase, not a KSeF/government requirement.)
 
 import {
@@ -392,6 +393,28 @@ export default function App() {
     notifications:   ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor']
   };
 
+  const isKnownRoute = (() => {
+    if (location.pathname === '/' || location.pathname === '/login' || location.pathname === '/auth/sso-callback') {
+      return true;
+    }
+
+    if (pathParts[0] !== 'company' || !pathParts[1]) {
+      return false;
+    }
+
+    if (pathParts.length === 2) {
+      return true;
+    }
+
+    if (pathParts[2] === 'invoices') {
+      return pathParts.length === 3 || (pathParts.length === 4 && Boolean(pathParts[3]));
+    }
+
+    return pathParts.length === 3
+      && pathParts[2] !== 'invoice-detail'
+      && Object.prototype.hasOwnProperty.call(PAGE_ROLES_REQUIRED, pathParts[2]);
+  })();
+
   // Show a spinner while the SSO cookie check is in flight
   if (isAuthLoading) {
     if (isLandingPath) {
@@ -406,6 +429,10 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  if (!isKnownRoute) {
+    return <NotFoundPage />;
   }
 
   if (isLandingPath) {
