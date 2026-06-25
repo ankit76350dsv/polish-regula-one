@@ -1,0 +1,215 @@
+# KSeFFlow — KSeF Integration / Government API Center (developer guide)
+
+This document explains the **Integration** page end to end: what it's for, the UI, every API, how
+the KSeF availability state actually works, the operation modes and their legal deadlines, the
+connection configuration, permissions, and the files involved. Aimed at a developer new to this area.
+
+UI route: `/company/{tenantId}/integration` (sidebar: "Government API Center")
+→ [`IntegrationCenter.jsx`](../frontend/src/components/IntegrationCenter.jsx)
+
+---
+
+## 1. What the page is for
+
+A small operations dashboard for the connection to the **National e-Invoice System (KSeF)**. It
+answers three questions and lets an admin act on one of them:
+
+1. **What state is KSeF in?** — `ONLINE`, `OFFLINE_UNAVAILABILITY`, or `EMERGENCY`. This state sets
+   the **legal deadline** by which invoices issued offline must reach KSeF.
+2. **Which KSeF are we talking to?** — the configured environment (Test/Sandbox vs Production), the
+   real base URL, and the invoice schema.
+3. **What do the modes mean?** — a short explainer that backs the "Declare …" actions.
+
+> This page only shows **real** data. Earlier it contained a fabricated request/response "terminal",
+> a fake latency number, "simulate failure" buttons, and a crypto-algorithm claim — all removed
+> because none of it was real. Detailed per-action activity/errors live in the **Audit Center**.
+
+---
+
+## 2. Architecture at a glance
+
+```
+Browser (IntegrationCenter.jsx)
+   │  ksefFetch()  → KSeFFlow backend (:8081)  /api/v1/ksef-status/**
+   ▼
+KsefAvailabilityController
+   ├── GET  /ksef-status              → current operation mode (read, any signed-in user)
+   ├── GET  /ksef-status/connection   → environment + base URL + schema (read)
+   └── POST /ksef-status/{emergency|unavailability|online}  → declare a state (KSEF_TENANT_ADMIN)
+        │
+        ▼
+KsefAvailabilityService   (the source of truth for the mode)
+   ├── in-memory AtomicReference<Status>   ← NOT persisted, process-wide (global)
+   ├── @Scheduled monitor()  → probes KSeF reachability, flips ONLINE↔UNAVAILABILITY
+   └── currentOfflineMode()  → EMERGENCY ⇒ 7-business-day window, else next-business-day
+
+KsefApiProperties  → environment (SANDBOX/PRODUCTION) + base URLs + FA(3) schema
+```
+
+---
+
+## 3. Frontend
+
+**Component:** [`IntegrationCenter.jsx`](../frontend/src/components/IntegrationCenter.jsx)
+**API client:** [`ksefApi.js`](../frontend/src/api/ksefApi.js)
+**Permission helper:** [`lib/permissions.js`](../frontend/src/lib/permissions.js) → `can.manageAvailability(permissions)`
+
+Layout:
+1. **KSeF State (Operation Mode)** — the live mode badge + `reason` / `declaredBy` / `since`, a
+   **Refresh** button, and (admins only) **Declare Emergency / Declare Unavailability / Restore
+   Online** buttons. Declaring prompts for a reason (recorded for audit).
+2. **KSeF connection** — environment, endpoint, invoice schema (read-only; server-controlled).
+3. **Operation modes** — concise explainer of the three modes and their deadlines (supports the
+   Declare buttons).
+
+Frontend API functions (all `ksefFetch`, cookie-auth, tenant resolved server-side):
+
+| Function | Method + path |
+|---|---|
+| `getKsefStatus()` | `GET /api/v1/ksef-status` |
+| `getKsefConnection()` | `GET /api/v1/ksef-status/connection` |
+| `declareKsefEmergency(reason)` | `POST /api/v1/ksef-status/emergency` |
+| `declareKsefUnavailability(reason)` | `POST /api/v1/ksef-status/unavailability` |
+| `declareKsefOnline(reason)` | `POST /api/v1/ksef-status/online` |
+
+Navigation/visibility:
+- The page is in the sidebar under "Government API Center"; access is gated by
+  `PAGE_ROLES_REQUIRED.integration` in [`App.jsx`](../frontend/src/App.jsx) (Super Admin, Company Admin).
+- The Declare buttons render only when `can.manageAvailability(permissions)` is true; everyone else
+  sees a read-only note.
+
+---
+
+## 4. Our backend API (`/api/v1/ksef-status`)
+
+Controller: [`KsefAvailabilityController.java`](../backend/src/main/java/com/ksefflow/backend/controllers/KsefAvailabilityController.java)
+
+| Endpoint | Permission | Returns / does |
+|---|---|---|
+| `GET /` | any signed-in user | `Status { mode, manual, reason, declaredBy, since }` |
+| `GET /connection` | any signed-in user | `ConnectionInfo { environment, baseUrl, invoiceSchema }` |
+| `POST /emergency` | `KSEF_TENANT_ADMIN` | declare EMERGENCY (reason required) |
+| `POST /unavailability` | `KSEF_TENANT_ADMIN` | declare OFFLINE_UNAVAILABILITY (reason required) |
+| `POST /online` | `KSEF_TENANT_ADMIN` | clear a manual declaration, hand back to the monitor |
+
+The declare endpoints write an immutable audit entry (`KSEF_EMERGENCY_DECLARED`,
+`KSEF_UNAVAILABILITY_DECLARED`, `KSEF_ONLINE_DECLARED`) — see §6.
+
+---
+
+## 5. How the availability state works (important)
+
+Service: [`KsefAvailabilityService.java`](../backend/src/main/java/com/ksefflow/backend/services/KsefAvailabilityService.java)
+
+- The state is a single **in-memory `AtomicReference<Status>`** — **not stored in MongoDB**.
+  Consequences a developer must know:
+  - It is **process-wide / global** — the same state for *all* tenants (KSeF availability is a
+    national fact, not per-company). The declaration audit entry is recorded with tenantId `SYSTEM`.
+  - It **resets to `ONLINE` ("Initial state")** on every backend restart (which is why a fresh boot
+    shows `Reason: Initial state`).
+  - Multiple backend instances would each hold their own copy — fine for a single instance; if you
+    scale out, this needs centralizing (e.g. shared store / config) before relying on it.
+- `Status` record: `mode` ([`KsefServiceMode`](../backend/src/main/java/com/ksefflow/backend/models/utils/KsefServiceMode.java):
+  `ONLINE` / `OFFLINE_UNAVAILABILITY` / `EMERGENCY`), `manual` (true when set by a human),
+  `reason`, `declaredBy`, `since`.
+- **Automatic monitor** (`@Scheduled monitor()`): periodically probes KSeF reachability via
+  `KsefApiClient` and flips `ONLINE ↔ OFFLINE_UNAVAILABILITY` automatically — **unless** a manual
+  declaration is in effect (`manual = true`), which overrides the monitor until **Restore Online**
+  is called. (`ksef.availability.*` toggles the monitor.)
+- `currentOfflineMode()` maps the state to the offline window the invoice pipeline records when it
+  parks an invoice: `EMERGENCY` → 7-business-day window; anything else not-online → next business day.
+
+---
+
+## 6. Operation modes & legal deadlines
+
+| Mode | Meaning | Offline submission deadline | Set by |
+|---|---|---|---|
+| **Online** | KSeF available; invoices sent in real time | n/a | monitor (auto) |
+| **Unavailability** | KSeF temporarily down (e.g. maintenance) | **next business day** | monitor (auto) or admin |
+| **Emergency** (*tryb awaryjny*) | Official Ministry of Finance outage announcement | **7 business days** | admin only (on the MF announcement) |
+
+Legal basis (per the service Javadoc / `COMPLIANCE_GAP_ANALYSIS.md` C7): Polish VAT Act
+**art. 106nf** (emergency) / **art. 106nh** (unavailability). The chosen mode flows into each parked
+invoice's `ksefSubmissionDeadline`, which the offline retry queue then races against
+(see [`offline` retry docs / KsefRetryQueueService`](../backend/src/main/java/com/ksefflow/backend/services/retry/KsefRetryQueueService.java)).
+
+Why declaring is admin-only: it changes a **legal deadline** and must be based on the official MF
+announcement — not something any user should toggle.
+
+---
+
+## 7. Connection configuration
+
+Properties: [`KsefApiProperties.java`](../backend/src/main/java/com/ksefflow/backend/config/KsefApiProperties.java)
+(prefix `ksef.api`). The `GET /connection` endpoint surfaces these read-only:
+
+- `environment` ([`KsefEnvironment`](../backend/src/main/java/com/ksefflow/backend/models/utils/KsefEnvironment.java): `SANDBOX` / `PRODUCTION`) — driven by the active Spring profile.
+- `getActiveBaseUrl()` → `sandbox-url` or `production-url` depending on environment.
+- Invoice schema from `form-code` (e.g. `FA (3) 1-0E`).
+
+Dev values (`application-dev.properties`):
+```
+ksef.api.environment=SANDBOX
+ksef.api.sandbox-url=https://api-test.ksef.mf.gov.pl/v2
+ksef.api.production-url=https://api.ksef.mf.gov.pl/v2
+ksef.api.form-code.system-code=FA (3)
+ksef.api.form-code.schema-version=1-0E
+ksef.api.form-code.value=FA
+```
+The environment is **server-set, not user-selectable** — this is deliberate so sandbox invoices can
+never be sent to the live system.
+
+---
+
+## 8. Permissions
+
+Codes from RegulaOne, checked via [`AuthenticatedUser.requireAnyPermission(...)`](../backend/src/main/java/com/ksefflow/backend/security/AuthenticatedUser.java):
+- **Read** (`GET /ksef-status`, `GET /ksef-status/connection`): any signed-in KSeF user.
+- **Declare** (`POST /emergency|unavailability|online`): `KSEF_TENANT_ADMIN`.
+
+(Page-level sidebar visibility is additionally gated by `PAGE_ROLES_REQUIRED.integration` =
+Super Admin / Company Admin on the frontend.)
+
+---
+
+## 9. What this page intentionally does NOT show
+
+For developers who remember the old version — these were **removed because they were fake**:
+- A "KSeF-REST Gateway Interactive Terminal" with invented session tokens, KSeF-IDs, and hashes.
+- A fabricated **latency** value and a mock **Gateway Health Indicator**.
+- "Simulate Network Failures" / "Set Online" / "Loopback Connectivity Test" buttons (they flipped a
+  local mock flag, not the real backend).
+- A user-selectable SANDBOX/PRODUCTION endpoint switch (environment is server config) with wrong URLs.
+- A "SHA-256 with RSA 4096" crypto claim.
+
+Real per-action activity and KSeF error detail belong in the **Audit Center**
+(`GET /api/v1/audit-logs`), not here.
+
+---
+
+## 10. File map
+
+Backend (`backend/src/main/java/com/ksefflow/backend/`):
+- `controllers/KsefAvailabilityController.java` — the `/api/v1/ksef-status` endpoints.
+- `services/KsefAvailabilityService.java` — the in-memory state, monitor, and offline-mode mapping.
+- `config/KsefApiProperties.java` — environment + base URLs + schema.
+- `models/utils/KsefServiceMode.java`, `KsefEnvironment.java`, `KsefOfflineMode.java`.
+- `services/ksefauth/KsefApiClient.java` — used by the monitor to probe KSeF.
+
+Frontend (`frontend/src/`):
+- `components/IntegrationCenter.jsx` — the page.
+- `api/ksefApi.js` — `getKsefStatus`, `getKsefConnection`, `declareKsef*`.
+- `lib/permissions.js` — `can.manageAvailability`.
+
+---
+
+## 11. Quick recap
+
+- The page shows the **real** KSeF operation mode, the **real** connection config, and an explainer.
+- The mode lives **in memory** in `KsefAvailabilityService` — global, auto-monitored, manually
+  overridable, and **reset on restart**.
+- Declaring a mode is **admin-only**, audited, and changes the **legal offline deadline**
+  (Unavailability → next business day; Emergency → 7 business days).
+- Environment is **server-configured** (`SANDBOX`/`PRODUCTION`); test invoices can't reach production.
+- Detailed activity/errors are in the **Audit Center**, not on this page.
