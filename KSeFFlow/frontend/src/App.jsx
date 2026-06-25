@@ -619,41 +619,6 @@ export default function App() {
 
           <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
 
-          <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
-            <Building2 size={13} className="text-slate-400" />
-            <span className="text-slate-500 font-medium">{t('header.tenant')}:</span>
-            <select
-              value={activeTenant.id}
-              disabled
-              className="bg-transparent border-0 font-bold text-slate-700 focus:outline-none focus:ring-0 leading-tight pr-1 cursor-not-allowed opacity-80"
-            >
-              <option value={activeTenant.id}>{activeTenant.name || 'My Organisation'}</option>
-            </select>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
-            <UserSquare size={13} className="text-slate-400" />
-            {activeRole !== 'Super Admin' && <Lock size={12} className="text-red-550 shrink-0" />}
-            <span className="text-slate-500 font-medium">{t('header.sessionRole')}:</span>
-            <select
-              value={activeRole}
-              disabled={activeRole !== 'Super Admin'}
-              onChange={(e) => {
-                const r = e.target.value;
-                setActiveRole(r);
-                logAuditAction('RBAC_ROLE_TRANSITION', `Role changed to: ${r}.`);
-                addNotification('Role Adjusted', `Active permissions changed to: ${r}`, 'info');
-              }}
-              className={`bg-transparent border-0 font-bold text-red-650 focus:ring-0 focus:outline-none leading-tight pr-1 ${activeRole !== 'Super Admin' ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
-            >
-              <option value="Company Admin">{language === 'pl' ? 'Administrator firmy (Wszystkie uprawnienia)' : 'Company Admin (All permissions)'}</option>
-              <option value="Accountant">{language === 'pl' ? 'Księgowy (Wystawianie faktur, certyfikaty)' : 'Accountant (Issue invoices, certs)'}</option>
-              <option value="Finance User">{language === 'pl' ? 'Użytkownik finansowy (Wystawianie faktur, pliki)' : 'Finance User (Issue invoices, files)'}</option>
-              <option value="Auditor">{language === 'pl' ? 'Audytor (Tylko podgląd zgodności)' : 'Auditor (View Only compliance)'}</option>
-              <option value="Super Admin">{language === 'pl' ? 'Super Administrator (Uniwersalny Root)' : 'Super Admin (Universal Root)'}</option>
-            </select>
-          </div>
-
           {/* Language Switcher */}
           <button
             onClick={() => setLanguage(language === 'en' ? 'pl' : 'en')}
