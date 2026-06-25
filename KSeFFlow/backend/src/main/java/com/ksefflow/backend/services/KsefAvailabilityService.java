@@ -1,8 +1,11 @@
 package com.ksefflow.backend.services;
 
+import com.ksefflow.backend.models.KsefAvailabilityState;
 import com.ksefflow.backend.models.utils.KsefOfflineMode;
 import com.ksefflow.backend.models.utils.KsefServiceMode;
+import com.ksefflow.backend.repository.KsefAvailabilityStateRepository;
 import com.ksefflow.backend.services.ksefauth.KsefApiClient;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -41,17 +44,77 @@ public class KsefAvailabilityService {
 
     private final KsefApiClient ksefApiClient;
 
+    // Saves the one global state so it survives restarts and is shared across backend instances.
+    private final KsefAvailabilityStateRepository stateRepository;
+
     // Master on/off switch for the automatic ping. (Manual declarations always work.)
     @Value("${ksef.availability.monitor-enabled:true}")
     private boolean monitorEnabled;
 
     // The current known state, plus a small description of how/why it was set.
     // AtomicReference keeps reads/writes safe across the scheduler thread and request threads.
+    // This is the in-memory cache; the database (stateRepository) is the durable copy.
     private final AtomicReference<Status> status =
             new AtomicReference<>(new Status(KsefServiceMode.ONLINE, false, "Initial state", null, LocalDateTime.now()));
 
-    public KsefAvailabilityService(KsefApiClient ksefApiClient) {
+    public KsefAvailabilityService(KsefApiClient ksefApiClient,
+                                   KsefAvailabilityStateRepository stateRepository) {
         this.ksefApiClient = ksefApiClient;
+        this.stateRepository = stateRepository;
+    }
+
+    /**
+     * On startup, load the last saved global state from the database so a declared EMERGENCY (or
+     * unavailability) is NOT forgotten across a restart or read differently by another instance.
+     * If nothing is saved yet (first ever boot), we keep the default ONLINE and write it once.
+     */
+    @PostConstruct
+    void loadPersistedState() {
+        try {
+            stateRepository.findById(KsefAvailabilityState.GLOBAL_ID).ifPresentOrElse(
+                    saved -> {
+                        status.set(new Status(saved.getMode(), saved.isManual(), saved.getReason(),
+                                saved.getDeclaredBy(), saved.getSince()));
+                        log.warn("[loadPersistedState]:1 Restored KSeF availability from DB — mode=[{}], manual=[{}], declaredBy=[{}]",
+                                saved.getMode(), saved.isManual(), saved.getDeclaredBy());
+                    },
+                    () -> {
+                        persist(status.get());
+                        log.info("[loadPersistedState]:2 No saved KSeF availability found — initialised with ONLINE");
+                    });
+        } catch (Exception e) {
+            // Never let a DB hiccup stop the app from starting — fall back to the in-memory default.
+            log.error("[loadPersistedState]:3 Could not load saved KSeF availability — using in-memory default ONLINE: {}",
+                    e.getMessage());
+        }
+    }
+
+    /**
+     * Saves the global state to the single "GLOBAL" record (an upsert — same id every time, so it
+     * never creates duplicates). A DB failure here is logged but does NOT break the caller: the
+     * running process still has the correct value in memory.
+     */
+    private void persist(Status s) {
+        try {
+            stateRepository.save(KsefAvailabilityState.builder()
+                    .id(KsefAvailabilityState.GLOBAL_ID)
+                    .mode(s.mode())
+                    .manual(s.manual())
+                    .reason(s.reason())
+                    .declaredBy(s.declaredBy())
+                    .since(s.since())
+                    .updatedAt(LocalDateTime.now())
+                    .build());
+        } catch (Exception e) {
+            log.error("[persist]:1 Failed to save KSeF availability state to DB (in-memory value kept): {}", e.getMessage());
+        }
+    }
+
+    /** Update the in-memory snapshot AND persist it, so memory and the database never drift apart. */
+    private Status apply(Status next) {
+        status.set(next);
+        persist(next);
+        return next;
     }
 
     // ── Snapshot type returned to callers / the status endpoint ──────────────────
@@ -105,16 +168,14 @@ public class KsefAvailabilityService {
     public Status declareOnline(String reason, String declaredBy) {
         Status next = new Status(KsefServiceMode.ONLINE, false,
                 reason != null ? reason : "Manually set online", declaredBy, LocalDateTime.now());
-        status.set(next);
         log.warn("[declareOnline]:1 KSeF availability manually set ONLINE by [{}] — automatic monitoring resumes", declaredBy);
-        return next;
+        return apply(next);
     }
 
     private Status setManual(KsefServiceMode mode, String reason, String declaredBy) {
         Status next = new Status(mode, true, reason, declaredBy, LocalDateTime.now());
-        status.set(next);
         log.warn("[setManual]:1 KSeF availability manually set to [{}] by [{}]: {}", mode, declaredBy, reason);
-        return next;
+        return apply(next);
     }
 
     // ── Automatic monitor ──────────────────────────────────────────────────────────
@@ -144,12 +205,12 @@ public class KsefAvailabilityService {
 
         if (reachable && current.mode() != KsefServiceMode.ONLINE) {
             // KSeF is back. Clear our own auto-unavailability.
-            status.set(new Status(KsefServiceMode.ONLINE, false,
+            apply(new Status(KsefServiceMode.ONLINE, false,
                     "KSeF reachable again (auto-detected)", "auto-monitor", LocalDateTime.now()));
             log.warn("[monitor]:2 KSeF is reachable again — availability auto-restored to ONLINE");
         } else if (!reachable && current.mode() == KsefServiceMode.ONLINE) {
             // KSeF stopped answering. Switch to system-detected unavailability.
-            status.set(new Status(KsefServiceMode.OFFLINE_UNAVAILABILITY, false,
+            apply(new Status(KsefServiceMode.OFFLINE_UNAVAILABILITY, false,
                     "KSeF not reachable (auto-detected)", "auto-monitor", LocalDateTime.now()));
             log.warn("[monitor]:3 KSeF is not reachable — availability auto-set to OFFLINE_UNAVAILABILITY. "
                     + "Invoices will be issued offline with a next-business-day deadline.");

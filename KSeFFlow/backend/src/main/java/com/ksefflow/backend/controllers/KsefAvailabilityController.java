@@ -14,9 +14,11 @@ import org.springframework.web.server.ResponseStatusException;
 // REST API for the KSeF availability / failure-mode state (C7).
 //
 // Anyone signed in can READ the current state (the UI shows a banner when KSeF is down).
-// Only an ADMIN can CHANGE it, because declaring an emergency is a legal decision based on
-// the official Ministry of Finance announcement — it changes the deadline by which offline
-// invoices must reach KSeF.
+// Only a PLATFORM OPERATOR (KSEF_PLATFORM_ADMIN) can CHANGE it. This state is GLOBAL — one
+// value shared by every tenant — because KSeF emergency/unavailability is a NATIONAL fact
+// declared by the Ministry of Finance, not a per-company setting. A tenant admin must NOT be
+// able to flip a switch that changes how every other tenant issues invoices (cross-tenant
+// isolation), so declaring is restricted to the SaaS operator's own account.
 @RestController
 @RequestMapping("/api/v1/ksef-status")
 @RequiredArgsConstructor
@@ -56,37 +58,37 @@ public class KsefAvailabilityController {
 
     // ── Declare (admin only) ──────────────────────────────────────────────────────
 
-    // Permissions: KSEF_TENANT_ADMIN only — declaring an emergency is a legal decision
-    //              that changes invoice deadlines, so no other role may do it.
+    // Permissions: KSEF_PLATFORM_ADMIN only — declaring an emergency is a platform-level legal
+    //              decision that changes invoice deadlines for ALL tenants, so no tenant role may do it.
     // Declare a Ministry-announced emergency ("tryb awaryjny") — 7-business-day window.
     @PostMapping("/emergency")
     public ResponseEntity<KsefAvailabilityService.Status> declareEmergency(
             AuthenticatedUser caller, @RequestBody DeclareRequest request) {
-        requireAdmin(caller);
+        caller.requireAnyPermission(KsefPermission.KSEF_PLATFORM_ADMIN);
         String reason = safeReason(request);
         KsefAvailabilityService.Status status = availabilityService.declareEmergency(reason, caller.email());
         audit(caller, "KSEF_EMERGENCY_DECLARED", reason);
         return ResponseEntity.ok(status);
     }
 
-    // Permissions: KSEF_TENANT_ADMIN only — same reason as /emergency.
+    // Permissions: KSEF_PLATFORM_ADMIN only — same reason as /emergency.
     // Manually declare unavailability (e.g. a known maintenance window) — next-business-day window.
     @PostMapping("/unavailability")
     public ResponseEntity<KsefAvailabilityService.Status> declareUnavailability(
             AuthenticatedUser caller, @RequestBody DeclareRequest request) {
-        requireAdmin(caller);
+        caller.requireAnyPermission(KsefPermission.KSEF_PLATFORM_ADMIN);
         String reason = safeReason(request);
         KsefAvailabilityService.Status status = availabilityService.declareUnavailability(reason, caller.email());
         audit(caller, "KSEF_UNAVAILABILITY_DECLARED", reason);
         return ResponseEntity.ok(status);
     }
 
-    // Permissions: KSEF_TENANT_ADMIN only — clearing a declaration is also admin-only.
+    // Permissions: KSEF_PLATFORM_ADMIN only — clearing a declaration is also operator-only.
     // Clear any manual declaration and let the automatic monitor take over again.
     @PostMapping("/online")
     public ResponseEntity<KsefAvailabilityService.Status> declareOnline(
             AuthenticatedUser caller, @RequestBody(required = false) DeclareRequest request) {
-        requireAdmin(caller);
+        caller.requireAnyPermission(KsefPermission.KSEF_PLATFORM_ADMIN);
         String reason = request != null ? safeReason(request) : "Cleared by admin";
         KsefAvailabilityService.Status status = availabilityService.declareOnline(reason, caller.email());
         audit(caller, "KSEF_ONLINE_DECLARED", reason);
@@ -94,11 +96,6 @@ public class KsefAvailabilityController {
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────────
-
-    // Only a KSEF_TENANT_ADMIN may change the KSeF state. Everyone else gets 403 Forbidden.
-    private void requireAdmin(AuthenticatedUser caller) {
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN);
-    }
 
     private static String safeReason(DeclareRequest request) {
         if (request == null || request.reason() == null || request.reason().isBlank()) {

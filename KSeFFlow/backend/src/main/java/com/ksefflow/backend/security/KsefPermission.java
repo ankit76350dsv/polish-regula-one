@@ -13,9 +13,16 @@ package com.ksefflow.backend.security;
  *   - Gives the KSeF code type-safety and one obvious place to look up the rules.
  *
  * Rough meaning of each code (enforcement is added per-endpoint as needed):
+ *   - KSEF_PLATFORM_ADMIN    → PLATFORM-LEVEL operator capability (the SaaS operator,
+ *                              NOT a tenant). The ONLY role allowed to declare the
+ *                              global KSeF EMERGENCY / UNAVAILABILITY state, because
+ *                              that state is national (one value for ALL tenants) and
+ *                              mirrors the official Ministry of Finance announcement.
+ *                              Must be granted ONLY to the operator's own account —
+ *                              never to a customer/tenant admin (cross-tenant safety).
  *   - KSEF_TENANT_ADMIN      → full control inside the company's KSeF: manage
- *                              certificates, grant/revoke KSeF permissions, declare
- *                              emergency / offline mode.
+ *                              certificates, grant/revoke KSeF permissions. May READ
+ *                              the KSeF availability state, but may NOT declare it.
  *   - KSEF_CASE_MANAGER      → day-to-day invoicing: create, submit, and correct
  *                              invoices (maps to KSeF's own "InvoiceWrite" right).
  *   - KSEF_COMPLIANCE_OFFICER→ oversight: read everything and run compliance checks,
@@ -25,6 +32,7 @@ package com.ksefflow.backend.security;
  *   - KSEF_EMPLOYEE          → minimal access; baseline member with no invoicing rights.
  */
 public enum KsefPermission {
+    KSEF_PLATFORM_ADMIN,
     KSEF_TENANT_ADMIN,
     KSEF_CASE_MANAGER,
     KSEF_COMPLIANCE_OFFICER,

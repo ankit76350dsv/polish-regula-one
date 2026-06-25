@@ -9,6 +9,9 @@
 // The codes MUST match the backend enum com.ksefflow.backend.security.KsefPermission.
 
 export const KSEF = {
+  // Platform-level operator (the SaaS operator, NOT a tenant). Only this code may declare the
+  // GLOBAL KSeF emergency/unavailability state — granted only to the operator's own account.
+  PLATFORM_ADMIN:     'KSEF_PLATFORM_ADMIN',
   TENANT_ADMIN:       'KSEF_TENANT_ADMIN',
   CASE_MANAGER:       'KSEF_CASE_MANAGER',
   COMPLIANCE_OFFICER: 'KSEF_COMPLIANCE_OFFICER',
@@ -40,7 +43,9 @@ export const can = {
   readCertificates: (p) => hasAnyPermission(p, KSEF.TENANT_ADMIN, KSEF.AUDITOR),
 
   // POST /ksef-status/emergency|unavailability|online
-  manageAvailability: (p) => hasAnyPermission(p, KSEF.TENANT_ADMIN),
+  // Platform-operator only — this is a GLOBAL state shared by all tenants, so a tenant admin
+  // must NOT be able to declare it (matches the KSEF_PLATFORM_ADMIN backend guard).
+  manageAvailability: (p) => hasAnyPermission(p, KSEF.PLATFORM_ADMIN),
 
   // POST /permissions/persons/grants, DELETE /permissions/{id}
   managePermissions: (p) => hasAnyPermission(p, KSEF.TENANT_ADMIN),

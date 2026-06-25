@@ -22,7 +22,8 @@ export default function IntegrationCenter({ permissions, onAddNotification }) {
   const { language, t } = useLanguage();
   const T = (en, pl) => (language === 'pl' ? pl : en);
 
-  // Declaring states is KSEF_TENANT_ADMIN-only (matches the backend guards on /ksef-status/*).
+  // Declaring states is platform-operator only (KSEF_PLATFORM_ADMIN) — this is a GLOBAL state
+  // shared by every tenant, so tenant admins are read-only here. Matches the backend guards.
   const isAdmin = can.manageAvailability(permissions);
 
   const [ksefStatus, setKsefStatus] = useState(null);
