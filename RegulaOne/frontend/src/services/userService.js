@@ -34,6 +34,13 @@ export const userService = {
   updateUserStatusSuperAdmin: (userId, data) =>
     api.patch(`/api/superadmin/users/${userId}/status`, data),
 
+  // PATCH /api/superadmin/users/{userId}/permissions
+  // Body: { permissions: string[] } — same as updateUserPermissions but under the superadmin
+  // namespace. This is the ONLY path allowed to grant/revoke platform-level codes such as
+  // KSEF_PLATFORM_ADMIN (the company-admin route silently preserves those).
+  updateUserPermissionsSuperAdmin: (userId, permissions) =>
+    api.patch(`/api/superadmin/users/${userId}/permissions`, { permissions }),
+
   // PUT /api/admin/users/{subId}
   // Body: { name, email, role } — kept here for future use (change role flow).
   updateUser: (subId, data) =>

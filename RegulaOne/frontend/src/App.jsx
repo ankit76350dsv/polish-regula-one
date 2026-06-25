@@ -133,6 +133,7 @@ export default function App() {
               <Route path="/company/:tenantId/tenants"       element={<TenantManagement />} />
               <Route path="/company/:tenantId/tenants/:id"   element={<TenantDetailPage />} />
               <Route path="/company/:tenantId/users"         element={<UserManagement />} />
+              <Route path="/company/:tenantId/users/:userId" element={<UserPermissionsPage />} />
               <Route path="/company/:tenantId/package-tiers" element={<PackageTiers />} />
             </>
           )}

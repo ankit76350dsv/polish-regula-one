@@ -145,10 +145,13 @@ export function useSuperAdminStats() {
 }
 
 // Fetches every user across all tenants for the platform users table.
-export function useSuperAdminUsers() {
+// Accepts { enabled } so callers that are not super-admin can switch the query off and avoid a
+// pointless 403 against the superadmin namespace (defaults to enabled for existing callers).
+export function useSuperAdminUsers({ enabled = true } = {}) {
   return useQuery({
     queryKey: SUPERADMIN_KEYS.users,
     queryFn:  () => userService.getAllUsersGlobal(),
+    enabled,
   });
 }
 
@@ -168,5 +171,22 @@ export function useUpdateSuperAdminUserStatus() {
       qc.invalidateQueries({ queryKey: SUPERADMIN_KEYS.stats });
     },
     onError: (err) => toast.error(err.message ?? 'Failed to update user status'),
+  });
+}
+
+// Replaces a user's cross-app permission codes from the superadmin context.
+// Uses /api/superadmin/users/{userId}/permissions — the only path allowed to grant the
+// platform-level KSEF_PLATFORM_ADMIN code. Invalidates the platform-wide users list.
+export function useUpdateSuperAdminUserPermissions() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, permissions }) =>
+      userService.updateUserPermissionsSuperAdmin(userId, permissions),
+    onSuccess: () => {
+      toast.success('Permissions updated');
+      qc.invalidateQueries({ queryKey: SUPERADMIN_KEYS.users });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to update permissions'),
   });
 }

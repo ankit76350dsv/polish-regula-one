@@ -1,6 +1,7 @@
 package com.regulaone.backend.controllers;
 
 import com.regulaone.backend.dto.AppResponse;
+import com.regulaone.backend.dto.Auth.UpdatePermissionsRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
 import com.regulaone.backend.dto.Platform.PlatformOverviewResponse;
@@ -59,5 +60,18 @@ public class SuperAdminController {
         return ResponseEntity.ok(AppResponse.success(
                 "User status updated successfully",
                 userService.updateUserStatus(userId, request)));
+    }
+
+    // Update a user's cross-app permission codes from the platform-operator context.
+    // Same UserService method the company-admin route uses, but this namespace requires
+    // ROLE_SUPER_ADMIN — so this is the ONLY path that may grant/revoke platform-level codes
+    // such as KSEF_PLATFORM_ADMIN (the company-admin route silently preserves those).
+    @PatchMapping("/users/{userId}/permissions")
+    public ResponseEntity<AppResponse<UserResponse>> updateUserPermissions(
+            @PathVariable String userId,
+            @RequestBody UpdatePermissionsRequest request) {
+        return ResponseEntity.ok(AppResponse.success(
+                "User permissions updated successfully",
+                userService.updateUserPermissions(userId, request)));
     }
 }

@@ -8,7 +8,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ShieldCheck, Loader2, AlertTriangle, Check } from 'lucide-react';
-import { useTeamMembers, useUpdateUserPermissions } from '../../hooks/useTeam';
+import {
+  useTeamMembers, useUpdateUserPermissions,
+  useSuperAdminUsers, useUpdateSuperAdminUserPermissions,
+} from '../../hooks/useTeam';
+import { useAuthStore } from '../../store/authStore';
 
 // Catalogue of assignable permissions, grouped by the app that owns them.
 // Adding a new app later = add another group here; the page renders it automatically.
@@ -20,9 +24,18 @@ const PERMISSION_GROUPS = [
     description: 'National e-Invoice (KSeF) permissions',
     permissions: [
       {
+        // PLATFORM-LEVEL: declaring the GLOBAL KSeF emergency/unavailability state (one value for
+        // ALL tenants). Only a platform operator (ROLE_SUPER_ADMIN) may grant this — it is hidden
+        // from company admins and the backend refuses to let a non-super-admin change it.
+        code: 'KSEF_PLATFORM_ADMIN',
+        label: 'Platform Operator (KSeF availability)',
+        desc: 'Declare the global KSeF emergency / unavailability state for the whole platform. Operator-only.',
+        superAdminOnly: true,
+      },
+      {
         code: 'KSEF_TENANT_ADMIN',
         label: 'Tenant Admin',
-        desc: 'Full control: manage certificates, grant/revoke KSeF permissions, declare emergency / offline mode.',
+        desc: 'Full control within the company: manage certificates and grant/revoke KSeF permissions.',
       },
       {
         code: 'KSEF_CASE_MANAGER',
@@ -80,9 +93,6 @@ const PERMISSION_GROUPS = [
   },
 ];
 
-// Total number of selectable permission codes across all groups (for the counter).
-const ALL_CODES = PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => p.code));
-
 // Derives avatar initials from a full name string (up to 2 characters).
 function initials(name = '') {
   return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
@@ -92,15 +102,42 @@ export default function UserPermissionsPage() {
   const { tenantId, userId } = useParams();
   const navigate = useNavigate();
 
-  // Pull the user out of the shared members list (already fetched on the team page,
-  // refetched automatically here on a direct page load / refresh).
-  const { data: members, isLoading, error } = useTeamMembers();
+  // The page is shared by two roles:
+  //   - Company Admin (ROLE_ADMIN): edits their own tenant's users via /api/admin/**.
+  //   - Platform operator (ROLE_SUPER_ADMIN): edits any user via /api/superadmin/** and is the
+  //     ONLY role allowed to grant the platform-level KSEF_PLATFORM_ADMIN code.
+  const role = useAuthStore((s) => s.user?.role);
+  const isSuperAdmin = role === 'ROLE_SUPER_ADMIN';
+
+  // Both data sources are wired up unconditionally (React hooks rule); we use the one that
+  // matches the current role. The admin query is auto-disabled when there is no tenantId,
+  // so a super-admin (no tenant) does not trigger a bad request.
+  const adminQuery = useTeamMembers();
+  const superQuery = useSuperAdminUsers({ enabled: isSuperAdmin });
+  const { data: members, isLoading, error } = isSuperAdmin ? superQuery : adminQuery;
+
   const user = useMemo(
     () => members?.find((m) => m.id === userId),
     [members, userId],
   );
 
-  const updatePermissions = useUpdateUserPermissions();
+  // Pick the matching save mutation for the current role's API namespace.
+  const adminUpdate = useUpdateUserPermissions();
+  const superUpdate = useUpdateSuperAdminUserPermissions();
+  const updatePermissions = isSuperAdmin ? superUpdate : adminUpdate;
+
+  // Hide platform-operator-only permissions from anyone who is not a platform operator.
+  const visibleGroups = useMemo(
+    () => PERMISSION_GROUPS.map((g) => ({
+      ...g,
+      permissions: g.permissions.filter((p) => isSuperAdmin || !p.superAdminOnly),
+    })).filter((g) => g.permissions.length > 0),
+    [isSuperAdmin],
+  );
+  const visibleCodeCount = useMemo(
+    () => visibleGroups.flatMap((g) => g.permissions.map((p) => p.code)).length,
+    [visibleGroups],
+  );
 
   // Local working copy of the user's permission codes — edited until "Save".
   const [selected, setSelected] = useState([]);
@@ -115,7 +152,8 @@ export default function UserPermissionsPage() {
       prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
     );
 
-  const goBack = () => navigate(`/company/${tenantId}/team`);
+  // Return to wherever this editor was opened from (super-admin users list vs admin team page).
+  const goBack = () => navigate(`/company/${tenantId}/${isSuperAdmin ? 'users' : 'team'}`);
 
   const handleSave = () => {
     updatePermissions.mutate(
@@ -192,13 +230,13 @@ export default function UserPermissionsPage() {
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-slate-400">
-                  {selected.length} of {ALL_CODES.length} granted
+                  {selected.length} of {visibleCodeCount} granted
                 </span>
               </div>
             </CardHeader>
 
             <CardContent className="py-6 px-6 space-y-7">
-              {PERMISSION_GROUPS.map((group) => (
+              {visibleGroups.map((group) => (
                 <div key={group.app} className="space-y-3">
                   <div>
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">{group.app}</h3>
