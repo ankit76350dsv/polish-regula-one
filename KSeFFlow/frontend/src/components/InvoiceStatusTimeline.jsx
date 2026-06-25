@@ -101,12 +101,8 @@ export default function InvoiceStatusTimeline({ invoiceId }) {
           </div>
         )}
 
-        {/* When FAILED / OFFLINE, the error message is the most useful context. */}
-        {data.lastErrorMessage && (data.currentStatus === 'FAILED' || data.currentStatus === 'OFFLINE_MODE') && (
-          <p className="text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 break-words">
-            {data.lastErrorMessage}
-          </p>
-        )}
+        {/* Raw technical errors are intentionally NOT shown to users — the friendly "next step"
+            above already explains what is happening. Detailed errors live in the Audit Center. */}
       </div>
 
       {/* History timeline */}
@@ -133,7 +129,11 @@ export default function InvoiceStatusTimeline({ invoiceId }) {
                   </div>
                   {entry.note && <p className="text-[11px] text-stone-600 mt-1 leading-snug">{entry.note}</p>}
                   {entry.changedBy && (
-                    <p className="text-[10px] text-stone-400 mt-0.5">{T.by} {entry.changedBy}</p>
+                    <p className="text-[10px] text-stone-400 mt-0.5">
+                      {T.by} {/system/i.test(entry.changedBy)
+                        ? (language === 'pl' ? 'System (automatycznie)' : 'System (automatic)')
+                        : entry.changedBy}
+                    </p>
                   )}
                 </li>
               );

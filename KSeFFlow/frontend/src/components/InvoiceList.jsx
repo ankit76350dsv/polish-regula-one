@@ -22,6 +22,7 @@ import CorrectionModal from './CorrectionModal';
 import { listInvoicesPage } from '../api/ksefApi';
 import { useLanguage } from '../context/LanguageContext';
 import { can } from '../lib/permissions';
+import { invoiceStatusLabel, invoiceStatusHint } from '../lib/invoiceStatus';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
@@ -228,43 +229,24 @@ export default function InvoiceList({ tenant, role, permissions, onAddNotificati
                       {inv.totalGross.toLocaleString('pl-PL')} <span className="text-[10px] text-slate-400 font-normal">{inv.currency}</span>
                     </td>
                     <td className="py-3.5 px-3">
-                      {inv.status === 'SENT' ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="inline-flex self-start items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            ● {inv.status}
-                          </span>
-                          <span className="text-[9px] text-slate-400 font-mono truncate max-w-[120px]">{inv.ksefId ?? '—'}</span>
-                        </div>
-                      ) : inv.status === 'OFFLINE_MODE' ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="inline-flex self-start items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-orange-50 text-orange-700 border border-orange-200">
-                            ● {inv.status}
-                          </span>
-                          <span className="text-[9px] text-slate-550">{t('repository.submissionAttempts')} {inv.submissionAttempts}</span>
-                        </div>
-                      ) : inv.status === 'FAILED' ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="inline-flex self-start items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-red-50 text-red-700 border border-red-200">
-                            ● {inv.status}
-                          </span>
-                          <span className="text-[9px] text-red-400 truncate max-w-[120px]">{inv.lastErrorMessage ?? 'Submission error'}</span>
-                        </div>
-                      ) : inv.status === 'RETRYING' ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="inline-flex self-start items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                            ● {inv.status}
-                          </span>
-                          <span className="text-[9px] text-slate-500">Attempt #{inv.submissionAttempts}</span>
-                        </div>
-                      ) : inv.status === 'PENDING' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                          ● {inv.status}
+                      <div className="flex flex-col gap-0.5">
+                        <span className={`inline-flex self-start items-center px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                          inv.status === 'SENT' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                          inv.status === 'OFFLINE_MODE' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                          inv.status === 'FAILED' ? 'bg-red-50 text-red-700 border-red-200' :
+                          inv.status === 'RETRYING' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                          inv.status === 'PENDING' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                          'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}>
+                          {invoiceStatusLabel(inv.status, language)}
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                          ● {inv.status}
-                        </span>
-                      )}
+                        {inv.status === 'SENT' && inv.ksefId && (
+                          <span className="text-[9px] text-slate-400 font-mono truncate max-w-[150px]" title={inv.ksefId}>KSeF: {inv.ksefId}</span>
+                        )}
+                        {(inv.status === 'OFFLINE_MODE' || inv.status === 'RETRYING') && (
+                          <span className="text-[9px] text-slate-450">{language === 'pl' ? 'Wyśle się automatycznie' : 'Will send automatically'}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-2 text-center">
                       <button className="text-slate-400 hover:text-red-650 p-1 rounded-md transition inline-flex items-center gap-1 text-[10px] font-semibold cursor-pointer">
@@ -359,8 +341,8 @@ export default function InvoiceList({ tenant, role, permissions, onAddNotificati
                       <span className="text-red-750 text-[10px] uppercase font-bold flex items-center gap-1">
                         <FileBadge size={14} /> {t('repository.upoTitle')}
                       </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        ● {selectedInvoice.status}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {invoiceStatusLabel(selectedInvoice.status, language)}
                       </span>
                     </div>
 
@@ -408,8 +390,8 @@ export default function InvoiceList({ tenant, role, permissions, onAddNotificati
                       <span className="text-orange-950 text-[10px] uppercase font-bold flex items-center gap-1">
                         <QrCode size={14} className="text-orange-700" /> {t('repository.offlineQr')}
                       </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-orange-50 text-orange-700 border border-orange-200">
-                        ● {selectedInvoice.status}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                        {invoiceStatusLabel(selectedInvoice.status, language)}
                       </span>
                     </div>
 
@@ -430,12 +412,7 @@ export default function InvoiceList({ tenant, role, permissions, onAddNotificati
                       <span className="text-[10px] text-slate-400 mt-2 font-mono">{t('repository.scanArt')}</span>
                     </div>
 
-                    <div className="space-y-1 text-[10.5px] font-mono text-slate-650">
-                      <p>{t('repository.submissionAttempts')} <strong className="text-slate-800">{selectedInvoice.submissionAttempts}</strong></p>
-                      {selectedInvoice.lastErrorMessage && (
-                        <p className="text-orange-700 break-words">{selectedInvoice.lastErrorMessage}</p>
-                      )}
-                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">{invoiceStatusHint('OFFLINE_MODE', language)}</p>
 
                     <p className="text-[11px] leading-relaxed text-amber-900">
                       {t('repository.offlineLegalText')}
@@ -448,12 +425,7 @@ export default function InvoiceList({ tenant, role, permissions, onAddNotificati
                         <XCircle size={14} className="text-red-600" /> {t('repository.failedTitle')}
                       </span>
                     </div>
-                    <div className="space-y-1.5 font-mono text-[10.5px] text-slate-600">
-                      <p>{t('repository.submissionAttempts')} <strong className="text-slate-800">{selectedInvoice.submissionAttempts}</strong></p>
-                      <p className="text-red-700 bg-red-100 p-2 rounded border border-red-200 break-words leading-relaxed">
-                        {selectedInvoice.lastErrorMessage ?? 'No error details available.'}
-                      </p>
-                    </div>
+                    <p className="text-[11px] text-red-700 leading-relaxed">{invoiceStatusHint('FAILED', language)}</p>
                   </div>
                 ) : selectedInvoice.status === 'RETRYING' ? (
                   <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl space-y-3">
@@ -462,9 +434,7 @@ export default function InvoiceList({ tenant, role, permissions, onAddNotificati
                         <Clock size={14} className="text-amber-600" /> {t('repository.retryingTitle')}
                       </span>
                     </div>
-                    <div className="space-y-1.5 font-mono text-[10.5px] text-slate-650">
-                      <p>{t('repository.retryingText', { attempts: selectedInvoice.submissionAttempts })}</p>
-                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">{invoiceStatusHint('RETRYING', language)}</p>
                   </div>
                 ) : selectedInvoice.status === 'PENDING' ? (
                   <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl space-y-2">

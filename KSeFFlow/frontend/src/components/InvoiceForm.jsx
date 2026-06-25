@@ -571,12 +571,12 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
       )}
 
       {activeTab === 'form' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="lg:col-span-8 bg-white border border-stone-200/90 rounded-xl p-6 shadow-xs space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-stone-50 border border-stone-200/60 p-4 rounded-xl space-y-2">
                 <span className="text-[10px] font-bold text-stone-400 bg-white px-2 py-0.5 border rounded-full uppercase tracking-wider">
-                  01 {language === 'pl' ? 'SPRZEDAWCA / DANE PODATKOWE' : 'SELLER / TAX IDENTIFIER'}
+                  01 {language === 'pl' ? 'SPRZEDAWCA' : 'SELLER'}
                 </span>
                 <div className="space-y-2.5 text-xs text-stone-700">
                   <div className="grid grid-cols-3 gap-2">
@@ -632,13 +632,12 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                       className="col-span-2 bg-white px-2 py-1.5 border border-stone-200 rounded"
                     />
                   </div>
-                  <p className="text-emerald-700 font-medium pt-0.5">{language === 'pl' ? 'Dołączono automatyczną pieczęć podpisu' : 'Auto-sealed qualified signature attached'}</p>
                 </div>
               </div>
 
               <div className="bg-stone-50 border border-stone-200/60 p-4 rounded-xl space-y-2">
                 <span className="text-[10px] font-bold text-stone-400 bg-white px-2 py-0.5 border rounded-full uppercase tracking-wider">
-                  02 {language === 'pl' ? 'NABYWCA (WERYFIKOWANY NIP)' : 'BUYER ENTITY (NIP COMPLIANT)'}
+                  02 {language === 'pl' ? 'NABYWCA' : 'BUYER'}
                 </span>
                 <div className="space-y-2.5 text-xs text-stone-700">
                   <div className="grid grid-cols-3 gap-2">
@@ -748,7 +747,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
 
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b pb-2 border-stone-100">
-                <span className="text-xs font-bold text-stone-700 tracking-wide uppercase">03 {language === 'pl' ? 'POZYCJE STRUKTURALNE (TOWARY I USŁUGI)' : 'SPECIFICATION LINES (ITEMS)'}</span>
+                <span className="text-xs font-bold text-stone-700 tracking-wide uppercase">03 {language === 'pl' ? 'POZYCJE (TOWARY I USŁUGI)' : 'ITEMS (GOODS & SERVICES)'}</span>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={triggerAiAssist}
@@ -880,7 +879,7 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
           <div className="lg:col-span-4 space-y-6">
             <div className="bg-white border border-stone-200/90 rounded-xl p-5 shadow-xs space-y-4">
               <h4 className="font-bold text-stone-800 text-xs uppercase tracking-wider border-b pb-2 border-stone-100">
-                04 {language === 'pl' ? 'Podsumowanie stawek' : 'Polish Tax Matrix Summary'}
+                04 {language === 'pl' ? 'Podsumowanie' : 'Summary'}
               </h4>
 
               <div className="space-y-2.5 text-xs">
@@ -907,19 +906,19 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
 
               <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-[11px] text-emerald-800 space-y-1">
                 <div className="font-semibold flex items-center gap-1">
-                  <CheckCircle size={12} /> {language === 'pl' ? 'Zgodność prawna FA(3) potwierdzona' : 'Legal FA(3) Alignment Confirmed'}
+                  <CheckCircle size={12} /> {language === 'pl' ? 'Format FA(3)' : 'FA(3) format'}
                 </div>
                 <p className="leading-relaxed text-emerald-900/80">
-                  {language === 'pl' 
-                    ? 'Każda pozycja odpowiada zatwierdzonym stawkom VAT. Dokument zostanie podpisany kwalifikowaną kryptografią SHA-256 HSM.' 
-                    : 'Every product line maps to validated Polish PKWiU codes. The document will be signed with qualified SHA-256 HSM Cryptography.'}
+                  {language === 'pl'
+                    ? 'Faktura zostanie wystawiona w obowiązującej strukturze FA(3) i wysłana do KSeF.'
+                    : 'This invoice will be issued in the required FA(3) structure and sent to KSeF.'}
                 </p>
               </div>
             </div>
 
             <div className="bg-white border border-stone-200/90 rounded-xl p-5 shadow-xs space-y-3">
               <h4 className="font-bold text-stone-800 text-xs uppercase tracking-wider mb-2">
-                05 {language === 'pl' ? 'Rejestracja w KSeF' : 'Government Execution Deck'}
+                05 {language === 'pl' ? 'Status w KSeF' : 'KSeF Status'}
               </h4>
 
               {isViewOnly ? (
@@ -1025,12 +1024,6 @@ export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, o
                     {language === 'pl' ? 'Wymuś pracę offline (Offline Fallback)' : 'Force Offline Fallback Mode'}
                   </button>
 
-                  <div className="h-px bg-stone-100 my-2"></div>
-
-                  <div className="text-[10px] text-stone-500 space-y-1 text-center bg-stone-50 p-2.5 rounded-lg border">
-                    <p>{language === 'pl' ? 'Typ podpisu: Certyfikat PFX KIR' : 'Qualified signature type: PFX KIR Certificate'}</p>
-                    <p>{language === 'pl' ? 'Środowisko docelowe:' : 'Target endpoint:'} <span className="font-mono text-stone-900">{govStatus === 'Downtime Sim' ? 'Local Fallback State' : 'ksef-test.mf.gov.pl'}</span></p>
-                  </div>
                 </div>
               )}
             </div>
