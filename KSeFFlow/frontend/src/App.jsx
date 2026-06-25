@@ -45,7 +45,11 @@ import {
   LogOut,
   LayoutDashboard,
   Lock,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   UserCheck,
+  X,
   Inbox,
   KeyRound,
   Languages
@@ -83,8 +87,15 @@ export default function App() {
   const [hubUnread, setHubUnread] = useState(0);
   const [govStatus, setGovStatus] = useState('Connected');
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const navigateTo = (page) => navigate(`/company/${activeTenant.id}/${page}`);
+
+  useEffect(() => {
+    setIsMobileSidebarOpen(false);
+    setShowNotifications(false);
+  }, [location.pathname]);
 
   // ── SSO session init ────────────────────────────────────────────────────────
   // On every page load: ask the RegulaOne backend if the shared-domain
@@ -458,40 +469,155 @@ export default function App() {
     const allowed  = PAGE_ROLES_REQUIRED[section]?.includes(activeRole);
     return (
       <button
-        onClick={() => { navigateTo(section); setShowNotifications(false); }}
-        className={`w-full text-left py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
-          isActive ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+        type="button"
+        title={isSidebarCollapsed ? label : undefined}
+        aria-label={label}
+        aria-current={isActive ? 'page' : undefined}
+        onClick={() => { navigateTo(section); setShowNotifications(false); setIsMobileSidebarOpen(false); }}
+        className={`group relative w-full rounded-lg py-2.5 text-left text-xs font-semibold transition cursor-pointer ${
+          isSidebarCollapsed ? 'px-3 md:flex md:items-center md:justify-center md:px-2' : 'px-3'
+        } ${
+          isActive
+            ? 'bg-slate-100 text-slate-900 border-l-2 border-red-600 rounded-l-none'
+            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
         }`}
       >
-        <span className="flex items-center gap-3">
-          <Icon size={15} /> {label}
-        </span>
-        <span className="flex items-center gap-1.5">
-          {!allowed && <Lock size={11} className="text-slate-400" />}
-          {extra}
+        <span className={`flex min-w-0 items-center gap-3 ${isSidebarCollapsed ? 'md:justify-center' : 'justify-between'}`}>
+          <span className="flex min-w-0 items-center gap-3">
+            <Icon size={16} className="shrink-0" />
+            <span className={`truncate ${isSidebarCollapsed ? 'md:hidden' : ''}`}>{label}</span>
+          </span>
+          <span className={`flex shrink-0 items-center gap-1.5 ${isSidebarCollapsed ? 'md:absolute md:right-1 md:top-1' : ''}`}>
+            {!allowed && <Lock size={11} className="text-slate-400" />}
+            {extra}
+          </span>
         </span>
       </button>
     );
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col antialiased">
+    <div className="h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans antialiased md:flex">
 
-      <header className="bg-white border-b border-slate-200 h-16 px-6 flex items-center justify-between sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <div className="bg-red-700 text-white rounded-lg p-1.5 font-sans font-black flex items-center justify-center text-sm shadow-xs leading-none">
-            R1
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="font-extrabold text-[15px] tracking-tight text-slate-800 uppercase">RegulaOne</span>
-              <span className="text-[11px] bg-red-50 text-red-650 px-1.5 py-0.5 rounded font-mono font-bold leading-none">KSeFFlow</span>
+      {isMobileSidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={() => setIsMobileSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[2px] transition-opacity md:hidden"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex h-screen w-80 max-w-[86vw] shrink-0 transform flex-col border-r border-slate-200 bg-white font-sans shadow-2xl shadow-slate-900/15 transition-all duration-300 ease-out md:sticky md:top-0 md:z-30 md:max-w-none md:translate-x-0 md:shadow-none ${
+          isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        } ${isSidebarCollapsed ? 'md:w-20' : 'md:w-72'}`}
+      >
+        <div className={`flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 px-4 ${isSidebarCollapsed ? 'md:justify-center md:px-3' : 'justify-between'}`}>
+          <div className={`flex min-w-0 items-center gap-3 ${isSidebarCollapsed ? 'md:justify-center' : ''}`}>
+            <div className="bg-red-700 text-white rounded-lg p-1.5 font-sans font-black flex items-center justify-center text-sm shadow-xs leading-none shrink-0">
+              R1
             </div>
-            <p className="text-[10px] text-slate-400 font-medium">Poland e-Invoicing Compliance SaaS Node</p>
+            <div className={`min-w-0 ${isSidebarCollapsed ? 'md:hidden' : ''}`}>
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-extrabold text-[15px] tracking-tight text-slate-800 uppercase">RegulaOne</span>
+                <span className="text-[11px] bg-red-50 text-red-650 px-1.5 py-0.5 rounded font-mono font-bold leading-none">KSeFFlow</span>
+              </div>
+              <p className="truncate text-[10px] text-slate-400 font-medium">Poland e-Invoicing Compliance SaaS Node</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsSidebarCollapsed(prev => !prev)}
+              className="hidden rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 md:flex"
+              aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 md:hidden"
+              aria-label="Close sidebar"
+            >
+              <X size={15} />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="space-y-6">
+
+            <div className={`bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs shadow-xs ${isSidebarCollapsed ? 'md:hidden' : ''}`}>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">{t('sidebar.tenantVault')}</span>
+              <p className="font-semibold text-slate-700 truncate text-[11.5px] mt-1">{activeTenant.name}</p>
+              <div className="flex justify-between gap-2 text-[10px] text-slate-400 mt-1.5 pt-1 border-t border-slate-100">
+                <span className="min-w-0 truncate">{t('sidebar.nip')}: <strong className="text-slate-600">{activeTenant.nip}</strong></span>
+                <span className="text-emerald-600 font-bold shrink-0">{activeTenant.subscriptionPlan}</span>
+              </div>
+            </div>
+
+            <nav className="space-y-1" aria-label="KSeFFlow sections">
+              {navItem('dashboard', t('sidebar.dashboard'), LayoutDashboard)}
+              {navItem('create', t('sidebar.createInvoice'), FileEdit)}
+              {navItem('invoices', t('sidebar.repository'), FolderSearch)}
+              {navItem('received', t('sidebar.receivedInvoices'), Inbox)}
+              {navItem('permissions', t('sidebar.permissions'), KeyRound)}
+              {navItem('offline', t('sidebar.offlineQueue'), AlertTriangle,
+                invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length > 0 ? (
+                  <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
+                    {invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length}
+                  </span>
+                ) : undefined
+              )}
+              {navItem('integration', t('sidebar.apiCenter'), Cpu)}
+              {navItem('certificates', t('sidebar.certificates'), ShieldCheck)}
+              {navItem('audit', t('sidebar.auditCenter'), BookOpen)}
+              {navItem('notifications', language === 'pl' ? 'Powiadomienia' : 'Notifications', Bell,
+                hubUnread > 0 ? (
+                  <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
+                    {hubUnread}
+                  </span>
+                ) : undefined
+              )}
+            </nav>
+          </div>
+        </div>
+
+        <div className={`shrink-0 border-t border-slate-100 p-4 text-[10.5px] text-slate-400 ${isSidebarCollapsed ? 'md:px-3' : ''}`}>
+          <div className={`space-y-1 ${isSidebarCollapsed ? 'md:hidden' : ''}`}>
+            <p>{t('header.platformStatus')}: <strong>SECURE RODO_OK</strong></p>
+            <p>{t('header.database')}: <strong>Postgres schemas</strong></p>
+            <p className="truncate">{t('header.sla')}: <strong>Frankfurt AWS</strong></p>
+          </div>
+          <div className={`hidden ${isSidebarCollapsed ? 'md:flex' : ''} justify-center`}>
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" title="Platform secure" />
+          </div>
+        </div>
+      </aside>
+
+      <div className="flex h-screen min-w-0 flex-1 flex-col">
+        <header className="bg-white border-b border-slate-200 h-16 px-4 sm:px-6 flex shrink-0 items-center justify-between z-30">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="flex rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 md:hidden"
+              aria-label="Open sidebar"
+              aria-expanded={isMobileSidebarOpen}
+            >
+              <Menu size={17} />
+            </button>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-extrabold tracking-tight text-slate-800">KSeFFlow Workspace</p>
+              <p className="truncate text-[10px] font-medium text-slate-400">{activeTenant.name || 'My Organisation'}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
 
           <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
             <Building2 size={13} className="text-slate-400" />
@@ -601,56 +727,9 @@ export default function App() {
             </div>
           )}
         </div>
-      </header>
+        </header>
 
-      <div className="flex-1 flex flex-col md:flex-row">
-
-        <aside className="w-full md:w-64 bg-white border-r border-slate-200 p-4 flex flex-col justify-between shrink-0 font-sans">
-          <div className="space-y-6">
-
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs md:block hidden shadow-xs">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">{t('sidebar.tenantVault')}</span>
-              <p className="font-semibold text-slate-700 truncate text-[11.5px] mt-1">{activeTenant.name}</p>
-              <div className="flex justify-between text-[10px] text-slate-400 mt-1.5 pt-1 border-t border-slate-100">
-                <span>{t('sidebar.nip')}: <strong className="text-slate-600">{activeTenant.nip}</strong></span>
-                <span className="text-emerald-600 font-bold">{activeTenant.subscriptionPlan}</span>
-              </div>
-            </div>
-
-            <nav className="space-y-1">
-              {navItem('dashboard', t('sidebar.dashboard'), LayoutDashboard)}
-              {navItem('create', t('sidebar.createInvoice'), FileEdit)}
-              {navItem('invoices', t('sidebar.repository'), FolderSearch)}
-              {navItem('received', t('sidebar.receivedInvoices'), Inbox)}
-              {navItem('permissions', t('sidebar.permissions'), KeyRound)}
-              {navItem('offline', t('sidebar.offlineQueue'), AlertTriangle,
-                invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length > 0 ? (
-                  <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
-                    {invoices.filter(i => i.tenantId === activeTenant.id && i.status === 'OFFLINE_MODE').length}
-                  </span>
-                ) : undefined
-              )}
-              {navItem('integration', t('sidebar.apiCenter'), Cpu)}
-              {navItem('certificates', t('sidebar.certificates'), ShieldCheck)}
-              {navItem('audit', t('sidebar.auditCenter'), BookOpen)}
-              {navItem('notifications', language === 'pl' ? 'Powiadomienia' : 'Notifications', Bell,
-                hubUnread > 0 ? (
-                  <span className="bg-red-600 text-white font-bold font-mono text-[9px] px-1.5 py-0.5 rounded-full">
-                    {hubUnread}
-                  </span>
-                ) : undefined
-              )}
-            </nav>
-          </div>
-
-          <div className="pt-4 border-t border-slate-100 hidden md:block text-[10.5px] text-slate-400 space-y-1">
-            <p>{t('header.platformStatus')}: <strong>SECURE RODO_OK</strong></p>
-            <p>{t('header.database')}: <strong>Postgres schemas</strong></p>
-            <p className="truncate">{t('header.sla')}: <strong>Frankfurt AWS</strong></p>
-          </div>
-        </aside>
-
-        <main className="flex-1 p-6 md:p-8 min-w-0 overflow-y-auto">
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
 
           {!PAGE_ROLES_REQUIRED[pageKey]?.includes(activeRole) ? (
             <div className="bg-white border border-slate-200 rounded-xl p-8 max-w-lg mx-auto mt-12 text-center space-y-4 shadow-xs">
