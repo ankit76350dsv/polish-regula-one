@@ -28,6 +28,7 @@ import ReceivedInvoices from './components/ReceivedInvoices';
 import PermissionsManager from './components/PermissionsManager';
 import NotificationCenter from './components/NotificationCenter';
 import Login from './components/Login';
+import LandingPage from './components/LandingPage';
 // (ArchitectureDocs removed — it was a static, inaccurate showcase, not a KSeF/government requirement.)
 
 import {
@@ -53,6 +54,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language, setLanguage, t } = useLanguage();
+  const isLandingPath = location.pathname === '/';
 
   const pathParts = location.pathname.split('/').filter(Boolean);
   const urlTenantId   = pathParts[1] ?? null;
@@ -175,13 +177,12 @@ export default function App() {
 
         // ── URL tenant-ID correction ──────────────────────────────────────────
         // Three cases:
-        //   1. Landing on a non-company path (sso-callback, /, /login) → go to dashboard
+        //   1. Landing on a login/callback path → go to dashboard
         //   2. URL has a stale / wrong tenant ID → rewrite the path in place
         //   3. URL already has the correct tenant ID → do nothing
 
         const isEntryPath =
           location.pathname === '/auth/sso-callback' ||
-          location.pathname === '/'                  ||
           location.pathname === '/login';
 
         if (isEntryPath) {
@@ -235,7 +236,7 @@ export default function App() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (isAuthenticated && activeTenant.id && (location.pathname === '/' || location.pathname === '/login')) {
+    if (isAuthenticated && activeTenant.id && location.pathname === '/login') {
       navigate(`/company/${activeTenant.id}/dashboard`, { replace: true });
     }
   }, [isAuthenticated, location.pathname, activeTenant.id]);
@@ -393,6 +394,10 @@ export default function App() {
 
   // Show a spinner while the SSO cookie check is in flight
   if (isAuthLoading) {
+    if (isLandingPath) {
+      return <LandingPage isAuthLoading />;
+    }
+
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -400,6 +405,15 @@ export default function App() {
           <p className="text-slate-400 text-sm font-medium">{t('header.verifying')}</p>
         </div>
       </div>
+    );
+  }
+
+  if (isLandingPath) {
+    return (
+      <LandingPage
+        isAuthenticated={isAuthenticated}
+        tenantId={activeTenant.id || currentUser?.tenantId}
+      />
     );
   }
 
