@@ -759,11 +759,10 @@ export default function App() {
               {currentSection === 'dashboard' && (
                 <Dashboard
                   tenant={activeTenant}
-                  invoices={invoices}
-                  certificates={[]}
-                  onNavigate={navigateTo}
-                  govStatus={govStatus}
                   role={activeRole}
+                  permissions={userPermissions}
+                  onNavigate={navigateTo}
+                  onOpenInvoice={(id) => navigate(`/company/${activeTenant.id}/invoices/${id}`)}
                 />
               )}
 

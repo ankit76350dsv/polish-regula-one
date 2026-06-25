@@ -177,6 +177,14 @@ export const getInvoiceXml = async (invoiceId) => {
   return ksefFetch(`${INVOICE_PATH}/${encodeURIComponent(invoiceId)}/xml`);
 };
 
+// ── Dashboard (KSeFFlow backend :8081) ──────────────────────────────────────────
+/**
+ * All dashboard figures in one call: invoice counts, money totals per currency, certificate
+ * health, KSeF status, and recent activity. GET /api/v1/dashboard/summary.
+ * @returns {Promise<object>} DashboardSummaryResponse
+ */
+export const getDashboardSummary = async () => ksefFetch('/api/v1/dashboard/summary');
+
 /**
  * Fetch an invoice's status timeline: current status, the "what to do next" hint, and the
  * full ordered history of status changes (DRAFT → PENDING → SENT → ...) with timestamps.
