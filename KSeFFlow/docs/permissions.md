@@ -167,9 +167,32 @@ base `/api/v1/permissions`):
 
 **Government KSeF API** is the real store. [`KsefPermissionsService`](../backend/src/main/java/com/ksefflow/backend/services/KsefPermissionsService.java)
 opens a signed KSeF session ([`KSeFAuthService`](../backend/src/main/java/com/ksefflow/backend/services/ksefauth/KSeFAuthService.java))
-then calls KSeF via [`KsefApiClient`](../backend/src/main/java/com/ksefflow/backend/services/ksefauth/KsefApiClient.java)
-(`grantPersonPermissions`, `queryPersonPermissions`, `revokePermission`, `getPermissionsOperationStatus`).
+then calls KSeF via [`KsefApiClient`](../backend/src/main/java/com/ksefflow/backend/services/ksefauth/KsefApiClient.java).
 Grants/revokes are **asynchronous** — KSeF returns a `referenceNumber` you poll.
+
+**Our endpoint → government KSeF endpoint** (every call first opens a signed session — see the auth
+note below). `{ksefBaseUrl}` is the active KSeF base URL — sandbox `https://api-test.ksef.mf.gov.pl/v2`,
+production `https://api.ksef.mf.gov.pl/v2` (from [`KsefApiProperties`](../backend/src/main/java/com/ksefflow/backend/config/KsefApiProperties.java)):
+
+| Our endpoint (KSeFFlow `:8081`) | Government KSeF endpoint it calls | Notes |
+|---|---|---|
+| `POST /api/v1/permissions/persons/grants` | `POST {ksefBaseUrl}/permissions/persons/grants` | async → returns `referenceNumber` (202) |
+| `POST /api/v1/permissions/query` | `POST {ksefBaseUrl}/permissions/query/persons/grants?pageOffset=&pageSize=` | paged list of grants |
+| `DELETE /api/v1/permissions/{permissionId}` | `DELETE {ksefBaseUrl}/permissions/common/grants/{permissionId}` | async → returns `referenceNumber` (202) |
+| `GET /api/v1/permissions/operations/{referenceNumber}` | `GET {ksefBaseUrl}/permissions/operations/{referenceNumber}` | poll the async grant/revoke result |
+
+**Auth step (runs before every call above).** To act for the company, the backend first opens a
+certificate-signed KSeF session. That uses these government endpoints (in [`KsefApiClient`](../backend/src/main/java/com/ksefflow/backend/services/ksefauth/KsefApiClient.java)):
+
+| Step | Government KSeF endpoint |
+|---|---|
+| 1. Ask for a login challenge | `POST {ksefBaseUrl}/auth/challenge` |
+| 2. Submit the **XAdES-signed** challenge (uses the certificate) | `POST {ksefBaseUrl}/auth/xades-signature` |
+| 3. Wait for the auth result | `GET {ksefBaseUrl}/auth/{referenceNumber}` |
+| 4. Redeem the access token | `POST {ksefBaseUrl}/auth/token/redeem` |
+
+> The **"invalid certificate" (21115)** error happens at **step 2** (`/auth/xades-signature`) — KSeF
+> rejects the certificate, so the session never opens and none of the permission endpoints can run.
 
 **Databases / storage:**
 - **KSeF national system** — the source of truth for the grants themselves. KSeFFlow stores **no**
