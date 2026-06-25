@@ -24,9 +24,14 @@ import org.springframework.web.server.ResponseStatusException;
 public class KsefAvailabilityController {
 
     private final KsefAvailabilityService availabilityService;
+    private final com.ksefflow.backend.config.KsefApiProperties apiProperties;
 
     // Body for the "declare a state" calls. reason is required so the decision is documented.
     public record DeclareRequest(String reason) {}
+
+    // Read-only connection info shown on the Integration page: which KSeF environment we target,
+    // the actual base URL, and the invoice schema. Non-sensitive (no keys/tokens) — real config.
+    public record ConnectionInfo(String environment, String baseUrl, String invoiceSchema) {}
 
     // ── Read (any authenticated user) ────────────────────────────────────────────
 
@@ -36,6 +41,17 @@ public class KsefAvailabilityController {
     public ResponseEntity<KsefAvailabilityService.Status> getStatus(AuthenticatedUser caller) {
         log.info("[getStatus]:1 GET /ksef-status — tenant={}", caller.tenantId());
         return ResponseEntity.ok(availabilityService.getStatus());
+    }
+
+    // The real KSeF connection the backend uses (environment + active base URL + schema).
+    @GetMapping("/connection")
+    public ResponseEntity<ConnectionInfo> getConnection(AuthenticatedUser caller) {
+        String schema = apiProperties.getFormCode().getSystemCode()
+                + " " + apiProperties.getFormCode().getSchemaVersion();
+        return ResponseEntity.ok(new ConnectionInfo(
+                apiProperties.getEnvironment().name(),
+                apiProperties.getActiveBaseUrl(),
+                schema));
     }
 
     // ── Declare (admin only) ──────────────────────────────────────────────────────

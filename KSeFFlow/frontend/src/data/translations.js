@@ -327,8 +327,8 @@ export const translations = {
       pdfGenErrorDesc: "Could not open the print view"
     },
     integration: {
-      title: "Government API Center",
-      desc: "Monitor live microservice interfaces and secure connections to the Ministry of Finance Sandbox and Production environments.",
+      title: "KSeF Integration",
+      desc: "Current KSeF connection status, configuration, and recent activity.",
       statusCard: "Government Connection Status",
       endpoints: "Active KSeF Endpoint Directives",
       payloadSize: "Payload Limits & Schema Rules",
@@ -806,8 +806,8 @@ export const translations = {
       pdfGenErrorDesc: "Nie można otworzyć widoku wydruku"
     },
     integration: {
-      title: "Rządowe Centrum Integracji",
-      desc: "Monitoruj aktywne interfejsy mikrousług i bezpieczne połączenia z produkcyjnym i testowym środowiskiem Ministerstwa Finansów.",
+      title: "Integracja z KSeF",
+      desc: "Aktualny stan połączenia z KSeF, konfiguracja i ostatnia aktywność.",
       statusCard: "Status połączenia z bramką rządową",
       endpoints: "Aktywne dyrektywy endpointów KSeF",
       payloadSize: "Limity rozmiaru i zasady schematu XML",

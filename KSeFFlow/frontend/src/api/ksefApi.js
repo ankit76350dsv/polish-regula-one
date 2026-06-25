@@ -580,6 +580,12 @@ const KSEF_STATUS_PATH = '/api/v1/ksef-status';
 export const getKsefStatus = async () => ksefFetch(KSEF_STATUS_PATH);
 
 /**
+ * Read the REAL KSeF connection the backend uses (non-sensitive config).
+ * GET /api/v1/ksef-status/connection → { environment, baseUrl, invoiceSchema }
+ */
+export const getKsefConnection = async () => ksefFetch(`${KSEF_STATUS_PATH}/connection`);
+
+/**
  * Declare a Ministry-announced emergency ("tryb awaryjny", 7-business-day window) — admin only.
  * POST /api/v1/ksef-status/emergency  body { reason }
  */
