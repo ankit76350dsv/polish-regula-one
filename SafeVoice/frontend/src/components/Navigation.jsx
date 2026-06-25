@@ -26,11 +26,6 @@ export function AppSidebar({
   const [collapsed, setCollapsed] = useState(false);
   const isPublic = activeRole === "Public User";
 
-  const publicMenuItems = [
-    { label: t("nav.submitReport"), path: "/report", icon: Shield },
-    { label: t("nav.trackReport"), path: "/track", icon: ShieldCheck },
-  ];
-
   const adminMenuItems = [
     { label: t("nav.caseOperations"), path: "/dashboard", icon: Home },
     { label: t("nav.caseRegister"), path: "/cases", icon: AlertOctagon },
@@ -84,41 +79,8 @@ export function AppSidebar({
 
       <nav
         className="flex-1 overflow-y-auto px-3 py-4 space-y-6"
-        aria-label={t("nav.reporterPortal")}
+        aria-label={t("nav.authorizedStaff")}
       >
-        <div>
-          {!collapsed && (
-            <p className="text-[10px] font-mono tracking-wider text-slate-500 uppercase px-3 mb-2 font-semibold">
-              {t("nav.reporterPortal")}
-            </p>
-          )}
-          <ul className="space-y-1">
-            {publicMenuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentPath.startsWith(item.path);
-              return (
-                <li key={item.path}>
-                  <button
-                    onClick={() => onNavigate(item.path)}
-                    aria-current={isActive ? "page" : undefined}
-                    aria-label={collapsed ? item.label : undefined}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
-                      isActive
-                        ? "bg-cyan-50 text-cyan-700 border border-cyan-200"
-                        : "hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-transparent"
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    {!collapsed && (
-                      <span className="truncate">{item.label}</span>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
         <div>
           {!collapsed && (
             <div className="flex items-center justify-between px-3 mb-2">
@@ -193,7 +155,12 @@ export function AppSidebar({
   );
 }
 
-export function AppNavbar({ activeRole, setActiveRole }) {
+export function AppNavbar({
+  activeRole,
+  setActiveRole,
+  currentPath,
+  onNavigate,
+}) {
   const { t, i18n } = useTranslation();
   const jurisdiction = useJurisdiction();
   const roles = [
@@ -206,6 +173,11 @@ export function AppNavbar({ activeRole, setActiveRole }) {
   ];
 
   const isPublic = activeRole === "Public User";
+
+  const publicMenuItems = [
+    { label: t("nav.submitReport"), path: "/report", icon: Shield },
+    { label: t("nav.trackReport"), path: "/track", icon: ShieldCheck },
+  ];
 
   // Short compliance chip for the active country (EU-adaptable; Poland shows its 2024 Act).
   const jurisdictionChip =
@@ -230,6 +202,28 @@ export function AppNavbar({ activeRole, setActiveRole }) {
           <span className="w-px h-2.5 bg-slate-200" />
           <span>{jurisdictionChip}</span>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {publicMenuItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = currentPath ? currentPath.startsWith(item.path) : false;
+          return (
+            <button
+              key={item.path}
+              onClick={() => onNavigate && onNavigate(item.path)}
+              aria-current={isActive ? "page" : undefined}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
+                isActive
+                  ? "bg-cyan-50 text-cyan-700 border border-cyan-200"
+                  : "hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-transparent"
+              }`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline truncate">{item.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex items-center gap-4 relative">

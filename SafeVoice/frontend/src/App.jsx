@@ -735,7 +735,12 @@ export default function App() {
       />
 
       <div className="flex-grow flex flex-col min-h-screen overflow-x-hidden">
-        <AppNavbar activeRole={activeRole} setActiveRole={setRole} />
+        <AppNavbar
+          activeRole={activeRole}
+          setActiveRole={setRole}
+          currentPath={currentPath}
+          onNavigate={navigateTo}
+        />
 
         {activeRole === "Public User" && currentPath === "/access-denied" && (
           <div
