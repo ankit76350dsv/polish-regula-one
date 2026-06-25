@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Search,
   Filter,
@@ -13,16 +13,36 @@ import {
   Info,
   Layers,
   ArrowRight,
-  FileWarning
+  FileWarning,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import CorrectionModal from './CorrectionModal';
+import { listInvoicesPage } from '../api/ksefApi';
 import { useLanguage } from '../context/LanguageContext';
 import { can } from '../lib/permissions';
 
-export default function InvoiceList({ tenant, role, permissions, invoices, onAddNotification, onViewInvoiceDetail, onAddInvoice }) {
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+
+export default function InvoiceList({ tenant, role, permissions, onAddNotification, onViewInvoiceDetail, onAddInvoice }) {
   const { t, language } = useLanguage();
+
+  // Filters / paging — every change re-queries the BACKEND (true server-side pagination).
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [page, setPage] = useState(1);            // 1-based for the UI
+  const [pageSize, setPageSize] = useState(10);
+
+  // Server response for the current page only.
+  const [invoices, setInvoices] = useState([]);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0); // bump to force a refetch (after a correction)
+
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   // The SENT invoice currently being corrected (opens the correction modal). null = closed.
   const [correctionFor, setCorrectionFor] = useState(null);
@@ -30,19 +50,56 @@ export default function InvoiceList({ tenant, role, permissions, invoices, onAdd
   // KSEF_TENANT_ADMIN) — matches the backend guard on POST /invoices/{id}/correct.
   const canCorrect = can.issueInvoices(permissions);
 
-  const tenantInvoices = invoices.filter(inv => inv.tenantId === tenant.id);
+  // Debounce the search box so we don't hit the API on every keystroke.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 350);
+    return () => clearTimeout(id);
+  }, [searchTerm]);
 
-  const filteredInvoices = tenantInvoices.filter(inv => {
-    const matchesSearch =
-      inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.buyerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.buyerNIP.includes(searchTerm);
+  // Any filter / page-size change → jump back to page 1.
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, pageSize]);
 
-    if (statusFilter === 'ALL') return matchesSearch;
-    return inv.status === statusFilter && matchesSearch;
-  });
+  // Fetch the current page from the backend whenever the query inputs change.
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    listInvoicesPage({
+      page: page - 1,
+      size: pageSize,
+      status: statusFilter === 'ALL' ? undefined : statusFilter,
+      search: debouncedSearch || undefined,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        setInvoices(res.content);
+        setTotalElements(res.totalElements);
+        setTotalPages(Math.max(1, res.totalPages));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setInvoices([]); setTotalElements(0); setTotalPages(1);
+        setError(err.message || (language === 'pl' ? 'Nie udało się wczytać faktur.' : 'Failed to load invoices.'));
+      })
+      .finally(() => { if (!cancelled) setIsLoading(false); });
+    return () => { cancelled = true; };
+  }, [page, pageSize, statusFilter, debouncedSearch, refreshKey, language]);
 
-  const totalGrossSum = filteredInvoices.reduce((sum, inv) => sum + inv.totalGross, 0);
+  const refetch = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  // Gross total of the rows on THIS page (server pages the data, so we sum what's loaded).
+  const pageGrossSum = invoices.reduce((sum, inv) => sum + (inv.totalGross || 0), 0);
+
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * pageSize;
+  // Compact page-number list with "…" gaps (1 … 4 5 6 … 12).
+  const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1)
+    .filter((n) => n === 1 || n === totalPages || Math.abs(n - safePage) <= 1)
+    .reduce((acc, n, idx, arr) => {
+      if (idx > 0 && n - arr[idx - 1] > 1) acc.push('…');
+      acc.push(n);
+      return acc;
+    }, []);
 
   const triggerUpoDownload = (invoice) => {
     onAddNotification(
@@ -73,12 +130,12 @@ export default function InvoiceList({ tenant, role, permissions, invoices, onAdd
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 border border-slate-200 p-4 rounded-xl text-xs font-sans">
         <div>
           <span className="text-slate-400 block pb-0.5 font-semibold uppercase tracking-wider text-[10px]">{t('repository.activeSize')}</span>
-          <strong className="text-slate-700 text-lg">{tenantInvoices.length} {language === 'pl' ? 'faktur' : 'invoices'}</strong>
+          <strong className="text-slate-700 text-lg">{totalElements} {language === 'pl' ? 'faktur' : 'invoices'}</strong>
         </div>
         <div>
           <span className="text-slate-400 block pb-0.5 font-semibold uppercase tracking-wider text-[10px]">{t('repository.filteredGross')}</span>
           <strong className="text-slate-800 text-lg">
-            {totalGrossSum.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} PLN
+            {pageGrossSum.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} PLN
           </strong>
         </div>
         <div>
@@ -139,7 +196,19 @@ export default function InvoiceList({ tenant, role, permissions, invoices, onAdd
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredInvoices.map((inv) => (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-10 text-slate-400 text-xs">
+                      <span className="inline-flex items-center gap-2"><Loader2 size={15} className="animate-spin" /> {t('common.loading')}</span>
+                    </td>
+                  </tr>
+                ) : invoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-slate-400 text-xs">
+                      {t('repository.noInvoices')}
+                    </td>
+                  </tr>
+                ) : invoices.map((inv) => (
                   <tr
                     key={inv.id}
                     onClick={() => setSelectedInvoice(inv)}
@@ -204,16 +273,75 @@ export default function InvoiceList({ tenant, role, permissions, invoices, onAdd
                     </td>
                   </tr>
                 ))}
-                {filteredInvoices.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="text-center py-8 text-slate-400 text-xs">
-                      {t('repository.noInvoices')}
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3 font-medium">{error}</div>
+          )}
+
+          {/* Pagination footer — count + page controls. The data is paged on the SERVER. */}
+          {totalElements > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 pt-4">
+              <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                <span>
+                  {language === 'pl' ? 'Pokazano' : 'Showing'}{' '}
+                  <span className="font-semibold text-slate-700">{pageStart + 1}</span>–
+                  <span className="font-semibold text-slate-700">{Math.min(pageStart + pageSize, totalElements)}</span>{' '}
+                  {language === 'pl' ? 'z' : 'of'}{' '}
+                  <span className="font-semibold text-slate-700">{totalElements}</span>
+                </span>
+                <label className="flex items-center gap-1.5">
+                  <span className="text-slate-400">{language === 'pl' ? 'na stronę' : 'per page'}</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 font-semibold text-slate-700 text-[11px] cursor-pointer"
+                  >
+                    {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </label>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={safePage === 1 || isLoading}
+                    className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer disabled:cursor-default"
+                    aria-label={language === 'pl' ? 'Poprzednia strona' : 'Previous page'}
+                  >
+                    <ChevronLeft size={15} />
+                  </button>
+                  {pageNumbers.map((item, idx) =>
+                    item === '…' ? (
+                      <span key={`gap-${idx}`} className="px-1 text-[11px] text-slate-300">…</span>
+                    ) : (
+                      <button
+                        key={item}
+                        onClick={() => setPage(item)}
+                        disabled={isLoading}
+                        className={`h-7 min-w-[28px] px-2 rounded-lg text-[11px] font-bold transition cursor-pointer disabled:cursor-default ${
+                          safePage === item ? 'bg-red-600 text-white' : 'text-slate-500 hover:bg-slate-100'
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safePage === totalPages || isLoading}
+                    className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer disabled:cursor-default"
+                    aria-label={language === 'pl' ? 'Następna strona' : 'Next page'}
+                  >
+                    <ChevronRight size={15} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="lg:col-span-4 space-y-6">
@@ -417,7 +545,7 @@ export default function InvoiceList({ tenant, role, permissions, invoices, onAdd
           tenant={tenant}
           onAddNotification={onAddNotification}
           onClose={() => setCorrectionFor(null)}
-          onCreated={(draft) => { onAddInvoice?.(draft); }}
+          onCreated={(draft) => { onAddInvoice?.(draft); refetch(); }}
         />
       )}
     </div>

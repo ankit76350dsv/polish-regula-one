@@ -120,14 +120,48 @@ const toCurrencyEnum = (currency) => {
 };
 
 /**
- * List the caller's invoices. The backend scopes to the session tenant and returns a
- * Spring Data Page, so we read `.content`; a bare array is tolerated for compatibility.
- * (Any leading tenantId arg from older call sites is ignored — see the file header.)
+ * Load a generous slice of the tenant's invoices as a flat array (newest first). This feeds the
+ * SHARED app state used by widgets that need the whole picture (the sidebar offline-mode badge,
+ * the invoice-detail lookup, the offline queue). The invoice LIST page does NOT use this — it uses
+ * listInvoicesPage() for true server-side pagination. The backend returns a Spring Data Page; we
+ * read `.content` (a bare array is tolerated for compatibility).
  */
 export const listInvoices = async () => {
-  const page = await ksefFetch(INVOICE_PATH);
+  const params = new URLSearchParams({ page: '0', size: '500', sort: 'createdAt,desc' });
+  const page = await ksefFetch(`${INVOICE_PATH}?${params.toString()}`);
   const content = Array.isArray(page) ? page : (page?.content ?? []);
   return content.map(mapBackendInvoice);
+};
+
+/**
+ * Server-side paginated + filtered invoice list for the Invoice Repository page.
+ * GET /api/v1/invoices?page=&size=&status=&search=&sort=createdAt,desc
+ * The database does the paging/filtering/search, so we only ever fetch one page at a time.
+ *
+ * @param {object}  opts
+ * @param {number}  [opts.page=0]    zero-based page index
+ * @param {number}  [opts.size=10]   rows per page
+ * @param {string}  [opts.status]    KsefInvoiceStatus (e.g. SENT, OFFLINE_MODE, DRAFT) — omit for all
+ * @param {string}  [opts.search]    text matched against invoice number / buyer name / buyer NIP
+ * @returns {Promise<{content:object[], totalElements:number, totalPages:number, number:number, size:number}>}
+ */
+export const listInvoicesPage = async (opts = {}) => {
+  const { page = 0, size = 10, status, search } = opts;
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('size', String(size));
+  params.set('sort', 'createdAt,desc');
+  if (status) params.set('status', status);
+  if (search) params.set('search', search);
+  const json = await ksefFetch(`${INVOICE_PATH}?${params.toString()}`);
+  const content = Array.isArray(json) ? json : (json?.content ?? []);
+  return {
+    content:       content.map(mapBackendInvoice),
+    totalElements: json?.totalElements ?? content.length,
+    totalPages:    json?.totalPages    ?? 1,
+    number:        json?.number         ?? page,
+    size:          json?.size           ?? size,
+  };
 };
 
 export const getInvoice = async (_tenantId, invoiceId) => {

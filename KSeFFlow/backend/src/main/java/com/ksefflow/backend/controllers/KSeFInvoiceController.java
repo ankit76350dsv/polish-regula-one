@@ -270,16 +270,17 @@ public class KSeFInvoiceController {
     public ResponseEntity<Page<KsefInvoice>> listInvoices(
             AuthenticatedUser caller,
             @RequestParam(required = false) KsefInvoiceStatus status,
+            @RequestParam(required = false) String search,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
 
         // Read access — issuers, oversight roles, or the tenant admin.
         caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
                 KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
 
-        log.info("[listInvoices]:1 ▶ GET / (list) — tenant={} status={} page={} size={}",
-                caller.tenantId(), status, pageable.getPageNumber(), pageable.getPageSize());
+        log.info("[listInvoices]:1 ▶ GET / (list) — tenant={} status={} search={} page={} size={}",
+                caller.tenantId(), status, search, pageable.getPageNumber(), pageable.getPageSize());
 
-        Page<KsefInvoice> page = invoiceService.listInvoices(caller.tenantId(), status, pageable);
+        Page<KsefInvoice> page = invoiceService.listInvoices(caller.tenantId(), status, search, pageable);
         log.info("[listInvoices]:2 ✔ list — returned {} of {} invoices → 200 OK",
                 page.getNumberOfElements(), page.getTotalElements());
         return ResponseEntity.ok(page);

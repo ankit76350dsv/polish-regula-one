@@ -28,8 +28,16 @@ import com.ksefflow.backend.services.ksefauth.KsefApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -70,6 +78,10 @@ import java.util.Optional;
 public class KSeFInvoiceService {
 
     private final KsefInvoiceRepository ksef_invoices_repository;
+
+    // Used for the flexible list query (optional status + optional text search + pagination),
+    // following the same MongoTemplate pattern as KSeFAuditLogService.
+    private final MongoTemplate mongoTemplate;
 
     private final FA3XmlGeneratorService xmlGeneratorService;
     private final Fa3ValidationGate fa3ValidationGate;
@@ -447,13 +459,47 @@ public class KSeFInvoiceService {
         return invoice;
     }
 
-    public Page<KsefInvoice> listInvoices(String tenantId, KsefInvoiceStatus status, Pageable pageable) {
-        log.info("[listInvoices]:1 Listing invoices for tenant [{}] status [{}]", tenantId, status);
-        Page<KsefInvoice> page = (status != null)
-                ? ksef_invoices_repository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status, pageable)
-                : ksef_invoices_repository.findByTenantIdOrderByCreatedAtDesc(tenantId, pageable);
-        page.getContent().forEach(this::applyNextRetryAt);
-        return page;
+    /**
+     * Server-side paginated list of a tenant's invoices, with an optional status filter and an
+     * optional text search (matches invoice number, buyer name, or buyer NIP — case-insensitive).
+     * Always newest-first. Built with MongoTemplate so every filter is optional and combined in
+     * ONE query, and the database does the paging (no loading everything into memory).
+     *
+     * @param tenantId the tenant (always applied — tenant isolation)
+     * @param status   optional status filter (null = any status)
+     * @param search   optional text to look for in invoice number / buyer name / buyer NIP
+     * @param pageable the page number and size (sort is forced to createdAt DESC)
+     */
+    public Page<KsefInvoice> listInvoices(String tenantId, KsefInvoiceStatus status, String search, Pageable pageable) {
+        log.info("[listInvoices]:1 Listing invoices for tenant [{}] status [{}] search [{}] page [{}] size [{}]",
+                tenantId, status, search, pageable.getPageNumber(), pageable.getPageSize());
+
+        // Build the filter: tenant is mandatory; status and search are added only if provided.
+        List<Criteria> filters = new ArrayList<>();
+        filters.add(Criteria.where("tenantId").is(tenantId));
+        if (status != null) {
+            filters.add(Criteria.where("status").is(status));
+        }
+        if (search != null && !search.isBlank()) {
+            // Quote the user input so characters like "." are treated literally, not as regex.
+            String safe = java.util.regex.Pattern.quote(search.trim());
+            filters.add(new Criteria().orOperator(
+                    Criteria.where("invoiceNumber").regex(safe, "i"),
+                    Criteria.where("buyerName").regex(safe, "i"),
+                    Criteria.where("buyerNip").regex(safe, "i")));
+        }
+        Criteria finalCriteria = new Criteria().andOperator(filters.toArray(new Criteria[0]));
+
+        // Count first (for the total page count), then fetch just the requested page, newest first.
+        long total = mongoTemplate.count(new Query(finalCriteria), KsefInvoice.class);
+        Query dataQuery = new Query(finalCriteria)
+                .with(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .skip((long) pageable.getPageNumber() * pageable.getPageSize())
+                .limit(pageable.getPageSize());
+        List<KsefInvoice> content = mongoTemplate.find(dataQuery, KsefInvoice.class);
+
+        content.forEach(this::applyNextRetryAt);
+        return new PageImpl<>(content, pageable, total);
     }
 
     // For invoices still awaiting KSeF (offline/retrying), compute the earliest time the
