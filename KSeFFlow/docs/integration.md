@@ -147,6 +147,29 @@ Service: [`KsefAvailabilityService.java`](../backend/src/main/java/com/ksefflow/
 - `currentOfflineMode()` maps the state to the offline window the invoice pipeline records when it
   parks an invoice: `EMERGENCY` → 7-business-day window; anything else not-online → next business day.
 
+### What the mode actually does to invoice submission (the important consequence)
+
+The declared mode is **not just a label** — it controls how every invoice is issued. The submission
+flow [`KSeFInvoiceService.submitInvoice(...)`](../backend/src/main/java/com/ksefflow/backend/services/KSeFInvoiceService.java)
+checks the state **before** attempting the live KSeF call:
+
+- **ONLINE** → the invoice is sent through the normal real-time online flow (`executeKsefSubmission`).
+- **EMERGENCY / OFFLINE_UNAVAILABILITY** → the online flow is **skipped entirely**. The invoice is
+  routed straight to **offline issuance** (`handleOfflineMode`): FA(3) XML is still generated and
+  validated, a **QR code** is sealed with the offline certificate, the legal deadline from
+  `currentOfflineMode()` is stamped on the `KsefInvoice`, and it is queued for the background retry
+  queue to transmit to KSeF later (next business day / 7 business days).
+
+This is the government-required behavior — see the dedicated change note in
+[`COMPLIANCE_GAP_ANALYSIS.md`](../COMPLIANCE_GAP_ANALYSIS.md) and the official sources:
+[Tryby szczególne wystawiania faktur](https://ksef.podatki.gov.pl/informacje-ogolne-ksef-20/tryby-szczegolne-wystawiania-faktur/)
+and [Tryb offline – niedostępność KSeF](https://ksef.podatki.gov.pl/informacje-ogolne-ksef-20/tryb-offline-niedostepnosc-ksef/).
+
+So an admin clicking **Declare Emergency / Declare Unavailability** on this page immediately changes
+how the whole tenant's invoices are issued — that's why declaring is admin-only and audited. (The
+retry queue's job — pushing parked offline invoices into KSeF once reachable — is deliberately **not**
+gated by the mode; sending before the deadline is allowed.)
+
 ---
 
 ## 6. Operation modes & legal deadlines
