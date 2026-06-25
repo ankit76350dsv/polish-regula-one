@@ -128,24 +128,8 @@ export default function PermissionsManager({ tenant, role, permissions: userPerm
     }
   };
 
-  return (
-    <div className="space-y-6 max-w-5xl">
-      <div className="flex items-center justify-between gap-3 font-sans">
-        <div className="flex items-center gap-3">
-          <div className="bg-slate-900 text-white rounded-xl p-2"><KeyRound size={18} /></div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-800 tracking-tight">{language === 'pl' ? 'Uprawnienia KSeF' : 'KSeF Permissions'}</h2>
-            <p className="text-xs text-slate-500">{language === 'pl' ? 'Kto może działać w KSeF w imieniu Twojej firmy.' : 'Who is authorized to act in KSeF on behalf of your company.'}</p>
-          </div>
-        </div>
-        <button onClick={loadPermissions} disabled={isLoading}
-          className="inline-flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-707 font-semibold py-2 px-3 rounded-xl text-xs transition cursor-pointer disabled:opacity-60 font-sans">
-          {isLoading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} {language === 'pl' ? 'Odśwież' : 'Refresh'}
-        </button>
-      </div>
-
-      {/* Grant form — only useful to admins; the backend enforces this too. */}
-      {isAdmin && (
+  // ── Grant form (admins only) — extracted so the layout can place it beside the list ──────
+  const grantForm = isAdmin && (
         <form onSubmit={handleGrant} className="bg-white border border-slate-200 rounded-xl shadow-xs p-5 space-y-4 font-sans text-xs">
           <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
             <UserPlus size={15} /> {language === 'pl' ? 'Nadaj uprawnienia osobie' : 'Grant permissions to a person'}
@@ -195,11 +179,15 @@ export default function PermissionsManager({ tenant, role, permissions: userPerm
             </button>
           </div>
         </form>
-      )}
+  );
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3 font-sans font-medium">{error}</div>}
+  // Any load error from KSeF.
+  const errorBlock = error && (
+    <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl px-4 py-3 font-sans font-medium">{error}</div>
+  );
 
-      {/* Current permissions list */}
+  // Current permissions list (read live from KSeF).
+  const permissionsList = (
       <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden font-sans">
         {isLoading ? (
           <div className="flex items-center justify-center h-40 text-slate-400 text-sm gap-2">
@@ -254,6 +242,45 @@ export default function PermissionsManager({ tenant, role, permissions: userPerm
           </div>
         )}
       </div>
+  );
+
+  // Page header (title + refresh) — shown full width above the content.
+  const header = (
+    <div className="flex items-center justify-between gap-3 font-sans">
+      <div className="flex items-center gap-3">
+        <div className="bg-slate-900 text-white rounded-xl p-2"><KeyRound size={18} /></div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-800 tracking-tight">{language === 'pl' ? 'Uprawnienia KSeF' : 'KSeF Permissions'}</h2>
+          <p className="text-xs text-slate-500">{language === 'pl' ? 'Kto może działać w KSeF w imieniu Twojej firmy.' : 'Who is authorized to act in KSeF on behalf of your company.'}</p>
+        </div>
+      </div>
+      <button onClick={loadPermissions} disabled={isLoading}
+        className="inline-flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-707 font-semibold py-2 px-3 rounded-xl text-xs transition cursor-pointer disabled:opacity-60 font-sans">
+        {isLoading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} {language === 'pl' ? 'Odśwież' : 'Refresh'}
+      </button>
+    </div>
+  );
+
+  // Layout: header on top, then on wide screens the grant form sits BESIDE the list (form 40%,
+  // list 60%) so the page fills the width instead of leaving a big empty area on the right.
+  // Below xl, or when the user is not an admin (no form), everything stacks full width.
+  return (
+    <div className="space-y-6">
+      {header}
+      {isAdmin ? (
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
+          <div className="xl:col-span-2">{grantForm}</div>
+          <div className="xl:col-span-3 space-y-6">
+            {errorBlock}
+            {permissionsList}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {errorBlock}
+          {permissionsList}
+        </div>
+      )}
     </div>
   );
 }
