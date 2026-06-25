@@ -445,6 +445,14 @@ export const deleteHubNotification = async (id) =>
  */
 export const getMyTenant = async () => apiFetch('/api/tenant/info');
 
+/**
+ * Fetch the signed-in user's full profile from the RegulaOne backend.
+ * Calls GET /api/auth/me (identity from the idToken cookie; the client never sends an id).
+ * apiFetch unwraps the AppResponse envelope, so this resolves to the UserResponse object
+ * (name, email, role, enabled, tenantId/Name/Status, plan fields, moduleIds, permissions, …).
+ */
+export const getMe = async () => apiFetch('/api/auth/me');
+
 // ── Certificate API (KSeFFlow backend :8081) ──────────────────────────────────
 
 /**

@@ -18,6 +18,7 @@ const mapRole = (r) => {
 };
 
 import Dashboard from './components/Dashboard';
+import Profile from './components/Profile';
 import InvoiceForm from './components/InvoiceForm';
 import InvoiceList from './components/InvoiceList';
 import IntegrationCenter from './components/IntegrationCenter';
@@ -401,7 +402,8 @@ export default function App() {
     integration:     ['Super Admin', 'Company Admin'],
     certificates:    ['Super Admin', 'Company Admin', 'Accountant'],
     audit:           ['Super Admin', 'Company Admin', 'Auditor'],
-    notifications:   ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor']
+    notifications:   ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor'],
+    profile:         ['Super Admin', 'Company Admin', 'Accountant', 'Finance User', 'Auditor']
   };
 
   const isKnownRoute = (() => {
@@ -675,13 +677,19 @@ export default function App() {
 
           {currentUser && (
             <div className="flex items-center gap-3 pl-3 border-l border-slate-200">
-              <div className="hidden lg:block text-right">
-                <p className="text-xs font-black text-slate-800 leading-tight flex items-center gap-1 justify-end">
-                  <UserCheck size={12} className="text-emerald-600" />
-                  {currentUser.name}
-                </p>
-                <span className="text-[10px] font-mono text-slate-400 leading-none block mt-0.5">{currentUser.email}</span>
-              </div>
+              <button
+                onClick={() => navigateTo('profile')}
+                title={language === 'pl' ? 'Zobacz profil' : 'View profile'}
+                className="flex items-center gap-2 cursor-pointer group"
+              >
+                <span className="h-8 w-8 rounded-full bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold flex items-center justify-center shrink-0">
+                  {(currentUser.name || '').trim().split(/\s+/).map(n => n[0]).join('').slice(0, 2).toUpperCase() || '—'}
+                </span>
+                <span className="hidden lg:block text-right">
+                  <span className="block text-xs font-black text-slate-800 leading-tight group-hover:text-red-700 transition">{currentUser.name}</span>
+                  <span className="block text-[10px] font-mono text-slate-400 leading-none mt-0.5">{currentUser.email}</span>
+                </span>
+              </button>
               <button
                 onClick={handleLogout}
                 title={t('header.signOut')}
@@ -843,6 +851,10 @@ export default function App() {
 
               {currentSection === 'notifications' && (
                 <NotificationCenter onChanged={loadHub} />
+              )}
+
+              {currentSection === 'profile' && (
+                <Profile />
               )}
             </>
           )}
