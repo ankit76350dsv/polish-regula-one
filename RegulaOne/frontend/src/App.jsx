@@ -11,6 +11,7 @@ import RespondChallengePage from './pages/Auth/RespondChallengePage';
 import ChangePasswordPage   from './pages/Auth/ChangePasswordPage';
 import SSOCallbackPage      from './pages/Auth/SSOCallbackPage';
 import LandingPage          from './pages/Landing/LandingPage';
+import NotFoundPage         from './pages/NotFoundPage';
 
 // Dashboard pages
 import Overview    from './pages/Dashboard/Overview';
@@ -154,7 +155,7 @@ export default function App() {
           <Route path="/company/:tenantId/modules/privacypilot"  element={<ModulePlaceholder />} />
         </Route>
 
-        <Route path="*" element={<Navigate to={user ? dashboardPath(user.tenantId) : '/'} replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   );
