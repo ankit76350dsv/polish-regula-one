@@ -26,19 +26,17 @@ import {
   selectIsAuthenticated,
 } from "./slices/authSlice";
 import { tryRefreshSession } from "./services/api";
+// Translates between our short internal paths ("/dashboard") and the address-bar
+// URL the signed-in staff area uses ("/company/{tenantId}/dashboard").
+import { toLogicalPath, toBrowserPath, isStaffSection } from "./utils/routing";
 
-// Staff routes are protected by RegulaOne SSO. The public report-submission and
-// report-tracking routes are deliberately NOT here — anonymous whistleblowers must
-// reach them without signing in (EU 2019/1937 + Poland 2024 Whistleblower Act).
-const STAFF_PREFIXES = ["/dashboard", "/cases", "/messages", "/audits", "/users", "/settings"];
+// The staff area is protected by RegulaOne SSO (isStaffSection in utils/routing).
+// The public report-submission and report-tracking routes are deliberately NOT in
+// that list — anonymous whistleblowers must reach them without signing in
+// (EU 2019/1937 + Poland 2024 Whistleblower Act).
 
 // The path the central login sends the browser back to after a successful sign-in.
 const SSO_CALLBACK_PATH = "/auth/sso-callback";
-
-// Is this path part of the gated staff area?
-function isStaffPath(path) {
-  return STAFF_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
-}
 
 function normalizePath(pathname) {
   if (!pathname || pathname === "/") return "/report";
@@ -63,20 +61,34 @@ export default function App() {
   const user = useSelector(selectCurrentUser);
   const isAuthenticated = useSelector(selectIsAuthenticated);
 
-  const [currentPath, setCurrentPath] = useState(() => normalizePath(window.location.pathname));
+  // The organisation the signed-in staff member belongs to. It namespaces every
+  // staff URL as /company/{tenantId}/… . Empty until the SSO session is verified.
+  const tenantId = user?.tenantId ?? "";
+
+  // currentPath is always the LOGICAL path ("/dashboard", "/cases/abc"). We read it
+  // from the address bar with toLogicalPath so a deep link like
+  // /company/T1/cases/abc still resolves to the right screen.
+  const [currentPath, setCurrentPath] = useState(() =>
+    normalizePath(toLogicalPath(window.location.pathname)),
+  );
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    const handlePopState = () => setCurrentPath(normalizePath(window.location.pathname));
+    const handlePopState = () =>
+      setCurrentPath(normalizePath(toLogicalPath(window.location.pathname)));
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
+  // navigate() accepts either a logical path ("/cases/abc") or a full browser URL
+  // ("/company/T1/cases/abc") and does the right thing: it keeps state on the
+  // logical path but writes the tenant-prefixed URL to the address bar.
   const navigate = (path) => {
-    const nextPath = normalizePath(path);
-    window.history.pushState(null, "", nextPath);
-    setCurrentPath(nextPath);
+    const logical = normalizePath(toLogicalPath(path));
+    const url = toBrowserPath(logical, tenantId);
+    window.history.pushState(null, "", url);
+    setCurrentPath(logical);
   };
 
   // ── SSO session bootstrap ─────────────────────────────────────────────────
@@ -117,11 +129,24 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, currentPath]);
 
+  // Once signed in, make sure a staff URL carries its /company/{tenantId} prefix.
+  // This fixes deep links / refreshes that landed on a flat path (e.g. someone
+  // opened /dashboard before logging in): we rewrite it in place to the canonical
+  // /company/{tenantId}/dashboard without adding a new history entry.
+  useEffect(() => {
+    if (!isAuthenticated || !tenantId) return;
+    if (currentPath === SSO_CALLBACK_PATH || !isStaffSection(currentPath)) return;
+    const canonical = toBrowserPath(currentPath, tenantId);
+    if (window.location.pathname !== canonical) {
+      window.history.replaceState(null, "", canonical);
+    }
+  }, [isAuthenticated, tenantId, currentPath]);
+
   // Sign out: clears the SSO cookies on the backend and leaves for the central app.
   const handleLogout = () => dispatch(signOut());
 
   // Does the current screen require a verified staff session?
-  const gated = currentPath === SSO_CALLBACK_PATH || isStaffPath(currentPath);
+  const gated = currentPath === SSO_CALLBACK_PATH || isStaffSection(currentPath);
 
   const page = useMemo(() => {
     if (currentPath === SSO_CALLBACK_PATH) return <SsoCallbackPending />;
@@ -139,7 +164,10 @@ export default function App() {
     if (currentPath === "/users") return <UsersPermissionsMatrixPage />;
     if (currentPath === "/settings") return <ComplianceSettingsPage />;
     return <AccessDeniedPage navigate={navigate} />;
-  }, [currentPath]);
+    // tenantId is included so the pages' navigate() closure rebuilds with the
+    // correct /company/{tenantId} prefix the moment the session is verified.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPath, tenantId]);
 
   return (
     // The whole app is exactly as tall as the screen (h-screen) and hides its
@@ -163,6 +191,7 @@ export default function App() {
         setCollapsed={setCollapsed}
         user={user}
         onLogout={handleLogout}
+        tenantId={tenantId}
       />
 
       {/* Right column: a vertical stack that fills the remaining width.
@@ -178,12 +207,14 @@ export default function App() {
             setMobileOpen={setMobileOpen}
             user={user}
             onLogout={handleLogout}
+            tenantId={tenantId}
           />
           <MobileNavigation
             currentPath={currentPath}
             navigate={navigate}
             open={mobileOpen}
             close={() => setMobileOpen(false)}
+            tenantId={tenantId}
           />
         </div>
 

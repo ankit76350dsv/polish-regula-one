@@ -125,8 +125,8 @@ all good?         → the real page ✅
 
 > 🔑 **Public pages are NOT behind the bouncer.** `/report` and `/track` render directly so an
 > anonymous whistleblower can use them without signing in. This is a **legal requirement**
-> (EU Directive 2019/1937 + the Polish 2024 Whistleblower Act), enforced in
-> [`App.jsx`](../../frontend/src/App.jsx) via the `STAFF_PREFIXES` list.
+> (EU Directive 2019/1937 + the Polish 2024 Whistleblower Act), enforced via the
+> `STAFF_SECTIONS` list in [`utils/routing.js`](../../frontend/src/utils/routing.js).
 
 ### Step 4 — Not signed in? Go to the front desk
 
@@ -153,6 +153,28 @@ if (isAuthenticated && currentPath === "/auth/sso-callback") {
 ```
 
 ✅ You're in. Steps 1–5 take a couple of seconds.
+
+### The staff URL scheme (`/company/{tenantId}/…`)
+
+Once signed in, every staff page is namespaced under the user's organisation in the address
+bar, exactly like KSeFFlow:
+
+```
+/company/{tenantId}/dashboard
+/company/{tenantId}/cases/abc
+/report                         ← public pages stay flat (no tenant)
+```
+
+To keep this simple, **the app still thinks in short "logical" paths** (`/dashboard`,
+`/cases/abc`). Only two tiny converters in [`utils/routing.js`](../../frontend/src/utils/routing.js)
+translate between the two worlds:
+
+- `toBrowserPath("/dashboard", tenantId)` → `/company/{tenantId}/dashboard` (what the URL shows)
+- `toLogicalPath("/company/{tenantId}/dashboard")` → `/dashboard` (what the app matches on)
+
+So the page switch, the route guard, and the active-link highlight never have to know about
+tenant ids — they all work on the logical path. `navigate()` accepts **either** form and does
+the right thing. The `tenantId` comes from the signed-in user (`user.tenantId`).
 
 ---
 
@@ -242,6 +264,7 @@ Everything follows the project's mandatory **Redux Toolkit** structure
 | [`components/auth/Login.jsx`](../../frontend/src/components/auth/Login.jsx) | Redirects to the RegulaOne front desk (with loop explanation). |
 | [`components/auth/SafeVoiceAccessModal.jsx`](../../frontend/src/components/auth/SafeVoiceAccessModal.jsx) | The "you can't enter SafeVoice" blocking screen. |
 | [`utils/access.js`](../../frontend/src/utils/access.js) | The rulebook: *is this signed-in user allowed in SafeVoice?* |
+| [`utils/routing.js`](../../frontend/src/utils/routing.js) | Converts between logical paths (`/dashboard`) and the `/company/{tenantId}/…` URL scheme; defines `STAFF_SECTIONS`. |
 | [`App.jsx`](../../frontend/src/App.jsx) | The conductor: starts the check, gates staff routes, handles the callback, runs the refresh timer. |
 | [`main.jsx`](../../frontend/src/main.jsx) | Wraps the app in the Redux `<Provider>`. |
 
@@ -268,7 +291,9 @@ You need the RegulaOne backend running, because SafeVoice has no login of its ow
 2. `cd SafeVoice/frontend && npm run dev` (serves on `:1003`).
 3. Visit a **staff** page, e.g. `http://localhost:1003/dashboard`.
    - **Not signed in?** You should bounce to the RegulaOne login, then return to the dashboard.
-   - **Signed in?** The dashboard loads, and your name + role show in the sidebar and navbar.
+   - **Signed in?** The dashboard loads, the URL becomes
+     `http://localhost:1003/company/{tenantId}/dashboard`, and your name + role show in the
+     sidebar and navbar. Deep-linking straight to `/company/{tenantId}/cases` also works.
 4. Visit a **public** page `http://localhost:1003/report` — it must load with **no** sign-in.
 5. **Sign out** from the sidebar/navbar → you should land back on the central login.
 
@@ -281,9 +306,10 @@ You need the RegulaOne backend running, because SafeVoice has no login of its ow
 
 ## 11. How to extend it
 
-- **Gate a new staff route:** add its path prefix to `STAFF_PREFIXES` in
-  [`App.jsx`](../../frontend/src/App.jsx). Done — `AuthGate` now protects it.
-- **Keep a route public:** just *don't* add it to `STAFF_PREFIXES`.
+- **Gate a new staff route:** add its section name to `STAFF_SECTIONS` in
+  [`utils/routing.js`](../../frontend/src/utils/routing.js). Done — it now gets the
+  `/company/{tenantId}/…` prefix **and** `AuthGate` protection automatically.
+- **Keep a route public:** just *don't* add it to `STAFF_SECTIONS` (it stays flat and ungated).
 - **Read the current user anywhere:** `useSelector(selectCurrentUser)` from
   [`authSlice.js`](../../frontend/src/slices/authSlice.js). Never call `/api/auth/me` yourself —
   the slice already holds the answer.

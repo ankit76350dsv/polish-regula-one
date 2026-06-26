@@ -1,7 +1,13 @@
+import { toBrowserPath } from "../../utils/routing";
+
 // A single clickable navigation link.
 // It shows an icon, a label, and (sometimes) a small count badge.
 // It also highlights itself when the user is on its page.
-export function NavItem({ item, currentPath, navigate, compact = false }) {
+//
+// item.path is the short logical path ("/dashboard"). We match the active state on
+// that logical path, but the visible href shows the real address-bar URL (e.g.
+// /company/{tenantId}/dashboard) so right-click / open-in-new-tab works correctly.
+export function NavItem({ item, currentPath, navigate, compact = false, tenantId }) {
   const Icon = item.icon;
 
   // Work out if this link points to the page the user is looking at now.
@@ -13,7 +19,7 @@ export function NavItem({ item, currentPath, navigate, compact = false }) {
 
   return (
     <a
-      href={item.path}
+      href={toBrowserPath(item.path, tenantId)}
       onClick={(event) => {
         event.preventDefault();
         navigate(item.path);

@@ -2,8 +2,9 @@
 // It lists every link (both public and staff) in a simple grid.
 // When the menu is closed we show nothing at all.
 import { publicRoutes, staffRoutes } from "./navRoutes";
+import { toBrowserPath } from "../../utils/routing";
 
-export function MobileNavigation({ currentPath, navigate, open, close }) {
+export function MobileNavigation({ currentPath, navigate, open, close, tenantId }) {
   if (!open) return null;
 
   return (
@@ -12,7 +13,7 @@ export function MobileNavigation({ currentPath, navigate, open, close }) {
         {[...publicRoutes, ...staffRoutes].map((item) => (
           <a
             key={item.path}
-            href={item.path}
+            href={toBrowserPath(item.path, tenantId)}
             onClick={(event) => {
               event.preventDefault();
               navigate(item.path);

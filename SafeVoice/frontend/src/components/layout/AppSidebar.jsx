@@ -13,7 +13,15 @@ function initialsOf(user) {
   return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
-export function AppSidebar({ currentPath, navigate, collapsed, setCollapsed, user, onLogout }) {
+export function AppSidebar({
+  currentPath,
+  navigate,
+  collapsed,
+  setCollapsed,
+  user,
+  onLogout,
+  tenantId,
+}) {
   return (
     <aside
       className={`hidden lg:flex bg-white border-r border-slate-200 flex-col h-screen text-slate-700 transition-all duration-300 relative ${
@@ -64,7 +72,13 @@ export function AppSidebar({ currentPath, navigate, collapsed, setCollapsed, use
           <ul className="space-y-1">
             {staffRoutes.map((item) => (
               <li key={item.path}>
-                <NavItem item={item} currentPath={currentPath} navigate={navigate} compact={collapsed} />
+                <NavItem
+                  item={item}
+                  currentPath={currentPath}
+                  navigate={navigate}
+                  compact={collapsed}
+                  tenantId={tenantId}
+                />
               </li>
             ))}
           </ul>

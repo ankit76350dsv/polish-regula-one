@@ -5,7 +5,15 @@ import { FileCheck2, LogOut, Menu, X } from "lucide-react";
 import { NavItem } from "./NavItem";
 import { publicRoutes } from "./navRoutes";
 
-export function AppNavbar({ currentPath, navigate, mobileOpen, setMobileOpen, user, onLogout }) {
+export function AppNavbar({
+  currentPath,
+  navigate,
+  mobileOpen,
+  setMobileOpen,
+  user,
+  onLogout,
+  tenantId,
+}) {
   return (
     <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center justify-between gap-4">
       <div className="flex items-center gap-3">
@@ -38,7 +46,13 @@ export function AppNavbar({ currentPath, navigate, mobileOpen, setMobileOpen, us
       <div className="flex items-center gap-4">
         <nav className="flex items-center gap-2" aria-label="Public pages">
           {publicRoutes.map((item) => (
-            <NavItem key={item.path} item={item} currentPath={currentPath} navigate={navigate} />
+            <NavItem
+              key={item.path}
+              item={item}
+              currentPath={currentPath}
+              navigate={navigate}
+              tenantId={tenantId}
+            />
           ))}
         </nav>
 
