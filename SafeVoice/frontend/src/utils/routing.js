@@ -59,3 +59,30 @@ export function isStaffSection(logicalPath) {
   const section = pathOnly(logicalPath).split("/").filter(Boolean)[0];
   return STAFF_SECTIONS.includes(section);
 }
+
+// ── Public anonymous report page ─────────────────────────────────────────────
+// The "Submit report" button opens this in its own browser tab. The reporter
+// sees ONLY the form — no navbar, no sidebar, no staff session — so a
+// whistleblower can submit anonymously (EU 2019/1937 + Poland 2024 Act).
+//
+// The company the report belongs to travels in the URL itself:
+//     /company/{tenantId}/report
+// That lets the page know which organisation it is for, without ever needing
+// the reporter to sign in or reveal who they are.
+
+// Build the full address-bar URL for one company's public report page.
+export function toPublicReportPath(tenantId) {
+  return `/company/${tenantId}/report`;
+}
+
+// If the given browser path IS a standalone public report page, return the
+// company (tenant) id from it. Otherwise return null. We only match the exact
+// shape /company/{tenantId}/report so normal staff URLs are never mistaken for
+// the anonymous page.
+export function getStandaloneReportTenant(pathname) {
+  const parts = pathOnly(pathname).split("/").filter(Boolean);
+  if (parts[0] === "company" && parts[1] && parts[2] === "report" && parts.length === 3) {
+    return parts[1];
+  }
+  return null;
+}

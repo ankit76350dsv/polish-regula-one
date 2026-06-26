@@ -1,4 +1,4 @@
-import { toBrowserPath } from "../../utils/routing";
+import { toBrowserPath, toPublicReportPath } from "../../utils/routing";
 
 // A single clickable navigation link.
 // It shows an icon, a label, and (sometimes) a small count badge.
@@ -10,17 +10,28 @@ import { toBrowserPath } from "../../utils/routing";
 export function NavItem({ item, currentPath, navigate, compact = false, tenantId }) {
   const Icon = item.icon;
 
+  // Some links (the "Submit report" button) open the anonymous report page in a
+  // brand-new tab so the reporter sees only the form — no navbar, no session.
+  // Those links point at the public /company/{tenantId}/report URL and behave
+  // like a normal browser link (no in-app navigation).
+  const opensReportTab = item.newTab && Boolean(tenantId);
+
   // Work out if this link points to the page the user is looking at now.
   // The "/cases" link also stays active on detail pages like "/cases/123".
+  // A new-tab link never highlights — it does not change the current page.
   const isActive =
-    item.path === "/cases"
+    !opensReportTab &&
+    (item.path === "/cases"
       ? currentPath === "/cases" || currentPath.startsWith("/cases/")
-      : currentPath === item.path || currentPath.startsWith(`${item.path}/`);
+      : currentPath === item.path || currentPath.startsWith(`${item.path}/`));
 
   return (
     <a
-      href={toBrowserPath(item.path, tenantId)}
+      href={opensReportTab ? toPublicReportPath(tenantId) : toBrowserPath(item.path, tenantId)}
+      {...(opensReportTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
       onClick={(event) => {
+        // For the new-tab report link, let the browser open it normally.
+        if (opensReportTab) return;
         event.preventDefault();
         navigate(item.path);
       }}

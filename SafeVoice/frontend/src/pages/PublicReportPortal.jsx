@@ -2,7 +2,11 @@ import { AlertCircle, Check, ChevronRight, Lock, Shield, Upload } from "lucide-r
 import { AppButton, SecureCard } from "../components/ui";
 import { reportCategories } from "./staticData";
 
-export default function PublicReportPortal() {
+// tenantId says which company this report is for. It arrives from the URL
+// (/company/{tenantId}/report) when the page is opened in its own tab. It is
+// optional so the in-app preview still works without it. We never ask the
+// reporter who THEY are — only which organisation the report concerns.
+export default function PublicReportPortal({ tenantId }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-start leading-relaxed">
       <div className="lg:col-span-2">
@@ -27,7 +31,20 @@ export default function PublicReportPortal() {
             </li>
           </ol>
 
+          {/* Show which company this report will reach, when we know it from the
+              URL. This is the only identity on the page — the organisation's,
+              never the reporter's. */}
+          {tenantId && (
+            <p className="mb-6 text-[11px] font-mono text-slate-500">
+              Reporting to organisation:{" "}
+              <span className="font-bold text-slate-700">{tenantId}</span>
+            </p>
+          )}
+
           <div className="space-y-6">
+            {/* Carry the company id with the form so a later submission step can
+                attach the report to the right tenant. No reporter data is added. */}
+            <input type="hidden" name="tenantId" value={tenantId ?? ""} />
             <div>
               <label
                 htmlFor="report-category"

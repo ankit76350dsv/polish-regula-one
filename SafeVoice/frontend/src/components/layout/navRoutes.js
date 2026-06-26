@@ -13,8 +13,10 @@ import {
 } from "lucide-react";
 
 // Links that anyone can use (no login needed): send a report or track one.
+// "Submit report" has newTab: true so it opens the anonymous report page in its
+// own tab at /company/{tenantId}/report — clean of any navbar or staff session.
 export const publicRoutes = [
-  { label: "Submit report", path: "/report", icon: Shield },
+  { label: "Submit report", path: "/report", icon: Shield, newTab: true },
   { label: "Track report", path: "/track", icon: ShieldCheck },
 ];
 

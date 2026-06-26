@@ -2,7 +2,7 @@
 // It lists every link (both public and staff) in a simple grid.
 // When the menu is closed we show nothing at all.
 import { publicRoutes, staffRoutes } from "./navRoutes";
-import { toBrowserPath } from "../../utils/routing";
+import { toBrowserPath, toPublicReportPath } from "../../utils/routing";
 
 export function MobileNavigation({ currentPath, navigate, open, close, tenantId }) {
   if (!open) return null;
@@ -10,11 +10,20 @@ export function MobileNavigation({ currentPath, navigate, open, close, tenantId 
   return (
     <div className="lg:hidden border-b border-slate-200 bg-white px-4 py-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {[...publicRoutes, ...staffRoutes].map((item) => (
+        {[...publicRoutes, ...staffRoutes].map((item) => {
+          // "Submit report" opens the anonymous page in a new tab, just like in
+          // the desktop navbar. Everything else navigates inside the app.
+          const opensReportTab = item.newTab && Boolean(tenantId);
+          return (
           <a
             key={item.path}
-            href={toBrowserPath(item.path, tenantId)}
+            href={opensReportTab ? toPublicReportPath(tenantId) : toBrowserPath(item.path, tenantId)}
+            {...(opensReportTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
             onClick={(event) => {
+              if (opensReportTab) {
+                close();
+                return;
+              }
               event.preventDefault();
               navigate(item.path);
               close();
@@ -28,7 +37,8 @@ export function MobileNavigation({ currentPath, navigate, open, close, tenantId 
             <item.icon className="w-4 h-4" aria-hidden="true" />
             {item.label}
           </a>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

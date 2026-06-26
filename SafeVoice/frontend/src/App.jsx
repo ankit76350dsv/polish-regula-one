@@ -10,6 +10,7 @@ import {
   PublicReportPortal,
   ReportSuccessPage,
   SecurityAuditTrailLogsPage,
+  StandaloneReportPage,
   TrackCasePage,
   UsersPermissionsMatrixPage,
 } from "./pages";
@@ -28,7 +29,12 @@ import {
 import { tryRefreshSession } from "./services/api";
 // Translates between our short internal paths ("/dashboard") and the address-bar
 // URL the signed-in staff area uses ("/company/{tenantId}/dashboard").
-import { toLogicalPath, toBrowserPath, isStaffSection } from "./utils/routing";
+import {
+  toLogicalPath,
+  toBrowserPath,
+  isStaffSection,
+  getStandaloneReportTenant,
+} from "./utils/routing";
 
 // The staff area is protected by RegulaOne SSO (isStaffSection in utils/routing).
 // The public report-submission and report-tracking routes are deliberately NOT in
@@ -56,7 +62,25 @@ function SsoCallbackPending() {
   );
 }
 
+// Top-level decision: which "world" are we in?
+//
+// If the address bar is /company/{tenantId}/report we render ONLY the anonymous
+// report page — no staff shell, and crucially none of the SSO session hooks
+// below ever run, because SafeVoiceShell is never mounted. That keeps the
+// whistleblower page completely free of anything tied to a logged-in user.
+//
+// Every other URL renders the normal staff shell (sidebar + navbar + SSO).
 export default function App() {
+  // window.location is read once on mount. The report page always loads in a
+  // fresh tab, so this value never changes for the life of this component.
+  const standaloneReportTenant = getStandaloneReportTenant(window.location.pathname);
+  if (standaloneReportTenant) {
+    return <StandaloneReportPage tenantId={standaloneReportTenant} />;
+  }
+  return <SafeVoiceShell />;
+}
+
+function SafeVoiceShell() {
   const dispatch = useDispatch();
   const user = useSelector(selectCurrentUser);
   const isAuthenticated = useSelector(selectIsAuthenticated);

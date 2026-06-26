@@ -7,5 +7,6 @@ export { default as ComplianceSettingsPage } from "./ComplianceSettingsPage.jsx"
 export { default as PublicReportPortal } from "./PublicReportPortal.jsx";
 export { default as ReportSuccessPage } from "./ReportSuccessPage.jsx";
 export { default as SecurityAuditTrailLogsPage } from "./SecurityAuditTrailLogsPage.jsx";
+export { default as StandaloneReportPage } from "./StandaloneReportPage.jsx";
 export { default as TrackCasePage } from "./TrackCasePage.jsx";
 export { default as UsersPermissionsMatrixPage } from "./UsersPermissionsMatrixPage.jsx";
