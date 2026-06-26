@@ -29,10 +29,7 @@ export default function CaseManagementPage({ navigate }) {
     const q = query.trim().toLowerCase();
     return reports.filter((r) => {
       const matchesQuery =
-        !q ||
-        r.id.toLowerCase().includes(q) ||
-        r.category.toLowerCase().includes(q) ||
-        (r.trackingCode || "").toLowerCase().includes(q);
+        !q || r.id.toLowerCase().includes(q) || r.category.toLowerCase().includes(q);
       const matchesFilter =
         filter === "all" ||
         (filter === "critical" && r.severity === "Critical") ||
@@ -106,7 +103,7 @@ export default function CaseManagementPage({ navigate }) {
               <tr key={report.id} className="hover:bg-slate-50 border-b border-slate-200 transition-colors">
                 <td className="px-4 py-3 text-xs">
                   <div className="font-bold text-slate-900">{report.id}</div>
-                  <div className="text-[10px] text-slate-500 font-mono">{report.trackingCode}</div>
+                  <div className="text-[10px] text-slate-500 font-mono">{report.disclosureMode}</div>
                 </td>
                 <td className="px-4 py-3 text-xs text-slate-700">{t(`categories.${report.category}`, report.category)}</td>
                 <td className="px-4 py-3 text-xs"><StatusBadge status={report.status} /></td>

@@ -18,10 +18,10 @@ export const reportService = {
     return api.post("/api/safevoice/reports", payload);
   },
 
-  // Public: look up a case by tracking code + PIN.
-  trackReport(trackingCode, pin) {
-    if (USE_MOCK) return mockApi.trackReport(trackingCode, pin);
-    return api.post("/api/safevoice/reports/track", { trackingCode, pin });
+  // Public: look up a case using ONLY the access key (the single credential).
+  trackReport(accessKey) {
+    if (USE_MOCK) return mockApi.trackReport(accessKey);
+    return api.post("/api/safevoice/reports/track", { accessKey });
   },
 
   // Staff: list all cases for the signed-in tenant.

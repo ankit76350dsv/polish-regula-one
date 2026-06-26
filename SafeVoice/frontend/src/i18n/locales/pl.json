@@ -167,12 +167,15 @@
   },
   "success": {
     "title": "Twoje zgłoszenie zostało przyjęte",
-    "subtitle": "Zapisz poniższe dane — są pokazywane tylko raz i stanowią jedyny sposób śledzenia Twojej sprawy.",
-    "trackingCode": "Kod do śledzenia",
-    "pin": "PIN dostępu (pokazany raz)",
-    "saveWarning": "Zapisz ten kod i PIN w bezpiecznym miejscu poza tą aplikacją. Nie możemy ich odzyskać i nigdy nie przechowujemy Twojej tożsamości.",
-    "copyCode": "Kopiuj kod do śledzenia",
-    "copyPin": "Kopiuj PIN",
+    "subtitle": "Poniżej znajduje się Twój klucz dostępu — JEDYNY identyfikator i hasło do Twojej sprawy. Jest pokazywany tylko raz i stanowi jedyny sposób śledzenia zgłoszenia.",
+    "accessKey": "Twój klucz dostępu (pokazany raz)",
+    "accessKeyHint": "Ten 64-znakowy klucz jest jednocześnie numerem sprawy i hasłem. Zachowaj go w tajemnicy.",
+    "saveWarning": "Zapisz ten klucz w bezpiecznym miejscu, poza tą aplikacją. Przechowujemy tylko jego jednokierunkowy odcisk — nie możemy go odzyskać ani zresetować. Jeśli go zgubisz, sprawy nie da się otworzyć ponownie, co właśnie chroni Twoją anonimowość.",
+    "copyKey": "Kopiuj klucz dostępu",
+    "downloadKey": "Pobierz klucz",
+    "fileHeading": "Klucz dostępu SafeVoice — zachowaj go w tajemnicy i bezpiecznym miejscu",
+    "hrTitle": "Przekazano do HR",
+    "hrBody": "Jako indywidualna sprawa pracownicza została przekazana do HR i jest obsługiwana poza anonimowym kanałem dla sygnalistów, dlatego nie wydano klucza dostępu.",
     "ackInfo": "Potwierdzenie otrzymasz w ciągu 7 dni, a informację zwrotną o zgłoszeniu w ciągu 3 miesięcy — poprzez kanał śledzenia.",
     "goTrack": "Przejdź do śledzenia zgłoszenia",
     "newReport": "Złóż kolejne zgłoszenie"
@@ -180,9 +183,9 @@
   "track": {
     "title": "Śledź zgłoszenie",
     "subtitle": "Anonimowe sprawdzenie statusu",
-    "codeLabel": "Kod do śledzenia",
-    "codePlaceholder": "np. SV-XXXX-XXXX",
-    "pinLabel": "PIN dostępu",
+    "keyLabel": "Klucz dostępu",
+    "keyPlaceholder": "Wklej swój 64-znakowy klucz dostępu",
+    "keyHint": "To jedyny klucz pokazany Ci raz przy wysyłaniu zgłoszenia. Nie zapisaliśmy go, więc nie można go odzyskać.",
     "lookup": "Zobacz status",
     "lookingUp": "Sprawdzanie…",
     "notFound": "Nie znaleźliśmy zgłoszenia z tym kodem i PIN-em. Sprawdź oba i spróbuj ponownie.",
@@ -509,6 +512,7 @@
     "accessRemoved": "Dostęp odebrany.",
     "saved": "Zapisano zmiany.",
     "copyOk": "Skopiowano do schowka.",
+    "downloaded": "Pobrano klucz — zapisz plik w bezpiecznym miejscu.",
     "genericError": "Coś poszło nie tak. Spróbuj ponownie."
   },
   "categories": {

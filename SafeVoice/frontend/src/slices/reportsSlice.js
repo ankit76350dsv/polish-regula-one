@@ -22,9 +22,9 @@ export const submitReport = createAsyncThunk("reports/submit", (payload) =>
 
 export const trackReport = createAsyncThunk(
   "reports/track",
-  async ({ trackingCode, pin }, { rejectWithValue }) => {
+  async ({ accessKey }, { rejectWithValue }) => {
     try {
-      return await reportService.trackReport(trackingCode, pin);
+      return await reportService.trackReport(accessKey);
     } catch (err) {
       return rejectWithValue(err?.errorCode === "NOT_FOUND" ? "notFound" : "error");
     }
@@ -47,7 +47,7 @@ const initialState = {
 
   submitStatus: "idle",
   submitError: null,
-  lastSubmission: null, // { caseId, trackingCode, pin, isHrOnly }
+  lastSubmission: null, // { accessKey, isHrOnly }
 
   tracked: null, // { report, messages }
   trackStatus: "idle",

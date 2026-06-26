@@ -165,12 +165,15 @@
   },
   "success": {
     "title": "Your report has been received",
-    "subtitle": "Save the details below — they are shown only once and are the only way to follow your case.",
-    "trackingCode": "Tracking code",
-    "pin": "Access PIN (shown once)",
-    "saveWarning": "Save this code and PIN somewhere safe and outside this application. We cannot recover them and we never store your identity.",
-    "copyCode": "Copy tracking code",
-    "copyPin": "Copy PIN",
+    "subtitle": "Below is your access key — the ONE credential for your case. It is shown only once and is the only way to follow your report.",
+    "accessKey": "Your access key (shown once)",
+    "accessKeyHint": "This 64-character key is both your case reference and your password. Keep it secret.",
+    "saveWarning": "Save this key somewhere safe, outside this application. We store only a one-way fingerprint of it — we cannot recover or reset it. If you lose it, the case cannot be reopened, which is what keeps you anonymous.",
+    "copyKey": "Copy access key",
+    "downloadKey": "Download key",
+    "fileHeading": "SafeVoice access key — keep this secret and safe",
+    "hrTitle": "Routed to HR",
+    "hrBody": "As an individual labour matter this was sent to HR and is handled outside the anonymous whistleblower channel, so no access key is issued.",
     "ackInfo": "You will receive an acknowledgement within 7 days and feedback on your report within 3 months, through the tracking channel.",
     "goTrack": "Go to report tracking",
     "newReport": "Submit another report"
@@ -178,9 +181,9 @@
   "track": {
     "title": "Track a report",
     "subtitle": "Anonymous status lookup",
-    "codeLabel": "Tracking code",
-    "codePlaceholder": "e.g. SV-XXXX-XXXX",
-    "pinLabel": "Access PIN",
+    "keyLabel": "Access key",
+    "keyPlaceholder": "Paste your 64-character access key",
+    "keyHint": "This is the single key shown to you once when you submitted. We never stored it, so it cannot be recovered.",
     "lookup": "View status",
     "lookingUp": "Checking…",
     "notFound": "We could not find a report with that code and PIN. Check both and try again.",
@@ -507,6 +510,7 @@
     "accessRemoved": "Access removed.",
     "saved": "Changes saved.",
     "copyOk": "Copied to clipboard.",
+    "downloaded": "Key downloaded — store the file somewhere safe.",
     "genericError": "Something went wrong. Please try again."
   },
   "categories": {

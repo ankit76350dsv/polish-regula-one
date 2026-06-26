@@ -13,6 +13,7 @@
  */
 import { MOCK_LATENCY_MS } from "../config";
 import * as seed from "./db";
+import { caseRefFromHash, generateAccessKey, sha256Hex } from "../utils/accessKey";
 
 // ── In-memory store ──────────────────────────────────────────────────────────
 // We deep-clone the seed so edits during a session never mutate the source data.
@@ -45,20 +46,6 @@ function plusDays(days) {
   return d.toISOString().replace("T", " ").substring(0, 16);
 }
 
-// Generate a high-entropy-looking tracking code, e.g. "SV-A1B2-C3D4".
-// NOTE: a real PIN/code MUST be generated server-side with a CSPRNG and stored
-// only as a hash. This client-side generator is for the mock phase only.
-function makeTrackingCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no easily confused chars
-  const block = () =>
-    Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
-  return `SV-${block()}-${block()}`;
-}
-
-function makePin() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
 function pushAudit(entry) {
   store.auditLogs.unshift({
     id: `aud-${store.auditLogs.length + 1}-${Date.now()}`,
@@ -80,17 +67,20 @@ export const mockApi = {
   async createReport(payload) {
     await wait();
     const isHrOnly = seed.HR_ONLY_CATEGORIES.includes(payload.category);
-    const seq = String(store.reports.length + 1).padStart(3, "0");
-    const id = `SV-2026-${seq}`;
 
-    // HR grievances are routed to HR with NO tracking PIN (matches the law's scope).
-    const trackingCode = isHrOnly ? "Not issued" : makeTrackingCode();
-    const pin = isHrOnly ? null : makePin();
+    // The ONE credential: a single 64-char hex key. It is the case identifier AND
+    // the access token. We store ONLY its SHA-256 fingerprint, never the key.
+    // HR grievances are routed to HR and get NO anonymous key (matches the law's scope).
+    const accessKey = isHrOnly ? null : generateAccessKey();
+    const keyHash = accessKey ? await sha256Hex(accessKey) : null;
+
+    // The case reference shown to STAFF is derived from the fingerprint, so it is
+    // not a separately generated id and never reveals the key.
+    const id = keyHash ? caseRefFromHash(keyHash) : `HR-${store.reports.length + 1}`;
 
     const report = {
       id,
-      trackingCode,
-      pin,
+      keyHash,
       category: payload.category,
       description: payload.facts,
       incidentDate: payload.incidentDate,
@@ -134,17 +124,19 @@ export const mockApi = {
       actorRef: "intake-service",
       actionType: "REPORT_RECEIVED",
       subjectId: id,
-      metadataNotice: "No reporter telemetry captured.",
+      metadataNotice: "No reporter telemetry captured. Access key stored as a hash only.",
     });
-    return { caseId: id, trackingCode, pin, isHrOnly };
+    // The plaintext key is returned ONCE here for display, then forgotten by the system.
+    return { accessKey, isHrOnly };
   },
 
-  // Anonymous reporter looks up their case by tracking code + PIN.
-  async trackReport(trackingCode, pin) {
+  // Anonymous reporter looks up their case using ONLY the access key. We hash the
+  // provided key and match it against the stored fingerprint — the plaintext key
+  // is never stored or compared directly.
+  async trackReport(accessKey) {
     await wait();
-    const report = store.reports.find(
-      (r) => r.trackingCode === (trackingCode || "").trim() && r.pin && r.pin === (pin || "").trim(),
-    );
+    const hash = await sha256Hex((accessKey || "").trim());
+    const report = store.reports.find((r) => r.keyHash && r.keyHash === hash);
     if (!report) throw fail("NOT_FOUND", "NOT_FOUND");
     const thread = store.messages.filter((m) => m.caseId === report.id);
     return { report: structuredClone(report), messages: structuredClone(thread) };

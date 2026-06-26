@@ -12,10 +12,8 @@ import {
 } from "../../slices/reportsSlice";
 import { sendMessage } from "../../slices/messagesSlice";
 import { addToast } from "../../slices/uiSlice";
-import { firstError, required } from "../../utils/validation";
 
-// Anonymous status lookup by tracking code + PIN, then a secure two-way thread.
-// Fully working against the mock backend, including the not-found error path.
+// Anonymous status lookup using ONLY the access key, then a secure two-way thread.
 export default function TrackCasePage() {
   const { t } = useTranslation();
   const dispatch = useDispatch();
@@ -23,8 +21,8 @@ export default function TrackCasePage() {
   const trackStatus = useSelector(selectTrackStatus);
   const trackError = useSelector(selectTrackError);
 
-  const [form, setForm] = useState({ code: "", pin: "" });
-  const [errors, setErrors] = useState({});
+  const [accessKey, setAccessKey] = useState("");
+  const [keyError, setKeyError] = useState("");
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -32,13 +30,12 @@ export default function TrackCasePage() {
 
   function lookup(e) {
     e.preventDefault();
-    const next = {};
-    next.code = firstError(form.code, [required]);
-    next.pin = firstError(form.pin, [required]);
-    Object.keys(next).forEach((k) => next[k] == null && delete next[k]);
-    setErrors(next);
-    if (Object.keys(next).length) return;
-    dispatch(trackReport({ trackingCode: form.code, pin: form.pin }));
+    if (!accessKey.trim()) {
+      setKeyError(t("validation.required"));
+      return;
+    }
+    setKeyError("");
+    dispatch(trackReport({ accessKey }));
   }
 
   async function send(e) {
@@ -61,7 +58,6 @@ export default function TrackCasePage() {
 
   const report = tracked?.report;
   const thread = tracked?.messages || [];
-  const err = (key) => (errors[key] ? t(errors[key].key, errors[key].params) : undefined);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start leading-relaxed">
@@ -69,22 +65,16 @@ export default function TrackCasePage() {
         <SecureCard title={t("track.title")} subtitle={t("track.subtitle")}>
           <form className="space-y-4" onSubmit={lookup} noValidate>
             <TextInput
-              label={t("track.codeLabel")}
+              label={t("track.keyLabel")}
               required
-              placeholder={t("track.codePlaceholder")}
-              value={form.code}
-              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-              error={err("code")}
-              className="font-mono"
-            />
-            <TextInput
-              label={t("track.pinLabel")}
-              required
-              type="password"
-              inputMode="numeric"
-              value={form.pin}
-              onChange={(e) => setForm((f) => ({ ...f, pin: e.target.value }))}
-              error={err("pin")}
+              placeholder={t("track.keyPlaceholder")}
+              hint={t("track.keyHint")}
+              value={accessKey}
+              onChange={(e) => setAccessKey(e.target.value)}
+              error={keyError}
+              autoComplete="off"
+              spellCheck={false}
+              className="[&_input]:font-mono"
             />
             <AppButton type="submit" variant="primary" disabled={looking} icon={looking ? null : <ShieldCheck className="w-4 h-4" />}>
               {looking ? <Spinner size={16} label={t("track.lookingUp")} /> : t("track.lookup")}

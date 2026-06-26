@@ -10,14 +10,14 @@ import com.safevoice.backend.service.AttachmentService;
 import com.safevoice.backend.service.CaseMessageService;
 import com.safevoice.backend.service.CaseReportService;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.util.UUID;
 
 /**
  * REST controller representing public endpoints for whistleblowers.
@@ -25,26 +25,17 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/v1/public/cases")
+@RequiredArgsConstructor
 public class PublicCaseController {
 
     private final CaseReportService caseReportService;
     private final CaseMessageService caseMessageService;
     private final AttachmentService attachmentService;
 
-    @Autowired
-    public PublicCaseController(
-            CaseReportService caseReportService,
-            CaseMessageService caseMessageService,
-            AttachmentService attachmentService) {
-        this.caseReportService = caseReportService;
-        this.caseMessageService = caseMessageService;
-        this.attachmentService = attachmentService;
-    }
-
     /**
      * Submit a new case report.
      */
-    @PostMapping
+    @PostMapping("/submit")
     public ResponseEntity<CaseSubmissionResponse> submit(
             @Valid @RequestBody CaseSubmissionRequest request,
             @RequestHeader("X-Tenant-ID") String tenantId) {

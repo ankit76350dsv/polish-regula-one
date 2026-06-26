@@ -14,8 +14,8 @@ export default function CentralEncryptedInboxPage() {
   const status = useSelector(selectReportsStatus);
   const sending = useSelector(selectSending);
 
-  // Only cases with an anonymous tracking channel have a two-way thread.
-  const threads = reports.filter((r) => r.trackingCode && r.trackingCode !== "Not issued");
+  // Only anonymous cases (those that have an access key) have a two-way thread.
+  const threads = reports.filter((r) => r.keyHash);
   const [selectedId, setSelectedId] = useState(null);
   const activeId = selectedId || threads[0]?.id || null;
   const messages = useSelector(selectMessagesFor(activeId));

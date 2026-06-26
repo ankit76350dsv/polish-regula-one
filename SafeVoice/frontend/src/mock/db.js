@@ -52,8 +52,9 @@ export const severityValues = ["Low", "Medium", "High", "Critical"];
 export const reports = [
   {
     id: "SV-2026-001",
-    trackingCode: "SV-W4R9-M2Q7",
-    pin: "482913",
+    // Only the SHA-256 fingerprint of the reporter's access key is ever stored —
+    // never the key itself. (Seed fixtures use placeholder fingerprints.)
+    keyHash: "9f1a7c2e4b6d8f0a1c3e5b7d9f0a2c4e6b8d0f1a3c5e7b9d0f2a4c6e8b0d2f4a",
     category: "Corruption",
     description:
       "Procurement requirements appear tailored to one supplier. The report describes gifts, supplier contacts, and matching equipment requirements without naming the reporter.",
@@ -114,8 +115,7 @@ export const reports = [
   },
   {
     id: "SV-2026-002",
-    trackingCode: "SV-P8C2-L7H5",
-    pin: "204517",
+    keyHash: "3b5d7f9a1c2e4b6d8f0a2c4e6b8d0f1a3c5e7f9b1d3a5c7e9f0b2d4a6c8e0f2b",
     category: "Privacy / Personal Data",
     description:
       "A consultant allegedly exported customer records containing national identifiers to an unmanaged cloud drive.",
@@ -159,8 +159,8 @@ export const reports = [
   },
   {
     id: "SV-2026-003",
-    trackingCode: "Not issued",
-    pin: null,
+    // HR grievance: handled by HR, no anonymous access key issued.
+    keyHash: null,
     category: "Individual HR Grievance",
     description:
       "Individual overtime and scheduling grievance routed to HR. It is not represented as an anonymous whistleblower case.",
