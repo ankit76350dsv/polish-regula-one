@@ -1,6 +1,6 @@
 import { ChevronRight, Search } from "lucide-react";
-import { AppTable } from "../components/ui";
-import { auditLogs } from "./staticData";
+import { AppTable } from "../../components/ui";
+import { auditLogs } from "../staticData";
 
 export default function SecurityAuditTrailLogsPage() {
   return (

@@ -1,6 +1,6 @@
 import { UserCheck } from "lucide-react";
-import { AppButton, AppTable, SecureCard } from "../components/ui";
-import { rolePermissions, users } from "./staticData";
+import { AppButton, AppTable, SecureCard } from "../../components/ui";
+import { rolePermissions, users } from "../staticData";
 
 const permissionKeys = [
   ["viewReports", "View"],

@@ -1,6 +1,6 @@
 import { Lock, Send, ShieldCheck, Upload } from "lucide-react";
-import { AppButton, SecureCard } from "../components/ui";
-import { messages, reports } from "./staticData";
+import { AppButton, SecureCard } from "../../components/ui";
+import { messages, reports } from "../staticData";
 
 export default function TrackCasePage() {
   const report = reports[0];

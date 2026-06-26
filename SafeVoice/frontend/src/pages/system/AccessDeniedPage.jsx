@@ -1,5 +1,5 @@
 import { Shield } from "lucide-react";
-import { AppButton, SecureCard } from "../components/ui";
+import { AppButton, SecureCard } from "../../components/ui";
 
 export default function AccessDeniedPage({ navigate }) {
   return (

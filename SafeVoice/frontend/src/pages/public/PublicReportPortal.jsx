@@ -1,6 +1,6 @@
 import { AlertCircle, Check, ChevronRight, Lock, Shield, Upload } from "lucide-react";
-import { AppButton, SecureCard } from "../components/ui";
-import { reportCategories } from "./staticData";
+import { AppButton, SecureCard } from "../../components/ui";
+import { reportCategories } from "../staticData";
 
 // tenantId says which company this report is for. It arrives from the URL
 // (/company/{tenantId}/report) when the page is opened in its own tab. It is

@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
-import { AppButton, AppTable } from "../components/ui";
-import { reports, severityClasses, statusClasses } from "./staticData";
+import { AppButton, AppTable } from "../../components/ui";
+import { reports, severityClasses, statusClasses } from "../staticData";
 
 export default function CaseManagementPage({ navigate }) {
   return (

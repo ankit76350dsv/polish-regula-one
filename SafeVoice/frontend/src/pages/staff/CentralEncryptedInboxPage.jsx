@@ -1,6 +1,6 @@
 import { Lock, Send } from "lucide-react";
-import { AppButton, SecureCard } from "../components/ui";
-import { messages, reports } from "./staticData";
+import { AppButton, SecureCard } from "../../components/ui";
+import { messages, reports } from "../staticData";
 
 export default function CentralEncryptedInboxPage() {
   const selectedReport = reports[0];

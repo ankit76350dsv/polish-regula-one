@@ -1,6 +1,6 @@
 import { AlertOctagon, Clock, FileText, Inbox, ShieldCheck } from "lucide-react";
-import { AppButton, SecureCard } from "../components/ui";
-import { reports } from "./staticData";
+import { AppButton, SecureCard } from "../../components/ui";
+import { reports } from "../staticData";
 
 const dashboardCards = [
   { label: "Open reports", value: "3", icon: AlertOctagon, tone: "text-cyan-700 bg-cyan-50 border-cyan-200" },

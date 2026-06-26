@@ -1,6 +1,6 @@
 import { Clock, FileText, Lock, Scale, UserCheck } from "lucide-react";
-import { AppTable, SecureCard } from "../components/ui";
-import { complianceReview } from "./staticData";
+import { AppTable, SecureCard } from "../../components/ui";
+import { complianceReview } from "../staticData";
 
 const securityItems = [
   ["MFA", "Required for all staff roles; no bypass role"],

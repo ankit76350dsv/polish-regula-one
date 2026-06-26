@@ -1,6 +1,6 @@
 import { FileText, Lock, Send, ShieldCheck } from "lucide-react";
-import { AppButton, AppTable, SecureCard, TimelineWidget } from "../components/ui";
-import { messages, reports, severityClasses, statusClasses, users } from "./staticData";
+import { AppButton, AppTable, SecureCard, TimelineWidget } from "../../components/ui";
+import { messages, reports, severityClasses, statusClasses, users } from "../staticData";
 
 export default function CaseDetailsPage({ caseId }) {
   const report = reports.find((item) => item.id === caseId) ?? reports[0];
