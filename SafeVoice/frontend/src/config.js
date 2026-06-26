@@ -12,9 +12,23 @@
  * calls the mock API (src/mock/mockApi.js) or the real HTTP client (src/services/api.js).
  */
 
-// Default to mock mode so the app is fully runnable with no backend. Set
-// VITE_USE_MOCK="false" in .env to talk to the real RegulaOne backend instead.
-export const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? "true") !== "false";
+// SafeVoice has TWO independent data switches, because authentication and feature
+// data become ready at different times:
+//
+//   USE_MOCK_AUTH — who is signed in. Defaults to REAL: access is decided entirely
+//     by the live /api/auth/me response (valid session → in, 401 → central login).
+//     There is NO mock auto-login. Set VITE_USE_MOCK_AUTH="true" only for an offline
+//     auth demo.
+//
+//   USE_MOCK_DATA — the feature data (reports, cases, messages, users, audit,
+//     settings). Defaults to MOCK, so the app stays fully usable while those backend
+//     endpoints are still being built and would otherwise return 404/500. Set
+//     VITE_USE_MOCK_DATA="false" once the real SafeVoice endpoints are live.
+//
+// This lets us run REAL login + MOCK feature data at the same time — exactly the
+// state during backend development.
+export const USE_MOCK_AUTH = (import.meta.env.VITE_USE_MOCK_AUTH ?? "false") === "true";
+export const USE_MOCK_DATA = (import.meta.env.VITE_USE_MOCK_DATA ?? "true") === "true";
 
 // How long the fake API waits before answering, in milliseconds. This lets us
 // see real loading spinners and skeletons during development.

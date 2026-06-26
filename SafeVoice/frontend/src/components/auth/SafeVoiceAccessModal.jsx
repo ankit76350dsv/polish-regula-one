@@ -9,7 +9,7 @@ export default function SafeVoiceAccessModal({ reason, onSignOut }) {
   const key = ["disabled", "module", "package", "permission"].includes(reason) ? reason : "module";
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
         <div className="bg-slate-900 px-6 py-3 flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-widest text-white/70">RegulaOne · SafeVoice</span>

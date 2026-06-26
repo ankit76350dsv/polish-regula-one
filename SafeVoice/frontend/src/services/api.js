@@ -23,6 +23,11 @@
 const REGULAONE_API_URL = import.meta.env.VITE_REGULAONE_API_URL ?? "http://localhost:8080";
 const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:1003";
 const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? "http://localhost:3000/login";
+// The central RegulaOne "create an organisation account" page. SafeVoice has no
+// sign-up form of its own, so the landing page's "Sign Up" button just sends the
+// visitor here. Defaults to /auth/signup on the same host as the central login.
+const CENTRAL_SIGNUP =
+  import.meta.env.VITE_CENTRAL_SIGNUP_URL ?? new URL("/auth/signup", CENTRAL_LOGIN).toString();
 
 // Where the central login sends the browser back to after a successful sign-in.
 export const SSO_CALLBACK_URL = `${APP_URL}/auth/sso-callback`;
@@ -228,6 +233,8 @@ export const api = {
   del: (path) => apiFetch(path, { method: "DELETE" }),
 };
 
-// Exposed so the logout flow can reach the central login as a last-resort fallback.
+// Exposed so the logout flow can reach the central login as a last-resort fallback,
+// and so the landing page can link its Login / Sign Up buttons at the central app.
 export const CENTRAL_LOGIN_URL = CENTRAL_LOGIN;
+export const CENTRAL_SIGNUP_URL = CENTRAL_SIGNUP;
 export const REGULAONE_API_BASE = REGULAONE_API_URL;

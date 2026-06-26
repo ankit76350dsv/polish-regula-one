@@ -48,7 +48,7 @@ export default function Login() {
   // Loop detected — explain instead of reloading forever.
   if (looped) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200">
           <div className="flex items-center gap-2 text-cyan-600">
             <Shield className="w-5 h-5" aria-hidden="true" />
@@ -90,7 +90,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
       <div className="text-center space-y-4">
         <div className="w-10 h-10 mx-auto border-4 border-cyan-600 border-t-transparent rounded-full animate-spin" />
         <p className="text-slate-700 text-sm font-medium">Redirecting to RegulaOne sign-in…</p>

@@ -58,7 +58,8 @@
     "intakeActive": "Intake active",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
-    "toggleNav": "Toggle navigation"
+    "toggleNav": "Toggle navigation",
+    "skipToContent": "Skip to content"
   },
   "footer": {
     "rights": "© {{year}} DSV Corporation — RegulaOne. All rights reserved.",
@@ -82,7 +83,9 @@
     "openLogin": "Open RegulaOne login",
     "errorTitle": "Could not verify your session",
     "errorBody": "Please try again in a moment.",
-    "signedInAs": "Signed in as"
+    "signedInAs": "Signed in as",
+    "signInRequiredTitle": "Sign in required",
+    "signInRequiredBody": "You must sign in to open the SafeVoice workspace."
   },
   "access": {
     "disabledTitle": "Your account is disabled",
@@ -99,7 +102,13 @@
     "notFoundTitle": "Page not found",
     "notFoundBody": "The page you are looking for does not exist or has moved.",
     "returnToPortal": "Return to public portal",
-    "goToDashboard": "Go to dashboard"
+    "goToDashboard": "Go to dashboard",
+    "invalidTenantTitle": "Organisation reporting link required",
+    "invalidTenantBody": "This report page must be opened through your organisation's own secure reporting link. Without it we cannot tell which company the report is for, so the form is not shown and nothing is submitted.",
+    "invalidTenantExampleLabel": "A valid reporting link looks like",
+    "invalidTenantHint": "Your organisation shares this link on notice boards, intranet pages, or your employment documents. Contact your employer or compliance officer if you cannot find it.",
+    "invalidTenantTrackCta": "Track an existing report",
+    "goHome": "Go to home"
   },
   "report": {
     "title": "Submit an anonymous report",
@@ -555,5 +564,56 @@
     "ROLE_SUPER_ADMIN": "Super Admin",
     "ROLE_ADMIN": "Administrator",
     "ROLE_USER": "User"
+  },
+  "landing": {
+    "tagline": "Whistleblower reporting & case management",
+    "badge": "EU Whistleblower Directive & Polish 2024 Act compliant",
+    "subtitle": "A secure, anonymous channel for reports — and one workspace to handle every case.",
+    "description": "SafeVoice connects RegulaOne SSO, encrypted anonymous intake, secure two-way messaging, role-based case handling, audit trails, and statutory retention into one compliant whistleblowing platform.",
+    "login": "Login",
+    "signup": "Sign Up",
+    "access": "Access SafeVoice",
+    "checkingSession": "Checking session",
+    "viewCapabilities": "View capabilities",
+    "heroLoginCta": "Login with RegulaOne SSO",
+    "registerOrg": "Register organisation",
+    "stat1Label": "Encryption",
+    "stat1Value": "AES-256",
+    "stat2Label": "Access",
+    "stat2Value": "SSO",
+    "stat3Label": "Hosting",
+    "stat3Value": "EEA",
+    "capabilitiesTitle": "Everything a compliant whistleblowing channel needs",
+    "capabilitiesSubtitle": "Built for the EU Whistleblower Directive (2019/1937) and Poland's 2024 Whistleblower Protection Act.",
+    "cap1Title": "Encrypted anonymous intake",
+    "cap1Desc": "Reports and attachments are encrypted (AES-256-GCM); reporters stay anonymous with a single secure access key.",
+    "cap2Title": "Secure two-way messaging",
+    "cap2Desc": "Follow up with the reporter through an encrypted channel without ever revealing their identity.",
+    "cap3Title": "Audit trail & retention",
+    "cap3Desc": "Every action is logged in an immutable trail, with statutory retention windows kept ready for inspection.",
+    "cap4Title": "Role-based access",
+    "cap4Desc": "SSO sign-in with backend-enforced SafeVoice roles, tenant isolation, and least-privilege navigation.",
+    "panelTitle": "Secure intake console",
+    "panelSubtitle": "Anonymous report lifecycle",
+    "panelStatusLabel": "Channel active",
+    "panelPostureTitle": "Security posture",
+    "panelPostureSubtitle": "Tenant-scoped case operations",
+    "metricEncryption": "Encryption",
+    "metricRetention": "Retention",
+    "metricResidency": "Data residency",
+    "metricAccess": "Access",
+    "stage1Title": "Report",
+    "stage1Detail": "Submitted anonymously",
+    "stage2Title": "Encrypted",
+    "stage2Detail": "Sealed at rest",
+    "stage3Title": "Triage",
+    "stage3Detail": "Assigned to a handler",
+    "stage4Title": "Resolved",
+    "stage4Detail": "Outcome recorded & retained",
+    "vaultTitle": "Identity stays protected",
+    "vaultDesc": "Reporter identity and metadata are never exposed to case handlers — anonymity is enforced by design.",
+    "complianceEu": "EU Directive 2019/1937",
+    "complianceGdpr": "GDPR / RODO encrypted",
+    "compliancePl": "Polish & English"
   }
 }

@@ -32,7 +32,7 @@ export function PublicLayout({ navigate, currentPath, children }) {
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-4">
           <button
             type="button"
-            onClick={() => navigate("/report")}
+            onClick={() => navigate("/")}
             className="flex items-center gap-2 text-cyan-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded"
           >
             <Shield className="w-5 h-5 shrink-0" aria-hidden="true" />

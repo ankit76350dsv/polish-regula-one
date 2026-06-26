@@ -58,7 +58,8 @@
     "intakeActive": "Przyjmowanie zgłoszeń aktywne",
     "collapse": "Zwiń panel boczny",
     "expand": "Rozwiń panel boczny",
-    "toggleNav": "Przełącz nawigację"
+    "toggleNav": "Przełącz nawigację",
+    "skipToContent": "Przejdź do treści"
   },
   "footer": {
     "rights": "© {{year}} DSV Corporation — RegulaOne. Wszelkie prawa zastrzeżone.",
@@ -82,7 +83,9 @@
     "openLogin": "Otwórz logowanie RegulaOne",
     "errorTitle": "Nie udało się zweryfikować sesji",
     "errorBody": "Spróbuj ponownie za chwilę.",
-    "signedInAs": "Zalogowano jako"
+    "signedInAs": "Zalogowano jako",
+    "signInRequiredTitle": "Wymagane logowanie",
+    "signInRequiredBody": "Aby otworzyć obszar roboczy SafeVoice, musisz się zalogować."
   },
   "access": {
     "disabledTitle": "Twoje konto jest zablokowane",
@@ -99,7 +102,13 @@
     "notFoundTitle": "Nie znaleziono strony",
     "notFoundBody": "Szukana strona nie istnieje lub została przeniesiona.",
     "returnToPortal": "Wróć do portalu publicznego",
-    "goToDashboard": "Przejdź do pulpitu"
+    "goToDashboard": "Przejdź do pulpitu",
+    "invalidTenantTitle": "Wymagany link zgłoszeniowy organizacji",
+    "invalidTenantBody": "Tę stronę zgłoszenia należy otworzyć przez własny bezpieczny link zgłoszeniowy Twojej organizacji. Bez niego nie możemy ustalić, której firmy dotyczy zgłoszenie, dlatego formularz nie jest wyświetlany i nic nie jest wysyłane.",
+    "invalidTenantExampleLabel": "Prawidłowy link zgłoszeniowy wygląda tak",
+    "invalidTenantHint": "Twoja organizacja udostępnia ten link na tablicach ogłoszeń, w intranecie lub w dokumentach pracowniczych. Skontaktuj się z pracodawcą lub specjalistą ds. zgodności, jeśli nie możesz go znaleźć.",
+    "invalidTenantTrackCta": "Śledź istniejące zgłoszenie",
+    "goHome": "Przejdź do strony głównej"
   },
   "report": {
     "title": "Złóż anonimowe zgłoszenie",
@@ -557,5 +566,56 @@
     "ROLE_SUPER_ADMIN": "Super Administrator",
     "ROLE_ADMIN": "Administrator",
     "ROLE_USER": "Użytkownik"
+  },
+  "landing": {
+    "tagline": "Zgłoszenia sygnalistów i zarządzanie sprawami",
+    "badge": "Zgodne z dyrektywą UE o sygnalistach i ustawą z 2024 r.",
+    "subtitle": "Bezpieczny, anonimowy kanał zgłoszeń — i jedno miejsce do obsługi każdej sprawy.",
+    "description": "SafeVoice łączy logowanie RegulaOne SSO, szyfrowane anonimowe zgłoszenia, bezpieczną dwukierunkową komunikację, obsługę spraw opartą na rolach, ścieżki audytu i ustawowe okresy przechowywania w jednej zgodnej platformie dla sygnalistów.",
+    "login": "Zaloguj się",
+    "signup": "Załóż konto",
+    "access": "Przejdź do SafeVoice",
+    "checkingSession": "Sprawdzanie sesji",
+    "viewCapabilities": "Zobacz możliwości",
+    "heroLoginCta": "Zaloguj się przez RegulaOne SSO",
+    "registerOrg": "Zarejestruj organizację",
+    "stat1Label": "Szyfrowanie",
+    "stat1Value": "AES-256",
+    "stat2Label": "Dostęp",
+    "stat2Value": "SSO",
+    "stat3Label": "Hosting",
+    "stat3Value": "EOG",
+    "capabilitiesTitle": "Wszystko, czego potrzebuje zgodny kanał dla sygnalistów",
+    "capabilitiesSubtitle": "Zbudowane zgodnie z dyrektywą UE 2019/1937 i polską ustawą o ochronie sygnalistów z 2024 r.",
+    "cap1Title": "Szyfrowane anonimowe zgłoszenia",
+    "cap1Desc": "Zgłoszenia i załączniki są szyfrowane (AES-256-GCM); zgłaszający pozostają anonimowi dzięki jednemu bezpiecznemu kluczowi dostępu.",
+    "cap2Title": "Bezpieczna dwukierunkowa komunikacja",
+    "cap2Desc": "Kontaktuj się ze zgłaszającym przez szyfrowany kanał, nigdy nie ujawniając jego tożsamości.",
+    "cap3Title": "Ścieżka audytu i retencja",
+    "cap3Desc": "Każde działanie jest zapisywane w niezmienialnej ścieżce audytu, z ustawowymi okresami przechowywania gotowymi do kontroli.",
+    "cap4Title": "Dostęp oparty na rolach",
+    "cap4Desc": "Logowanie SSO z rolami SafeVoice egzekwowanymi po stronie serwera, izolacją najemców i nawigacją według najmniejszych uprawnień.",
+    "panelTitle": "Bezpieczna konsola zgłoszeń",
+    "panelSubtitle": "Cykl życia anonimowego zgłoszenia",
+    "panelStatusLabel": "Kanał aktywny",
+    "panelPostureTitle": "Stan bezpieczeństwa",
+    "panelPostureSubtitle": "Obsługa spraw w obrębie najemcy",
+    "metricEncryption": "Szyfrowanie",
+    "metricRetention": "Retencja",
+    "metricResidency": "Lokalizacja danych",
+    "metricAccess": "Dostęp",
+    "stage1Title": "Zgłoszenie",
+    "stage1Detail": "Przesłane anonimowo",
+    "stage2Title": "Zaszyfrowane",
+    "stage2Detail": "Zabezpieczone w spoczynku",
+    "stage3Title": "Triage",
+    "stage3Detail": "Przydzielone do osoby obsługującej",
+    "stage4Title": "Rozwiązane",
+    "stage4Detail": "Wynik zapisany i przechowywany",
+    "vaultTitle": "Tożsamość pozostaje chroniona",
+    "vaultDesc": "Tożsamość i metadane zgłaszającego nigdy nie są ujawniane osobom obsługującym sprawy — anonimowość jest zapewniona w samym projekcie.",
+    "complianceEu": "Dyrektywa UE 2019/1937",
+    "complianceGdpr": "Szyfrowanie RODO / GDPR",
+    "compliancePl": "Polski i angielski"
   }
 }

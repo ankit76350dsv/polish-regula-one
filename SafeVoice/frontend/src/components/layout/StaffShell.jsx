@@ -11,15 +11,23 @@ import { AppSidebar } from "./AppSidebar";
 import { MobileNavigation } from "./MobileNavigation";
 import { SiteFooter } from "./SiteFooter";
 import { AuthGate } from "../auth";
-import { USE_MOCK } from "../../config";
+import { USE_MOCK_AUTH } from "../../config";
 import { tryRefreshSession } from "../../services/api";
-import { initSession, signOut, ssoLoopDetected, selectCurrentUser, selectIsAuthenticated } from "../../slices/authSlice";
+import {
+  initSession,
+  signOut,
+  ssoLoopDetected,
+  selectAuthStatus,
+  selectCurrentUser,
+  selectIsAuthenticated,
+} from "../../slices/authSlice";
 import { isStaffSection, toBrowserPath } from "../../utils/routing";
 
 const SSO_CALLBACK_PATH = "/auth/sso-callback";
 
 export function StaffShell({ currentPath, navigate, children }) {
   const dispatch = useDispatch();
+  const status = useSelector(selectAuthStatus);
   const user = useSelector(selectCurrentUser);
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const tenantId = user?.tenantId ?? "";
@@ -27,10 +35,13 @@ export function StaffShell({ currentPath, navigate, children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Verify the SSO session once on entering the staff world.
+  // Verify the SSO session. We only kick it off when it has not run yet ("idle")
+  // so /api/auth/me is called at most once for the whole app — the landing page may
+  // already have verified it, in which case we reuse that cached result. The
+  // AuthGate's "Try again" still works because the thunk allows a manual re-check.
   useEffect(() => {
-    dispatch(initSession());
-  }, [dispatch]);
+    if (status === "idle") dispatch(initSession());
+  }, [dispatch, status]);
 
   // Endless-redirect-loop guard from services/api.js.
   useEffect(() => {
@@ -41,7 +52,7 @@ export function StaffShell({ currentPath, navigate, children }) {
 
   // Silent token refresh every 55 minutes while signed in (real backend only).
   useEffect(() => {
-    if (!isAuthenticated || USE_MOCK) return;
+    if (!isAuthenticated || USE_MOCK_AUTH) return;
     const timer = setInterval(() => tryRefreshSession(), 55 * 60 * 1000);
     return () => clearInterval(timer);
   }, [isAuthenticated]);
@@ -70,46 +81,51 @@ export function StaffShell({ currentPath, navigate, children }) {
 
   const handleLogout = () => dispatch(signOut());
 
+  // The whole staff chrome (sidebar + navbar + content) is wrapped in <AuthGate>.
+  // Until the session is verified AND the user is allowed into SafeVoice, AuthGate
+  // renders only its own full-screen state (spinner / login redirect / access modal)
+  // and the chrome below is NEVER mounted — so an unauthenticated or blocked visitor
+  // never even sees the navigation. This matches KSeFFlow's ProtectedRoute → Workspace.
   return (
-    <div className="bg-slate-50 text-slate-900 font-sans h-screen flex overflow-hidden antialiased">
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-3 focus:left-3 focus:bg-cyan-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"
-      >
-        Skip to content
-      </a>
+    <AuthGate>
+      <div className="bg-slate-50 text-slate-900 font-sans h-screen flex overflow-hidden antialiased">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-3 focus:left-3 focus:bg-cyan-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"
+        >
+          Skip to content
+        </a>
 
-      <AppSidebar
-        currentPath={currentPath}
-        navigate={navigate}
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        user={user}
-        onLogout={handleLogout}
-        tenantId={tenantId}
-      />
+        <AppSidebar
+          currentPath={currentPath}
+          navigate={navigate}
+          collapsed={collapsed}
+          setCollapsed={setCollapsed}
+          user={user}
+          onLogout={handleLogout}
+          tenantId={tenantId}
+        />
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="shrink-0">
-          <AppNavbar
-            currentPath={currentPath}
-            navigate={navigate}
-            mobileOpen={mobileOpen}
-            setMobileOpen={setMobileOpen}
-            user={user}
-            onLogout={handleLogout}
-            tenantId={tenantId}
-          />
-          <MobileNavigation currentPath={currentPath} navigate={navigate} open={mobileOpen} close={() => setMobileOpen(false)} tenantId={tenantId} user={user} />
-        </div>
-
-        <main id="main-content" className="flex-1 overflow-y-auto flex flex-col">
-          <div className="p-4 md:p-6 lg:p-8 w-full mx-auto flex-1">
-            <AuthGate>{children}</AuthGate>
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="shrink-0">
+            <AppNavbar
+              currentPath={currentPath}
+              navigate={navigate}
+              mobileOpen={mobileOpen}
+              setMobileOpen={setMobileOpen}
+              user={user}
+              onLogout={handleLogout}
+              tenantId={tenantId}
+            />
+            <MobileNavigation currentPath={currentPath} navigate={navigate} open={mobileOpen} close={() => setMobileOpen(false)} tenantId={tenantId} user={user} />
           </div>
-          <SiteFooter navigate={navigate} />
-        </main>
+
+          <main id="main-content" className="flex-1 overflow-y-auto flex flex-col">
+            <div className="p-4 md:p-6 lg:p-8 w-full mx-auto flex-1">{children}</div>
+            <SiteFooter navigate={navigate} />
+          </main>
+        </div>
       </div>
-    </div>
+    </AuthGate>
   );
 }

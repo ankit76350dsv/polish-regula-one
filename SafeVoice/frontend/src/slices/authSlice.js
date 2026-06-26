@@ -11,13 +11,45 @@
  */
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { fetchMe, logout } from "../services/authService";
-import { clearSsoRedirectGuard, CENTRAL_LOGIN_URL, SSO_CALLBACK_URL } from "../services/api";
-import { USE_MOCK } from "../config";
+import {
+  clearSsoRedirectGuard,
+  redirectToLogin,
+  CENTRAL_LOGIN_URL,
+  SSO_CALLBACK_URL,
+} from "../services/api";
+import { USE_MOCK_AUTH } from "../config";
 import mockApi from "../mock/mockApi";
 
 // How long we wait for /api/auth/me before treating the backend as unreachable.
 // Without this, a dead/wrong-host backend leaves the app stuck on the spinner forever.
 const ME_TIMEOUT_MS = 8000;
+
+// ── Mock "session" (development only) ─────────────────────────────────────────
+// In mock mode there is no real SSO server, but we still want the app to behave
+// like production: just opening a staff URL must NOT log you in automatically.
+// So we keep a tiny per-tab flag that says "the demo user has signed in". Until
+// that flag is set, the mock session check reports "not signed in" — exactly like
+// arriving at the real app with no cookie. Signing in (signIn) sets it; signing
+// out clears it. We use sessionStorage so a page refresh keeps you signed in
+// within the same tab, but a fresh tab / direct link starts logged out.
+const MOCK_SESSION_KEY = "safevoice_mock_session";
+
+function mockSessionActive() {
+  try {
+    return sessionStorage.getItem(MOCK_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setMockSession(active) {
+  try {
+    if (active) sessionStorage.setItem(MOCK_SESSION_KEY, "1");
+    else sessionStorage.removeItem(MOCK_SESSION_KEY);
+  } catch {
+    /* sessionStorage may be unavailable (private mode) — ignore */
+  }
+}
 
 // ── Thunks ────────────────────────────────────────────────────────────────────
 
@@ -32,10 +64,13 @@ const ME_TIMEOUT_MS = 8000;
 export const initSession = createAsyncThunk(
   "auth/initSession",
   async (_arg, { rejectWithValue }) => {
-    // MOCK MODE: there is no real SSO backend while we build the UI, so we return
-    // a fixed staff user. Flip VITE_USE_MOCK=false to use the real RegulaOne SSO.
-    if (USE_MOCK) {
-      return mockApi.me();
+    // MOCK MODE: there is no real SSO backend while we build the UI. We only return
+    // the demo user if a mock sign-in has actually happened — otherwise we report
+    // "not signed in", so a staff URL opened without logging in is denied just like
+    // in production. Flip VITE_USE_MOCK=false to use the real RegulaOne SSO instead.
+    if (USE_MOCK_AUTH) {
+      if (mockSessionActive()) return mockApi.me();
+      return rejectWithValue({ kind: "unauthenticated" });
     }
 
     // Guard against a dead / slow / wrong-IP backend.
@@ -62,6 +97,44 @@ export const initSession = createAsyncThunk(
       clearTimeout(timeout);
     }
   },
+  {
+    // Optimise API usage (one /me per app load, no polling): skip the network call
+    // when a check is already in flight or the session is already verified. This is
+    // what lets the landing page AND the staff area both ask for the session without
+    // ever firing /api/auth/me twice. A real "Try again" still works because the
+    // status is "error"/"unauthenticated" by then, which this condition allows.
+    condition: (_arg, { getState }) => {
+      const status = getState().auth.status;
+      return status !== "loading" && status !== "authenticated";
+    },
+  },
+);
+
+/**
+ * Sign in.
+ *   MOCK MODE: there is no login form — establish the mock session flag and load
+ *   the demo profile, so the user is now authenticated (and staff routes open up).
+ *   REAL MODE: there is no in-app login either — hand off to the central RegulaOne
+ *   login page (the browser leaves), exactly like the SSO redirect everywhere else.
+ */
+export const signIn = createAsyncThunk(
+  "auth/signIn",
+  async (_arg, { rejectWithValue }) => {
+    if (USE_MOCK_AUTH) {
+      setMockSession(true);
+      return mockApi.me();
+    }
+    redirectToLogin();
+    // The browser is navigating away; keep us "not signed in" until it returns.
+    return rejectWithValue({ kind: "unauthenticated" });
+  },
+  {
+    // Don't start a second sign-in while one is running or already done.
+    condition: (_arg, { getState }) => {
+      const status = getState().auth.status;
+      return status !== "loading" && status !== "authenticated";
+    },
+  },
 );
 
 /**
@@ -70,9 +143,12 @@ export const initSession = createAsyncThunk(
  * is never left in a half-signed-out state.
  */
 export const signOut = createAsyncThunk("auth/signOut", async () => {
-  // MOCK MODE: there is no central app to bounce to, so we just clear the session
-  // in state (the reducer below sets status → 'unauthenticated') and stay put.
-  if (USE_MOCK) return true;
+  // MOCK MODE: clear the mock session flag so the user is genuinely logged out
+  // (the reducer below sets status → 'unauthenticated') and stay put.
+  if (USE_MOCK_AUTH) {
+    setMockSession(false);
+    return true;
+  }
 
   let logoutUrl = null;
   try {
@@ -132,6 +208,21 @@ const authSlice = createSlice({
           state.status = "unauthenticated";
           state.error = null;
         }
+        state.user = null;
+      })
+      // Sign-in: same state transitions as a session check. In mock mode this is
+      // the actual "login"; in real mode signIn redirects away and rejects.
+      .addCase(signIn.pending, (state) => {
+        state.status = "loading";
+        state.error = null;
+      })
+      .addCase(signIn.fulfilled, (state, action) => {
+        state.status = "authenticated";
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(signIn.rejected, (state) => {
+        state.status = "unauthenticated";
         state.user = null;
       })
       // In mock mode signing out clears the session here (no central redirect).

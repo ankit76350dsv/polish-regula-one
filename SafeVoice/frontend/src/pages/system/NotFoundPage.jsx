@@ -13,12 +13,15 @@ export default function NotFoundPage({ navigate }) {
             <Compass className="w-6 h-6" aria-hidden="true" />
           </div>
           <p>{t("access.notFoundBody")}</p>
+          {/* "Go home" works from any world (public or staff); "Track report" is a
+              public-safe action. We avoid linking straight to a staff page so a
+              mistyped public URL never forces an unnecessary login. */}
           <div className="flex flex-wrap gap-2">
-            <AppButton type="button" variant="primary" onClick={() => navigate("/dashboard")}>
-              {t("access.goToDashboard")}
+            <AppButton type="button" variant="primary" onClick={() => navigate("/")}>
+              {t("access.goHome")}
             </AppButton>
-            <AppButton type="button" variant="outline" onClick={() => navigate("/report")}>
-              {t("access.returnToPortal")}
+            <AppButton type="button" variant="outline" onClick={() => navigate("/track")}>
+              {t("nav.trackReport")}
             </AppButton>
           </div>
         </div>

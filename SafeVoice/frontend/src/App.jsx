@@ -8,6 +8,8 @@ import {
   CaseManagementPage,
   CentralEncryptedInboxPage,
   ComplianceSettingsPage,
+  InvalidTenantPage,
+  LandingPage,
   NotFoundPage,
   PublicReportPortal,
   ReportSuccessPage,
@@ -55,7 +57,9 @@ const PUBLIC_PATHS = new Set([
 ]);
 
 function normalizePath(pathname) {
-  if (!pathname || pathname === "/") return "/report";
+  // Root is the public landing page (the app's front door), exactly like KSeFFlow
+  // and RegulaOne. Everything else keeps its own path.
+  if (!pathname || pathname === "/") return "/";
   return pathname;
 }
 
@@ -74,6 +78,7 @@ function SsoCallbackPending() {
 
 // Document <title> per route, so browser history/tabs are meaningful.
 const TITLE_KEYS = {
+  // "/" (landing) intentionally omitted → the default "SafeVoice" title is used.
   "/report": "report.title",
   "/report/success": "success.title",
   "/track": "track.title",
@@ -137,7 +142,15 @@ export default function App() {
 
   // Resolve the page + which "world" (chrome) it belongs in.
   const { element, world } = useMemo(() => {
-    // Standalone anonymous report deep link: /company/{tenantId}/report
+    // Landing page (the public front door). It is its own "world": full-page, with
+    // no public/staff chrome around it. It is the only public page that looks at the
+    // session — to decide between Login/Sign Up and "Access SafeVoice".
+    if (currentPath === "/") {
+      return { element: <LandingPage navigate={navigate} />, world: "landing" };
+    }
+
+    // Standalone anonymous report deep link: /company/{tenantId}/report — the only
+    // way to submit a report, because the report MUST be tied to one organisation.
     if (standaloneReportTenant) {
       return { element: <PublicReportPortal tenantId={standaloneReportTenant} navigate={navigate} />, world: "public" };
     }
@@ -145,7 +158,9 @@ export default function App() {
     // Public, no-login pages.
     if (PUBLIC_PATHS.has(currentPath)) {
       const map = {
-        "/report": <PublicReportPortal navigate={navigate} />,
+        // Bare /report has no organisation id, so we never show the form or call the
+        // submit API — we show the Invalid Tenant page instead (see InvalidTenantPage).
+        "/report": <InvalidTenantPage navigate={navigate} />,
         "/report/success": <ReportSuccessPage navigate={navigate} />,
         "/track": <TrackCasePage navigate={navigate} />,
         "/privacy": <PrivacyNoticePage navigate={navigate} />,
@@ -194,7 +209,10 @@ export default function App() {
 
   return (
     <>
-      {world === "public" ? (
+      {world === "landing" ? (
+        // The landing page is self-contained (own header + footer) — render it bare.
+        element
+      ) : world === "public" ? (
         <PublicLayout navigate={navigate} currentPath={currentPath}>
           {element}
         </PublicLayout>
@@ -206,7 +224,8 @@ export default function App() {
 
       {/* Global chrome available in every world. */}
       <ToastHost />
-      {world === "public" && <CookieBanner navigate={navigate} />}
+      {/* Cookie consent must appear on every public-facing surface (GDPR transparency). */}
+      {(world === "landing" || world === "public") && <CookieBanner navigate={navigate} />}
     </>
   );
 }
