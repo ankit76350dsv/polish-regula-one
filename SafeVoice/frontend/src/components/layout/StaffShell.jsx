@@ -100,7 +100,7 @@ export function StaffShell({ currentPath, navigate, children }) {
             onLogout={handleLogout}
             tenantId={tenantId}
           />
-          <MobileNavigation currentPath={currentPath} navigate={navigate} open={mobileOpen} close={() => setMobileOpen(false)} tenantId={tenantId} />
+          <MobileNavigation currentPath={currentPath} navigate={navigate} open={mobileOpen} close={() => setMobileOpen(false)} tenantId={tenantId} user={user} />
         </div>
 
         <main id="main-content" className="flex-1 overflow-y-auto flex flex-col">

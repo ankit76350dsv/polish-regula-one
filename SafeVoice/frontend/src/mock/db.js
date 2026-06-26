@@ -224,20 +224,14 @@ export const messages = [
   },
 ];
 
+// Authorised personnel. Their `role` is a SAFEVOICE_* permission code, exactly as
+// it appears in the RegulaOne /me permissions array.
 export const users = [
-  { id: "usr-1", name: "Jan Kowalski", email: "jan.kowalski@regulaone.pl", role: "Super Admin", status: "Active", mfaRequired: true, lastLoginReview: "2026-06-14 09:12" },
-  { id: "usr-2", name: "Zofia Wiśniewska", email: "zofia.wisniewska@regulaone.pl", role: "Compliance Officer", status: "Active", mfaRequired: true, lastLoginReview: "2026-06-16 08:45" },
-  { id: "usr-3", name: "Tomasz Wójcik", email: "tomasz.wojcik@regulaone.pl", role: "Investigator", status: "Active", mfaRequired: true, lastLoginReview: "2026-06-15 11:20" },
-  { id: "usr-4", name: "Katarzyna Mazur", email: "katarzyna.mazur@regulaone.pl", role: "HR Manager", status: "Active", mfaRequired: true, lastLoginReview: "2026-06-12 10:02" },
-  { id: "usr-5", name: "Andrzej Kamiński", email: "andrzej.kaminski@external-audit.eu", role: "Auditor", status: "Pending", mfaRequired: true, lastLoginReview: "Not activated" },
-];
-
-export const rolePermissions = [
-  { role: "Super Admin", viewReports: true, assignCases: true, closeCases: true, exportData: true, accessAudits: true, manageUsers: true, manageRetention: true },
-  { role: "Compliance Officer", viewReports: true, assignCases: true, closeCases: true, exportData: false, accessAudits: true, manageUsers: false, manageRetention: true },
-  { role: "Investigator", viewReports: true, assignCases: false, closeCases: false, exportData: false, accessAudits: false, manageUsers: false, manageRetention: false },
-  { role: "HR Manager", viewReports: true, assignCases: false, closeCases: false, exportData: false, accessAudits: false, manageUsers: false, manageRetention: false },
-  { role: "Auditor", viewReports: true, assignCases: false, closeCases: false, exportData: true, accessAudits: true, manageUsers: false, manageRetention: false },
+  { id: "usr-1", name: "Jan Kowalski", email: "jan.kowalski@regulaone.pl", role: "SAFEVOICE_TENANT_ADMIN", status: "Active", mfaRequired: true, lastLoginReview: "2026-06-14 09:12" },
+  { id: "usr-2", name: "Zofia Wiśniewska", email: "zofia.wisniewska@regulaone.pl", role: "SAFEVOICE_COMPLIANCE_OFFICER", status: "Active", mfaRequired: true, lastLoginReview: "2026-06-16 08:45" },
+  { id: "usr-3", name: "Tomasz Wójcik", email: "tomasz.wojcik@regulaone.pl", role: "SAFEVOICE_INVESTIGATOR", status: "Active", mfaRequired: true, lastLoginReview: "2026-06-15 11:20" },
+  { id: "usr-4", name: "Katarzyna Mazur", email: "katarzyna.mazur@regulaone.pl", role: "SAFEVOICE_HR_MANAGER", status: "Active", mfaRequired: true, lastLoginReview: "2026-06-12 10:02" },
+  { id: "usr-5", name: "Andrzej Kamiński", email: "andrzej.kaminski@external-audit.eu", role: "SAFEVOICE_AUDITOR", status: "Pending", mfaRequired: true, lastLoginReview: "Not activated" },
 ];
 
 export const auditLogs = [
@@ -285,19 +279,36 @@ export const complianceReview = [
   { area: "Retention", feature: "Retention and legal hold controls", decision: "Add", justification: "Closed cases need visible retention state, deletion scheduling, and legal hold status.", risk: "Keeping reports longer than needed conflicts with storage limitation." },
 ];
 
-// The mock signed-in staff user (used when USE_MOCK is on, so the staff area is
-// reachable without a real RegulaOne SSO backend).
-export const mockCurrentUser = {
-  name: "Zofia Wiśniewska",
-  email: "zofia.wisniewska@regulaone.pl",
-  role: "Compliance Officer",
-  permissions: ["viewReports", "assignCases", "closeCases", "accessAudits", "manageRetention"],
-  tenantId: "T-REGULAONE-PL",
-  tenantName: "RegulaOne Poland",
+// The mock signed-in profile, in the EXACT shape RegulaOne's /me endpoint returns
+// (so mock mode mirrors production). It is run through normalizeUser() just like a
+// real response. This mirrors the sample DSV TEAM admin profile, which holds every
+// SAFEVOICE_* role. To preview how the UI restricts a less-privileged user, trim
+// this `permissions` array (e.g. keep only "SAFEVOICE_INVESTIGATOR").
+export const mockMeProfile = {
+  id: "6a34c9f69d71d550dff0c3b5",
+  name: "Ankit Kumar",
+  email: "ankit@dsvcorp.com.au",
+  role: "ROLE_ADMIN",
   enabled: true,
-  moduleIds: ["SAFEVOICE"],
+  tenantId: "6a34ca2d9d71d550dff0c3b6",
+  tenantName: "DSV TEAM",
+  tenantStatus: "ACTIVE",
+  packageId: "6a0466e9361d1caa88cba7ed",
+  moduleIds: ["WORKPULSE", "SAFEWORK", "WASTESYNC", "PRIVACYPILOT", "KSEFFLOW", "SAFEVOICE"],
+  permissions: [
+    "KSEF_TENANT_ADMIN",
+    "KSEF_CASE_MANAGER",
+    "KSEF_COMPLIANCE_OFFICER",
+    "KSEF_AUDITOR",
+    "KSEF_EMPLOYEE",
+    "SAFEVOICE_TENANT_ADMIN",
+    "SAFEVOICE_COMPLIANCE_OFFICER",
+    "SAFEVOICE_INVESTIGATOR",
+    "SAFEVOICE_HR_MANAGER",
+    "SAFEVOICE_AUDITOR",
+  ],
   planExpired: false,
-  planExpiresAt: "2027-01-01",
+  planExpiresAt: "2026-07-19T10:18:45.616",
 };
 
 // Tailwind class maps for status / severity chips (kept with the data they describe).

@@ -91,6 +91,8 @@
     "moduleBody": "Your organisation's subscription does not include the SafeVoice whistleblower module. Add it in RegulaOne to gain access.",
     "packageTitle": "Subscription expired",
     "packageBody": "Your organisation's subscription has expired, so access to SafeVoice is paused. Renew the plan in RegulaOne to restore access.",
+    "permissionTitle": "No SafeVoice role assigned",
+    "permissionBody": "Your account does not have any SafeVoice role yet. Ask your administrator to grant a SafeVoice permission (for example Investigator or Compliance Officer).",
     "needHelp": "Need help? Contact your RegulaOne administrator.",
     "deniedTitle": "Access denied",
     "deniedBody": "You do not have permission to view this page. If you believe this is a mistake, contact your administrator.",
@@ -545,12 +547,13 @@
     "Critical": "Critical"
   },
   "roles": {
-    "Super Admin": "Super Admin",
-    "Company Admin": "Company Admin",
-    "Compliance Officer": "Compliance Officer",
-    "Investigator": "Investigator",
-    "HR Manager": "HR Manager",
-    "Auditor": "Auditor",
-    "Case Handler": "Case Handler"
+    "SAFEVOICE_TENANT_ADMIN": "Tenant Admin",
+    "SAFEVOICE_COMPLIANCE_OFFICER": "Compliance Officer",
+    "SAFEVOICE_INVESTIGATOR": "Investigator",
+    "SAFEVOICE_HR_MANAGER": "HR Manager",
+    "SAFEVOICE_AUDITOR": "Auditor",
+    "ROLE_SUPER_ADMIN": "Super Admin",
+    "ROLE_ADMIN": "Administrator",
+    "ROLE_USER": "User"
   }
 }

@@ -14,6 +14,7 @@
 import { MOCK_LATENCY_MS } from "../config";
 import * as seed from "./db";
 import { caseRefFromHash, generateAccessKey, sha256Hex } from "../utils/accessKey";
+import { normalizeUser, ROLE_PERMISSION_ROWS } from "../utils/permissions";
 
 // ── In-memory store ──────────────────────────────────────────────────────────
 // We deep-clone the seed so edits during a session never mutate the source data.
@@ -60,7 +61,8 @@ function pushAudit(entry) {
 export const mockApi = {
   async me() {
     await wait(300);
-    return structuredClone(seed.mockCurrentUser);
+    // Same normalisation the real auth service runs on a /me response.
+    return normalizeUser(structuredClone(seed.mockMeProfile));
   },
 
   // ── Public report submission ──────────────────────────────────────────────
@@ -217,7 +219,7 @@ export const mockApi = {
   // ── Users & permissions ─────────────────────────────────────────────────
   async listUsers() {
     await wait();
-    return { users: structuredClone(store.users), rolePermissions: structuredClone(seed.rolePermissions) };
+    return { users: structuredClone(store.users), rolePermissions: structuredClone(ROLE_PERMISSION_ROWS) };
   },
 
   async inviteUser({ name, email, role }) {

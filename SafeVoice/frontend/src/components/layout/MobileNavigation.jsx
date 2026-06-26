@@ -3,15 +3,19 @@
 import { useTranslation } from "react-i18next";
 import { publicRoutes, staffRoutes } from "./navRoutes";
 import { toBrowserPath, toPublicReportPath } from "../../utils/routing";
+import { can } from "../../utils/permissions";
 
-export function MobileNavigation({ currentPath, navigate, open, close, tenantId }) {
+export function MobileNavigation({ currentPath, navigate, open, close, tenantId, user }) {
   const { t } = useTranslation();
   if (!open) return null;
+
+  // Hide staff links the user's permissions don't grant.
+  const visibleStaff = staffRoutes.filter((item) => !item.cap || can(user, item.cap));
 
   return (
     <div className="lg:hidden border-b border-slate-200 bg-white px-4 py-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {[...publicRoutes, ...staffRoutes].map((item) => {
+        {[...publicRoutes, ...visibleStaff].map((item) => {
           const opensReportTab = item.newTab && Boolean(tenantId);
           const Icon = item.icon;
           return (

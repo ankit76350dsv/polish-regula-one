@@ -29,6 +29,7 @@ import { ToastHost } from "./components/ui";
 import { CookieBanner } from "./components/compliance/CookieBanner";
 import { selectCurrentUser } from "./slices/authSlice";
 import { selectTheme } from "./slices/uiSlice";
+import { can, requiredCapabilityForPath } from "./utils/permissions";
 import {
   getStandaloneReportTenant,
   isStaffSection,
@@ -180,6 +181,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPath, tenantId, standaloneReportTenant]);
 
+  // Permission guard: if a signed-in user opens a staff page they lack the
+  // capability for, show Access denied instead. (While unauthenticated, user is
+  // null and AuthGate handles the spinner/login, so we don't gate prematurely.)
+  const requiredCap = world === "staff" ? requiredCapabilityForPath(currentPath) : null;
+  const guardedElement =
+    world === "staff" && user && requiredCap && !can(user, requiredCap) ? (
+      <AccessDeniedPage navigate={navigate} />
+    ) : (
+      element
+    );
+
   return (
     <>
       {world === "public" ? (
@@ -188,7 +200,7 @@ export default function App() {
         </PublicLayout>
       ) : (
         <StaffShell currentPath={currentPath} navigate={navigate}>
-          {element}
+          {guardedElement}
         </StaffShell>
       )}
 

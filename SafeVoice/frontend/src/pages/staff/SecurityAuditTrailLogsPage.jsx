@@ -5,12 +5,15 @@ import { ChevronRight, Download, Search } from "lucide-react";
 import { AppButton, AppTable, ConfirmDialog, EmptyState, ErrorState, PageSpinner } from "../../components/ui";
 import { fetchAudit, selectAuditLogs, selectAuditStatus } from "../../slices/auditSlice";
 import { addToast } from "../../slices/uiSlice";
+import { selectCurrentUser } from "../../slices/authSlice";
+import { can } from "../../utils/permissions";
 
 export default function SecurityAuditTrailLogsPage() {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const logs = useSelector(selectAuditLogs);
   const status = useSelector(selectAuditStatus);
+  const canExport = can(useSelector(selectCurrentUser), "exportData");
   const [query, setQuery] = useState("");
   const [confirmExport, setConfirmExport] = useState(false);
 
@@ -36,9 +39,11 @@ export default function SecurityAuditTrailLogsPage() {
           <h1 className="text-lg font-bold text-slate-900 tracking-tight">{t("audit.title")}</h1>
           <p className="text-xs text-slate-500 mt-1">{t("audit.subtitle")}</p>
         </div>
-        <AppButton type="button" variant="outline" icon={<Download className="w-4 h-4" />} onClick={() => setConfirmExport(true)}>
-          {t("audit.export")}
-        </AppButton>
+        {canExport && (
+          <AppButton type="button" variant="outline" icon={<Download className="w-4 h-4" />} onClick={() => setConfirmExport(true)}>
+            {t("audit.export")}
+          </AppButton>
+        )}
       </div>
 
       <div className="flex flex-col md:flex-row items-center gap-4 bg-white p-4 rounded-lg border border-slate-200 justify-between shadow-xs">

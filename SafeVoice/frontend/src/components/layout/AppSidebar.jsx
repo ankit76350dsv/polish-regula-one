@@ -3,6 +3,7 @@ import { ChevronLeft, Lock, LogOut, Shield } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { NavItem } from "./NavItem";
 import { staffRoutes } from "./navRoutes";
+import { can } from "../../utils/permissions";
 
 // Build initials for the round avatar (e.g. "Zofia Wiśniewska" → "ZW").
 function initialsOf(user) {
@@ -57,11 +58,13 @@ export function AppSidebar({ currentPath, navigate, collapsed, setCollapsed, use
             </div>
           )}
           <ul className="space-y-1">
-            {staffRoutes.map((item) => (
-              <li key={item.path}>
-                <NavItem item={item} currentPath={currentPath} navigate={navigate} compact={collapsed} tenantId={tenantId} />
-              </li>
-            ))}
+            {staffRoutes
+              .filter((item) => !item.cap || can(user, item.cap))
+              .map((item) => (
+                <li key={item.path}>
+                  <NavItem item={item} currentPath={currentPath} navigate={navigate} compact={collapsed} tenantId={tenantId} />
+                </li>
+              ))}
           </ul>
         </div>
       </nav>
@@ -75,7 +78,7 @@ export function AppSidebar({ currentPath, navigate, collapsed, setCollapsed, use
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-slate-800 truncate">{user.name || user.email}</p>
-                <p className="text-[10px] text-slate-500 truncate">{t(`roles.${user.role}`, user.role)}</p>
+                <p className="text-[10px] text-slate-500 truncate">{t(`roles.${user.safeVoiceRole || user.role}`, user.safeVoiceRole || user.role)}</p>
               </div>
               <button
                 type="button"

@@ -91,6 +91,8 @@
     "moduleBody": "Subskrypcja Twojej organizacji nie obejmuje modułu dla sygnalistów SafeVoice. Dodaj go w RegulaOne, aby uzyskać dostęp.",
     "packageTitle": "Subskrypcja wygasła",
     "packageBody": "Subskrypcja Twojej organizacji wygasła, więc dostęp do SafeVoice jest wstrzymany. Odnów plan w RegulaOne, aby przywrócić dostęp.",
+    "permissionTitle": "Brak przypisanej roli SafeVoice",
+    "permissionBody": "Twoje konto nie ma jeszcze żadnej roli SafeVoice. Poproś administratora o nadanie uprawnienia SafeVoice (np. Prowadzący sprawę lub Specjalista ds. zgodności).",
     "needHelp": "Potrzebujesz pomocy? Skontaktuj się z administratorem RegulaOne.",
     "deniedTitle": "Brak dostępu",
     "deniedBody": "Nie masz uprawnień do tej strony. Jeśli uważasz, że to błąd, skontaktuj się z administratorem.",
@@ -547,12 +549,13 @@
     "Critical": "Krytyczna"
   },
   "roles": {
-    "Super Admin": "Super Administrator",
-    "Company Admin": "Administrator firmy",
-    "Compliance Officer": "Specjalista ds. zgodności",
-    "Investigator": "Prowadzący sprawę",
-    "HR Manager": "Kierownik HR",
-    "Auditor": "Audytor",
-    "Case Handler": "Osoba obsługująca sprawę"
+    "SAFEVOICE_TENANT_ADMIN": "Administrator najemcy",
+    "SAFEVOICE_COMPLIANCE_OFFICER": "Specjalista ds. zgodności",
+    "SAFEVOICE_INVESTIGATOR": "Prowadzący sprawę",
+    "SAFEVOICE_HR_MANAGER": "Kierownik HR",
+    "SAFEVOICE_AUDITOR": "Audytor",
+    "ROLE_SUPER_ADMIN": "Super Administrator",
+    "ROLE_ADMIN": "Administrator",
+    "ROLE_USER": "Użytkownik"
   }
 }

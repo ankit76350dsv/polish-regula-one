@@ -9,12 +9,14 @@ export const publicRoutes = [
   { labelKey: "nav.trackReport", path: "/track", icon: ShieldCheck },
 ];
 
-// Staff-only links (behind the SSO AuthGate).
+// Staff-only links (behind the SSO AuthGate). `cap` is the SafeVoice capability a
+// user must hold to see/use the link — the sidebar/menu hide links the user can't
+// access, and App also guards the page itself.
 export const staffRoutes = [
-  { labelKey: "nav.dashboard", path: "/dashboard", icon: Home },
-  { labelKey: "nav.cases", path: "/cases", icon: AlertOctagon },
-  { labelKey: "nav.inbox", path: "/messages", icon: Inbox, count: 2 },
-  { labelKey: "nav.audit", path: "/audits", icon: Terminal },
-  { labelKey: "nav.users", path: "/users", icon: UserCheck },
-  { labelKey: "nav.settings", path: "/settings", icon: Settings },
+  { labelKey: "nav.dashboard", path: "/dashboard", icon: Home, cap: "viewReports" },
+  { labelKey: "nav.cases", path: "/cases", icon: AlertOctagon, cap: "viewReports" },
+  { labelKey: "nav.inbox", path: "/messages", icon: Inbox, count: 2, cap: "viewReports" },
+  { labelKey: "nav.audit", path: "/audits", icon: Terminal, cap: "accessAudits" },
+  { labelKey: "nav.users", path: "/users", icon: UserCheck, cap: "manageUsers" },
+  { labelKey: "nav.settings", path: "/settings", icon: Settings, cap: "manageSettings" },
 ];

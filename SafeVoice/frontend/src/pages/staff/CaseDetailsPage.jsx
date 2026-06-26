@@ -26,6 +26,8 @@ import {
 import { fetchMessages, selectMessagesFor, selectSending, sendMessage } from "../../slices/messagesSlice";
 import { fetchUsers, selectUsers } from "../../slices/usersSlice";
 import { addToast } from "../../slices/uiSlice";
+import { selectCurrentUser } from "../../slices/authSlice";
+import { can } from "../../utils/permissions";
 
 export default function CaseDetailsPage({ caseId, navigate }) {
   const { t } = useTranslation();
@@ -36,6 +38,11 @@ export default function CaseDetailsPage({ caseId, navigate }) {
   const messages = useSelector(selectMessagesFor(caseId));
   const sending = useSelector(selectSending);
   const users = useSelector(selectUsers);
+  const currentUser = useSelector(selectCurrentUser);
+
+  // Capability-driven controls (mirrors the user's SAFEVOICE_* permissions).
+  const canUpdate = can(currentUser, "assignCases") || can(currentUser, "closeCases");
+  const canExport = can(currentUser, "exportData");
 
   const [pending, setPending] = useState(null); // { field, value, toastKey } | { action }
   const [draft, setDraft] = useState("");
@@ -114,12 +121,16 @@ export default function CaseDetailsPage({ caseId, navigate }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <AppButton type="button" variant="outline" icon={<FileText className="w-4 h-4" />} onClick={() => setPending({ action: "export" })}>
-            {t("case.exportSummary")}
-          </AppButton>
-          <AppButton type="button" variant="secure" icon={<ShieldCheck className="w-4 h-4" />} onClick={() => setPending({ action: "reviewed" })}>
-            {t("case.markReviewed")}
-          </AppButton>
+          {canExport && (
+            <AppButton type="button" variant="outline" icon={<FileText className="w-4 h-4" />} onClick={() => setPending({ action: "export" })}>
+              {t("case.exportSummary")}
+            </AppButton>
+          )}
+          {canUpdate && (
+            <AppButton type="button" variant="secure" icon={<ShieldCheck className="w-4 h-4" />} onClick={() => setPending({ action: "reviewed" })}>
+              {t("case.markReviewed")}
+            </AppButton>
+          )}
         </div>
       </div>
 
@@ -204,17 +215,17 @@ export default function CaseDetailsPage({ caseId, navigate }) {
         <div className="space-y-6">
           <SecureCard title={t("case.controls")} subtitle={t("case.controlsSub")}>
             <div className="space-y-4">
-              <SelectField label={t("case.controlStatus")} value={report.status} onChange={(e) => askChange("status", e.target.value, "toast.statusUpdated")} disabled={updating}>
+              <SelectField label={t("case.controlStatus")} value={report.status} onChange={(e) => askChange("status", e.target.value, "toast.statusUpdated")} disabled={updating || !canUpdate}>
                 {statusValues.map((s) => (
                   <option key={s} value={s}>{t(`status.${s}`, s)}</option>
                 ))}
               </SelectField>
-              <SelectField label={t("case.controlSeverity")} value={report.severity} onChange={(e) => askChange("severity", e.target.value, "toast.severityUpdated")} disabled={updating}>
+              <SelectField label={t("case.controlSeverity")} value={report.severity} onChange={(e) => askChange("severity", e.target.value, "toast.severityUpdated")} disabled={updating || !canUpdate}>
                 {severityValues.map((s) => (
                   <option key={s} value={s}>{t(`severity.${s}`, s)}</option>
                 ))}
               </SelectField>
-              <SelectField label={t("case.controlInvestigator")} value={report.assignedInvestigator} onChange={(e) => askChange("assignedInvestigator", e.target.value, "toast.assigneeUpdated")} disabled={updating}>
+              <SelectField label={t("case.controlInvestigator")} value={report.assignedInvestigator} onChange={(e) => askChange("assignedInvestigator", e.target.value, "toast.assigneeUpdated")} disabled={updating || !canUpdate}>
                 <option value="Unassigned">{t("cases.unassigned")}</option>
                 {users.map((u) => (
                   <option key={u.id} value={u.name}>{u.name}</option>

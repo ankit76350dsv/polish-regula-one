@@ -51,7 +51,7 @@ export function AppNavbar({ currentPath, navigate, mobileOpen, setMobileOpen, us
           <div className="hidden md:flex items-center gap-2.5 border-l border-slate-200 pl-4">
             <div className="flex flex-col items-end">
               <span className="text-xs font-semibold text-slate-800 leading-none truncate max-w-[12rem]">{user.name || user.email}</span>
-              <span className="text-[10px] font-mono text-slate-500 mt-1 uppercase font-bold tracking-wider">{t(`roles.${user.role}`, user.role)}</span>
+              <span className="text-[10px] font-mono text-slate-500 mt-1 uppercase font-bold tracking-wider">{t(`roles.${user.safeVoiceRole || user.role}`, user.safeVoiceRole || user.role)}</span>
             </div>
             <button
               type="button"

@@ -11,15 +11,7 @@
  * them directly (per the project's Redux Toolkit rules).
  */
 import { tryRefreshSession, REGULAONE_API_BASE } from "./api";
-
-// RegulaOne is the single source of truth for roles. We translate its backend role
-// codes into the friendly SafeVoice role names used by this module's RBAC.
-export function mapRole(role) {
-  if (role === "ROLE_SUPER_ADMIN") return "Super Admin";
-  if (role === "ROLE_ADMIN") return "Company Admin";
-  // ROLE_USER and anything unknown default to the least-privileged staff role.
-  return "Case Handler";
-}
+import { normalizeUser } from "../utils/permissions";
 
 /**
  * Ask the RegulaOne backend who the current user is, using the shared-domain
@@ -55,27 +47,13 @@ export async function fetchMe(signal) {
   }
 
   const json = await res.json().catch(() => null);
-  // /api/auth/me returns AppResponse<UserResponse> — unwrap the envelope.
-  const user = json?.data ?? json;
-  if (!user || typeof user !== "object") {
-    throw new Error("Malformed session response");
-  }
-
-  // Normalise into the exact shape the rest of the app relies on. We carry the
-  // account/module/plan fields through so the access gate (utils/access.js) can
-  // decide whether this user may use SafeVoice.
-  return {
-    name: user.name ?? "",
-    email: user.email ?? "",
-    role: mapRole(user.role),
-    permissions: Array.isArray(user.permissions) ? user.permissions : [],
-    tenantId: user.tenantId ?? "",
-    tenantName: user.tenantName ?? null,
-    enabled: user.enabled,
-    moduleIds: Array.isArray(user.moduleIds) ? user.moduleIds : [],
-    planExpired: Boolean(user.planExpired),
-    planExpiresAt: user.planExpiresAt ?? null,
-  };
+  // /api/auth/me returns AppResponse<UserResponse> — unwrap the envelope, then
+  // normalise into the exact shape the rest of the app relies on (raw platform
+  // role + raw permissions + the derived SafeVoice display role). The access gate
+  // (utils/access.js) and permission checks (utils/permissions.js) read this.
+  const user = normalizeUser(json?.data ?? json);
+  if (!user) throw new Error("Malformed session response");
+  return user;
 }
 
 /**
