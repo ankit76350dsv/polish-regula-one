@@ -1,119 +1,173 @@
-import { Lock, Send, ShieldCheck, Upload } from "lucide-react";
-import { AppButton, SecureCard } from "../../components/ui";
-import { messages, reports } from "../staticData";
+import { useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useTranslation } from "react-i18next";
+import { Lock, Send, ShieldCheck } from "lucide-react";
+import { AppButton, SecureCard, Spinner, TextInput } from "../../components/ui";
+import {
+  appendTrackedMessage,
+  selectTracked,
+  selectTrackError,
+  selectTrackStatus,
+  trackReport,
+} from "../../slices/reportsSlice";
+import { sendMessage } from "../../slices/messagesSlice";
+import { addToast } from "../../slices/uiSlice";
+import { firstError, required } from "../../utils/validation";
 
+// Anonymous status lookup by tracking code + PIN, then a secure two-way thread.
+// Fully working against the mock backend, including the not-found error path.
 export default function TrackCasePage() {
-  const report = reports[0];
-  const reportMessages = messages.filter((message) => message.caseId === report.id);
+  const { t } = useTranslation();
+  const dispatch = useDispatch();
+  const tracked = useSelector(selectTracked);
+  const trackStatus = useSelector(selectTrackStatus);
+  const trackError = useSelector(selectTrackError);
+
+  const [form, setForm] = useState({ code: "", pin: "" });
+  const [errors, setErrors] = useState({});
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const looking = trackStatus === "loading";
+
+  function lookup(e) {
+    e.preventDefault();
+    const next = {};
+    next.code = firstError(form.code, [required]);
+    next.pin = firstError(form.pin, [required]);
+    Object.keys(next).forEach((k) => next[k] == null && delete next[k]);
+    setErrors(next);
+    if (Object.keys(next).length) return;
+    dispatch(trackReport({ trackingCode: form.code, pin: form.pin }));
+  }
+
+  async function send(e) {
+    e.preventDefault();
+    if (!draft.trim() || !tracked) return;
+    setSending(true);
+    try {
+      const { message } = await dispatch(
+        sendMessage({ caseId: tracked.report.id, sender: "Anonymous Whistleblower", text: draft }),
+      ).unwrap();
+      dispatch(appendTrackedMessage(message));
+      setDraft("");
+      dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
+    } catch {
+      dispatch(addToast({ type: "error", message: t("track.sendError") }));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const report = tracked?.report;
+  const thread = tracked?.messages || [];
+  const err = (key) => (errors[key] ? t(errors[key].key, errors[key].params) : undefined);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-start leading-relaxed">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start leading-relaxed">
       <div className="lg:col-span-1 space-y-6">
-        <SecureCard title="Track a report" subtitle="Anonymous status lookup">
-          <div className="space-y-4">
-            <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
-              Tracking code
-              <input
-                defaultValue={report.trackingCode}
-                className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm font-mono text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
-              Access PIN
-              <input
-                defaultValue="482913"
-                type="password"
-                className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm font-mono text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-              />
-            </label>
-            <AppButton type="button" variant="primary" icon={<ShieldCheck className="w-4 h-4" />}>
-              View status
+        <SecureCard title={t("track.title")} subtitle={t("track.subtitle")}>
+          <form className="space-y-4" onSubmit={lookup} noValidate>
+            <TextInput
+              label={t("track.codeLabel")}
+              required
+              placeholder={t("track.codePlaceholder")}
+              value={form.code}
+              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+              error={err("code")}
+              className="font-mono"
+            />
+            <TextInput
+              label={t("track.pinLabel")}
+              required
+              type="password"
+              inputMode="numeric"
+              value={form.pin}
+              onChange={(e) => setForm((f) => ({ ...f, pin: e.target.value }))}
+              error={err("pin")}
+            />
+            <AppButton type="submit" variant="primary" disabled={looking} icon={looking ? null : <ShieldCheck className="w-4 h-4" />}>
+              {looking ? <Spinner size={16} label={t("track.lookingUp")} /> : t("track.lookup")}
             </AppButton>
-          </div>
+            {trackStatus === "failed" && (
+              <p role="alert" className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-3">
+                {trackError === "notFound" ? t("track.notFound") : t("common.error")}
+              </p>
+            )}
+          </form>
         </SecureCard>
 
-        <SecureCard title="Case status" subtitle={report.id}>
-          <div className="space-y-3 text-xs text-slate-700">
-            <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
-              <span>Status</span>
-              <span className="font-semibold text-cyan-700">{report.status}</span>
+        {report && (
+          <SecureCard title={t("track.statusTitle")} subtitle={report.id}>
+            <div className="space-y-3 text-xs text-slate-700">
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                <span>{t("common.status")}</span>
+                <span className="font-semibold text-cyan-700">{t(`status.${report.status}`, report.status)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                <span>{t("track.ackDue")}</span>
+                <span className="font-mono text-slate-600">{report.acknowledgementDue}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                <span>{t("track.feedbackDue")}</span>
+                <span className="font-mono text-slate-600">{report.feedbackDue}</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
-              <span>Acknowledgement due</span>
-              <span className="font-mono text-slate-600">{report.acknowledgementDue}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
-              <span>Feedback due</span>
-              <span className="font-mono text-slate-600">{report.feedbackDue}</span>
-            </div>
-          </div>
-        </SecureCard>
+          </SecureCard>
+        )}
       </div>
 
       <div className="lg:col-span-2">
-        <SecureCard isEncrypted title="Secure message thread" subtitle="Static conversation preview">
-          <div className="space-y-4">
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg p-3 text-xs flex items-start gap-2">
-              <Lock className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
-              Messages are presented as UI only. Sending and evidence upload are intentionally inactive.
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 max-h-[32rem] overflow-y-auto">
-              {reportMessages.map((message) => {
-                const reporter = message.sender === "Anonymous Whistleblower";
-                return (
-                  <div
-                    key={message.id}
-                    className={`flex ${reporter ? "justify-end" : "justify-start"} mb-4`}
-                  >
-                    <div
-                      className={`max-w-[82%] rounded-lg p-3.5 text-xs shadow-sm border ${
-                        reporter
-                          ? "bg-white text-slate-800 border-slate-200"
-                          : "bg-cyan-600 text-white border-cyan-500"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-5 mb-1.5 border-b border-slate-200/40 pb-1">
-                        <span className="font-semibold">{message.sender}</span>
-                        <span className="text-[9px] font-mono opacity-80">{message.timestamp}</span>
-                      </div>
-                      <p className="leading-relaxed whitespace-pre-wrap">{message.text}</p>
-                      {message.attachments?.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-slate-200/50 text-[10px] font-mono">
-                          {message.attachments.map((file) => (
-                            <span key={file.id}>{file.displayName}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 border-t border-slate-200 pt-4">
-              <input
-                defaultValue="Thank you. I can add one more supporting document."
-                className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  aria-label="Attach evidence"
-                >
-                  <Upload className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-600 text-white hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  aria-label="Send message"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
+        <SecureCard isEncrypted title={t("track.threadTitle")} subtitle={t("track.threadSubtitle")}>
+          {!report ? (
+            <p className="text-xs text-slate-500">{t("track.emptyThread")}</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg p-3 text-xs flex items-start gap-2">
+                <Lock className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+                {t("track.threadSubtitle")}
               </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 max-h-[32rem] overflow-y-auto">
+                {thread.length === 0 ? (
+                  <p className="text-xs text-slate-500 text-center py-6">{t("track.emptyThread")}</p>
+                ) : (
+                  thread.map((message) => {
+                    const isReporter = message.sender === "Anonymous Whistleblower";
+                    return (
+                      <div key={message.id} className={`flex ${isReporter ? "justify-end" : "justify-start"} mb-4`}>
+                        <div
+                          className={`max-w-[82%] rounded-lg p-3.5 text-xs shadow-sm border ${
+                            isReporter ? "bg-cyan-600 text-white border-cyan-500" : "bg-white text-slate-800 border-slate-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-5 mb-1.5 border-b border-white/20 pb-1">
+                            <span className="font-semibold">{isReporter ? t("track.you") : message.sender}</span>
+                            <span className="text-[9px] font-mono opacity-80">{message.timestamp}</span>
+                          </div>
+                          <p className="leading-relaxed whitespace-pre-wrap">{message.text}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <form className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 border-t border-slate-200 pt-4" onSubmit={send}>
+                <label htmlFor="track-msg" className="sr-only">{t("track.messagePlaceholder")}</label>
+                <input
+                  id="track-msg"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder={t("track.messagePlaceholder")}
+                  className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                />
+                <AppButton type="submit" variant="primary" disabled={sending || !draft.trim()} icon={sending ? null : <Send className="w-4 h-4" />}>
+                  {sending ? <Spinner size={16} /> : t("common.send")}
+                </AppButton>
+              </form>
             </div>
-          </div>
+          )}
         </SecureCard>
       </div>
     </div>

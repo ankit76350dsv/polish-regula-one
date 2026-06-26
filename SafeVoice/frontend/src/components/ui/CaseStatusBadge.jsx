@@ -20,7 +20,7 @@ export function CaseStatusBadge({ status }) {
       dot: "bg-cyan-500",
     },
     "Awaiting Reporter": {
-      bg: "bg-violet-50 text-violet-755 border-violet-200",
+      bg: "bg-violet-50 text-violet-700 border-violet-200",
       dot: "bg-violet-500",
     },
     Remediation: {
@@ -28,7 +28,7 @@ export function CaseStatusBadge({ status }) {
       dot: "bg-teal-500",
     },
     Closed: {
-      bg: "bg-slate-100 text-slate-705 border-slate-200",
+      bg: "bg-slate-100 text-slate-700 border-slate-200",
       dot: "bg-slate-400",
     },
   };

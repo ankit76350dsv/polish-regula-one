@@ -33,7 +33,7 @@ export function TimelineWidget({ events }) {
                           ? "bg-cyan-50 text-cyan-700 border border-cyan-200"
                           : event.type === "retention"
                             ? "bg-amber-50 text-amber-700 border border-amber-200"
-                            : "bg-slate-100 text-slate-700 border border-slate-250"
+                            : "bg-slate-100 text-slate-700 border border-slate-300"
                     }`}
                   >
                     <FileText className="w-3.5 h-3.5" aria-hidden="true" />

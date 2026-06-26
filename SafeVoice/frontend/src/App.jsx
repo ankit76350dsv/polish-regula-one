@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useTranslation } from "react-i18next";
 import {
   AccessDeniedPage,
   AdminDashboardPage,
@@ -7,253 +8,193 @@ import {
   CaseManagementPage,
   CentralEncryptedInboxPage,
   ComplianceSettingsPage,
+  NotFoundPage,
   PublicReportPortal,
   ReportSuccessPage,
   SecurityAuditTrailLogsPage,
-  StandaloneReportPage,
   TrackCasePage,
   UsersPermissionsMatrixPage,
 } from "./pages";
-// The navigation shell (sidebar, top navbar, mobile menu) now lives in its own
-// folder so this file only has to wire the pieces together, not define them.
-import { AppNavbar, AppSidebar, MobileNavigation } from "./components/layout";
-// AuthGate guards the staff area behind the central RegulaOne SSO session.
-import { AuthGate } from "./components/auth";
 import {
-  initSession,
-  signOut,
-  ssoLoopDetected,
-  selectCurrentUser,
-  selectIsAuthenticated,
-} from "./slices/authSlice";
-import { tryRefreshSession } from "./services/api";
-// Translates between our short internal paths ("/dashboard") and the address-bar
-// URL the signed-in staff area uses ("/company/{tenantId}/dashboard").
+  AccessibilityPage,
+  CookiePolicyPage,
+  DataRequestPage,
+  ExternalReportingPage,
+  HowItWorksPage,
+  PrivacyNoticePage,
+  TermsPage,
+} from "./pages/legal";
+import { PublicLayout, StaffShell } from "./components/layout";
+import { ToastHost } from "./components/ui";
+import { CookieBanner } from "./components/compliance/CookieBanner";
+import { selectCurrentUser } from "./slices/authSlice";
+import { selectTheme } from "./slices/uiSlice";
 import {
-  toLogicalPath,
-  toBrowserPath,
-  isStaffSection,
   getStandaloneReportTenant,
+  isStaffSection,
+  toBrowserPath,
+  toLogicalPath,
 } from "./utils/routing";
 
-// The staff area is protected by RegulaOne SSO (isStaffSection in utils/routing).
-// The public report-submission and report-tracking routes are deliberately NOT in
-// that list — anonymous whistleblowers must reach them without signing in
-// (EU 2019/1937 + Poland 2024 Whistleblower Act).
-
-// The path the central login sends the browser back to after a successful sign-in.
 const SSO_CALLBACK_PATH = "/auth/sso-callback";
+
+// Public paths anyone may reach with no login. Everything else is treated as the
+// gated staff world (and unknown paths fall through to a public 404).
+const PUBLIC_PATHS = new Set([
+  "/report",
+  "/report/success",
+  "/track",
+  "/privacy",
+  "/terms",
+  "/cookies",
+  "/accessibility",
+  "/how-it-works",
+  "/external-reporting",
+  "/data-request",
+]);
 
 function normalizePath(pathname) {
   if (!pathname || pathname === "/") return "/report";
   return pathname;
 }
 
-// Tiny full-area spinner shown for the brief moment after the central login returns
-// us to /auth/sso-callback, before we redirect to the staff dashboard.
+// Brief spinner shown right after the central login returns to /auth/sso-callback.
 function SsoCallbackPending() {
+  const { t } = useTranslation();
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
       <div className="text-center space-y-4">
         <div className="w-10 h-10 mx-auto border-4 border-cyan-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-slate-600 text-sm font-medium">Completing sign-in…</p>
+        <p className="text-slate-600 text-sm font-medium">{t("auth.verifying")}</p>
       </div>
     </div>
   );
 }
 
-// Top-level decision: which "world" are we in?
-//
-// If the address bar is /company/{tenantId}/report we render ONLY the anonymous
-// report page — no staff shell, and crucially none of the SSO session hooks
-// below ever run, because SafeVoiceShell is never mounted. That keeps the
-// whistleblower page completely free of anything tied to a logged-in user.
-//
-// Every other URL renders the normal staff shell (sidebar + navbar + SSO).
+// Document <title> per route, so browser history/tabs are meaningful.
+const TITLE_KEYS = {
+  "/report": "report.title",
+  "/report/success": "success.title",
+  "/track": "track.title",
+  "/privacy": "footer.privacy",
+  "/terms": "footer.terms",
+  "/cookies": "footer.cookies",
+  "/accessibility": "footer.accessibility",
+  "/how-it-works": "footer.howItWorks",
+  "/external-reporting": "footer.externalReporting",
+  "/data-request": "compliance.dataRequest.title",
+  "/dashboard": "nav.dashboard",
+  "/cases": "nav.cases",
+  "/messages": "nav.inbox",
+  "/audits": "nav.audit",
+  "/users": "nav.users",
+  "/settings": "nav.settings",
+};
+
 export default function App() {
-  // window.location is read once on mount. The report page always loads in a
-  // fresh tab, so this value never changes for the life of this component.
-  const standaloneReportTenant = getStandaloneReportTenant(window.location.pathname);
-  if (standaloneReportTenant) {
-    return <StandaloneReportPage tenantId={standaloneReportTenant} />;
-  }
-  return <SafeVoiceShell />;
-}
-
-function SafeVoiceShell() {
   const dispatch = useDispatch();
+  const { t } = useTranslation();
+  const theme = useSelector(selectTheme);
   const user = useSelector(selectCurrentUser);
-  const isAuthenticated = useSelector(selectIsAuthenticated);
-
-  // The organisation the signed-in staff member belongs to. It namespaces every
-  // staff URL as /company/{tenantId}/… . Empty until the SSO session is verified.
   const tenantId = user?.tenantId ?? "";
 
-  // currentPath is always the LOGICAL path ("/dashboard", "/cases/abc"). We read it
-  // from the address bar with toLogicalPath so a deep link like
-  // /company/T1/cases/abc still resolves to the right screen.
+  // Apply the chosen theme to <html> (drives all dark: styles + the dark remap).
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "dark") root.classList.add("dark");
+    else root.classList.remove("dark");
+  }, [theme]);
+
+  // ── Router state ──────────────────────────────────────────────────────────
+  const standaloneReportTenant = getStandaloneReportTenant(window.location.pathname);
+
   const [currentPath, setCurrentPath] = useState(() =>
     normalizePath(toLogicalPath(window.location.pathname)),
   );
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    const handlePopState = () =>
-      setCurrentPath(normalizePath(toLogicalPath(window.location.pathname)));
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    const onPop = () => setCurrentPath(normalizePath(toLogicalPath(window.location.pathname)));
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // navigate() accepts either a logical path ("/cases/abc") or a full browser URL
-  // ("/company/T1/cases/abc") and does the right thing: it keeps state on the
-  // logical path but writes the tenant-prefixed URL to the address bar.
+  // navigate() accepts a logical path and writes the correct address-bar URL.
   const navigate = (path) => {
     const logical = normalizePath(toLogicalPath(path));
     const url = toBrowserPath(logical, tenantId);
     window.history.pushState(null, "", url);
     setCurrentPath(logical);
+    // Scroll back to top on navigation (long pages otherwise keep their scroll).
+    window.scrollTo?.(0, 0);
   };
 
-  // ── SSO session bootstrap ─────────────────────────────────────────────────
-  // On load, ask the RegulaOne backend whether the shared-domain cookie is a
-  // valid session. The result lives in the Redux auth slice and drives AuthGate.
+  // Keep the document title in sync with the current route.
   useEffect(() => {
-    dispatch(initSession());
-  }, [dispatch]);
+    const key = TITLE_KEYS[currentPath] || (currentPath.startsWith("/cases/") ? "nav.cases" : null);
+    document.title = key ? `${t(key)} · SafeVoice` : "SafeVoice";
+  }, [currentPath, t]);
 
-  // services/api.js fires this event when a 401 keeps redirecting us in circles;
-  // we flip ssoLoop so AuthGate stops reloading and shows an explanation instead.
-  useEffect(() => {
-    const onLoop = () => dispatch(ssoLoopDetected());
-    window.addEventListener("safevoice:sso-loop", onLoop);
-    return () => window.removeEventListener("safevoice:sso-loop", onLoop);
-  }, [dispatch]);
-
-  // The login token expires after about an hour. While a staff member is signed in
-  // we silently refresh it every 55 minutes so they never get bounced to login.
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const REFRESH_INTERVAL_MS = 55 * 60 * 1000;
-    const timer = setInterval(() => {
-      tryRefreshSession();
-    }, REFRESH_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [isAuthenticated]);
-
-  // After the central login returns us to /auth/sso-callback, send the user on to
-  // where they were headed (returnPath) or to the staff dashboard.
-  useEffect(() => {
-    if (isAuthenticated && currentPath === SSO_CALLBACK_PATH) {
-      const params = new URLSearchParams(window.location.search);
-      const returnPath = params.get("returnPath");
-      navigate(returnPath || "/dashboard");
+  // Resolve the page + which "world" (chrome) it belongs in.
+  const { element, world } = useMemo(() => {
+    // Standalone anonymous report deep link: /company/{tenantId}/report
+    if (standaloneReportTenant) {
+      return { element: <PublicReportPortal tenantId={standaloneReportTenant} navigate={navigate} />, world: "public" };
     }
-    // navigate is stable for our purposes; we only react to auth/path changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, currentPath]);
 
-  // Once signed in, make sure a staff URL carries its /company/{tenantId} prefix.
-  // This fixes deep links / refreshes that landed on a flat path (e.g. someone
-  // opened /dashboard before logging in): we rewrite it in place to the canonical
-  // /company/{tenantId}/dashboard without adding a new history entry.
-  useEffect(() => {
-    if (!isAuthenticated || !tenantId) return;
-    if (currentPath === SSO_CALLBACK_PATH || !isStaffSection(currentPath)) return;
-    const canonical = toBrowserPath(currentPath, tenantId);
-    if (window.location.pathname !== canonical) {
-      window.history.replaceState(null, "", canonical);
+    // Public, no-login pages.
+    if (PUBLIC_PATHS.has(currentPath)) {
+      const map = {
+        "/report": <PublicReportPortal navigate={navigate} />,
+        "/report/success": <ReportSuccessPage navigate={navigate} />,
+        "/track": <TrackCasePage navigate={navigate} />,
+        "/privacy": <PrivacyNoticePage navigate={navigate} />,
+        "/terms": <TermsPage navigate={navigate} />,
+        "/cookies": <CookiePolicyPage navigate={navigate} />,
+        "/accessibility": <AccessibilityPage navigate={navigate} />,
+        "/how-it-works": <HowItWorksPage navigate={navigate} />,
+        "/external-reporting": <ExternalReportingPage navigate={navigate} />,
+        "/data-request": <DataRequestPage navigate={navigate} />,
+      };
+      return { element: map[currentPath], world: "public" };
     }
-  }, [isAuthenticated, tenantId, currentPath]);
 
-  // Sign out: clears the SSO cookies on the backend and leaves for the central app.
-  const handleLogout = () => dispatch(signOut());
+    // SSO callback (staff world).
+    if (currentPath === SSO_CALLBACK_PATH) return { element: <SsoCallbackPending />, world: "staff" };
 
-  // Does the current screen require a verified staff session?
-  const gated = currentPath === SSO_CALLBACK_PATH || isStaffSection(currentPath);
-
-  const page = useMemo(() => {
-    if (currentPath === SSO_CALLBACK_PATH) return <SsoCallbackPending />;
-    if (currentPath === "/report") return <PublicReportPortal />;
-    if (currentPath === "/report/success") return <ReportSuccessPage />;
-    if (currentPath === "/track") return <TrackCasePage />;
-    if (currentPath === "/access-denied") return <AccessDeniedPage navigate={navigate} />;
-    if (currentPath === "/dashboard") return <AdminDashboardPage navigate={navigate} />;
-    if (currentPath === "/cases") return <CaseManagementPage navigate={navigate} />;
+    // Gated staff pages.
+    if (currentPath === "/dashboard") return { element: <AdminDashboardPage navigate={navigate} />, world: "staff" };
+    if (currentPath === "/cases") return { element: <CaseManagementPage navigate={navigate} />, world: "staff" };
     if (currentPath.startsWith("/cases/")) {
-      return <CaseDetailsPage caseId={decodeURIComponent(currentPath.replace("/cases/", ""))} />;
+      const caseId = decodeURIComponent(currentPath.replace("/cases/", ""));
+      return { element: <CaseDetailsPage caseId={caseId} navigate={navigate} />, world: "staff" };
     }
-    if (currentPath === "/messages") return <CentralEncryptedInboxPage />;
-    if (currentPath === "/audits") return <SecurityAuditTrailLogsPage />;
-    if (currentPath === "/users") return <UsersPermissionsMatrixPage />;
-    if (currentPath === "/settings") return <ComplianceSettingsPage />;
-    return <AccessDeniedPage navigate={navigate} />;
-    // tenantId is included so the pages' navigate() closure rebuilds with the
-    // correct /company/{tenantId} prefix the moment the session is verified.
+    if (currentPath === "/messages") return { element: <CentralEncryptedInboxPage navigate={navigate} />, world: "staff" };
+    if (currentPath === "/audits") return { element: <SecurityAuditTrailLogsPage navigate={navigate} />, world: "staff" };
+    if (currentPath === "/users") return { element: <UsersPermissionsMatrixPage navigate={navigate} />, world: "staff" };
+    if (currentPath === "/settings") return { element: <ComplianceSettingsPage navigate={navigate} />, world: "staff" };
+    if (currentPath === "/access-denied") return { element: <AccessDeniedPage navigate={navigate} />, world: "staff" };
+
+    // Anything else → a public 404 (no login forced for a mistyped URL).
+    if (isStaffSection(currentPath)) return { element: <NotFoundPage navigate={navigate} />, world: "staff" };
+    return { element: <NotFoundPage navigate={navigate} />, world: "public" };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPath, tenantId]);
+  }, [currentPath, tenantId, standaloneReportTenant]);
 
   return (
-    // The whole app is exactly as tall as the screen (h-screen) and hides its
-    // own overflow. This means the PAGE never scrolls. Instead, only the main
-    // content area below is allowed to scroll, which keeps the sidebar and
-    // navbar fixed in place no matter how long the content gets.
-    <div className="bg-slate-50 text-slate-900 font-sans h-screen flex overflow-hidden antialiased">
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-3 focus:left-3 focus:bg-cyan-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"
-      >
-        Skip to content
-      </a>
+    <>
+      {world === "public" ? (
+        <PublicLayout navigate={navigate} currentPath={currentPath}>
+          {element}
+        </PublicLayout>
+      ) : (
+        <StaffShell currentPath={currentPath} navigate={navigate}>
+          {element}
+        </StaffShell>
+      )}
 
-      {/* The sidebar is already full screen height (h-screen) and sits to the
-          left. Because the page does not scroll, it stays put on its own. */}
-      <AppSidebar
-        currentPath={currentPath}
-        navigate={navigate}
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-        user={user}
-        onLogout={handleLogout}
-        tenantId={tenantId}
-      />
-
-      {/* Right column: a vertical stack that fills the remaining width.
-          min-w-0 lets wide content shrink instead of pushing the layout wider. */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* shrink-0 keeps the navbar at its natural height so it never gets
-            squeezed and never scrolls away. */}
-        <div className="shrink-0">
-          <AppNavbar
-            currentPath={currentPath}
-            navigate={navigate}
-            mobileOpen={mobileOpen}
-            setMobileOpen={setMobileOpen}
-            user={user}
-            onLogout={handleLogout}
-            tenantId={tenantId}
-          />
-          <MobileNavigation
-            currentPath={currentPath}
-            navigate={navigate}
-            open={mobileOpen}
-            close={() => setMobileOpen(false)}
-            tenantId={tenantId}
-          />
-        </div>
-
-        {/* This is the ONLY part that scrolls. flex-1 makes it take all the
-            leftover height, and overflow-y-auto adds a scrollbar only when the
-            content is taller than the space available. */}
-        <main id="main-content" className="flex-1 overflow-y-auto">
-          <div className="p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto pb-20">
-            {/* Staff pages (and the SSO callback) run through AuthGate, which shows
-                the spinner / login redirect / access modal as needed. Public report
-                pages render directly so anonymous reporters are never gated. */}
-            {<AuthGate>{page}</AuthGate>}
-          </div>
-        </main>
-      </div>
-    </div>
+      {/* Global chrome available in every world. */}
+      <ToastHost />
+      {world === "public" && <CookieBanner navigate={navigate} />}
+    </>
   );
 }

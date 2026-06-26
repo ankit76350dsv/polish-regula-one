@@ -1,34 +1,105 @@
-import { UserCheck } from "lucide-react";
-import { AppButton, AppTable, SecureCard } from "../../components/ui";
-import { rolePermissions, users } from "../staticData";
+import { useEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useTranslation } from "react-i18next";
+import { Trash2, UserCheck } from "lucide-react";
+import {
+  AppButton,
+  AppModal,
+  AppTable,
+  ConfirmDialog,
+  PageSpinner,
+  SecureCard,
+  SelectField,
+  Spinner,
+  TextInput,
+} from "../../components/ui";
+import {
+  fetchUsers,
+  inviteUser,
+  removeUser,
+  selectInviting,
+  selectRolePermissions,
+  selectUsers,
+  selectUsersStatus,
+} from "../../slices/usersSlice";
+import { addToast } from "../../slices/uiSlice";
+import { firstError, email as emailRule, required } from "../../utils/validation";
 
-const permissionKeys = [
-  ["viewReports", "View"],
-  ["assignCases", "Assign"],
-  ["closeCases", "Close"],
-  ["exportData", "Export"],
-  ["accessAudits", "Audits"],
-  ["manageUsers", "Users"],
-  ["manageRetention", "Retention"],
+const PERMISSION_KEYS = [
+  "viewReports",
+  "assignCases",
+  "closeCases",
+  "exportData",
+  "accessAudits",
+  "manageUsers",
+  "manageRetention",
 ];
 
 export default function UsersPermissionsMatrixPage() {
+  const { t } = useTranslation();
+  const dispatch = useDispatch();
+  const users = useSelector(selectUsers);
+  const rolePermissions = useSelector(selectRolePermissions);
+  const status = useSelector(selectUsersStatus);
+  const inviting = useSelector(selectInviting);
+
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", role: "Investigator" });
+  const [errors, setErrors] = useState({});
+  const [toRemove, setToRemove] = useState(null);
+
+  useEffect(() => {
+    if (status === "idle") dispatch(fetchUsers());
+  }, [status, dispatch]);
+
+  if (status === "loading" && users.length === 0) return <PageSpinner label={t("common.loading")} />;
+
+  async function submitInvite(e) {
+    e.preventDefault();
+    const next = {};
+    next.name = firstError(form.name, [required]);
+    next.email = firstError(form.email, [required, emailRule]);
+    Object.keys(next).forEach((k) => next[k] == null && delete next[k]);
+    setErrors(next);
+    if (Object.keys(next).length) return;
+    try {
+      await dispatch(inviteUser(form)).unwrap();
+      dispatch(addToast({ type: "success", message: t("users.inviteSuccess", { email: form.email }) }));
+      setInviteOpen(false);
+      setForm({ name: "", email: "", role: "Investigator" });
+    } catch {
+      dispatch(addToast({ type: "error", message: t("toast.genericError") }));
+    }
+  }
+
+  async function confirmRemove() {
+    if (!toRemove) return;
+    try {
+      await dispatch(removeUser(toRemove.id)).unwrap();
+      dispatch(addToast({ type: "success", message: t("toast.accessRemoved") }));
+    } catch {
+      dispatch(addToast({ type: "error", message: t("toast.genericError") }));
+    } finally {
+      setToRemove(null);
+    }
+  }
+
+  const err = (key) => (errors[key] ? t(errors[key].key, errors[key].params) : undefined);
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto leading-relaxed">
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 pb-4 gap-4">
         <div>
-          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Users and permissions</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Static role matrix and authorized personnel page.
-          </p>
+          <h1 className="text-lg font-bold text-slate-900 tracking-tight">{t("users.title")}</h1>
+          <p className="text-xs text-slate-500 mt-1">{t("users.subtitle")}</p>
         </div>
-        <AppButton type="button" variant="primary" icon={<UserCheck className="w-4 h-4" />}>
-          Invite officer
+        <AppButton type="button" variant="primary" icon={<UserCheck className="w-4 h-4" />} onClick={() => setInviteOpen(true)}>
+          {t("users.invite")}
         </AppButton>
       </div>
 
-      <SecureCard title="Authorized personnel">
-        <AppTable headers={["Officer", "Role", "Status", "MFA", "Last review"]}>
+      <SecureCard title={t("users.personnel")}>
+        <AppTable headers={[t("users.colOfficer"), t("users.colRole"), t("users.colStatus"), t("users.colMfa"), t("users.colLastReview"), ""]}>
           {users.map((user) => (
             <tr key={user.id} className="hover:bg-slate-50 border-b border-slate-200 text-xs">
               <td className="px-4 py-3 font-bold text-slate-800">
@@ -37,30 +108,40 @@ export default function UsersPermissionsMatrixPage() {
               </td>
               <td className="px-4 py-3">
                 <span className="bg-cyan-50 px-2.5 py-1 rounded border border-cyan-200 text-cyan-700 font-semibold uppercase tracking-wider">
-                  {user.role}
+                  {t(`roles.${user.role}`, user.role)}
                 </span>
               </td>
               <td className="px-4 py-3 text-slate-700">{user.status}</td>
-              <td className="px-4 py-3 text-emerald-700 font-semibold">
-                {user.mfaRequired ? "Required" : "Missing"}
+              <td className="px-4 py-3 font-semibold">
+                <span className={user.mfaRequired ? "text-emerald-700" : "text-rose-600"}>
+                  {user.mfaRequired ? t("users.mfaRequired") : t("users.mfaMissing")}
+                </span>
               </td>
               <td className="px-4 py-3 text-slate-500 font-mono">{user.lastLoginReview}</td>
+              <td className="px-4 py-3 text-right">
+                <button
+                  type="button"
+                  onClick={() => setToRemove(user)}
+                  aria-label={t("users.confirmRemoveTitle", { name: user.name })}
+                  className="text-slate-400 hover:text-rose-600 p-1.5 rounded hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                >
+                  <Trash2 className="w-4 h-4" aria-hidden="true" />
+                </button>
+              </td>
             </tr>
           ))}
         </AppTable>
       </SecureCard>
 
-      <SecureCard title="Permission matrix" subtitle="No authorization logic is active in this phase">
-        <AppTable headers={["Role", ...permissionKeys.map(([, label]) => label)]}>
+      <SecureCard title={t("users.matrix")} subtitle={t("users.matrixSub")}>
+        <AppTable headers={[t("users.colRole"), ...PERMISSION_KEYS.map((k) => t(`users.perm.${k}`))]}>
           {rolePermissions.map((rule) => (
             <tr key={rule.role} className="hover:bg-slate-50 border-b border-slate-200">
-              <td className="px-4 py-3 font-mono text-xs font-bold text-cyan-700 uppercase">
-                {rule.role}
-              </td>
-              {permissionKeys.map(([key]) => (
+              <td className="px-4 py-3 font-mono text-xs font-bold text-cyan-700 uppercase">{t(`roles.${rule.role}`, rule.role)}</td>
+              {PERMISSION_KEYS.map((key) => (
                 <td key={key} className="px-4 py-3 text-center text-xs">
                   <span className={rule[key] ? "text-emerald-700 font-semibold" : "text-slate-400"}>
-                    {rule[key] ? "Allowed" : "Blocked"}
+                    {rule[key] ? t("users.permAllowed") : t("users.permBlocked")}
                   </span>
                 </td>
               ))}
@@ -69,26 +150,34 @@ export default function UsersPermissionsMatrixPage() {
         </AppTable>
       </SecureCard>
 
-      <SecureCard title="Invite officer form" subtitle="Visual-only form shell">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
-            Officer name
-            <input defaultValue="Alicja Nowak" className="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm" />
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
-            Business email
-            <input defaultValue="alicja.nowak@regulaone.pl" className="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm" />
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
-            Role
-            <select defaultValue="Investigator" className="rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm">
-              {rolePermissions.map((role) => (
-                <option key={role.role}>{role.role}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </SecureCard>
+      {/* Invite modal */}
+      <AppModal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} title={t("users.inviteTitle")}>
+        <form className="space-y-4" onSubmit={submitInvite} noValidate>
+          <TextInput label={t("users.inviteName")} required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} error={err("name")} />
+          <TextInput label={t("users.inviteEmail")} required type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} error={err("email")} />
+          <SelectField label={t("users.inviteRole")} value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
+            {rolePermissions.map((r) => (
+              <option key={r.role} value={r.role}>{t(`roles.${r.role}`, r.role)}</option>
+            ))}
+          </SelectField>
+          <div className="flex justify-end gap-2 pt-2">
+            <AppButton type="button" variant="secondary" onClick={() => setInviteOpen(false)}>{t("common.cancel")}</AppButton>
+            <AppButton type="submit" variant="primary" disabled={inviting}>
+              {inviting ? <Spinner size={16} /> : t("users.inviteSubmit")}
+            </AppButton>
+          </div>
+        </form>
+      </AppModal>
+
+      <ConfirmDialog
+        isOpen={Boolean(toRemove)}
+        title={toRemove ? t("users.confirmRemoveTitle", { name: toRemove.name }) : ""}
+        message={t("users.confirmRemoveBody")}
+        tone="danger"
+        confirmLabel={t("common.remove")}
+        onConfirm={confirmRemove}
+        onCancel={() => setToRemove(null)}
+      />
     </div>
   );
 }

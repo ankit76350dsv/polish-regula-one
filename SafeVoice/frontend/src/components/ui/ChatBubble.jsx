@@ -24,7 +24,7 @@ export function ChatBubble({ sender, text, timestamp, attachments = [] }) {
             {isReporter ? t("chat.anonymousReporter") : sender}
           </span>
           <span
-            className={`text-[9px] font-mono ${isReporter ? "text-slate-500" : "text-cyan-105"}`}
+            className={`text-[9px] font-mono ${isReporter ? "text-slate-500" : "text-cyan-100"}`}
           >
             {timestamp}
           </span>

@@ -1,31 +1,20 @@
-// This file holds the lists of links shown in the SafeVoice navigation.
-// We keep them here in one place so the sidebar, top navbar, and mobile menu
-// all read from the same source. If a link needs to change, we change it once.
-import {
-  AlertOctagon,
-  Home,
-  Inbox,
-  Settings,
-  Shield,
-  ShieldCheck,
-  Terminal,
-  UserCheck,
-} from "lucide-react";
+// Navigation link definitions, in one place so the sidebar, top navbar, and
+// mobile menu stay in sync. `labelKey` is an i18n key translated at render time.
+import { AlertOctagon, Home, Inbox, Settings, Shield, ShieldCheck, Terminal, UserCheck } from "lucide-react";
 
-// Links that anyone can use (no login needed): send a report or track one.
-// "Submit report" has newTab: true so it opens the anonymous report page in its
-// own tab at /company/{tenantId}/report — clean of any navbar or staff session.
+// Public links (no login). "Submit report" opens the anonymous portal in a new
+// tab at /company/{tenantId}/report — clean of any staff session.
 export const publicRoutes = [
-  { label: "Submit report", path: "/report", icon: Shield, newTab: true },
-  { label: "Track report", path: "/track", icon: ShieldCheck },
+  { labelKey: "nav.submitReport", path: "/report", icon: Shield, newTab: true },
+  { labelKey: "nav.trackReport", path: "/track", icon: ShieldCheck },
 ];
 
-// Links only for authorized staff who handle the reports.
+// Staff-only links (behind the SSO AuthGate).
 export const staffRoutes = [
-  { label: "Case operations", path: "/dashboard", icon: Home },
-  { label: "Case register", path: "/cases", icon: AlertOctagon },
-  { label: "Secure inbox", path: "/messages", icon: Inbox, count: 2 },
-  { label: "Audit trail", path: "/audits", icon: Terminal },
-  { label: "Access controls", path: "/users", icon: UserCheck },
-  { label: "Compliance settings", path: "/settings", icon: Settings },
+  { labelKey: "nav.dashboard", path: "/dashboard", icon: Home },
+  { labelKey: "nav.cases", path: "/cases", icon: AlertOctagon },
+  { labelKey: "nav.inbox", path: "/messages", icon: Inbox, count: 2 },
+  { labelKey: "nav.audit", path: "/audits", icon: Terminal },
+  { labelKey: "nav.users", path: "/users", icon: UserCheck },
+  { labelKey: "nav.settings", path: "/settings", icon: Settings },
 ];

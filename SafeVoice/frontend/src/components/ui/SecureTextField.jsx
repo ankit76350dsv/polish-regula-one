@@ -38,7 +38,7 @@ export function SecureTextField({
         <input
           id={fieldId}
           aria-describedby={helperId}
-          className={`block w-full rounded-lg bg-white border border-slate-350 text-slate-900 placeholder-slate-400 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 py-2.5 ${
+          className={`block w-full rounded-lg bg-white border border-slate-300 text-slate-900 placeholder-slate-400 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 py-2.5 ${
             icon ? "pl-10" : "pl-3.5"
           } pr-3.5 transition-colors`}
           {...props}

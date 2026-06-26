@@ -14,7 +14,7 @@ export function AppButton({
     secondary:
       "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 focus:ring-slate-500",
     outline:
-      "bg-transparent border border-slate-300 hover:bg-slate-550 hover:bg-slate-50 text-slate-700 focus:ring-slate-500",
+      "bg-transparent border border-slate-300 hover:bg-slate-50 text-slate-700 focus:ring-slate-500",
     danger:
       "bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 focus:ring-rose-500",
     secure:

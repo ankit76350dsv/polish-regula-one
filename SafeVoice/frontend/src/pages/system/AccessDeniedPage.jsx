@@ -1,24 +1,19 @@
-import { Shield } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { AppButton, SecureCard } from "../../components/ui";
 
 export default function AccessDeniedPage({ navigate }) {
+  const { t } = useTranslation();
   return (
     <div className="max-w-xl mx-auto py-16">
-      <SecureCard
-        title="Access denied"
-        subtitle="This page mirrors the previous unauthorized access screen without adding route protection."
-      >
+      <SecureCard title={t("access.deniedTitle")}>
         <div className="space-y-4 text-sm text-slate-700">
-          <p>
-            Staff-only areas were previously gated by role checks. Phase 2 keeps the page structure only, so this route simply renders the message as a standalone page.
-          </p>
-          <AppButton
-            type="button"
-            variant="secure"
-            icon={<Shield className="w-4 h-4" />}
-            onClick={() => navigate("/report")}
-          >
-            Return to public portal
+          <div className="flex items-center gap-3 text-amber-600">
+            <ShieldAlert className="w-6 h-6" aria-hidden="true" />
+          </div>
+          <p>{t("access.deniedBody")}</p>
+          <AppButton type="button" variant="primary" onClick={() => navigate("/dashboard")}>
+            {t("access.goToDashboard")}
           </AppButton>
         </div>
       </SecureCard>

@@ -12,3 +12,15 @@ export { AppModal } from "./AppModal";
 export { TimelineWidget } from "./TimelineWidget";
 export { AttachmentUploader } from "./AttachmentUploader";
 export { ChatBubble } from "./ChatBubble";
+
+// Newer primitives that complete the production UX (loading/empty/error, toasts,
+// confirmation, pagination, theme + language controls, accessible form fields).
+export { Spinner, PageSpinner } from "./Spinner";
+export { EmptyState, ErrorState } from "./StateViews";
+export { ToastHost } from "./ToastHost";
+export { ConfirmDialog } from "./ConfirmDialog";
+export { Pagination } from "./Pagination";
+export { ThemeToggle } from "./ThemeToggle";
+export { LanguageSwitcher } from "./LanguageSwitcher";
+export { TextInput, TextArea, SelectField, Checkbox } from "./FormField";
+export { StatusBadge, SeverityBadge } from "./StatusBadges";

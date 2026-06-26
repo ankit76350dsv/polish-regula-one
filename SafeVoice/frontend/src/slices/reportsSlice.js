@@ -1,0 +1,166 @@
+/**
+ * Reports slice — the heart of SafeVoice state.
+ *
+ * Covers both worlds:
+ *   • PUBLIC reporter flow: submit a report, then track it by code + PIN.
+ *   • STAFF flow: list cases, open one case, update status/severity/assignment.
+ *
+ * Every async call goes through reportService (mock now, real backend later) and
+ * every loading / success / error flag lives here, per the project's Redux rules.
+ */
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import reportService from "../services/reportService";
+
+// ── Thunks ────────────────────────────────────────────────────────────────────
+export const fetchReports = createAsyncThunk("reports/fetchAll", () => reportService.listReports());
+
+export const fetchReport = createAsyncThunk("reports/fetchOne", (id) => reportService.getReport(id));
+
+export const submitReport = createAsyncThunk("reports/submit", (payload) =>
+  reportService.createReport(payload),
+);
+
+export const trackReport = createAsyncThunk(
+  "reports/track",
+  async ({ trackingCode, pin }, { rejectWithValue }) => {
+    try {
+      return await reportService.trackReport(trackingCode, pin);
+    } catch (err) {
+      return rejectWithValue(err?.errorCode === "NOT_FOUND" ? "notFound" : "error");
+    }
+  },
+);
+
+export const updateReport = createAsyncThunk("reports/update", ({ id, patch }) =>
+  reportService.updateReport(id, patch),
+);
+
+// ── Slice ───────────────────────────────────────────────────────────────────
+const initialState = {
+  list: [],
+  listStatus: "idle",
+  listError: null,
+
+  current: null,
+  currentStatus: "idle",
+  currentError: null,
+
+  submitStatus: "idle",
+  submitError: null,
+  lastSubmission: null, // { caseId, trackingCode, pin, isHrOnly }
+
+  tracked: null, // { report, messages }
+  trackStatus: "idle",
+  trackError: null, // 'notFound' | 'error' | null
+
+  updating: false,
+};
+
+const reportsSlice = createSlice({
+  name: "reports",
+  initialState,
+  reducers: {
+    clearSubmission(state) {
+      state.submitStatus = "idle";
+      state.submitError = null;
+      state.lastSubmission = null;
+    },
+    clearTracked(state) {
+      state.tracked = null;
+      state.trackStatus = "idle";
+      state.trackError = null;
+    },
+    // Used when a message is sent from the tracking page so the reporter sees it
+    // appended immediately without re-fetching the whole case.
+    appendTrackedMessage(state, action) {
+      if (state.tracked) state.tracked.messages.push(action.payload);
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      // list
+      .addCase(fetchReports.pending, (s) => {
+        s.listStatus = "loading";
+        s.listError = null;
+      })
+      .addCase(fetchReports.fulfilled, (s, a) => {
+        s.listStatus = "succeeded";
+        s.list = a.payload;
+      })
+      .addCase(fetchReports.rejected, (s, a) => {
+        s.listStatus = "failed";
+        s.listError = a.error?.message || "error";
+      })
+      // one
+      .addCase(fetchReport.pending, (s) => {
+        s.currentStatus = "loading";
+        s.currentError = null;
+        s.current = null;
+      })
+      .addCase(fetchReport.fulfilled, (s, a) => {
+        s.currentStatus = "succeeded";
+        s.current = a.payload;
+      })
+      .addCase(fetchReport.rejected, (s, a) => {
+        s.currentStatus = "failed";
+        s.currentError = a.error?.message || "error";
+      })
+      // submit
+      .addCase(submitReport.pending, (s) => {
+        s.submitStatus = "loading";
+        s.submitError = null;
+      })
+      .addCase(submitReport.fulfilled, (s, a) => {
+        s.submitStatus = "succeeded";
+        s.lastSubmission = a.payload;
+      })
+      .addCase(submitReport.rejected, (s, a) => {
+        s.submitStatus = "failed";
+        s.submitError = a.error?.message || "error";
+      })
+      // track
+      .addCase(trackReport.pending, (s) => {
+        s.trackStatus = "loading";
+        s.trackError = null;
+      })
+      .addCase(trackReport.fulfilled, (s, a) => {
+        s.trackStatus = "succeeded";
+        s.tracked = a.payload;
+      })
+      .addCase(trackReport.rejected, (s, a) => {
+        s.trackStatus = "failed";
+        s.trackError = a.payload || "error";
+        s.tracked = null;
+      })
+      // update (status/severity/assignment)
+      .addCase(updateReport.pending, (s) => {
+        s.updating = true;
+      })
+      .addCase(updateReport.fulfilled, (s, a) => {
+        s.updating = false;
+        s.current = a.payload;
+        // keep the list row in sync
+        const i = s.list.findIndex((r) => r.id === a.payload.id);
+        if (i !== -1) s.list[i] = a.payload;
+      })
+      .addCase(updateReport.rejected, (s) => {
+        s.updating = false;
+      });
+  },
+});
+
+export const { clearSubmission, clearTracked, appendTrackedMessage } = reportsSlice.actions;
+
+// ── Selectors ─────────────────────────────────────────────────────────────────
+export const selectReports = (s) => s.reports.list;
+export const selectReportsStatus = (s) => s.reports.listStatus;
+export const selectCurrentReport = (s) => s.reports.current;
+export const selectCurrentStatus = (s) => s.reports.currentStatus;
+export const selectSubmitStatus = (s) => s.reports.submitStatus;
+export const selectLastSubmission = (s) => s.reports.lastSubmission;
+export const selectTracked = (s) => s.reports.tracked;
+export const selectTrackStatus = (s) => s.reports.trackStatus;
+export const selectTrackError = (s) => s.reports.trackError;
+export const selectUpdating = (s) => s.reports.updating;
+
+export default reportsSlice.reducer;

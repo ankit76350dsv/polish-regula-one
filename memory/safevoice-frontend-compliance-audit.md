@@ -3,6 +3,8 @@
 **Date:** 2026-06-26 · **Scope:** `SafeVoice/frontend` · **Type:** read-only review (no code changed)
 **Full report (artifact):** https://claude.ai/code/artifact/82fbce6d-cade-4b73-8de3-47c18c9d752c
 
+> **UPDATE 2026-06-26 — frontend rebuilt (mock-data phase).** The whole frontend was rebuilt on mock data so backend work is now pure API integration. Added: i18n (PL default + EN, `src/i18n`), dark mode (`uiSlice` + `.dark` remap in index.css), a swappable mock layer (`src/mock/db.js` + `mockApi.js`) behind `VITE_USE_MOCK`, service layer (`src/services/*Service.js`), feature slices (reports/messages/users/audit/settings/ui/consent), UI primitives (toasts, ConfirmDialog, state views, pagination, accessible FormField). Working public flow (validated report form with consent + oral/meeting channel → server-issued code/PIN → tracking + secure thread), compliance pages (privacy/terms/cookies/accessibility/how-it-works/external RPO/GDPR data request), cookie banner, and all staff pages functional (dashboard, register w/ filter+pagination, case details w/ confirm-gated updates + messaging, inbox, audit, users invite/remove, settings). App split into public vs staff "worlds"; `authSlice` has a mock-auth mode so the staff area is reachable with no SSO backend. Frontend-level fixes for audit blockers C-2 (code/PIN now generated, not hard-coded), C-4 (Polish i18n live), privacy notice present, oral/meeting channel present. Still backend/infra: real CSP/headers, real RBAC enforcement, real CSRF, server-side PIN hashing, EEA hosting. `npm run build` green; dev server boots clean. Invalid Tailwind shades fixed.
+
 ---
 
 ## Critical framing — it's a static prototype

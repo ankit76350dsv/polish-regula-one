@@ -16,7 +16,7 @@ export function SecureCard({
         <div className="absolute inset-x-0 top-0 h-[2px] bg-emerald-500/70" />
       )}
       {(title || subtitle || isEncrypted) && (
-        <div className="border-b border-slate-150 px-5 py-4 flex items-start justify-between gap-4">
+        <div className="border-b border-slate-200 px-5 py-4 flex items-start justify-between gap-4">
           <div>
             {title && (
               <h3 className="text-sm font-semibold text-slate-900 tracking-tight flex items-center gap-2">

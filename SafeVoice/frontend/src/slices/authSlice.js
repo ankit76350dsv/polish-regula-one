@@ -12,6 +12,8 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { fetchMe, logout } from "../services/authService";
 import { clearSsoRedirectGuard, CENTRAL_LOGIN_URL, SSO_CALLBACK_URL } from "../services/api";
+import { USE_MOCK } from "../config";
+import mockApi from "../mock/mockApi";
 
 // How long we wait for /api/auth/me before treating the backend as unreachable.
 // Without this, a dead/wrong-host backend leaves the app stuck on the spinner forever.
@@ -30,6 +32,12 @@ const ME_TIMEOUT_MS = 8000;
 export const initSession = createAsyncThunk(
   "auth/initSession",
   async (_arg, { rejectWithValue }) => {
+    // MOCK MODE: there is no real SSO backend while we build the UI, so we return
+    // a fixed staff user. Flip VITE_USE_MOCK=false to use the real RegulaOne SSO.
+    if (USE_MOCK) {
+      return mockApi.me();
+    }
+
     // Guard against a dead / slow / wrong-IP backend.
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ME_TIMEOUT_MS);
@@ -62,6 +70,10 @@ export const initSession = createAsyncThunk(
  * is never left in a half-signed-out state.
  */
 export const signOut = createAsyncThunk("auth/signOut", async () => {
+  // MOCK MODE: there is no central app to bounce to, so we just clear the session
+  // in state (the reducer below sets status → 'unauthenticated') and stay put.
+  if (USE_MOCK) return true;
+
   let logoutUrl = null;
   try {
     logoutUrl = await logout();
@@ -120,6 +132,11 @@ const authSlice = createSlice({
           state.status = "unauthenticated";
           state.error = null;
         }
+        state.user = null;
+      })
+      // In mock mode signing out clears the session here (no central redirect).
+      .addCase(signOut.fulfilled, (state) => {
+        state.status = "unauthenticated";
         state.user = null;
       });
   },

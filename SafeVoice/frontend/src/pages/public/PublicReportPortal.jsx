@@ -1,171 +1,268 @@
-import { AlertCircle, Check, ChevronRight, Lock, Shield, Upload } from "lucide-react";
-import { AppButton, SecureCard } from "../../components/ui";
-import { reportCategories } from "../staticData";
+import { useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useTranslation } from "react-i18next";
+import { AlertCircle, Check, ChevronRight, ExternalLink, Lock, Phone, Shield } from "lucide-react";
+import { AppButton, AttachmentUploader, Checkbox, SecureCard, SelectField, Spinner, TextArea, TextInput } from "../../components/ui";
+import { reportCategories, HR_ONLY_CATEGORIES } from "../../mock/db";
+import { submitReport, selectSubmitStatus } from "../../slices/reportsSlice";
+import { addToast } from "../../slices/uiSlice";
+import { firstError, maxLength, minLength, notFutureDate, required } from "../../utils/validation";
 
-// tenantId says which company this report is for. It arrives from the URL
-// (/company/{tenantId}/report) when the page is opened in its own tab. It is
-// optional so the in-app preview still works without it. We never ask the
-// reporter who THEY are — only which organisation the report concerns.
-export default function PublicReportPortal({ tenantId }) {
+// The anonymous report form. Fully working against the mock backend: validates,
+// shows a submitting state, and on success hands a server-issued tracking
+// code + PIN to the success page. `tenantId` (optional) names the organisation
+// when the page is opened as a standalone deep link.
+export default function PublicReportPortal({ tenantId, navigate }) {
+  const { t } = useTranslation();
+  const dispatch = useDispatch();
+  const submitStatus = useSelector(selectSubmitStatus);
+  const submitting = submitStatus === "loading";
+
+  // Controlled form state — empty by default (no misleading pre-filled values).
+  const [form, setForm] = useState({
+    category: "",
+    incidentDate: "",
+    area: "",
+    facts: "",
+    channel: "written",
+    requestMeeting: false,
+    consentPrivacy: false,
+    consentVoluntary: false,
+  });
+  const [files, setFiles] = useState([]);
+  const [errors, setErrors] = useState({});
+
+  const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
+  const isHrCategory = HR_ONLY_CATEGORIES.includes(form.category);
+
+  function validate() {
+    const next = {};
+    next.category = firstError(form.category, [required]);
+    next.incidentDate = firstError(form.incidentDate, [required, notFutureDate]);
+    next.area = firstError(form.area, [required, (v) => maxLength(v, 120)]);
+    next.facts = firstError(form.facts, [required, (v) => minLength(v, 20), (v) => maxLength(v, 5000)]);
+    next.consent =
+      form.consentPrivacy && form.consentVoluntary ? null : { key: "validation.consentRequired" };
+    // Drop empty entries.
+    Object.keys(next).forEach((k) => next[k] == null && delete next[k]);
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!validate()) return;
+    try {
+      await dispatch(
+        submitReport({
+          tenantId: tenantId ?? null,
+          category: form.category,
+          incidentDate: form.incidentDate,
+          area: form.area,
+          facts: form.facts,
+          channel: form.channel,
+          requestMeeting: form.requestMeeting,
+          attachments: files.map((f) => ({ displayName: f.displayName, sizeLabel: f.sizeLabel })),
+        }),
+      ).unwrap();
+      navigate?.("/report/success");
+    } catch {
+      dispatch(addToast({ type: "error", message: t("toast.genericError") }));
+    }
+  }
+
+  const err = (key) => (errors[key] ? t(errors[key].key, errors[key].params) : undefined);
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-start leading-relaxed">
-      <div className="lg:col-span-2">
-        <SecureCard
-          isEncrypted
-          title="Submit an anonymous report"
-          subtitle="Step 1 of 2: facts and evidence"
-        >
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start leading-relaxed">
+      <form className="lg:col-span-2" onSubmit={handleSubmit} noValidate>
+        <SecureCard isEncrypted title={t("report.title")} subtitle={t("report.subtitleStep1")}>
+          {/* Progress indicator */}
           <ol className="flex flex-wrap items-center gap-3 mb-6 bg-slate-100 p-3 rounded-lg border border-slate-200 list-none">
-            <li className="flex items-center gap-3">
-              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold bg-cyan-600 text-white">
-                1
-              </span>
-              <span className="text-xs text-slate-800 font-semibold">Report facts</span>
+            <li className="flex items-center gap-2.5">
+              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold bg-cyan-600 text-white">1</span>
+              <span className="text-xs text-slate-800 font-semibold">{t("report.stepFacts")}</span>
             </li>
             <ChevronRight className="w-4 h-4 text-slate-400" aria-hidden="true" />
-            <li className="flex items-center gap-3">
-              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold bg-slate-200 text-slate-600">
-                2
-              </span>
-              <span className="text-xs text-slate-500 font-semibold">Protection choices</span>
+            <li className="flex items-center gap-2.5">
+              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold bg-slate-200 text-slate-600">2</span>
+              <span className="text-xs text-slate-500 font-semibold">{t("report.stepProtection")}</span>
             </li>
           </ol>
 
-          {/* Show which company this report will reach, when we know it from the
-              URL. This is the only identity on the page — the organisation's,
-              never the reporter's. */}
           {tenantId && (
             <p className="mb-6 text-[11px] font-mono text-slate-500">
-              Reporting to organisation:{" "}
-              <span className="font-bold text-slate-700">{tenantId}</span>
+              {t("report.reportingTo")}: <span className="font-bold text-slate-700">{tenantId}</span>
             </p>
           )}
 
           <div className="space-y-6">
-            {/* Carry the company id with the form so a later submission step can
-                attach the report to the right tenant. No reporter data is added. */}
-            <input type="hidden" name="tenantId" value={tenantId ?? ""} />
-            <div>
-              <label
-                htmlFor="report-category"
-                className="text-xs font-bold text-slate-700 uppercase font-mono block mb-1.5"
-              >
-                Report category
-              </label>
-              <select
-                id="report-category"
-                defaultValue="Corruption"
-                className="block w-full rounded-lg bg-white border border-slate-300 text-slate-900 px-3.5 py-2.5 text-sm outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-              >
-                {reportCategories.map((category) => (
-                  <option key={category}>{category}</option>
-                ))}
-              </select>
-              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3.5 text-xs text-amber-800 flex items-start gap-2.5">
+            <SelectField
+              label={t("report.category")}
+              required
+              hint={t("report.categoryHint")}
+              value={form.category}
+              onChange={(e) => set("category")(e.target.value)}
+              error={err("category")}
+            >
+              <option value="" disabled>
+                {t("common.selectOption")}
+              </option>
+              {reportCategories.map((c) => (
+                <option key={c} value={c}>
+                  {t(`categories.${c}`, c)}
+                </option>
+              ))}
+            </SelectField>
+
+            {isHrCategory && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3.5 text-xs text-amber-800 flex items-start gap-2.5">
                 <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
-                  <span className="font-bold block mb-1">HR grievances stay separate</span>
-                  Individual labour disputes are shown as HR handoff items, not anonymous whistleblower cases.
+                  <span className="font-bold block mb-1">{t("report.hrSeparateTitle")}</span>
+                  {t("report.hrSeparateBody")}
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
-                Incident date
-                <input
-                  type="date"
-                  defaultValue="2026-05-10"
-                  className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-                />
-              </label>
-              <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-700">
-                Area involved
-                <input
-                  type="text"
-                  defaultValue="Procurement"
-                  className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-                />
-              </label>
+              <TextInput
+                label={t("report.incidentDate")}
+                required
+                type="date"
+                value={form.incidentDate}
+                onChange={(e) => set("incidentDate")(e.target.value)}
+                error={err("incidentDate")}
+              />
+              <TextInput
+                label={t("report.area")}
+                required
+                placeholder={t("report.areaPlaceholder")}
+                value={form.area}
+                onChange={(e) => set("area")(e.target.value)}
+                error={err("area")}
+              />
             </div>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-bold text-slate-700 uppercase font-mono">
-                Facts and context
-              </span>
-              <textarea
-                rows={6}
-                defaultValue="Describe what happened, when it happened, and who or what process was involved. Avoid details that could identify you unless they are necessary for follow-up."
-                className="block w-full rounded-lg bg-white border border-slate-300 text-slate-900 placeholder-slate-400 text-sm p-3.5 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-              />
-              <span className="text-[11px] text-slate-500">
-                UI only: no validation or submission is active in this phase.
-              </span>
-            </label>
+            <TextArea
+              label={t("report.facts")}
+              required
+              rows={6}
+              placeholder={t("report.factsPlaceholder")}
+              hint={t("report.factsHint")}
+              value={form.facts}
+              onChange={(e) => set("facts")(e.target.value)}
+              error={err("facts")}
+            />
 
             <div>
               <span className="text-xs font-bold text-slate-700 uppercase font-mono block mb-2">
-                Evidence
+                {t("report.evidence")}
               </span>
-              <div className="border-2 border-dashed rounded-lg p-5 text-center border-slate-300 bg-slate-50/70">
-                <div className="flex flex-col items-center gap-2">
-                  <Upload className="w-8 h-8 text-slate-500" aria-hidden="true" />
-                  <p className="text-xs font-semibold text-slate-700">
-                    Drop PDF, PNG, JPG, XML, or DOCX evidence here
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    Static placeholder only. Upload handling comes later.
-                  </p>
-                </div>
-              </div>
+              <AttachmentUploader files={files} onFilesChanged={setFiles} />
             </div>
+
+            {/* Reporting channel — written + oral, plus the right to a meeting (Art. 9(2)). */}
+            <fieldset className="border border-slate-200 rounded-lg p-4">
+              <legend className="text-xs font-bold text-slate-700 uppercase font-mono px-1">
+                {t("report.channelTitle")}
+              </legend>
+              <div className="space-y-2 mt-2">
+                <label className="flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer">
+                  <input type="radio" name="channel" value="written" checked={form.channel === "written"} onChange={() => set("channel")("written")} className="h-4 w-4 accent-cyan-600" />
+                  {t("report.channelWritten")}
+                </label>
+                <label className="flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer">
+                  <input type="radio" name="channel" value="oral" checked={form.channel === "oral"} onChange={() => set("channel")("oral")} className="h-4 w-4 accent-cyan-600" />
+                  <Phone className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+                  {t("report.channelOral")}
+                </label>
+              </div>
+              {form.channel === "oral" && (
+                <p className="mt-2 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded p-2.5">
+                  {t("report.channelOralInfo")}
+                </p>
+              )}
+              <div className="mt-3 pt-3 border-t border-slate-200">
+                <Checkbox
+                  label={t("report.requestMeeting")}
+                  checked={form.requestMeeting}
+                  onChange={set("requestMeeting")}
+                />
+                {form.requestMeeting && (
+                  <p className="mt-2 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded p-2.5">
+                    {t("report.requestMeetingInfo")}
+                  </p>
+                )}
+              </div>
+            </fieldset>
 
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-xs text-emerald-800 flex items-start gap-3">
               <Lock className="w-5 h-5 text-emerald-700 mt-0.5 shrink-0" aria-hidden="true" />
               <div>
-                <span className="font-bold block mb-1">Anonymous by default</span>
-                This page keeps the original protection copy and layout, but does not create records yet.
+                <span className="font-bold block mb-1">{t("report.anonymousTitle")}</span>
+                {t("report.anonymousBody")}
               </div>
             </div>
 
+            {/* Consent / acknowledgements (required before submit). */}
+            <fieldset className="space-y-3">
+              <legend className="text-xs font-bold text-slate-700 uppercase font-mono mb-1">
+                {t("report.consentTitle")}
+              </legend>
+              <Checkbox
+                label={t("report.consentPrivacy", { privacyLink: t("report.consentPrivacyLink") })}
+                checked={form.consentPrivacy}
+                onChange={set("consentPrivacy")}
+              />
+              <button
+                type="button"
+                onClick={() => navigate?.("/privacy")}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-700 hover:underline ml-6 focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded"
+              >
+                <ExternalLink className="w-3 h-3" aria-hidden="true" /> {t("footer.privacy")}
+              </button>
+              <Checkbox
+                label={t("report.consentVoluntary")}
+                checked={form.consentVoluntary}
+                onChange={set("consentVoluntary")}
+              />
+              {errors.consent && (
+                <p role="alert" className="flex items-center gap-1.5 text-[11px] text-rose-600">
+                  <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                  {t(errors.consent.key)}
+                </p>
+              )}
+            </fieldset>
+
             <div className="flex justify-end border-t border-slate-200 pt-4">
-              <AppButton type="button" variant="secure" icon={<Shield className="w-4 h-4" />}>
-                Submit anonymous report
+              <AppButton type="submit" variant="secure" disabled={submitting} icon={submitting ? null : <Shield className="w-4 h-4" />}>
+                {submitting ? <Spinner size={16} label={t("report.submitting")} /> : t("report.submit")}
               </AppButton>
             </div>
           </div>
         </SecureCard>
-      </div>
+      </form>
 
+      {/* Side column: safeguards + data minimisation transparency. */}
       <div className="space-y-6">
-        <SecureCard title="Reporter safeguards" subtitle="Static compliance cues">
+        <SecureCard title={t("report.safeguardsTitle")}>
           <ul className="space-y-3 text-xs text-slate-700">
-            {[
-              "7-day acknowledgement and 3-month feedback window.",
-              "No reporter telemetry shown to case handlers.",
-              "Evidence references hide original filenames.",
-              "Irrelevant personal data deletion window is visible.",
-              "External reporting remains available.",
-            ].map((item) => (
-              <li key={item} className="flex items-start gap-2">
+            {["ack", "noTelemetry", "filenames", "deletion", "external"].map((k) => (
+              <li key={k} className="flex items-start gap-2">
                 <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" aria-hidden="true" />
-                <span>{item}</span>
+                <span>{t(`report.safeguards.${k}`)}</span>
               </li>
             ))}
           </ul>
         </SecureCard>
 
-        <SecureCard title="Data minimization" subtitle="Not collected in reporter intake">
+        <SecureCard title={t("report.minimizationTitle")} subtitle={t("report.minimizationSubtitle")}>
           <div className="grid gap-2 text-xs text-slate-700">
-            {["Analytics", "Marketing pixels", "Device fingerprint", "Browser fingerprint", "Geolocation", "Reporter IP in case view"].map((item) => (
-              <div
-                key={item}
-                className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2"
-              >
-                <span>{item}</span>
-                <span className="text-emerald-700 font-mono text-[10px] uppercase">
-                  Not collected
-                </span>
+            {["analytics", "marketing", "device", "browser", "geo", "ip"].map((k) => (
+              <div key={k} className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                <span>{t(`report.minimization.${k}`)}</span>
+                <span className="text-emerald-700 font-mono text-[10px] uppercase">{t("report.notCollected")}</span>
               </div>
             ))}
           </div>

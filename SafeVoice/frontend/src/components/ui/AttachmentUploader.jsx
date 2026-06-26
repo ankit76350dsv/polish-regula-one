@@ -109,7 +109,7 @@ export function AttachmentUploader({ onFilesChanged, files }) {
         className={`border-2 border-dashed rounded-lg p-5 text-center transition-colors cursor-pointer focus-within:border-cyan-500 ${
           isDragActive
             ? "border-emerald-500 bg-emerald-50/50"
-            : "border-slate-300 hover:border-slate-450 bg-slate-550 bg-slate-50/50 hover:bg-slate-100/30"
+            : "border-slate-300 hover:border-slate-400 bg-slate-100 bg-slate-50/50 hover:bg-slate-100/30"
         }`}
         onDragEnter={handleDrag}
         onDragOver={handleDrag}
@@ -207,7 +207,7 @@ export function AttachmentUploader({ onFilesChanged, files }) {
                     e.stopPropagation();
                     removeFile(idx);
                   }}
-                  className="text-slate-550 hover:text-rose-600 p-1 rounded hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="text-slate-500 hover:text-rose-600 p-1 rounded hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
