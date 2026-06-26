@@ -33,23 +33,27 @@ export function AppNavbar({ currentPath, navigate, mobileOpen, setMobileOpen }) 
         </div>
       </div>
 
-      <nav className="flex items-center gap-2" aria-label="Public pages">
-        {publicRoutes.map((item) => (
-          <NavItem key={item.path} item={item} currentPath={currentPath} navigate={navigate} />
-        ))}
-      </nav>
+      {/* Right side group: the public links (Submit / Track report) now sit
+          right next to the "Page-only rebuild" info block. */}
+      <div className="flex items-center gap-4">
+        <nav className="flex items-center gap-2" aria-label="Public pages">
+          {publicRoutes.map((item) => (
+            <NavItem key={item.path} item={item} currentPath={currentPath} navigate={navigate} />
+          ))}
+        </nav>
 
-      <div className="hidden xl:flex items-center gap-2.5 border-l border-slate-200 pl-4">
-        <div className="flex flex-col items-end">
-          <span className="text-xs font-semibold text-slate-800 leading-none">
-            Page-only rebuild
-          </span>
-          <span className="text-[10px] font-mono text-slate-500 mt-1 uppercase font-bold tracking-wider">
-            No auth or APIs
-          </span>
-        </div>
-        <div className="w-8 h-8 rounded-full bg-cyan-50 border border-cyan-200 flex items-center justify-center font-bold text-cyan-600 text-xs">
-          <FileCheck2 className="w-4 h-4" aria-hidden="true" />
+        <div className="hidden xl:flex items-center gap-2.5 border-l border-slate-200 pl-4">
+          <div className="flex flex-col items-end">
+            <span className="text-xs font-semibold text-slate-800 leading-none">
+              Page-only rebuild
+            </span>
+            <span className="text-[10px] font-mono text-slate-500 mt-1 uppercase font-bold tracking-wider">
+              No auth or APIs
+            </span>
+          </div>
+          <div className="w-8 h-8 rounded-full bg-cyan-50 border border-cyan-200 flex items-center justify-center font-bold text-cyan-600 text-xs">
+            <FileCheck2 className="w-4 h-4" aria-hidden="true" />
+          </div>
         </div>
       </div>
     </header>
