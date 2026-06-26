@@ -195,7 +195,7 @@ export default function App() {
             {/* Staff pages (and the SSO callback) run through AuthGate, which shows
                 the spinner / login redirect / access modal as needed. Public report
                 pages render directly so anonymous reporters are never gated. */}
-            {gated ? <AuthGate>{page}</AuthGate> : page}
+            {<AuthGate>{page}</AuthGate>}
           </div>
         </main>
       </div>
