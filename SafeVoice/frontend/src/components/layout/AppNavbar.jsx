@@ -1,11 +1,11 @@
 // The top bar shown on every page.
 // It has the mobile menu button, a "live" intake status dot, compliance tags,
 // and the public navigation links (submit / track a report).
-import { FileCheck2, Menu, X } from "lucide-react";
+import { FileCheck2, LogOut, Menu, X } from "lucide-react";
 import { NavItem } from "./NavItem";
 import { publicRoutes } from "./navRoutes";
 
-export function AppNavbar({ currentPath, navigate, mobileOpen, setMobileOpen }) {
+export function AppNavbar({ currentPath, navigate, mobileOpen, setMobileOpen, user, onLogout }) {
   return (
     <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center justify-between gap-4">
       <div className="flex items-center gap-3">
@@ -42,19 +42,43 @@ export function AppNavbar({ currentPath, navigate, mobileOpen, setMobileOpen }) 
           ))}
         </nav>
 
-        <div className="hidden xl:flex items-center gap-2.5 border-l border-slate-200 pl-4">
-          <div className="flex flex-col items-end">
-            <span className="text-xs font-semibold text-slate-800 leading-none">
-              Page-only rebuild
-            </span>
-            <span className="text-[10px] font-mono text-slate-500 mt-1 uppercase font-bold tracking-wider">
-              No auth or APIs
-            </span>
+        {/* When a staff member is signed in via RegulaOne SSO we show who they are
+            and a sign-out button. Otherwise we keep the build/status badge. */}
+        {user ? (
+          <div className="hidden md:flex items-center gap-2.5 border-l border-slate-200 pl-4">
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-semibold text-slate-800 leading-none truncate max-w-[12rem]">
+                {user.name || user.email}
+              </span>
+              <span className="text-[10px] font-mono text-slate-500 mt-1 uppercase font-bold tracking-wider">
+                {user.role}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onLogout}
+              aria-label="Sign out"
+              title="Sign out"
+              className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-50 border border-slate-200 text-slate-500 hover:text-rose-600 hover:border-rose-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            >
+              <LogOut className="w-4 h-4" aria-hidden="true" />
+            </button>
           </div>
-          <div className="w-8 h-8 rounded-full bg-cyan-50 border border-cyan-200 flex items-center justify-center font-bold text-cyan-600 text-xs">
-            <FileCheck2 className="w-4 h-4" aria-hidden="true" />
+        ) : (
+          <div className="hidden xl:flex items-center gap-2.5 border-l border-slate-200 pl-4">
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-semibold text-slate-800 leading-none">
+                Page-only rebuild
+              </span>
+              <span className="text-[10px] font-mono text-slate-500 mt-1 uppercase font-bold tracking-wider">
+                No auth or APIs
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-cyan-50 border border-cyan-200 flex items-center justify-center font-bold text-cyan-600 text-xs">
+              <FileCheck2 className="w-4 h-4" aria-hidden="true" />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </header>
   );

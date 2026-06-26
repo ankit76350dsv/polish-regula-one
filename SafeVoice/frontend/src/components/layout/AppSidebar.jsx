@@ -1,11 +1,19 @@
 // The left sidebar shown on large screens.
 // It lists the staff-only navigation links and can shrink to a thin strip
 // when the user collapses it.
-import { ChevronLeft, Lock, Shield } from "lucide-react";
+import { ChevronLeft, Lock, LogOut, Shield } from "lucide-react";
 import { NavItem } from "./NavItem";
 import { staffRoutes } from "./navRoutes";
 
-export function AppSidebar({ currentPath, navigate, collapsed, setCollapsed }) {
+// Build short initials from a name/email for the round avatar (e.g. "Anna Kowalska" → "AK").
+function initialsOf(user) {
+  const source = user?.name || user?.email || "";
+  const parts = source.trim().split(/[\s@.]+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
+}
+
+export function AppSidebar({ currentPath, navigate, collapsed, setCollapsed, user, onLogout }) {
   return (
     <aside
       className={`hidden lg:flex bg-white border-r border-slate-200 flex-col h-screen text-slate-700 transition-all duration-300 relative ${
@@ -63,7 +71,43 @@ export function AppSidebar({ currentPath, navigate, collapsed, setCollapsed }) {
         </div>
       </nav>
 
-      <div className="border-t border-slate-200 p-4">
+      <div className="border-t border-slate-200 p-4 space-y-3">
+        {/* Signed-in staff member + sign out. Only shown once the RegulaOne SSO
+            session is verified (user is populated from the auth slice). */}
+        {user &&
+          (!collapsed ? (
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 shrink-0 rounded-full bg-cyan-50 border border-cyan-200 flex items-center justify-center font-bold text-cyan-700 text-[11px]">
+                {initialsOf(user)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-slate-800 truncate">
+                  {user.name || user.email}
+                </p>
+                <p className="text-[10px] text-slate-500 truncate">{user.role}</p>
+              </div>
+              <button
+                type="button"
+                onClick={onLogout}
+                aria-label="Sign out"
+                title="Sign out"
+                className="shrink-0 text-slate-400 hover:text-rose-600 p-1 rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              >
+                <LogOut className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onLogout}
+              aria-label="Sign out"
+              title="Sign out"
+              className="w-full flex justify-center text-slate-400 hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded"
+            >
+              <LogOut className="w-4 h-4" aria-hidden="true" />
+            </button>
+          ))}
+
         {!collapsed ? (
           <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex flex-col gap-1">
             <div className="flex items-center gap-1.5 text-[10px] font-mono font-semibold text-slate-700 leading-none">
