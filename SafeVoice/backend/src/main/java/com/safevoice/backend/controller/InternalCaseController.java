@@ -1,5 +1,7 @@
 package com.safevoice.backend.controller;
 
+import com.safevoice.backend.dto.CaseSummaryResponse;
+import com.safevoice.backend.dto.PageResponse;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
@@ -32,12 +34,27 @@ public class InternalCaseController {
     private final AttachmentService attachmentService;
 
     /**
-     * Lists active whistleblower cases for the tenant.
+     * Lists whistleblower cases for the tenant as a PAGE of slim summaries — only the
+     * columns the register table shows, plus an unread-message count for the badge.
+     * Supports free-text search and a quick filter, and returns paging info for the UI.
+     * The full case (description, timeline, attachments, …) is returned only by
+     * {@link #getById}, when a staff member opens one case.
+     *
+     * Query parameters (all optional, with safe defaults):
+     *   page   1-based page number (default 1)
+     *   size   rows per page (default 20, capped server-side)
+     *   search free text matched against case reference and category
+     *   filter one of: all | critical | unassigned | feedbackDue
      */
     @GetMapping
-    public ResponseEntity<List<CaseReport>> list(
-            @RequestHeader("X-Tenant-ID") String tenantId) {
-        List<CaseReport> reports = caseReportService.list(tenantId);
+    public ResponseEntity<PageResponse<CaseSummaryResponse>> list(
+            @RequestHeader("X-Tenant-ID") String tenantId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String filter) {
+        PageResponse<CaseSummaryResponse> reports =
+                caseReportService.listSummaries(tenantId, search, filter, page, size);
         return ResponseEntity.ok(reports);
     }
 

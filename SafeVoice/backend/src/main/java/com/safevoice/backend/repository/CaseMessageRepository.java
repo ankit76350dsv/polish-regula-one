@@ -17,4 +17,12 @@ public interface CaseMessageRepository extends MongoRepository<CaseMessage, Stri
      * Enforces tenant isolation.
      */
     List<CaseMessage> findAllByTenantIdAndCaseIdOrderByTimestampAsc(String tenantId, String caseId);
+
+    /**
+     * Counts the messages in a case that staff have NOT read yet. A message is
+     * "unread by staff" when readByAdmin is false — which is exactly how a reporter's
+     * messages start out. The case register uses this number to show an unread badge.
+     * Scoped to the tenant so one organisation can never see another's counts.
+     */
+    long countByTenantIdAndCaseIdAndReadByAdminFalse(String tenantId, String caseId);
 }

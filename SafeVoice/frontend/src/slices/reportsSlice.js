@@ -14,6 +14,13 @@ import reportService from "../services/reportService";
 // ── Thunks ────────────────────────────────────────────────────────────────────
 export const fetchReports = createAsyncThunk("reports/fetchAll", () => reportService.listReports());
 
+// One page of the case register (server-side search / filter / pagination). Kept
+// separate from fetchReports so the dashboard and inbox (which use the full list)
+// are not affected by the register's current page, search, or filter.
+export const fetchCasePage = createAsyncThunk("reports/fetchCasePage", (params) =>
+  reportService.listReportsPage(params),
+);
+
 export const fetchReport = createAsyncThunk("reports/fetchOne", (id) => reportService.getReport(id));
 
 export const submitReport = createAsyncThunk("reports/submit", (payload) =>
@@ -48,6 +55,18 @@ const initialState = {
   list: [],
   listStatus: "idle",
   listError: null,
+
+  // The staff "case register" — one server-side page at a time, with its own
+  // search/filter/paging meta, kept apart from the full `list` above.
+  register: {
+    items: [],
+    page: 1,
+    size: 8,
+    total: 0,
+    totalPages: 0,
+    status: "idle",
+    error: null,
+  },
 
   current: null,
   currentStatus: "idle",
@@ -94,6 +113,23 @@ const reportsSlice = createSlice({
       .addCase(fetchReports.rejected, (s, a) => {
         s.listStatus = "failed";
         s.listError = a.error?.message || "error";
+      })
+      // register page (search / filter / pagination)
+      .addCase(fetchCasePage.pending, (s) => {
+        s.register.status = "loading";
+        s.register.error = null;
+      })
+      .addCase(fetchCasePage.fulfilled, (s, a) => {
+        s.register.status = "succeeded";
+        s.register.items = a.payload.items;
+        s.register.page = a.payload.page;
+        s.register.size = a.payload.size;
+        s.register.total = a.payload.total;
+        s.register.totalPages = a.payload.totalPages;
+      })
+      .addCase(fetchCasePage.rejected, (s, a) => {
+        s.register.status = "failed";
+        s.register.error = a.error?.message || "error";
       })
       // one
       .addCase(fetchReport.pending, (s) => {
@@ -170,6 +206,7 @@ export const { clearSubmission, clearTracked } = reportsSlice.actions;
 // ── Selectors ─────────────────────────────────────────────────────────────────
 export const selectReports = (s) => s.reports.list;
 export const selectReportsStatus = (s) => s.reports.listStatus;
+export const selectRegister = (s) => s.reports.register;
 export const selectCurrentReport = (s) => s.reports.current;
 export const selectCurrentStatus = (s) => s.reports.currentStatus;
 export const selectSubmitStatus = (s) => s.reports.submitStatus;

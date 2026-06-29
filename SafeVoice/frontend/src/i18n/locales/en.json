@@ -250,6 +250,7 @@
     "colInvestigator": "Investigator",
     "colFeedbackDue": "Feedback due",
     "unassigned": "Unassigned",
+    "unreadMessages": "{{count}} unread message(s) from the reporter",
     "empty": "No cases match your filters.",
     "loadError": "Could not load cases."
   },

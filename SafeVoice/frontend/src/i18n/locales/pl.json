@@ -252,6 +252,7 @@
     "colInvestigator": "Prowadzący",
     "colFeedbackDue": "Termin inf. zwrotnej",
     "unassigned": "Nieprzypisane",
+    "unreadMessages": "Nieprzeczytane wiadomości od zgłaszającego: {{count}}",
     "empty": "Żadna sprawa nie pasuje do filtrów.",
     "loadError": "Nie udało się wczytać spraw."
   },

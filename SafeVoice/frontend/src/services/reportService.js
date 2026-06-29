@@ -53,10 +53,31 @@ export const reportService = {
 
   // ── STAFF (internal compliance dashboard) ────────────────────────────────────
 
-  // List every active case for the signed-in tenant.
+  // List cases for the signed-in tenant as a flat array (used by the dashboard and the
+  // inbox, which want the whole set, not a page). The list endpoint is paginated, so we
+  // ask for a single large page and return just the normalised rows.
   async listReports() {
-    const list = await staffApi.get("/api/v1/internal/cases");
-    return normalizeReports(list);
+    const data = await staffApi.get("/api/v1/internal/cases?page=1&size=200");
+    return normalizeReports(data?.items);
+  },
+
+  // Load ONE page of the case register, with optional search and quick filter. Returns
+  // the normalised rows plus the paging info (page, size, total, totalPages) the table
+  // needs to draw its pager.
+  async listReportsPage({ page = 1, size = 8, search = "", filter = "all" } = {}) {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("size", String(size));
+    if (search && search.trim()) params.set("search", search.trim());
+    if (filter && filter !== "all") params.set("filter", filter);
+    const data = await staffApi.get(`/api/v1/internal/cases?${params.toString()}`);
+    return {
+      items: normalizeReports(data?.items),
+      page: data?.page ?? page,
+      size: data?.size ?? size,
+      total: data?.total ?? 0,
+      totalPages: data?.totalPages ?? 0,
+    };
   },
 
   // Load one case by its id.

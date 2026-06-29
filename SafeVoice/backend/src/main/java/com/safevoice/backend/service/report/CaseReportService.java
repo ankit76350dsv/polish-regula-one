@@ -2,6 +2,8 @@ package com.safevoice.backend.service.report;
 
 import com.safevoice.backend.dto.CaseSubmissionRequest;
 import com.safevoice.backend.dto.CaseSubmissionResponse;
+import com.safevoice.backend.dto.CaseSummaryResponse;
+import com.safevoice.backend.dto.PageResponse;
 import com.safevoice.backend.exception.CaseNotFoundException;
 import com.safevoice.backend.exception.CaseReferenceConflictException;
 import com.safevoice.backend.exception.TenantNotFoundException;
@@ -16,18 +18,24 @@ import com.safevoice.backend.model.enums.case_report.CaseStatus;
 import com.safevoice.backend.model.enums.case_report.DisclosureMode;
 import com.safevoice.backend.model.enums.case_report.IntakeChannel;
 import com.safevoice.backend.model.enums.case_report.ReportCategory;
+import com.safevoice.backend.repository.CaseMessageRepository;
 import com.safevoice.backend.repository.CaseReportRepository;
 import com.safevoice.backend.repository.TenantRepository;
 import com.safevoice.backend.service.AuditLogService;
 import com.safevoice.backend.service.report.utils.CaseReportUtils;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Service orchestrating operations on CaseReport documents.
@@ -36,16 +44,30 @@ import java.util.List;
 public class CaseReportService {
 
     private final CaseReportRepository caseReportRepository;
+    private final CaseMessageRepository caseMessageRepository;
     private final TenantRepository tenantRepository;
     private final AuditLogService auditLogService;
+    // Used for the case-register list, which needs flexible search/filter/sort/paging
+    // that fixed repository methods cannot express. MongoTemplate lets us build the
+    // query dynamically and safely (user text is escaped before it reaches the DB).
+    private final MongoTemplate mongoTemplate;
+
+    // Hard ceiling on page size, so a caller can never ask for a giant page that would
+    // strain the database or the browser. Requests above this are clamped down to it.
+    private static final int MAX_PAGE_SIZE = 200;
+    private static final int DEFAULT_PAGE_SIZE = 20;
 
     @Autowired
     public CaseReportService(CaseReportRepository caseReportRepository,
+                             CaseMessageRepository caseMessageRepository,
                              TenantRepository tenantRepository,
-                             AuditLogService auditLogService) {
+                             AuditLogService auditLogService,
+                             MongoTemplate mongoTemplate) {
         this.caseReportRepository = caseReportRepository;
+        this.caseMessageRepository = caseMessageRepository;
         this.tenantRepository = tenantRepository;
         this.auditLogService = auditLogService;
+        this.mongoTemplate = mongoTemplate;
     }
 
     /**
@@ -246,10 +268,109 @@ public class CaseReportService {
     }
 
     /**
-     * Lists active cases for a tenant.
+     * Lists active cases for a tenant (full documents). Kept for internal callers that
+     * genuinely need the whole case; the staff register uses {@link #listSummaries} instead.
      */
     public List<CaseReport> list(String tenantId) {
         return caseReportRepository.findAllByTenantIdAndDeletedFalse(tenantId);
+    }
+
+    /**
+     * Build ONE PAGE of the staff "case register", with optional search and a filter.
+     *
+     * For each case on the page we return only the columns the table shows, plus how many
+     * of the reporter's messages staff have not read yet (for the unread badge). We never
+     * include the description, access-key hash, timeline, or attachments here — the list
+     * does not need them, and leaving them out keeps that sensitive data off the wire
+     * (data minimisation). The full case is loaded only when a staff member opens one.
+     *
+     * Every input is treated as untrusted and made safe:
+     *  - tenantId is required (we never list across organisations).
+     *  - page below 1 becomes 1; size is clamped to a sane default and a hard maximum.
+     *  - a blank search is ignored; a non-blank one is escaped before it touches the DB
+     *    (so characters like "(" or "*" can never act as a regex or break the query).
+     *  - an unknown filter is treated as "all".
+     *
+     * @param tenantId the organisation whose cases to list (required)
+     * @param search   free text matched against the case reference and category (optional)
+     * @param filter   one of: all, critical, unassigned, feedbackDue (optional)
+     * @param page     1-based page number
+     * @param size     rows per page
+     */
+    public PageResponse<CaseSummaryResponse> listSummaries(String tenantId, String search,
+                                                           String filter, int page, int size) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("Tenant info/context is required");
+        }
+
+        // Clamp paging inputs so a bad/missing value can never break the query.
+        int safePage = page < 1 ? 1 : page;
+        int safeSize = size < 1 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
+
+        // Always scope to this tenant and skip soft-deleted cases.
+        List<Criteria> conditions = new ArrayList<>();
+        conditions.add(Criteria.where("tenantId").is(tenantId));
+        conditions.add(Criteria.where("deleted").is(false));
+
+        // The quick filter buttons in the register. Anything unrecognised means "all".
+        String activeFilter = filter == null ? "" : filter.trim().toLowerCase();
+        switch (activeFilter) {
+            case "critical" -> conditions.add(Criteria.where("severity").is(CaseSeverity.CRITICAL));
+            case "unassigned" -> conditions.add(new Criteria().orOperator(
+                    Criteria.where("assignedInvestigator").is(null),
+                    Criteria.where("assignedInvestigator").is("Unassigned"),
+                    Criteria.where("assignedInvestigator").exists(false)));
+            case "feedbackdue" -> conditions.add(Criteria.where("status").ne(CaseStatus.CLOSED));
+            default -> { /* "all" or unknown → no extra condition */ }
+        }
+
+        // Free-text search across the readable reference and the category. The user's
+        // text is quoted so it is matched literally (no regex injection), case-insensitive.
+        if (search != null && !search.isBlank()) {
+            String literal = Pattern.quote(search.trim());
+            conditions.add(new Criteria().orOperator(
+                    Criteria.where("caseReference").regex(literal, "i"),
+                    Criteria.where("category").regex(literal, "i")));
+        }
+
+        Criteria all = new Criteria().andOperator(conditions.toArray(new Criteria[0]));
+
+        // Count the full match set first (for the pager), then fetch only this page,
+        // newest first. If the requested page is past the end, the fetch simply returns
+        // an empty list — a valid, non-error outcome.
+        long total = mongoTemplate.count(Query.query(all), CaseReport.class);
+        Query pageQuery = Query.query(all)
+                .with(Sort.by(Sort.Direction.DESC, "submissionDate"))
+                .skip((long) (safePage - 1) * safeSize)
+                .limit(safeSize);
+        List<CaseReport> reports = mongoTemplate.find(pageQuery, CaseReport.class);
+
+        List<CaseSummaryResponse> items = new ArrayList<>();
+        for (CaseReport report : reports) {
+            // Count this case's still-unread (by staff) messages for the badge.
+            long unread = caseMessageRepository
+                    .countByTenantIdAndCaseIdAndReadByAdminFalse(tenantId, report.getId());
+            items.add(CaseSummaryResponse.builder()
+                    .id(report.getId())
+                    .caseReference(report.getCaseReference())
+                    .disclosureMode(report.getDisclosureMode())
+                    .category(report.getCategory())
+                    .status(report.getStatus())
+                    .severity(report.getSeverity())
+                    .assignedInvestigator(report.getAssignedInvestigator())
+                    .feedbackDue(report.getFeedbackDue())
+                    .unreadCount(unread)
+                    .build());
+        }
+
+        int totalPages = (int) Math.ceil((double) total / safeSize);
+        return PageResponse.<CaseSummaryResponse>builder()
+                .items(items)
+                .page(safePage)
+                .size(safeSize)
+                .total(total)
+                .totalPages(totalPages)
+                .build();
     }
 
     /**

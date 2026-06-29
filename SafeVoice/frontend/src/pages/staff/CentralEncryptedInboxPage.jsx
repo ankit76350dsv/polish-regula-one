@@ -14,8 +14,10 @@ export default function CentralEncryptedInboxPage() {
   const status = useSelector(selectReportsStatus);
   const sending = useSelector(selectSending);
 
-  // Only anonymous cases (those that have an access key) have a two-way thread.
-  const threads = reports.filter((r) => r.keyHash);
+  // Only anonymous cases have a two-way reporter thread. The list no longer exposes the
+  // access-key hash (a credential — it must never leave the server), so we identify them
+  // by their disclosure mode instead.
+  const threads = reports.filter((r) => r.disclosureMode === "Anonymous");
   const [selectedId, setSelectedId] = useState(null);
   const activeId = selectedId || threads[0]?.id || null;
   const messages = useSelector(selectMessagesFor(activeId));
