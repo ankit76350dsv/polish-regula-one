@@ -1,13 +1,11 @@
-import { AlertTriangle, Lock, LogIn, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import Login from "./Login";
 import SafeVoiceAccessModal from "./SafeVoiceAccessModal";
 import { evaluateSafeVoiceAccess } from "../../utils/access";
-import { USE_MOCK_AUTH } from "../../config";
 import {
   initSession,
-  signIn,
   signOut,
   selectAuthStatus,
   selectAuthError,
@@ -62,33 +60,7 @@ export default function AuthGate({ children }) {
     );
   }
 
-  // 3a. MOCK MODE: there is no central login to bounce to, so a visitor who has not
-  // signed in (or who signed out) sees a sign-in prompt here. Access to the staff
-  // area is blocked until they click "Login" — the dashboard is never shown first.
-  if (USE_MOCK_AUTH && status !== "authenticated") {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 p-8 text-center space-y-4">
-          <div className="mx-auto w-12 h-12 rounded-full bg-cyan-50 flex items-center justify-center">
-            <Lock className="text-cyan-600" size={22} aria-hidden="true" />
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-slate-800">{t("auth.signInRequiredTitle")}</h2>
-            <p className="text-xs text-slate-500 mt-1">{t("auth.signInRequiredBody")}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => dispatch(signIn())}
-            className="inline-flex items-center justify-center gap-2 w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          >
-            <LogIn size={15} /> {t("landing.login")}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 3b. Not signed in (real SSO) → central login flow.
+  // 3. Not signed in → central login flow.
   if (status !== "authenticated" || ssoLoop) {
     return <Login />;
   }

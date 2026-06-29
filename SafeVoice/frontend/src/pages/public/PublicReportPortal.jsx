@@ -3,15 +3,14 @@ import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Check, ChevronRight, ExternalLink, Lock, Phone, Shield } from "lucide-react";
 import { AppButton, AttachmentUploader, Checkbox, SecureCard, SelectField, Spinner, TextArea, TextInput } from "../../components/ui";
-import { reportCategories, HR_ONLY_CATEGORIES } from "../../mock/db";
+import { reportCategories, HR_ONLY_CATEGORIES } from "../../constants/caseFields";
 import { submitReport, selectSubmitStatus } from "../../slices/reportsSlice";
 import { addToast } from "../../slices/uiSlice";
 import { firstError, maxLength, minLength, notFutureDate, required } from "../../utils/validation";
 
-// The anonymous report form. Fully working against the mock backend: validates,
-// shows a submitting state, and on success hands a server-issued tracking
-// code + PIN to the success page. `tenantId` (optional) names the organisation
-// when the page is opened as a standalone deep link.
+// The anonymous report form. Validates, shows a submitting state, and on success
+// hands the server-issued one-time access key to the success page. `tenantId` names
+// the organisation, read from the /company/{tenantId}/report deep-link URL.
 export default function PublicReportPortal({ tenantId, navigate }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();

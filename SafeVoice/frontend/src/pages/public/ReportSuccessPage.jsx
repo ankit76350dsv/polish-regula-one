@@ -7,9 +7,9 @@ import { clearSubmission, selectLastSubmission } from "../../slices/reportsSlice
 import { addToast } from "../../slices/uiSlice";
 
 // Shows the ONE access key issued for the just-submitted report. It is the only
-// credential the reporter ever gets (identifier + password in one), comes from
-// the (mock) backend, and is shown only once. If there is no recent submission
-// (e.g. a reload), we send them back to the form rather than show a stale key.
+// credential the reporter ever gets (identifier + password in one), comes from the
+// backend, and is shown only once. If there is no recent submission (e.g. a reload),
+// we send them back to the form rather than show a stale key.
 export default function ReportSuccessPage({ navigate }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();

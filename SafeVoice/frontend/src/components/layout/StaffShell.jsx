@@ -11,7 +11,6 @@ import { AppSidebar } from "./AppSidebar";
 import { MobileNavigation } from "./MobileNavigation";
 import { SiteFooter } from "./SiteFooter";
 import { AuthGate } from "../auth";
-import { USE_MOCK_AUTH } from "../../config";
 import { tryRefreshSession } from "../../services/api";
 import {
   initSession,
@@ -50,9 +49,9 @@ export function StaffShell({ currentPath, navigate, children }) {
     return () => window.removeEventListener("safevoice:sso-loop", onLoop);
   }, [dispatch]);
 
-  // Silent token refresh every 55 minutes while signed in (real backend only).
+  // Silent token refresh every 55 minutes while signed in.
   useEffect(() => {
-    if (!isAuthenticated || USE_MOCK_AUTH) return;
+    if (!isAuthenticated) return;
     const timer = setInterval(() => tryRefreshSession(), 55 * 60 * 1000);
     return () => clearInterval(timer);
   }, [isAuthenticated]);

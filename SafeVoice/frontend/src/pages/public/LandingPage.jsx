@@ -16,14 +16,12 @@ import {
 } from "lucide-react";
 import { LanguageSwitcher, ThemeToggle } from "../../components/ui";
 import { SiteFooter } from "../../components/layout";
-import { USE_MOCK_AUTH } from "../../config";
 import {
   CENTRAL_SIGNUP_URL,
   redirectToLogin,
 } from "../../services/api";
 import {
   initSession,
-  signIn,
   selectAuthStatus,
   selectCurrentUser,
   selectIsAuthenticated,
@@ -272,17 +270,10 @@ export default function LandingPage({ navigate }) {
     if (status === "idle") dispatch(initSession());
   }, [dispatch, status]);
 
-  // "Login": with a real backend, hand off to the central RegulaOne login. In mock
-  // mode there is no login form, so signIn() establishes the demo session first —
-  // only THEN do we enter the workspace. (Without this the dashboard would be
-  // reachable with no login at all.)
-  const handleLogin = async () => {
-    if (USE_MOCK_AUTH) {
-      await dispatch(signIn());
-      navigate("/dashboard");
-    } else {
-      redirectToLogin();
-    }
+  // "Login": hand off to the central RegulaOne login page (the browser leaves and
+  // returns to /auth/sso-callback once signed in).
+  const handleLogin = () => {
+    redirectToLogin();
   };
 
   // "Access SafeVoice": go into the gated workspace. navigate() rewrites this to
