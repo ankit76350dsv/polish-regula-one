@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
-import { FileText, Lock, Send, ShieldCheck } from "lucide-react";
+import { FileText, Lock, MessageSquare, Send, ShieldCheck } from "lucide-react";
 import {
   AppButton,
   AppTable,
@@ -23,7 +23,7 @@ import {
   selectUpdating,
   updateReport,
 } from "../../slices/reportsSlice";
-import { fetchMessages, selectMessagesFor, selectSending, sendMessage } from "../../slices/messagesSlice";
+import { fetchMessages, selectMessagesFor, selectSending, selectThread, sendMessage } from "../../slices/messagesSlice";
 import { fetchUsers, selectUsers } from "../../slices/usersSlice";
 import { addToast } from "../../slices/uiSlice";
 import { selectCurrentUser } from "../../slices/authSlice";
@@ -121,6 +121,20 @@ export default function CaseDetailsPage({ caseId, navigate }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {report.disclosureMode === "Anonymous" && (
+            <AppButton
+              type="button"
+              variant="outline"
+              icon={<MessageSquare className="w-4 h-4" />}
+              onClick={() => {
+                // Tell the inbox which thread to open, then go there.
+                dispatch(selectThread(report.id));
+                navigate?.("/messages");
+              }}
+            >
+              {t("case.openInbox")}
+            </AppButton>
+          )}
           {canExport && (
             <AppButton type="button" variant="outline" icon={<FileText className="w-4 h-4" />} onClick={() => setPending({ action: "export" })}>
               {t("case.exportSummary")}

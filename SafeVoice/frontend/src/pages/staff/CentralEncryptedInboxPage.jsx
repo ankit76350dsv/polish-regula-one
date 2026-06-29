@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
-import { Lock, Send } from "lucide-react";
+import { FileText, Lock, Send } from "lucide-react";
 import { AppButton, EmptyState, PageSpinner, SecureCard, Spinner } from "../../components/ui";
 import { fetchReports, selectReports, selectReportsStatus } from "../../slices/reportsSlice";
-import { fetchMessages, selectMessagesFor, selectSending, sendMessage } from "../../slices/messagesSlice";
+import {
+  clearSelectedThread,
+  fetchMessages,
+  selectMessagesFor,
+  selectSelectedThreadId,
+  selectSending,
+  sendMessage,
+} from "../../slices/messagesSlice";
 import { addToast } from "../../slices/uiSlice";
 
-export default function CentralEncryptedInboxPage() {
+export default function CentralEncryptedInboxPage({ navigate }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const reports = useSelector(selectReports);
@@ -18,7 +25,9 @@ export default function CentralEncryptedInboxPage() {
   // access-key hash (a credential — it must never leave the server), so we identify them
   // by their disclosure mode instead.
   const threads = reports.filter((r) => r.disclosureMode === "Anonymous");
-  const [selectedId, setSelectedId] = useState(null);
+  // If we arrived here from a case's detail page ("Open in inbox"), start on that thread.
+  const preselectId = useSelector(selectSelectedThreadId);
+  const [selectedId, setSelectedId] = useState(preselectId);
   const activeId = selectedId || threads[0]?.id || null;
   // The readable reference (e.g. "SV/2026/0629/1408") for the open thread, used in the
   // header instead of the raw database id. Falls back to the id if not loaded yet.
@@ -30,6 +39,12 @@ export default function CentralEncryptedInboxPage() {
   useEffect(() => {
     if (status === "idle") dispatch(fetchReports());
   }, [status, dispatch]);
+
+  // We have used the "open this thread" hint from the case page — forget it so a later
+  // plain visit to the inbox starts on the first thread, not this stale one.
+  useEffect(() => {
+    if (preselectId) dispatch(clearSelectedThread());
+  }, [preselectId, dispatch]);
 
   useEffect(() => {
     if (activeId) dispatch(fetchMessages(activeId));
@@ -95,7 +110,16 @@ export default function CentralEncryptedInboxPage() {
         </SecureCard>
 
         {activeId ? (
-          <SecureCard isEncrypted title={t("inbox.thread", { id: activeRef })} subtitle={t("inbox.twoWay")}>
+          <SecureCard
+            isEncrypted
+            title={t("inbox.thread", { id: activeRef })}
+            subtitle={t("inbox.twoWay")}
+            headerAction={
+              <AppButton type="button" size="sm" variant="outline" icon={<FileText className="w-4 h-4" />} onClick={() => navigate?.(`/cases/${activeId}`)}>
+                {t("inbox.openCase")}
+              </AppButton>
+            }
+          >
             <div className="space-y-4">
               <div className="flex items-start gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
                 <Lock className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />

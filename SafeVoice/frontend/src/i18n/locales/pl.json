@@ -260,6 +260,7 @@
     "submittedVia": "{{category}} — złożono przez {{channel}}",
     "exportSummary": "Eksportuj podsumowanie",
     "markReviewed": "Oznacz jako przejrzane",
+    "openInbox": "Otwórz w skrzynce",
     "narrative": "Opis sprawy",
     "narrativeSub": "Fakty podane przez zgłaszającego",
     "incidentDate": "Data zdarzenia",
@@ -304,6 +305,7 @@
     "selectThread": "Wybierz wątek sprawy, aby zobaczyć rozmowę.",
     "thread": "Wątek {{id}}",
     "twoWay": "Dwukierunkowa anonimowa komunikacja",
+    "openCase": "Otwórz sprawę",
     "empty": "Brak wątków wiadomości.",
     "messagePlaceholder": "Napisz ostrożne pytanie uzupełniające…"
   },

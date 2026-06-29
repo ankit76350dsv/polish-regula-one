@@ -258,6 +258,7 @@
     "submittedVia": "{{category}} submitted via {{channel}}",
     "exportSummary": "Export summary",
     "markReviewed": "Mark reviewed",
+    "openInbox": "Open in inbox",
     "narrative": "Case narrative",
     "narrativeSub": "Reporter-provided facts",
     "incidentDate": "Incident date",
@@ -302,6 +303,7 @@
     "selectThread": "Select a case thread to view the conversation.",
     "thread": "Thread {{id}}",
     "twoWay": "Two-way anonymous communication",
+    "openCase": "Open case",
     "empty": "No message threads yet.",
     "messagePlaceholder": "Write a careful follow-up question…"
   },

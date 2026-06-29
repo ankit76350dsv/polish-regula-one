@@ -22,8 +22,20 @@ const messagesSlice = createSlice({
     status: "idle",
     sending: false,
     sendError: null,
+    // When the user jumps from a case's detail page to the inbox, we remember which
+    // case to open so the inbox can preselect that thread. Cleared once consumed.
+    selectedThreadId: null,
   },
-  reducers: {},
+  reducers: {
+    // Remember which case thread the inbox should open next.
+    selectThread(state, action) {
+      state.selectedThreadId = action.payload;
+    },
+    // Forget the remembered thread (after the inbox has used it).
+    clearSelectedThread(state) {
+      state.selectedThreadId = null;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchMessages.pending, (s) => {
@@ -52,8 +64,11 @@ const messagesSlice = createSlice({
   },
 });
 
+export const { selectThread, clearSelectedThread } = messagesSlice.actions;
+
 export const selectMessagesFor = (caseId) => (s) => s.messages.byCase[caseId] || [];
 export const selectMessagesStatus = (s) => s.messages.status;
 export const selectSending = (s) => s.messages.sending;
+export const selectSelectedThreadId = (s) => s.messages.selectedThreadId;
 
 export default messagesSlice.reducer;
