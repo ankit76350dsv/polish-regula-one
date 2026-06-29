@@ -20,6 +20,10 @@ export default function CentralEncryptedInboxPage() {
   const threads = reports.filter((r) => r.disclosureMode === "Anonymous");
   const [selectedId, setSelectedId] = useState(null);
   const activeId = selectedId || threads[0]?.id || null;
+  // The readable reference (e.g. "SV/2026/0629/1408") for the open thread, used in the
+  // header instead of the raw database id. Falls back to the id if not loaded yet.
+  const activeThread = threads.find((r) => r.id === activeId);
+  const activeRef = activeThread?.caseReference || activeId;
   const messages = useSelector(selectMessagesFor(activeId));
   const [draft, setDraft] = useState("");
 
@@ -69,8 +73,19 @@ export default function CentralEncryptedInboxPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-bold text-slate-900">{report.caseReference || report.id}</span>
-                    <span className="text-[10px] font-mono text-slate-500">{t(`status.${report.status}`, report.status)}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-bold text-slate-900 truncate">{report.caseReference || report.id}</span>
+                      {report.unreadCount > 0 && (
+                        <span
+                          className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-bold shrink-0"
+                          title={t("cases.unreadMessages", { count: report.unreadCount })}
+                          aria-label={t("cases.unreadMessages", { count: report.unreadCount })}
+                        >
+                          {report.unreadCount}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500 shrink-0">{t(`status.${report.status}`, report.status)}</span>
                   </div>
                   <p className="mt-1 text-[11px] text-slate-500 line-clamp-2">{t(`categories.${report.category}`, report.category)}</p>
                 </button>
@@ -80,7 +95,7 @@ export default function CentralEncryptedInboxPage() {
         </SecureCard>
 
         {activeId ? (
-          <SecureCard isEncrypted title={t("inbox.thread", { id: activeId })} subtitle={t("inbox.twoWay")}>
+          <SecureCard isEncrypted title={t("inbox.thread", { id: activeRef })} subtitle={t("inbox.twoWay")}>
             <div className="space-y-4">
               <div className="flex items-start gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
                 <Lock className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
