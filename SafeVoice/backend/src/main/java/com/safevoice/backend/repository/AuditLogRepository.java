@@ -1,6 +1,7 @@
 package com.safevoice.backend.repository;
 
 import com.safevoice.backend.model.document.AuditLog;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
@@ -28,4 +29,11 @@ public interface AuditLogRepository extends MongoRepository<AuditLog, String> {
      * "audit entries sealed".
      */
     long countByTenantId(String tenantId);
+
+    /**
+     * The most recent audit entries for a tenant, newest first. The Pageable limits how
+     * many come back, so the audit-trail screen loads the latest activity without ever
+     * pulling years of history at once.
+     */
+    List<AuditLog> findByTenantIdOrderByTimestampDesc(String tenantId, Pageable pageable);
 }
