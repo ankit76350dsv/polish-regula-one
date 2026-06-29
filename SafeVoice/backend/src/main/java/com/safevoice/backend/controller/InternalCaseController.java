@@ -7,7 +7,8 @@ import com.safevoice.backend.model.enums.case_report.CaseSeverity;
 import com.safevoice.backend.model.enums.case_report.CaseStatus;
 import com.safevoice.backend.service.AttachmentService;
 import com.safevoice.backend.service.CaseMessageService;
-import com.safevoice.backend.service.CaseReportService;
+import com.safevoice.backend.service.report.CaseReportService;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;

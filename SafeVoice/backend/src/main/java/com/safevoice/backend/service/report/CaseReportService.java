@@ -1,4 +1,4 @@
-package com.safevoice.backend.service;
+package com.safevoice.backend.service.report;
 
 import com.safevoice.backend.dto.CaseSubmissionRequest;
 import com.safevoice.backend.dto.CaseSubmissionResponse;
@@ -17,20 +17,15 @@ import com.safevoice.backend.model.enums.case_report.IntakeChannel;
 import com.safevoice.backend.model.enums.case_report.ReportCategory;
 import com.safevoice.backend.repository.CaseReportRepository;
 import com.safevoice.backend.repository.TenantRepository;
+import com.safevoice.backend.service.AuditLogService;
+import com.safevoice.backend.service.report.utils.CaseReportUtils;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 
 /**
@@ -42,7 +37,6 @@ public class CaseReportService {
     private final CaseReportRepository caseReportRepository;
     private final TenantRepository tenantRepository;
     private final AuditLogService auditLogService;
-    private final SecureRandom secureRandom = new SecureRandom();
 
     @Autowired
     public CaseReportService(CaseReportRepository caseReportRepository,
@@ -94,11 +88,11 @@ public class CaseReportService {
         String keyHash = null;
         String caseRef;
         if (isHrOnly) {
-            caseRef = "HR-" + randomHex(5).toUpperCase();
+            caseRef = "HR-" + CaseReportUtils.randomHex(5).toUpperCase();
         } else {
-            accessKey = generateAccessKey();
-            keyHash = sha256Hex(accessKey);
-            caseRef = caseRefFromHash(keyHash);
+            accessKey = CaseReportUtils.generateAccessKey();
+            keyHash = CaseReportUtils.sha256Hex(accessKey);
+            caseRef = CaseReportUtils.caseRefFromHash(keyHash);
         }
 
         // "oral" means the reporter wants a phone/voice channel; otherwise it is written.
@@ -109,10 +103,10 @@ public class CaseReportService {
         // ObjectId for _id. The readable "SV-..."/"HR-..." code is kept separately.
         caseReport.setCaseReference(caseRef);
         caseReport.setTenantId(tenantId);
-        caseReport.setKeyHash(keyHash);
+        caseReport.setKeyHash(keyHash); //! Hashed of genarated...
         caseReport.setCategory(category);
         caseReport.setDescription(request.getFacts());
-        caseReport.setIncidentDate(parseIncidentDate(request.getIncidentDate()));
+        caseReport.setIncidentDate(CaseReportUtils.parseIncidentDate(request.getIncidentDate()));
         caseReport.setDepartment(request.getArea());
         caseReport.setDisclosureMode(isHrOnly ? DisclosureMode.HR_HANDOFF : DisclosureMode.ANONYMOUS);
         caseReport.setIntakeChannel(isHrOnly ? IntakeChannel.HR_GRIEVANCE_HANDOFF : IntakeChannel.ANONYMOUS_WEB_PORTAL);
@@ -196,7 +190,7 @@ public class CaseReportService {
             throw new IllegalArgumentException("Access key is required");
         }
 
-        String keyHash = sha256Hex(accessKey.trim());
+        String keyHash = CaseReportUtils.sha256Hex(accessKey.trim());
         CaseReport report = caseReportRepository.findByKeyHash(keyHash)
                 .orElseThrow(() -> new CaseNotFoundException("No case found for the provided access key"));
 
@@ -380,67 +374,5 @@ public class CaseReportService {
         );
 
         return saved;
-    }
-
-    /**
-     * Make ONE cryptographically secure access key: 32 random bytes shown as 64 hex
-     * characters. This is the reporter's only credential. We use SecureRandom (a
-     * cryptographically strong generator) so keys cannot be guessed or predicted.
-     */
-    private String generateAccessKey() {
-        byte[] bytes = new byte[32];
-        secureRandom.nextBytes(bytes);
-        return HexFormat.of().formatHex(bytes); // lowercase hex, matches the web app's format
-    }
-
-    /**
-     * Make a short run of random hex characters. Used only to build a non-secret id
-     * for HR grievance cases, which have no access key of their own.
-     */
-    private String randomHex(int bytes) {
-        byte[] b = new byte[bytes];
-        secureRandom.nextBytes(b);
-        return HexFormat.of().formatHex(b);
-    }
-
-    /**
-     * Return the SHA-256 fingerprint (64 hex chars) of any text. We store and compare
-     * this fingerprint instead of the access key itself, so the key is never kept.
-     * SHA-256 is one-way: you cannot turn the fingerprint back into the key.
-     */
-    private String sha256Hex(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            // SHA-256 is part of every standard Java runtime, so this should never happen.
-            throw new IllegalStateException("SHA-256 algorithm is unavailable", e);
-        }
-    }
-
-    /**
-     * Build a short, non-secret case reference from the key fingerprint, e.g.
-     * "SV-1A2B3C4D5E". Staff use this to talk about a case; it is a one-way function
-     * of the key and never reveals it.
-     */
-    private String caseRefFromHash(String keyHash) {
-        return "SV-" + keyHash.substring(0, 10).toUpperCase();
-    }
-
-    /**
-     * Turn the form's calendar date ("YYYY-MM-DD") into an instant at the start of that
-     * day (UTC). Returns null if the reporter left the date empty or it cannot be read,
-     * so a missing or odd date never blocks an urgent report.
-     */
-    private Instant parseIncidentDate(String date) {
-        if (date == null || date.isBlank()) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(date.trim()).atStartOfDay(ZoneOffset.UTC).toInstant();
-        } catch (DateTimeParseException e) {
-            return null;
-        }
     }
 }

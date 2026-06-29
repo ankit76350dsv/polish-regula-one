@@ -10,7 +10,8 @@ import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
 import com.safevoice.backend.service.AttachmentService;
 import com.safevoice.backend.service.CaseMessageService;
-import com.safevoice.backend.service.CaseReportService;
+import com.safevoice.backend.service.report.CaseReportService;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
