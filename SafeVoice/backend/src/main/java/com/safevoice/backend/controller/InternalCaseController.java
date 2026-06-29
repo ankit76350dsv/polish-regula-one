@@ -9,7 +9,8 @@ import com.safevoice.backend.service.AttachmentService;
 import com.safevoice.backend.service.CaseMessageService;
 import com.safevoice.backend.service.report.CaseReportService;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -23,21 +24,12 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/internal/cases")
+@RequiredArgsConstructor
 public class InternalCaseController {
 
     private final CaseReportService caseReportService;
     private final CaseMessageService caseMessageService;
     private final AttachmentService attachmentService;
-
-    @Autowired
-    public InternalCaseController(
-            CaseReportService caseReportService,
-            CaseMessageService caseMessageService,
-            AttachmentService attachmentService) {
-        this.caseReportService = caseReportService;
-        this.caseMessageService = caseMessageService;
-        this.attachmentService = attachmentService;
-    }
 
     /**
      * Lists active whistleblower cases for the tenant.
