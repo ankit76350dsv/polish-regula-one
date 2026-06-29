@@ -31,4 +31,13 @@ public interface CaseReportRepository extends MongoRepository<CaseReport, String
      * Lists all non-soft-deleted case reports for a tenant.
      */
     List<CaseReport> findAllByTenantIdAndDeletedFalse(String tenantId);
+
+    /**
+     * Tells us whether a tenant already has a case with this readable reference.
+     * The reference is built from the submission minute (e.g. "SV/2026/0629/1408"), so
+     * two reports filed in the same minute would clash; we use this to detect that and
+     * ask the second reporter to try again a minute later. Scoped to the tenant, because
+     * each organisation has its own independent set of references.
+     */
+    boolean existsByTenantIdAndCaseReference(String tenantId, String caseReference);
 }

@@ -52,6 +52,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Two reports arrived in the same minute for the same organisation, so the readable
+     * case reference (built from that minute) would clash. Answered as 409 Conflict with
+     * errorCode "CASE_REFERENCE_CONFLICT" and a message telling the reporter to wait a
+     * minute and submit again — by then the reference is different and unique.
+     */
+    @ExceptionHandler(CaseReferenceConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleReferenceConflict(CaseReferenceConflictException ex) {
+        log.info("[handleReferenceConflict]: duplicate case reference in the same minute");
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(body(ex.getMessage(), "CASE_REFERENCE_CONFLICT", HttpStatus.CONFLICT));
+    }
+
+    /**
      * The report named an organisation (tenant) that does not exist or is switched off.
      * Answered as 404 with errorCode "TENANT_NOT_FOUND".
      */

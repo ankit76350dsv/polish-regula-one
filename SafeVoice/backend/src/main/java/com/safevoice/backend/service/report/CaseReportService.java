@@ -3,6 +3,7 @@ package com.safevoice.backend.service.report;
 import com.safevoice.backend.dto.CaseSubmissionRequest;
 import com.safevoice.backend.dto.CaseSubmissionResponse;
 import com.safevoice.backend.exception.CaseNotFoundException;
+import com.safevoice.backend.exception.CaseReferenceConflictException;
 import com.safevoice.backend.exception.TenantNotFoundException;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.document.Tenant;
@@ -80,19 +81,30 @@ public class CaseReportService {
         ReportCategory category = ReportCategory.fromLabel(request.getCategory());
         boolean isHrOnly = category == ReportCategory.LABOUR_DISPUTE;
 
-        // Decide the credential and the case id.
-        // - Normal report: one secret access key, stored only as a SHA-256 hash, and a
-        //   short case reference derived from that hash (so the id never reveals the key).
-        // - HR grievance: no key at all; the case still needs an id, so we make a random one.
+        // Decide the credential.
+        // - Normal report: one secret access key, stored only as a SHA-256 hash (so the
+        //   stored data can never reveal the reporter's key).
+        // - HR grievance: no key at all; it is routed to HR instead.
         String accessKey = null;
         String keyHash = null;
-        String caseRef;
-        if (isHrOnly) {
-            caseRef = "HR-" + CaseReportUtils.randomHex(5).toUpperCase();
-        } else {
+        if (!isHrOnly) {
             accessKey = CaseReportUtils.generateAccessKey();
             keyHash = CaseReportUtils.sha256Hex(accessKey);
-            caseRef = CaseReportUtils.caseRefFromHash(keyHash);
+        }
+
+        // Build the readable, non-secret case reference from WHEN the report arrived,
+        // e.g. "SV/2026/0629/1408" (or "HR/..." for an HR grievance). Staff use this to
+        // talk about the case; it carries no personal data and is not the database id.
+        String caseRef = CaseReportUtils.buildCaseReference(isHrOnly ? "HR" : "SV", now);
+
+        // The reference must be unique within the organisation. Because it is built down
+        // to the minute, two reports filed in the same minute for the same tenant would
+        // share one. If that happens we do NOT silently alter the reference — we stop and
+        // ask the reporter to wait a minute and submit again (a new minute → a new, unique
+        // reference). This keeps every reference a clean, one-to-one handle for a case.
+        if (caseReportRepository.existsByTenantIdAndCaseReference(tenantId, caseRef)) {
+            throw new CaseReferenceConflictException(
+                    "Another report was just received this minute. Please wait one minute and submit again.");
         }
 
         // "oral" means the reporter wants a phone/voice channel; otherwise it is written.

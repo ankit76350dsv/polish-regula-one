@@ -6,7 +6,9 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.HexFormat;
 
@@ -32,6 +34,21 @@ public final class CaseReportUtils {
      */
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
+    /**
+     * The clock zone used to build a case reference. We use Polish local time
+     * (Europe/Warsaw) because the reference is read by Polish compliance staff, so the
+     * date and time in it should match the day/hour they actually received the report.
+     */
+    private static final ZoneId CASE_REF_ZONE = ZoneId.of("Europe/Warsaw");
+
+    /**
+     * The layout of the date/time part of a case reference: four-digit year, then the
+     * month+day glued together, then the hour+minute glued together. For example a
+     * report received on 29 June 2026 at 14:08 becomes "2026/0629/1408".
+     */
+    private static final DateTimeFormatter CASE_REF_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy/MMdd/HHmm").withZone(CASE_REF_ZONE);
+
     // Private constructor: this is a utility class, so it must never be instantiated.
     private CaseReportUtils() {
     }
@@ -45,16 +62,6 @@ public final class CaseReportUtils {
         byte[] bytes = new byte[32];
         SECURE_RANDOM.nextBytes(bytes);
         return HexFormat.of().formatHex(bytes); // lowercase hex, matches the web app's format
-    }
-
-    /**
-     * Make a short run of random hex characters. Used only to build a non-secret id
-     * for HR grievance cases, which have no access key of their own.
-     */
-    public static String randomHex(int bytes) {
-        byte[] b = new byte[bytes];
-        SECURE_RANDOM.nextBytes(b);
-        return HexFormat.of().formatHex(b);
     }
 
     /**
@@ -74,12 +81,16 @@ public final class CaseReportUtils {
     }
 
     /**
-     * Build a short, non-secret case reference from the key fingerprint, e.g.
-     * "SV-1A2B3C4D5E". Staff use this to talk about a case; it is a one-way function
-     * of the key and never reveals it.
+     * Build the short, non-secret case reference staff use to talk about a case.
+     * The shape is "PREFIX/YEAR/MMDD/HHMM" built from when the report arrived, e.g.
+     * "SV/2026/0629/1408". The prefix is "SV" for an anonymous whistleblower report or
+     * "HR" for an HR grievance. It carries no personal data and never reveals the key.
+     *
+     * @param prefix      "SV" or "HR"
+     * @param submittedAt the moment the report was received
      */
-    public static String caseRefFromHash(String keyHash) {
-        return "SV-" + keyHash.substring(0, 10).toUpperCase();
+    public static String buildCaseReference(String prefix, Instant submittedAt) {
+        return prefix + "/" + CASE_REF_FORMAT.format(submittedAt);
     }
 
     /**

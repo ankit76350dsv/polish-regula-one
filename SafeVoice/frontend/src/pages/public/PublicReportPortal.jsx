@@ -65,8 +65,11 @@ export default function PublicReportPortal({ tenantId, navigate }) {
         }),
       ).unwrap();
       navigate?.("/report/success");
-    } catch {
-      dispatch(addToast({ type: "error", message: t("toast.genericError") }));
+    } catch (err) {
+      // Show the backend's own message when it has one (e.g. the "please wait one
+      // minute and submit again" reply when two reports land in the same minute);
+      // otherwise fall back to a generic error.
+      dispatch(addToast({ type: "error", message: err?.message || t("toast.genericError") }));
     }
   }
 
