@@ -27,4 +27,27 @@ public enum ReportCategory {
     ReportCategory(String label) {
         this.label = label;
     }
+
+    /**
+     * Finds the category that matches a human-readable label sent by the public web form
+     * (for example "Corruption" or "Individual HR Grievance"). The form sends the label,
+     * not the enum name, so we translate it here. Matching ignores upper/lower case and
+     * surrounding spaces so small differences do not cause a false rejection.
+     *
+     * @param label the visible category text submitted by the reporter
+     * @return the matching ReportCategory
+     * @throws IllegalArgumentException if no category matches (turned into a 400 error)
+     */
+    public static ReportCategory fromLabel(String label) {
+        if (label != null) {
+            String cleaned = label.trim();
+            for (ReportCategory category : values()) {
+                // Accept either the visible label ("Corruption") or the raw enum name ("CORRUPTION").
+                if (category.label.equalsIgnoreCase(cleaned) || category.name().equalsIgnoreCase(cleaned)) {
+                    return category;
+                }
+            }
+        }
+        throw new IllegalArgumentException("Unknown report category: " + label);
+    }
 }

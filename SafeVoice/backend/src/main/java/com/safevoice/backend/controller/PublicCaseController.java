@@ -1,8 +1,10 @@
 package com.safevoice.backend.controller;
 
+import com.safevoice.backend.dto.CaseMessageRequest;
 import com.safevoice.backend.dto.CaseRetrievalRequest;
 import com.safevoice.backend.dto.CaseSubmissionRequest;
 import com.safevoice.backend.dto.CaseSubmissionResponse;
+import com.safevoice.backend.dto.CaseTrackingResponse;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
@@ -20,11 +22,19 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 /**
- * REST controller representing public endpoints for whistleblowers.
- * Enforces tenant isolation via X-Tenant-ID headers and verifies PIN code ownership.
+ * Public, anonymous endpoints for whistleblowers (no login required).
+ *
+ * These match exactly what the SafeVoice web form sends:
+ *   POST   /api/safevoice/reports                  → submit a new report
+ *   POST   /api/safevoice/reports/track            → look up a case by access key
+ *   GET    /api/safevoice/reports/{caseId}/messages → read the case chat thread
+ *   POST   /api/safevoice/reports/{caseId}/messages → post a message into the thread
+ *
+ * The reporter's ONLY credential is a single 64-character access key. There is no
+ * tracking code and no PIN. We store only the key's hash, so the channel stays anonymous.
  */
 @RestController
-@RequestMapping("/api/v1/public/cases")
+@RequestMapping("/api/safevoice/reports")
 @RequiredArgsConstructor
 public class PublicCaseController {
 
@@ -33,47 +43,65 @@ public class PublicCaseController {
     private final AttachmentService attachmentService;
 
     /**
-     * Submit a new case report.
+     * Submit a new report. Returns the one-time access key (null for HR grievances).
+     * Validation failures and bad input are turned into clear JSON errors by the
+     * global exception handler.
      */
-    @PostMapping("/submit")
+    @PostMapping
     public ResponseEntity<CaseSubmissionResponse> submit(
-            @Valid @RequestBody CaseSubmissionRequest request,
-            @RequestHeader("X-Tenant-ID") String tenantId) {
-        CaseSubmissionResponse response = caseReportService.submit(request, tenantId);
+            @Valid @RequestBody CaseSubmissionRequest request) {
+        CaseSubmissionResponse response = caseReportService.submit(request);
         return ResponseEntity.ok(response);
     }
 
     /**
-     * Retrieve the case status, timeline, and attributes.
-     * Enforces case code and PIN verification.
+     * Look up a case using only the access key, and return the case plus its chat thread.
      */
-    @PostMapping("/retrieve")
-    public ResponseEntity<CaseReport> retrieve(
-            @Valid @RequestBody CaseRetrievalRequest request,
-            @RequestHeader("X-Tenant-ID") String tenantId) {
-        CaseReport report = caseReportService.retrieve(request.getTrackingCode(), request.getPin(), tenantId);
-        return ResponseEntity.ok(report);
+    @PostMapping("/track")
+    public ResponseEntity<CaseTrackingResponse> track(
+            @Valid @RequestBody CaseRetrievalRequest request) {
+        CaseReport report = caseReportService.retrieveByAccessKey(request.getAccessKey());
+        List<CaseMessage> messages = caseMessageService.getMessages(report.getId(), report.getTenantId());
+        return ResponseEntity.ok(CaseTrackingResponse.builder()
+                .report(report)
+                .messages(messages)
+                .build());
     }
 
     /**
-     * Post a chat message inside the case channel.
-     * Enforces case ownership verification.
+     * Read the chat thread for a case. The case is found by its short reference (the id
+     * the reporter received after looking the case up with their key).
+     *
+     * SECURITY NOTE: this resolves the case by its reference alone. The reference is only
+     * known to someone who already proved they hold the access key, but it is not itself a
+     * secret. A stronger design would carry the access key on this call too; see the change
+     * report. For now this matches the web app's current contract.
+     */
+    @GetMapping("/{caseId}/messages")
+    public ResponseEntity<List<CaseMessage>> getMessages(@PathVariable String caseId) {
+        CaseReport report = caseReportService.getByCaseRef(caseId);
+        List<CaseMessage> messages = caseMessageService.getMessages(report.getId(), report.getTenantId());
+        return ResponseEntity.ok(messages);
+    }
+
+    /**
+     * Post a message into a case's chat thread (reporter side).
      */
     @PostMapping("/{caseId}/messages")
     public ResponseEntity<CaseMessage> postMessage(
             @PathVariable String caseId,
-            @RequestParam("trackingCode") String trackingCode,
-            @RequestParam(value = "pin", required = false) String pin,
-            @RequestBody String text,
-            @RequestHeader("X-Tenant-ID") String tenantId) {
-        // Enforce ownership verification
-        caseReportService.retrieve(trackingCode, pin, tenantId);
+            @Valid @RequestBody CaseMessageRequest request) {
+        CaseReport report = caseReportService.getByCaseRef(caseId);
+
+        String sender = (request.getSender() == null || request.getSender().isBlank())
+                ? "Anonymous Whistleblower"
+                : request.getSender();
 
         CaseMessage message = caseMessageService.postMessage(
-                caseId,
-                text,
-                "Reporter",
-                tenantId,
+                report.getId(),
+                request.getText(),
+                sender,
+                report.getTenantId(),
                 "Public Portal",
                 "Anonymous Whistleblower"
         );
@@ -81,38 +109,18 @@ public class PublicCaseController {
     }
 
     /**
-     * Retrieve the chat log for the case.
-     * Enforces case ownership verification.
-     */
-    @GetMapping("/{caseId}/messages")
-    public ResponseEntity<List<CaseMessage>> getMessages(
-            @PathVariable String caseId,
-            @RequestParam("trackingCode") String trackingCode,
-            @RequestParam(value = "pin", required = false) String pin,
-            @RequestHeader("X-Tenant-ID") String tenantId) {
-        // Enforce ownership verification
-        caseReportService.retrieve(trackingCode, pin, tenantId);
-
-        List<CaseMessage> messages = caseMessageService.getMessages(caseId, tenantId);
-        return ResponseEntity.ok(messages);
-    }
-
-    /**
-     * Upload an evidence file attachment for a case.
-     * Enforces case ownership verification and security whitelists.
+     * Upload an evidence file for an existing case. Not used by the standard submit flow
+     * (the form sends file metadata inside the submit request), but kept for clients that
+     * upload the actual file later. Ownership is resolved by the case reference.
      */
     @PostMapping(value = "/{caseId}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<EvidenceAttachment> uploadAttachment(
             @PathVariable String caseId,
-            @RequestParam("trackingCode") String trackingCode,
-            @RequestParam(value = "pin", required = false) String pin,
-            @RequestParam("file") MultipartFile file,
-            @RequestHeader("X-Tenant-ID") String tenantId) {
-        // Enforce ownership verification
-        caseReportService.retrieve(trackingCode, pin, tenantId);
+            @RequestParam("file") MultipartFile file) {
+        CaseReport report = caseReportService.getByCaseRef(caseId);
 
         EvidenceAttachment attachment = attachmentService.upload(file);
-        caseReportService.addAttachment(caseId, attachment, tenantId);
+        caseReportService.addAttachment(report.getId(), attachment, report.getTenantId());
 
         return ResponseEntity.ok(attachment);
     }

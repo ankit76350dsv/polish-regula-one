@@ -2,23 +2,35 @@ package com.safevoice.backend.service;
 
 import com.safevoice.backend.dto.CaseSubmissionRequest;
 import com.safevoice.backend.dto.CaseSubmissionResponse;
+import com.safevoice.backend.exception.CaseNotFoundException;
+import com.safevoice.backend.exception.TenantNotFoundException;
 import com.safevoice.backend.model.document.CaseReport;
+import com.safevoice.backend.model.document.Tenant;
+import com.safevoice.backend.model.embedded.EvidenceAttachment;
 import com.safevoice.backend.model.embedded.TimelineEvent;
 import com.safevoice.backend.model.enums.audit.AuditActionType;
 import com.safevoice.backend.model.enums.audit.AuditOutcome;
 import com.safevoice.backend.model.enums.case_report.CaseSeverity;
 import com.safevoice.backend.model.enums.case_report.CaseStatus;
 import com.safevoice.backend.model.enums.case_report.DisclosureMode;
+import com.safevoice.backend.model.enums.case_report.IntakeChannel;
 import com.safevoice.backend.model.enums.case_report.ReportCategory;
 import com.safevoice.backend.repository.CaseReportRepository;
+import com.safevoice.backend.repository.TenantRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 
 /**
@@ -28,65 +40,122 @@ import java.util.List;
 public class CaseReportService {
 
     private final CaseReportRepository caseReportRepository;
+    private final TenantRepository tenantRepository;
     private final AuditLogService auditLogService;
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Autowired
-    public CaseReportService(CaseReportRepository caseReportRepository, AuditLogService auditLogService) {
+    public CaseReportService(CaseReportRepository caseReportRepository,
+                             TenantRepository tenantRepository,
+                             AuditLogService auditLogService) {
         this.caseReportRepository = caseReportRepository;
+        this.tenantRepository = tenantRepository;
         this.auditLogService = auditLogService;
     }
 
     /**
-     * Submit a new case report. Handles tracking code and PIN generation,
-     * compliance deadlines, dynamic labour dispute flows, and audit logs.
+     * Submit a new whistleblower report.
+     *
+     * What happens here, in plain steps:
+     *  1. Work out the category (from the label the form sent) and whether this is an
+     *     HR grievance — HR grievances are routed to HR and get NO anonymous key.
+     *  2. For a normal report, make ONE 64-character access key, hash it, and use the
+     *     hash to derive a short, non-secret case reference (the case's id) for staff.
+     *  3. Save the case with its compliance deadlines, timeline, and evidence metadata.
+     *  4. Write an immutable audit log entry (with no reporter-identifying data).
+     *  5. Return the plain access key to show the reporter ONCE (never stored).
      */
-    public CaseSubmissionResponse submit(CaseSubmissionRequest request, String tenantId) {
-        if (tenantId == null || tenantId.trim().isEmpty()) {
-            throw new IllegalArgumentException("Tenant context (X-Tenant-ID) is required");
+    public CaseSubmissionResponse submit(CaseSubmissionRequest request) {
+        // The organisation the report is for. It is required and MUST already exist in
+        // the tenant registry — we never accept a report for an unknown organisation.
+        if (request.getTenantId() == null || request.getTenantId().isBlank()) {
+            throw new IllegalArgumentException("Tenant info/context is required");
+        }
+        String tenantId = request.getTenantId().trim();
+        // Look the organisation up in the shared "tenants" collection and make sure it is
+        // present and ACTIVE. We never accept a report for an unknown or switched-off tenant.
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new TenantNotFoundException("Unknown tenant: " + tenantId));
+        if (!"ACTIVE".equalsIgnoreCase(tenant.getStatus())) {
+            throw new TenantNotFoundException("Tenant is not active: " + tenantId);
         }
 
         Instant now = Instant.now();
-        String trackingCode = generateTrackingCode();
-        String plaintextPin = null;
-        String hashedPin = null;
 
-        // Apply labour dispute compliance rule
-        DisclosureMode disclosureMode = request.getDisclosureMode();
-        if (request.getCategory() == ReportCategory.LABOUR_DISPUTE) {
-            disclosureMode = DisclosureMode.HR_HANDOFF;
+        // Translate the visible category label (e.g. "Fraud") into our strong enum type.
+        ReportCategory category = ReportCategory.fromLabel(request.getCategory());
+        boolean isHrOnly = category == ReportCategory.LABOUR_DISPUTE;
+
+        // Decide the credential and the case id.
+        // - Normal report: one secret access key, stored only as a SHA-256 hash, and a
+        //   short case reference derived from that hash (so the id never reveals the key).
+        // - HR grievance: no key at all; the case still needs an id, so we make a random one.
+        String accessKey = null;
+        String keyHash = null;
+        String caseRef;
+        if (isHrOnly) {
+            caseRef = "HR-" + randomHex(5).toUpperCase();
         } else {
-            // Generate numeric PIN for standard anonymous access retrieval
-            plaintextPin = generateNumericPin();
-            hashedPin = encoder.encode(plaintextPin);
+            accessKey = generateAccessKey();
+            keyHash = sha256Hex(accessKey);
+            caseRef = caseRefFromHash(keyHash);
         }
 
+        // "oral" means the reporter wants a phone/voice channel; otherwise it is written.
+        boolean oral = "oral".equalsIgnoreCase(request.getChannel());
+
         CaseReport caseReport = new CaseReport();
+        // Do NOT set the id by hand — leaving it null lets MongoDB generate a real
+        // ObjectId for _id. The readable "SV-..."/"HR-..." code is kept separately.
+        caseReport.setCaseReference(caseRef);
         caseReport.setTenantId(tenantId);
-        caseReport.setTrackingCode(trackingCode);
-        caseReport.setHashedPin(hashedPin);
-        caseReport.setCategory(request.getCategory());
-        caseReport.setDescription(request.getDescription());
-        caseReport.setIncidentDate(request.getIncidentDate());
-        caseReport.setDepartment(request.getDepartment());
-        caseReport.setDisclosureMode(disclosureMode);
-        caseReport.setContactVaultRef(request.getContactVaultRef());
-        caseReport.setIntakeChannel(request.getIntakeChannel());
+        caseReport.setKeyHash(keyHash);
+        caseReport.setCategory(category);
+        caseReport.setDescription(request.getFacts());
+        caseReport.setIncidentDate(parseIncidentDate(request.getIncidentDate()));
+        caseReport.setDepartment(request.getArea());
+        caseReport.setDisclosureMode(isHrOnly ? DisclosureMode.HR_HANDOFF : DisclosureMode.ANONYMOUS);
+        caseReport.setIntakeChannel(isHrOnly ? IntakeChannel.HR_GRIEVANCE_HANDOFF : IntakeChannel.ANONYMOUS_WEB_PORTAL);
         caseReport.setStatus(CaseStatus.RECEIVED);
         caseReport.setSeverity(CaseSeverity.MEDIUM);
         caseReport.setSubmissionDate(now);
 
-        // Compliance SLAs: 7-day acknowledgement, 90-day feedback deadline
+        // Legal context shown to the reporter on the tracking page.
+        caseReport.setLawfulBasis("Legal obligation and protected follow-up under the Polish Whistleblower Protection Act 2024");
+        caseReport.setController("DSV Corporation Pty Ltd - RegulaOne Poland");
+        caseReport.setProcessor("SafeVoice EEA Processing Cluster");
+
+        // Compliance SLAs: 7-day acknowledgement, 90-day (3-month) feedback deadline.
         caseReport.setAcknowledgementDue(now.plus(7, ChronoUnit.DAYS));
         caseReport.setFeedbackDue(now.plus(90, ChronoUnit.DAYS));
 
-        // Setup timeline
+        // Record the reporter's communication choices as risk flags so staff can act on them.
+        if (request.isRequestMeeting()) {
+            caseReport.getRiskFlags().add("Meeting requested");
+        }
+        if (oral) {
+            caseReport.getRiskFlags().add("Oral reporting requested");
+        }
+
+        // Keep ONLY the evidence file's name and size label — never any device/telemetry data.
+        if (request.getAttachments() != null) {
+            for (CaseSubmissionRequest.AttachmentMetadata meta : request.getAttachments()) {
+                EvidenceAttachment attachment = new EvidenceAttachment();
+                attachment.setDisplayName(meta.getDisplayName());
+                attachment.setSizeLabel(meta.getSizeLabel());
+                attachment.setMetadataStripped(true);
+                attachment.setOriginalNameStored(false);
+                caseReport.getAttachments().add(attachment);
+            }
+        }
+
+        // Setup timeline (first event = intake).
         List<TimelineEvent> timeline = new ArrayList<>();
         timeline.add(new TimelineEvent(
                 new org.bson.types.ObjectId().toHexString(),
                 "Report Submitted",
-                "Case intake completed via " + request.getIntakeChannel().name(),
+                "Case intake completed via " + caseReport.getIntakeChannel().getLabel()
+                        + ". Intake accepted without IP, device, browser, or geolocation storage.",
                 now,
                 "system"
         ));
@@ -94,7 +163,7 @@ public class CaseReportService {
 
         CaseReport saved = caseReportRepository.save(caseReport);
 
-        // Record compliance audit log
+        // Record compliance audit log (no reporter-identifying data is ever logged).
         auditLogService.log(
                 tenantId,
                 "Public Portal",
@@ -104,51 +173,61 @@ public class CaseReportService {
                 AuditOutcome.RECORDED,
                 null,
                 "Report category: " + saved.getCategory().name(),
-                "Metadata stripped automatically on intake."
+                "Metadata stripped automatically on intake. Access key stored as a hash only."
         );
 
+        // Return the plain key ONCE for display (null for HR grievances). It is now forgotten.
         return CaseSubmissionResponse.builder()
-                .id(saved.getId())
-                .trackingCode(trackingCode)
-                .pin(plaintextPin) // Only present for standard cases (null for LABOUR_DISPUTE)
-                .disclosureMode(disclosureMode)
-                .submissionDate(now)
-                .acknowledgementDue(caseReport.getAcknowledgementDue())
-                .feedbackDue(caseReport.getFeedbackDue())
+                .accessKey(accessKey)
+                .hrOnly(isHrOnly)
                 .build();
     }
 
     /**
-     * Retrieve a case report. Verifies PIN code if required.
+     * Look a case up using ONLY the access key.
+     *
+     * We hash the key the reporter typed and match it against the stored fingerprint —
+     * the plain key is never stored or compared directly. If nothing matches we answer
+     * with a single "not found" (we never reveal whether a key "almost" matched), which
+     * protects anonymity. A successful lookup is recorded in the audit trail.
      */
-    public CaseReport retrieve(String trackingCode, String pin, String tenantId) {
-        if (tenantId == null || tenantId.trim().isEmpty()) {
-            throw new IllegalArgumentException("Tenant context is required");
+    public CaseReport retrieveByAccessKey(String accessKey) {
+        if (accessKey == null || accessKey.isBlank()) {
+            throw new IllegalArgumentException("Access key is required");
         }
 
-        CaseReport report = caseReportRepository.findByTenantIdAndTrackingCode(tenantId, trackingCode)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid tracking code or tenant ID"));
+        String keyHash = sha256Hex(accessKey.trim());
+        CaseReport report = caseReportRepository.findByKeyHash(keyHash)
+                .orElseThrow(() -> new CaseNotFoundException("No case found for the provided access key"));
 
-        // If not a labour dispute, enforce PIN verification
-        if (report.getCategory() != ReportCategory.LABOUR_DISPUTE) {
-            if (pin == null || pin.isBlank() || report.getHashedPin() == null ||
-                    !encoder.matches(pin, report.getHashedPin())) {
-                auditLogService.log(
-                        tenantId,
-                        "Public Portal",
-                        "Anonymous Whistleblower",
-                        AuditActionType.ACCESS_REVIEW,
-                        report.getId(),
-                        AuditOutcome.DENIED,
-                        null,
-                        "Failed tracking PIN access attempt",
-                        "Access Denied: Invalid PIN code."
-                );
-                throw new IllegalArgumentException("Invalid tracking code or PIN code");
-            }
+        if (report.isDeleted()) {
+            throw new CaseNotFoundException("No case found for the provided access key");
         }
+
+        auditLogService.log(
+                report.getTenantId(),
+                "Public Portal",
+                "Anonymous Whistleblower",
+                AuditActionType.ACCESS_REVIEW,
+                report.getId(),
+                AuditOutcome.RECORDED,
+                null,
+                "Case viewed via access key",
+                "Reporter accessed their own case using a valid access key."
+        );
 
         return report;
+    }
+
+    /**
+     * Look a case up by its short case reference (the document id, e.g. "SV-1A2B3C4D5E").
+     * Used by the message endpoints, where the reporter is already inside their case view.
+     * No tenant filter is applied because the reporter has no tenant context.
+     */
+    public CaseReport getByCaseRef(String caseRef) {
+        return caseReportRepository.findById(caseRef)
+                .filter(r -> !r.isDeleted())
+                .orElseThrow(() -> new CaseNotFoundException("No case found for reference: " + caseRef));
     }
 
     /**
@@ -303,22 +382,65 @@ public class CaseReportService {
         return saved;
     }
 
-    private String generateTrackingCode() {
-        // Generates a 12-character uppercase alphanumeric tracking code (A-Z, 0-9)
-        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        StringBuilder sb = new StringBuilder(12);
-        for (int i = 0; i < 12; i++) {
-            sb.append(chars.charAt(secureRandom.nextInt(chars.length())));
-        }
-        return sb.toString();
+    /**
+     * Make ONE cryptographically secure access key: 32 random bytes shown as 64 hex
+     * characters. This is the reporter's only credential. We use SecureRandom (a
+     * cryptographically strong generator) so keys cannot be guessed or predicted.
+     */
+    private String generateAccessKey() {
+        byte[] bytes = new byte[32];
+        secureRandom.nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes); // lowercase hex, matches the web app's format
     }
 
-    private String generateNumericPin() {
-        // Generates an 8-digit numeric access PIN
-        StringBuilder sb = new StringBuilder(8);
-        for (int i = 0; i < 8; i++) {
-            sb.append(secureRandom.nextInt(10));
+    /**
+     * Make a short run of random hex characters. Used only to build a non-secret id
+     * for HR grievance cases, which have no access key of their own.
+     */
+    private String randomHex(int bytes) {
+        byte[] b = new byte[bytes];
+        secureRandom.nextBytes(b);
+        return HexFormat.of().formatHex(b);
+    }
+
+    /**
+     * Return the SHA-256 fingerprint (64 hex chars) of any text. We store and compare
+     * this fingerprint instead of the access key itself, so the key is never kept.
+     * SHA-256 is one-way: you cannot turn the fingerprint back into the key.
+     */
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 is part of every standard Java runtime, so this should never happen.
+            throw new IllegalStateException("SHA-256 algorithm is unavailable", e);
         }
-        return sb.toString();
+    }
+
+    /**
+     * Build a short, non-secret case reference from the key fingerprint, e.g.
+     * "SV-1A2B3C4D5E". Staff use this to talk about a case; it is a one-way function
+     * of the key and never reveals it.
+     */
+    private String caseRefFromHash(String keyHash) {
+        return "SV-" + keyHash.substring(0, 10).toUpperCase();
+    }
+
+    /**
+     * Turn the form's calendar date ("YYYY-MM-DD") into an instant at the start of that
+     * day (UTC). Returns null if the reporter left the date empty or it cannot be read,
+     * so a missing or odd date never blocks an urgent report.
+     */
+    private Instant parseIncidentDate(String date) {
+        if (date == null || date.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(date.trim()).atStartOfDay(ZoneOffset.UTC).toInstant();
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 }

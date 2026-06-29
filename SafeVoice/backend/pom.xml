@@ -52,6 +52,19 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 
+		<!--
+			Spring Boot DevTools: watches the compiled class files and automatically
+			restarts the running app whenever they change. This means you do NOT have to
+			stop and start the backend by hand after every code change. The restart is
+			fast because DevTools reloads only your code, not the libraries.
+			It is marked optional/runtime so it is never included in a production build.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-devtools</artifactId>
+			<scope>runtime</scope>
+			<optional>true</optional>
+		</dependency>
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>

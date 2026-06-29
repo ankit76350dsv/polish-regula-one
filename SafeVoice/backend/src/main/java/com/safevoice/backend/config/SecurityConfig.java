@@ -31,6 +31,15 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/**").permitAll()
+                        // Anonymous whistleblower endpoints: submitting a report, looking it up
+                        // with the access key, and the case chat thread. These MUST be public —
+                        // the reporter has no account and no login by design.
+                        .requestMatchers(
+                                "/api/safevoice/reports",
+                                "/api/safevoice/reports/track",
+                                "/api/safevoice/reports/*/messages",
+                                "/api/safevoice/reports/*/attachments"
+                        ).permitAll()
                         .anyRequest().authenticated());
         return http.build();
     }

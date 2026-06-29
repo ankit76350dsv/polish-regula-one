@@ -4,13 +4,16 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
- * Request payload used by public whistleblowers to query their case status/messages.
+ * Request the anonymous reporter sends to look up their own case.
+ *
+ * There is only ONE credential: the 64-character access key. No tracking code and no
+ * separate PIN — the key alone identifies the case and proves the holder may see it.
+ * We hash the key and match it against the stored fingerprint, so the plain key is
+ * never stored or compared directly.
  */
 @Data
 public class CaseRetrievalRequest {
 
-    @NotBlank(message = "Tracking code is required")
-    private String trackingCode;
-
-    private String pin; // Required for standard cases, blank for LABOUR_DISPUTE
+    @NotBlank(message = "Access key is required")
+    private String accessKey;
 }

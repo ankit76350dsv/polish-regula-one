@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Service representing operations on CaseMessage chat channels.
@@ -63,7 +62,13 @@ public class CaseMessageService {
         message.setText(text);
         message.setTimestamp(Instant.now());
 
-        if ("Reporter".equalsIgnoreCase(sender)) {
+        // Work out whether the writer is the reporter or a staff member. The public web
+        // app labels reporter messages "Anonymous Whistleblower"; internal tools use
+        // "Reporter". Either way we mark the message as already read by its own author.
+        boolean fromReporter = sender != null
+                && (sender.equalsIgnoreCase("Reporter")
+                    || sender.toLowerCase().contains("whistleblower"));
+        if (fromReporter) {
             message.setReadByReporter(true);
             message.setReadByAdmin(false);
         } else {

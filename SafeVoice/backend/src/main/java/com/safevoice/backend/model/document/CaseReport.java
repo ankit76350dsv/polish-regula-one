@@ -35,6 +35,19 @@ public class CaseReport extends BaseDocument {
 
     private String hashedPin;
 
+    // SHA-256 fingerprint (64 hex chars) of the reporter's single 64-char access key.
+    // We store ONLY this one-way hash — never the key itself — so even our own data
+    // cannot reveal a reporter's credential. This is what keeps the channel anonymous.
+    // It is null for HR grievance cases, which are routed to HR and get no access key.
+    @Indexed(sparse = true)
+    private String keyHash;
+
+    // A short, human-friendly case label shown to staff, e.g. "SV-2F6968FBB1" (or
+    // "HR-..." for HR grievances). This is NOT the primary key — the real _id is a
+    // MongoDB ObjectId, generated automatically. This field is just a readable handle.
+    @Indexed(sparse = true)
+    private String caseReference;
+
     @org.springframework.data.annotation.Version
     private Long version;
 

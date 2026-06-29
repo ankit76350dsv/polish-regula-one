@@ -6,7 +6,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * MongoDB repository for managing CaseReport documents.
@@ -19,6 +18,14 @@ public interface CaseReportRepository extends MongoRepository<CaseReport, String
      * Enforces tenant isolation.
      */
     Optional<CaseReport> findByTenantIdAndTrackingCode(String tenantId, String trackingCode);
+
+    /**
+     * Finds a case report by the SHA-256 fingerprint of its access key.
+     * This is how the anonymous reporter flow looks a case up: we hash the key the
+     * reporter types and match it against this stored fingerprint. The key fingerprint
+     * is globally unique, so no tenant context is needed (and the reporter has none).
+     */
+    Optional<CaseReport> findByKeyHash(String keyHash);
 
     /**
      * Lists all non-soft-deleted case reports for a tenant.
