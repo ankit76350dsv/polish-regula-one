@@ -4,7 +4,7 @@
  * Labels are translated; colour classes come from the centralised data module.
  */
 import { useTranslation } from "react-i18next";
-import { severityClasses, statusClasses } from "../../mock/db";
+import { severityClasses, statusClasses } from "../../constants/caseFields";
 
 export function StatusBadge({ status }) {
   const { t } = useTranslation();

@@ -1,59 +1,95 @@
 /**
  * Report service — the ONLY place report API calls are defined.
  *
- * SIMPLE EXPLANATION:
- * Each function checks ONE switch to decide between the fake backend (mockApi) and
- * the real one. There are two switches because the two halves go live separately:
- *   • PUBLIC reporter calls (submit / track / post message) use USE_MOCK_PUBLIC and
- *     talk to the SafeVoice backend through `publicApi`. These endpoints are live now.
- *   • STAFF calls (list / get / update) use USE_MOCK_DATA and stay on mock until their
- *     backend is ready. Flip VITE_USE_MOCK_DATA="false" then — no component changes.
+ * Two backends, two clients:
+ *   • PUBLIC reporter calls (submit / track / post message) → `publicApi`
+ *     (anonymous, no login) against the public SafeVoice endpoints.
+ *   • STAFF case-management calls (list / get / status / severity / assign) →
+ *     `staffApi` (carries the signed-in actor's identity headers) against the
+ *     internal compliance endpoints (/api/v1/internal/cases).
+ *
+ * Every response is run through the case normaliser so the rest of the app always
+ * receives friendly display values and short dates, never raw backend enum names.
  */
-import { USE_MOCK_DATA, USE_MOCK_PUBLIC } from "../config";
-import mockApi from "../mock/mockApi";
-import { api, publicApi } from "./api";
+import { publicApi, staffApi } from "./api";
+import {
+  normalizeMessage,
+  normalizeReport,
+  normalizeReports,
+  statusToApi,
+  severityToApi,
+} from "./caseNormalizer";
 
 export const reportService = {
-  // Public: submit a new anonymous report. The organisation (tenantId) travels inside
-  // the payload — the page reads it from the /company/{tenantId}/report URL, not from
-  // any login, so a whistleblower never has to identify themselves.
+  // ── PUBLIC (anonymous reporter) ──────────────────────────────────────────────
+
+  // Submit a new anonymous report. The organisation (tenantId) travels inside the
+  // payload — the page reads it from the /company/{tenantId}/report URL, not from any
+  // login, so a whistleblower never has to identify themselves. The response is the
+  // one-time access key, so it is returned as-is (nothing to normalise).
   createReport(payload) {
-    if (USE_MOCK_PUBLIC) return mockApi.createReport(payload);
     return publicApi.post("/api/safevoice/reports", payload);
   },
 
-  // Public: look up a case using ONLY the access key (the single credential).
-  trackReport(accessKey) {
-    if (USE_MOCK_PUBLIC) return mockApi.trackReport(accessKey);
-    return publicApi.post("/api/safevoice/reports/track", { accessKey });
+  // Look up a case using ONLY the access key. Returns { report, messages }; both are
+  // normalised so the tracking page shows friendly statuses and dates.
+  async trackReport(accessKey) {
+    const data = await publicApi.post("/api/safevoice/reports/track", { accessKey });
+    return {
+      report: normalizeReport(data?.report),
+      messages: Array.isArray(data?.messages) ? data.messages.map(normalizeMessage) : [],
+    };
   },
 
-  // Public: the reporter posts one message into their own case's chat thread. The case
-  // is identified by the id they received from the track lookup (carried in the URL path).
-  postPublicMessage(caseId, { sender, text }) {
-    if (USE_MOCK_PUBLIC) return mockApi.sendMessage(caseId, { sender, text });
-    return publicApi.post(`/api/safevoice/reports/${encodeURIComponent(caseId)}/messages`, {
-      sender,
-      text,
-    });
+  // The reporter posts one message into their own case's chat thread. The case is
+  // identified by the id they received from the track lookup (carried in the URL path).
+  async postPublicMessage(caseId, { sender, text }) {
+    const message = await publicApi.post(
+      `/api/safevoice/reports/${encodeURIComponent(caseId)}/messages`,
+      { sender, text },
+    );
+    return normalizeMessage(message);
   },
 
-  // Staff: list all cases for the signed-in tenant.
-  listReports() {
-    if (USE_MOCK_DATA) return mockApi.listReports();
-    return api.get("/api/safevoice/reports");
+  // ── STAFF (internal compliance dashboard) ────────────────────────────────────
+
+  // List every active case for the signed-in tenant.
+  async listReports() {
+    const list = await staffApi.get("/api/v1/internal/cases");
+    return normalizeReports(list);
   },
 
-  // Staff: load one case by id.
-  getReport(id) {
-    if (USE_MOCK_DATA) return mockApi.getReport(id);
-    return api.get(`/api/safevoice/reports/${encodeURIComponent(id)}`);
+  // Load one case by its id.
+  async getReport(id) {
+    const report = await staffApi.get(`/api/v1/internal/cases/${encodeURIComponent(id)}`);
+    return normalizeReport(report);
   },
 
-  // Staff: update one field (status / severity / assignedInvestigator).
-  updateReport(id, patch) {
-    if (USE_MOCK_DATA) return mockApi.updateReport(id, patch);
-    return api.patch(`/api/safevoice/reports/${encodeURIComponent(id)}`, patch);
+  /**
+   * Update ONE field of a case. The staff UI sends a small patch like
+   * { status: "Closed" } or { assignedInvestigator: "Anna Kowalska" }; the internal
+   * backend exposes a separate endpoint per field (status / severity / assign), each
+   * taking its value as a query parameter. We translate the patch into the right call
+   * here, converting friendly display values back into the backend's enum names.
+   */
+  async updateReport(id, patch) {
+    const base = `/api/v1/internal/cases/${encodeURIComponent(id)}`;
+    let updated;
+
+    if ("status" in patch) {
+      const value = encodeURIComponent(statusToApi(patch.status));
+      updated = await staffApi.patch(`${base}/status?status=${value}`);
+    } else if ("severity" in patch) {
+      const value = encodeURIComponent(severityToApi(patch.severity));
+      updated = await staffApi.patch(`${base}/severity?severity=${value}`);
+    } else if ("assignedInvestigator" in patch) {
+      const value = encodeURIComponent(patch.assignedInvestigator);
+      updated = await staffApi.patch(`${base}/assign?investigator=${value}`);
+    } else {
+      throw new Error("Unsupported case update");
+    }
+
+    return normalizeReport(updated);
   },
 };
 

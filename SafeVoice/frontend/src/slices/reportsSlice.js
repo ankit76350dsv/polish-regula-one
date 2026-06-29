@@ -5,8 +5,8 @@
  *   • PUBLIC reporter flow: submit a report, then track it by code + PIN.
  *   • STAFF flow: list cases, open one case, update status/severity/assignment.
  *
- * Every async call goes through reportService (mock now, real backend later) and
- * every loading / success / error flag lives here, per the project's Redux rules.
+ * Every async call goes through reportService (the real backend) and every loading /
+ * success / error flag lives here, per the project's Redux rules.
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import reportService from "../services/reportService";

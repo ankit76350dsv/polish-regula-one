@@ -1,19 +1,35 @@
 /**
- * Message service — secure two-way thread between staff and the anonymous reporter.
- * Delegates to the mock backend now; swap to the real API by flipping USE_MOCK_DATA.
+ * Message service — the staff side of the secure two-way case thread.
+ *
+ * These are the INTERNAL compliance endpoints (/api/v1/internal/cases/{id}/messages),
+ * so every call goes through `staffApi`, which attaches the signed-in actor's identity
+ * headers. The backend records the message under the actor's role (from the header),
+ * so we do not send a "sender" — only the text.
+ *
+ * (The anonymous reporter's own messages are handled separately, by reportService
+ * through the public endpoint, so the two worlds never cross.)
  */
-import { USE_MOCK_DATA } from "../config";
-import mockApi from "../mock/mockApi";
-import { api } from "./api";
+import { staffApi } from "./api";
+import { normalizeMessage, normalizeMessages } from "./caseNormalizer";
 
 export const messageService = {
-  list(caseId) {
-    if (USE_MOCK_DATA) return mockApi.listMessages(caseId);
-    return api.get(`/api/safevoice/reports/${encodeURIComponent(caseId)}/messages`);
+  // Load the whole thread for one case (oldest first), with friendly timestamps.
+  async list(caseId) {
+    const messages = await staffApi.get(
+      `/api/v1/internal/cases/${encodeURIComponent(caseId)}/messages`,
+    );
+    return normalizeMessages(messages);
   },
-  send(caseId, message) {
-    if (USE_MOCK_DATA) return mockApi.sendMessage(caseId, message);
-    return api.post(`/api/safevoice/reports/${encodeURIComponent(caseId)}/messages`, message);
+
+  // Post one staff message. The internal endpoint takes the raw text as a plain-string
+  // body and labels the sender from the actor headers, so we send just the text
+  // (as text/plain, via postText).
+  async send(caseId, { text }) {
+    const message = await staffApi.postText(
+      `/api/v1/internal/cases/${encodeURIComponent(caseId)}/messages`,
+      text,
+    );
+    return normalizeMessage(message);
   },
 };
 

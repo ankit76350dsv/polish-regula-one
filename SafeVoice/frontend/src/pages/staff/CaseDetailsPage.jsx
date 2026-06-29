@@ -15,7 +15,7 @@ import {
   StatusBadge,
   TimelineWidget,
 } from "../../components/ui";
-import { statusValues, severityValues } from "../../mock/db";
+import { statusValues, severityValues } from "../../constants/caseFields";
 import {
   fetchReport,
   selectCurrentReport,
@@ -111,7 +111,7 @@ export default function CaseDetailsPage({ caseId, navigate }) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => navigate?.("/cases")} className="text-lg font-bold text-slate-900 tracking-tight hover:text-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded">
-              {report.id}
+              {report.caseReference || report.id}
             </button>
             <StatusBadge status={report.status} />
             <SeverityBadge severity={report.severity} />

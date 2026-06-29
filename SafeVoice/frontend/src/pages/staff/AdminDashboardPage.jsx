@@ -69,7 +69,7 @@ export default function AdminDashboardPage({ navigate }) {
                 >
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-bold text-slate-900">{report.id}</div>
+                      <div className="text-sm font-bold text-slate-900">{report.caseReference || report.id}</div>
                       <div className="text-xs text-slate-500 mt-1">{t(`categories.${report.category}`, report.category)}</div>
                     </div>
                     <div className="flex flex-wrap gap-2">

@@ -67,7 +67,7 @@ export default function CentralEncryptedInboxPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-bold text-slate-900">{report.id}</span>
+                    <span className="text-xs font-bold text-slate-900">{report.caseReference || report.id}</span>
                     <span className="text-[10px] font-mono text-slate-500">{t(`status.${report.status}`, report.status)}</span>
                   </div>
                   <p className="mt-1 text-[11px] text-slate-500 line-clamp-2">{t(`categories.${report.category}`, report.category)}</p>

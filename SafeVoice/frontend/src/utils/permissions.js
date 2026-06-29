@@ -116,7 +116,7 @@ export const ROLE_PERMISSION_ROWS = Object.entries(SAFEVOICE_ROLE_PERMISSIONS).m
 );
 
 // Normalise a raw RegulaOne /me payload into the user shape the app relies on.
-// Used by both the real auth service and the mock, so the contract is identical.
+// Used by the auth service to map the /api/auth/me response into our user shape.
 export function normalizeUser(raw) {
   if (!raw || typeof raw !== "object") return null;
   const permissions = Array.isArray(raw.permissions) ? raw.permissions : [];
