@@ -1,23 +1,25 @@
 /**
  * User & permission service — authorised staff and the role permission matrix.
- * Delegates to the mock backend now; swap to the real API by flipping USE_MOCK_DATA.
+ *
+ * These are staff-only endpoints, so they go through `staffApi` (which carries the
+ * signed-in actor's identity headers).
+ *
+ * NOTE: the SafeVoice backend does not expose these endpoints yet, so the "Access
+ * controls" page will surface a load error until they are built. That is intentional —
+ * the app no longer uses any mock data, so unfinished areas fail loudly rather than
+ * showing fake records.
  */
-import { USE_MOCK_DATA } from "../config";
-import mockApi from "../mock/mockApi";
-import { api } from "./api";
+import { staffApi } from "./api";
 
 export const userService = {
   list() {
-    if (USE_MOCK_DATA) return mockApi.listUsers();
-    return api.get("/api/safevoice/users");
+    return staffApi.get("/api/safevoice/users");
   },
   invite(payload) {
-    if (USE_MOCK_DATA) return mockApi.inviteUser(payload);
-    return api.post("/api/safevoice/users/invite", payload);
+    return staffApi.post("/api/safevoice/users/invite", payload);
   },
   remove(id) {
-    if (USE_MOCK_DATA) return mockApi.removeUser(id);
-    return api.del(`/api/safevoice/users/${encodeURIComponent(id)}`);
+    return staffApi.del(`/api/safevoice/users/${encodeURIComponent(id)}`);
   },
 };
 

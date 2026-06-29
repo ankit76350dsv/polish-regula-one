@@ -1,19 +1,22 @@
 /**
- * Settings & compliance service — retention/review settings and GDPR data-subject
- * requests. Delegates to the mock backend now; swap to the real API via USE_MOCK_DATA.
+ * Settings & compliance service.
+ *
+ *   • get()               — staff-only retention/review settings → `staffApi`.
+ *   • submitDataRequest() — a GDPR data-subject request from the PUBLIC privacy page,
+ *                           so it goes through `publicApi` (no login required).
+ *
+ * NOTE: the SafeVoice backend does not expose these endpoints yet, so these areas will
+ * surface an error until they are built. That is intentional — there is no mock data
+ * any more, so unfinished areas fail loudly instead of pretending to work.
  */
-import { USE_MOCK_DATA } from "../config";
-import mockApi from "../mock/mockApi";
-import { api } from "./api";
+import { publicApi, staffApi } from "./api";
 
 export const settingsService = {
   get() {
-    if (USE_MOCK_DATA) return mockApi.getSettings();
-    return api.get("/api/safevoice/settings");
+    return staffApi.get("/api/safevoice/settings");
   },
   submitDataRequest(payload) {
-    if (USE_MOCK_DATA) return mockApi.submitDataRequest(payload);
-    return api.post("/api/safevoice/data-requests", payload);
+    return publicApi.post("/api/safevoice/data-requests", payload);
   },
 };
 
