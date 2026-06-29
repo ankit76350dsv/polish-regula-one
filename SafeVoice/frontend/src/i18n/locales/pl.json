@@ -220,7 +220,7 @@
     "slaMonitored": "W ramach SLA",
     "auditSealed": "Zapieczętowane wpisy audytu",
     "priorityQueue": "Kolejka priorytetowa",
-    "priorityQueueSub": "Sprawy wymagające uwagi",
+    "priorityQueueSub": "Nieprzypisane sprawy wymagające uwagi",
     "postureTitle": "Stan zgodności",
     "postureSub": "Wskaźniki na żywo",
     "posture": {

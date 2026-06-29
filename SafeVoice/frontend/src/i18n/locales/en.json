@@ -218,7 +218,7 @@
     "slaMonitored": "Within SLA",
     "auditSealed": "Audit entries sealed",
     "priorityQueue": "Priority queue",
-    "priorityQueueSub": "Cases needing attention",
+    "priorityQueueSub": "Unassigned cases needing attention",
     "postureTitle": "Compliance posture",
     "postureSub": "Live indicators",
     "posture": {

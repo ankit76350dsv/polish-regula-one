@@ -9,12 +9,20 @@ export const fetchDashboardStats = createAsyncThunk("dashboard/fetchStats", () =
   dashboardService.getStats(),
 );
 
+// The "cases needing attention" queue (unassigned, still-open cases).
+export const fetchAttention = createAsyncThunk("dashboard/fetchAttention", (limit) =>
+  dashboardService.getAttention(limit),
+);
+
 const dashboardSlice = createSlice({
   name: "dashboard",
   initialState: {
     stats: null, // { openReports, unreadReplies, slaCompliancePercent, auditEntries }
     status: "idle",
     error: null,
+    attention: [], // cases needing attention (unassigned)
+    attentionStatus: "idle",
+    attentionError: null,
   },
   reducers: {},
   extraReducers: (builder) => {
@@ -30,11 +38,25 @@ const dashboardSlice = createSlice({
       .addCase(fetchDashboardStats.rejected, (s, a) => {
         s.status = "failed";
         s.error = a.error?.message || "error";
+      })
+      .addCase(fetchAttention.pending, (s) => {
+        s.attentionStatus = "loading";
+        s.attentionError = null;
+      })
+      .addCase(fetchAttention.fulfilled, (s, a) => {
+        s.attentionStatus = "succeeded";
+        s.attention = a.payload;
+      })
+      .addCase(fetchAttention.rejected, (s, a) => {
+        s.attentionStatus = "failed";
+        s.attentionError = a.error?.message || "error";
       });
   },
 });
 
 export const selectDashboardStats = (s) => s.dashboard.stats;
 export const selectDashboardStatus = (s) => s.dashboard.status;
+export const selectAttention = (s) => s.dashboard.attention;
+export const selectAttentionStatus = (s) => s.dashboard.attentionStatus;
 
 export default dashboardSlice.reducer;

@@ -1,14 +1,19 @@
 package com.safevoice.backend.controller;
 
+import com.safevoice.backend.dto.CaseSummaryResponse;
 import com.safevoice.backend.dto.DashboardStatsResponse;
 import com.safevoice.backend.service.DashboardService;
+import com.safevoice.backend.service.report.CaseReportService;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * Internal (staff) endpoint that serves the dashboard's headline numbers.
@@ -20,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalDashboardController {
 
     private final DashboardService dashboardService;
+    private final CaseReportService caseReportService;
 
     /**
      * Returns the four dashboard stat-card values for the signed-in tenant:
@@ -29,5 +35,16 @@ public class InternalDashboardController {
     public ResponseEntity<DashboardStatsResponse> stats(
             @RequestHeader("X-Tenant-ID") String tenantId) {
         return ResponseEntity.ok(dashboardService.getStats(tenantId));
+    }
+
+    /**
+     * Returns the "cases needing attention" queue: active cases with NO investigator
+     * assigned yet, newest first, as slim summaries. Drives the dashboard's priority queue.
+     */
+    @GetMapping("/attention")
+    public ResponseEntity<List<CaseSummaryResponse>> attention(
+            @RequestHeader("X-Tenant-ID") String tenantId,
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(caseReportService.attentionCases(tenantId, limit));
     }
 }

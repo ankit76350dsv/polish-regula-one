@@ -368,20 +368,7 @@ public class CaseReportService {
 
         List<CaseSummaryResponse> items = new ArrayList<>();
         for (CaseReport report : reports) {
-            // Count this case's still-unread (by staff) messages for the badge.
-            long unread = caseMessageRepository
-                    .countByTenantIdAndCaseIdAndReadByAdminFalse(tenantId, report.getId());
-            items.add(CaseSummaryResponse.builder()
-                    .id(report.getId())
-                    .caseReference(report.getCaseReference())
-                    .disclosureMode(report.getDisclosureMode())
-                    .category(report.getCategory())
-                    .status(report.getStatus())
-                    .severity(report.getSeverity())
-                    .assignedInvestigator(report.getAssignedInvestigator())
-                    .feedbackDue(report.getFeedbackDue())
-                    .unreadCount(unread)
-                    .build());
+            items.add(toSummary(report));
         }
 
         int totalPages = (int) Math.ceil((double) total / safeSize);
@@ -391,6 +378,65 @@ public class CaseReportService {
                 .size(safeSize)
                 .total(total)
                 .totalPages(totalPages)
+                .build();
+    }
+
+    /**
+     * The dashboard "cases needing attention" queue: active cases that have NO investigator
+     * assigned yet. These are the cases waiting for someone to pick them up, so we surface
+     * them so staff can triage. Closed cases are excluded (they need no attention). Returned
+     * as slim summaries (with the unread-message count), newest first, capped at {@code limit}.
+     *
+     * @param tenantId the organisation (required)
+     * @param limit    the most rows to return
+     */
+    public List<CaseSummaryResponse> attentionCases(String tenantId, int limit) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("Tenant info/context is required");
+        }
+        int safeLimit = limit < 1 ? DEFAULT_PAGE_SIZE : Math.min(limit, MAX_PAGE_SIZE);
+
+        // "Unassigned" means the field is null, missing, or the literal "Unassigned".
+        Criteria unassigned = new Criteria().orOperator(
+                Criteria.where("assignedInvestigator").is(null),
+                Criteria.where("assignedInvestigator").is("Unassigned"),
+                Criteria.where("assignedInvestigator").exists(false));
+
+        Criteria all = new Criteria().andOperator(
+                Criteria.where("tenantId").is(tenantId),
+                Criteria.where("deleted").is(false),
+                Criteria.where("status").ne(CaseStatus.CLOSED),
+                unassigned);
+
+        Query query = Query.query(all)
+                .with(Sort.by(Sort.Direction.DESC, "submissionDate"))
+                .limit(safeLimit);
+
+        List<CaseSummaryResponse> items = new ArrayList<>();
+        for (CaseReport report : mongoTemplate.find(query, CaseReport.class)) {
+            items.add(toSummary(report));
+        }
+        return items;
+    }
+
+    /**
+     * Map one case document to the slim summary the lists use, including its current
+     * unread (by staff) message count for the badge. Shared by the register and the
+     * dashboard so both build summaries the exact same way.
+     */
+    private CaseSummaryResponse toSummary(CaseReport report) {
+        long unread = caseMessageRepository
+                .countByTenantIdAndCaseIdAndReadByAdminFalse(report.getTenantId(), report.getId());
+        return CaseSummaryResponse.builder()
+                .id(report.getId())
+                .caseReference(report.getCaseReference())
+                .disclosureMode(report.getDisclosureMode())
+                .category(report.getCategory())
+                .status(report.getStatus())
+                .severity(report.getSeverity())
+                .assignedInvestigator(report.getAssignedInvestigator())
+                .feedbackDue(report.getFeedbackDue())
+                .unreadCount(unread)
                 .build();
     }
 

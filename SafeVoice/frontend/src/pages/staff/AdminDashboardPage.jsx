@@ -3,27 +3,33 @@ import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { AlertOctagon, Clock, FileText, Inbox, ShieldCheck } from "lucide-react";
 import { AppButton, EmptyState, ErrorState, PageSpinner, SecureCard, SeverityBadge, StatusBadge } from "../../components/ui";
-import { fetchReports, selectReports, selectReportsStatus } from "../../slices/reportsSlice";
-import { fetchDashboardStats, selectDashboardStats } from "../../slices/dashboardSlice";
+import {
+  fetchAttention,
+  fetchDashboardStats,
+  selectAttention,
+  selectAttentionStatus,
+  selectDashboardStats,
+} from "../../slices/dashboardSlice";
 
 export default function AdminDashboardPage({ navigate }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
-  const reports = useSelector(selectReports);
-  const status = useSelector(selectReportsStatus);
   // Headline numbers come from the dedicated dashboard stats API (accurate across ALL
   // of the tenant's data, not just the cases currently loaded into the list).
   const stats = useSelector(selectDashboardStats);
+  // The priority queue is the "cases needing attention" list (unassigned cases) — its
+  // own API so the dashboard never has to pull or filter the whole case list itself.
+  const attention = useSelector(selectAttention);
+  const attentionStatus = useSelector(selectAttentionStatus);
 
   useEffect(() => {
-    if (status === "idle") dispatch(fetchReports());
     dispatch(fetchDashboardStats());
-  }, [status, dispatch]);
+    dispatch(fetchAttention());
+  }, [dispatch]);
 
-  if (status === "loading" && reports.length === 0) return <PageSpinner label={t("common.loading")} />;
-  if (status === "failed") return <ErrorState message={t("cases.loadError")} onRetry={() => dispatch(fetchReports())} />;
+  if (attentionStatus === "loading" && attention.length === 0) return <PageSpinner label={t("common.loading")} />;
+  if (attentionStatus === "failed") return <ErrorState message={t("cases.loadError")} onRetry={() => dispatch(fetchAttention())} />;
 
-  const open = reports.filter((r) => r.status !== "Closed");
   // Until the stats call returns, show an em dash rather than a misleading 0.
   const stat = (value, suffix = "") => (stats ? `${value}${suffix}` : "—");
   const cards = [
@@ -61,13 +67,13 @@ export default function AdminDashboardPage({ navigate }) {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <SecureCard title={t("dashboard.priorityQueue")} subtitle={t("dashboard.priorityQueueSub")} className="lg:col-span-2">
-          {open.length === 0 ? (
+          {attention.length === 0 ? (
             <EmptyState title={t("dashboard.emptyQueue")} />
           ) : (
             <div className="space-y-3">
-              {open.map((report) => (
+              {attention.map((report) => (
                 <button
                   key={report.id}
                   type="button"
@@ -84,7 +90,6 @@ export default function AdminDashboardPage({ navigate }) {
                       <SeverityBadge severity={report.severity} />
                     </div>
                   </div>
-                  <p className="text-xs text-slate-600 mt-3 line-clamp-2">{report.description}</p>
                 </button>
               ))}
             </div>
