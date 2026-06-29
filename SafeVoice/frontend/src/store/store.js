@@ -14,6 +14,7 @@ import auditReducer from "../slices/auditSlice";
 import settingsReducer from "../slices/settingsSlice";
 import uiReducer from "../slices/uiSlice";
 import consentReducer from "../slices/consentSlice";
+import { setCurrentActor } from "../services/identity";
 
 export const store = configureStore({
   reducer: {
@@ -26,4 +27,17 @@ export const store = configureStore({
     ui: uiReducer,
     consent: consentReducer,
   },
+});
+
+// Keep the staff HTTP client's identity in sync with who is signed in. Whenever the
+// auth user changes, copy their tenant/role/email into the identity holder so every
+// staff API call carries the right X-Tenant-ID / X-Actor-Role / X-Actor-ID headers.
+// We only write when the user reference actually changes, so this stays cheap.
+let lastUser;
+store.subscribe(() => {
+  const user = store.getState().auth.user;
+  if (user !== lastUser) {
+    lastUser = user;
+    setCurrentActor(user);
+  }
 });
