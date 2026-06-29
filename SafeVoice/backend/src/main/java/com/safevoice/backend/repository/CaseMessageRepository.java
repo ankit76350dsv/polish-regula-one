@@ -25,4 +25,10 @@ public interface CaseMessageRepository extends MongoRepository<CaseMessage, Stri
      * Scoped to the tenant so one organisation can never see another's counts.
      */
     long countByTenantIdAndCaseIdAndReadByAdminFalse(String tenantId, String caseId);
+
+    /**
+     * Counts ALL messages across the tenant that staff have not read yet (readByAdmin
+     * false). Drives the dashboard's "unread replies" figure.
+     */
+    long countByTenantIdAndReadByAdminFalse(String tenantId);
 }

@@ -1,9 +1,11 @@
 package com.safevoice.backend.repository;
 
 import com.safevoice.backend.model.document.CaseReport;
+import com.safevoice.backend.model.enums.case_report.CaseStatus;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,4 +42,19 @@ public interface CaseReportRepository extends MongoRepository<CaseReport, String
      * each organisation has its own independent set of references.
      */
     boolean existsByTenantIdAndCaseReference(String tenantId, String caseReference);
+
+    // ── Dashboard counters ───────────────────────────────────────────────────────
+
+    /** Total active (non-deleted) cases for a tenant. */
+    long countByTenantIdAndDeletedFalse(String tenantId);
+
+    /** Active cases NOT in the given status — used to count "open" cases (status != CLOSED). */
+    long countByTenantIdAndDeletedFalseAndStatusNot(String tenantId, CaseStatus status);
+
+    /**
+     * Active cases that are still open (status != CLOSED) whose feedback deadline has
+     * already passed (before the given time) — i.e. cases that have BREACHED their SLA.
+     */
+    long countByTenantIdAndDeletedFalseAndStatusNotAndFeedbackDueBefore(
+            String tenantId, CaseStatus status, Instant time);
 }

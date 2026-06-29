@@ -22,4 +22,10 @@ public interface AuditLogRepository extends MongoRepository<AuditLog, String> {
      * Used for calculating SHA-256 tamper-evident hash links.
      */
     AuditLog findFirstByTenantIdOrderByTimestampDesc(String tenantId);
+
+    /**
+     * Counts all sealed audit entries for a tenant — shown on the dashboard as
+     * "audit entries sealed".
+     */
+    long countByTenantId(String tenantId);
 }

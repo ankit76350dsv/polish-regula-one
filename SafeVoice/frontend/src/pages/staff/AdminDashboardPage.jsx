@@ -4,26 +4,33 @@ import { useTranslation } from "react-i18next";
 import { AlertOctagon, Clock, FileText, Inbox, ShieldCheck } from "lucide-react";
 import { AppButton, EmptyState, ErrorState, PageSpinner, SecureCard, SeverityBadge, StatusBadge } from "../../components/ui";
 import { fetchReports, selectReports, selectReportsStatus } from "../../slices/reportsSlice";
+import { fetchDashboardStats, selectDashboardStats } from "../../slices/dashboardSlice";
 
 export default function AdminDashboardPage({ navigate }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const reports = useSelector(selectReports);
   const status = useSelector(selectReportsStatus);
+  // Headline numbers come from the dedicated dashboard stats API (accurate across ALL
+  // of the tenant's data, not just the cases currently loaded into the list).
+  const stats = useSelector(selectDashboardStats);
 
   useEffect(() => {
     if (status === "idle") dispatch(fetchReports());
+    dispatch(fetchDashboardStats());
   }, [status, dispatch]);
 
   if (status === "loading" && reports.length === 0) return <PageSpinner label={t("common.loading")} />;
   if (status === "failed") return <ErrorState message={t("cases.loadError")} onRetry={() => dispatch(fetchReports())} />;
 
   const open = reports.filter((r) => r.status !== "Closed");
+  // Until the stats call returns, show an em dash rather than a misleading 0.
+  const stat = (value, suffix = "") => (stats ? `${value}${suffix}` : "—");
   const cards = [
-    { label: t("dashboard.openReports"), value: String(open.length), icon: AlertOctagon, tone: "text-cyan-700 bg-cyan-50 border-cyan-200" },
-    { label: t("dashboard.unreadReplies"), value: "2", icon: Inbox, tone: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-    { label: t("dashboard.slaMonitored"), value: "100%", icon: Clock, tone: "text-amber-700 bg-amber-50 border-amber-200" },
-    { label: t("dashboard.auditSealed"), value: String(reports.length), icon: ShieldCheck, tone: "text-violet-700 bg-violet-50 border-violet-200" },
+    { label: t("dashboard.openReports"), value: stat(stats?.openReports), icon: AlertOctagon, tone: "text-cyan-700 bg-cyan-50 border-cyan-200" },
+    { label: t("dashboard.unreadReplies"), value: stat(stats?.unreadReplies), icon: Inbox, tone: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+    { label: t("dashboard.slaMonitored"), value: stat(stats?.slaCompliancePercent, "%"), icon: Clock, tone: "text-amber-700 bg-amber-50 border-amber-200" },
+    { label: t("dashboard.auditSealed"), value: stat(stats?.auditEntries), icon: ShieldCheck, tone: "text-violet-700 bg-violet-50 border-violet-200" },
   ];
   const posture = ["intake", "telemetry", "evidence", "retention", "audit"];
 
