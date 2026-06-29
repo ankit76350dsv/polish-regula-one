@@ -24,9 +24,12 @@ import com.safevoice.backend.repository.TenantRepository;
 import com.safevoice.backend.service.AuditLogService;
 import com.safevoice.backend.service.report.utils.CaseReportUtils;
 
+import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
@@ -335,15 +338,33 @@ public class CaseReportService {
 
         Criteria all = new Criteria().andOperator(conditions.toArray(new Criteria[0]));
 
-        // Count the full match set first (for the pager), then fetch only this page,
-        // newest first. If the requested page is past the end, the fetch simply returns
-        // an empty list — a valid, non-error outcome.
+        // Count the full match set first (for the pager). Counting does not need the
+        // activity computation, so a plain count query is enough and cheap.
         long total = mongoTemplate.count(Query.query(all), CaseReport.class);
-        Query pageQuery = Query.query(all)
-                .with(Sort.by(Sort.Direction.DESC, "submissionDate"))
-                .skip((long) (safePage - 1) * safeSize)
-                .limit(safeSize);
-        List<CaseReport> reports = mongoTemplate.find(pageQuery, CaseReport.class);
+
+        // Order the cases WhatsApp-style: the one with the most RECENT activity first.
+        // Every activity (the report being submitted, a reporter message, an admin reply,
+        // a status change…) appends a timeline event, so the NEWEST timeline timestamp is
+        // the case's last activity. We compute that per case as:
+        //     lastActivityAt = max( max(timeline.timestamp), submissionDate )
+        // — the submissionDate is a floor, so a case can never sort below its own creation
+        // even if its timeline were ever empty. We then sort on it and take this page.
+        // (A page past the end simply yields an empty list — a valid, non-error outcome.)
+        AggregationOperation addLastActivity = context -> new Document("$addFields",
+                new Document("lastActivityAt", new Document("$max", List.of(
+                        new Document("$max", "$timeline.timestamp"),
+                        "$submissionDate"))));
+
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(all),
+                addLastActivity,
+                Aggregation.sort(Sort.by(Sort.Direction.DESC, "lastActivityAt")),
+                Aggregation.skip((long) (safePage - 1) * safeSize),
+                Aggregation.limit(safeSize));
+
+        List<CaseReport> reports = mongoTemplate
+                .aggregate(aggregation, CaseReport.class, CaseReport.class)
+                .getMappedResults();
 
         List<CaseSummaryResponse> items = new ArrayList<>();
         for (CaseReport report : reports) {

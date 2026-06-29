@@ -18,6 +18,7 @@ import {
 import { statusValues, severityValues } from "../../constants/caseFields";
 import {
   fetchReport,
+  fetchReports,
   selectCurrentReport,
   selectCurrentStatus,
   selectUpdating,
@@ -89,6 +90,9 @@ export default function CaseDetailsPage({ caseId, navigate }) {
       await dispatch(sendMessage({ caseId: report.id, sender: "Compliance Officer", text: draft })).unwrap();
       setDraft("");
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
+      // Refresh the shared case list so this case is at the top (latest activity) when
+      // the user returns to the inbox or register.
+      dispatch(fetchReports());
     } catch {
       dispatch(addToast({ type: "error", message: t("toast.genericError") }));
     }

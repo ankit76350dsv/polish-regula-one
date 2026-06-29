@@ -59,6 +59,9 @@ export default function CentralEncryptedInboxPage({ navigate }) {
       await dispatch(sendMessage({ caseId: activeId, sender: "Compliance Officer", text: draft })).unwrap();
       setDraft("");
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
+      // Refresh the thread list so this case jumps to the top (it now has the latest
+      // activity), matching the WhatsApp-style ordering the backend returns.
+      dispatch(fetchReports());
     } catch {
       dispatch(addToast({ type: "error", message: t("toast.genericError") }));
     }
