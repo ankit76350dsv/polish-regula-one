@@ -30,6 +30,15 @@
 export const USE_MOCK_AUTH = (import.meta.env.VITE_USE_MOCK_AUTH ?? "false") === "true";
 export const USE_MOCK_DATA = (import.meta.env.VITE_USE_MOCK_DATA ?? "true") === "true";
 
+//   USE_MOCK_PUBLIC — the ANONYMOUS reporter flow (submit a report, look it up by
+//     access key, and the two-way case chat). Defaults to REAL, because the public
+//     SafeVoice endpoints (/api/safevoice/reports…) are already live on the SafeVoice
+//     backend. We split this from USE_MOCK_DATA so the public reporter pages can talk
+//     to the real backend WITHOUT forcing the staff pages (whose endpoints may still
+//     be in progress) off mock at the same time. Set VITE_USE_MOCK_PUBLIC="true" to
+//     run the reporter flow on fake data again (e.g. frontend-only development).
+export const USE_MOCK_PUBLIC = (import.meta.env.VITE_USE_MOCK_PUBLIC ?? "false") === "true";
+
 // How long the fake API waits before answering, in milliseconds. This lets us
 // see real loading spinners and skeletons during development.
 export const MOCK_LATENCY_MS = Number(import.meta.env.VITE_MOCK_LATENCY_MS ?? 600);

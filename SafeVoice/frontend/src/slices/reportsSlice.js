@@ -35,6 +35,14 @@ export const updateReport = createAsyncThunk("reports/update", ({ id, patch }) =
   reportService.updateReport(id, patch),
 );
 
+// PUBLIC reporter posts a message into their own tracked case. Kept here (not in the
+// staff messagesSlice) so the anonymous chat uses the public SafeVoice endpoint and
+// shares the same `tracked` state the track lookup filled in.
+export const sendTrackedMessage = createAsyncThunk(
+  "reports/sendTrackedMessage",
+  ({ caseId, sender, text }) => reportService.postPublicMessage(caseId, { sender, text }),
+);
+
 // ── Slice ───────────────────────────────────────────────────────────────────
 const initialState = {
   list: [],
@@ -52,6 +60,7 @@ const initialState = {
   tracked: null, // { report, messages }
   trackStatus: "idle",
   trackError: null, // 'notFound' | 'error' | null
+  trackSending: false, // true while the reporter's new message is being posted
 
   updating: false,
 };
@@ -69,11 +78,6 @@ const reportsSlice = createSlice({
       state.tracked = null;
       state.trackStatus = "idle";
       state.trackError = null;
-    },
-    // Used when a message is sent from the tracking page so the reporter sees it
-    // appended immediately without re-fetching the whole case.
-    appendTrackedMessage(state, action) {
-      if (state.tracked) state.tracked.messages.push(action.payload);
     },
   },
   extraReducers: (builder) => {
@@ -145,11 +149,23 @@ const reportsSlice = createSlice({
       })
       .addCase(updateReport.rejected, (s) => {
         s.updating = false;
+      })
+      // reporter posts a message into their tracked case
+      .addCase(sendTrackedMessage.pending, (s) => {
+        s.trackSending = true;
+      })
+      .addCase(sendTrackedMessage.fulfilled, (s, a) => {
+        s.trackSending = false;
+        // Show the just-sent message in the thread immediately, without re-fetching.
+        if (s.tracked) s.tracked.messages.push(a.payload);
+      })
+      .addCase(sendTrackedMessage.rejected, (s) => {
+        s.trackSending = false;
       });
   },
 });
 
-export const { clearSubmission, clearTracked, appendTrackedMessage } = reportsSlice.actions;
+export const { clearSubmission, clearTracked } = reportsSlice.actions;
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
 export const selectReports = (s) => s.reports.list;
@@ -161,6 +177,7 @@ export const selectLastSubmission = (s) => s.reports.lastSubmission;
 export const selectTracked = (s) => s.reports.tracked;
 export const selectTrackStatus = (s) => s.reports.trackStatus;
 export const selectTrackError = (s) => s.reports.trackError;
+export const selectTrackSending = (s) => s.reports.trackSending;
 export const selectUpdating = (s) => s.reports.updating;
 
 export default reportsSlice.reducer;

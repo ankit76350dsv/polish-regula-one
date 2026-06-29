@@ -4,13 +4,13 @@ import { useTranslation } from "react-i18next";
 import { Lock, Send, ShieldCheck } from "lucide-react";
 import { AppButton, SecureCard, Spinner, TextInput } from "../../components/ui";
 import {
-  appendTrackedMessage,
   selectTracked,
   selectTrackError,
+  selectTrackSending,
   selectTrackStatus,
+  sendTrackedMessage,
   trackReport,
 } from "../../slices/reportsSlice";
-import { sendMessage } from "../../slices/messagesSlice";
 import { addToast } from "../../slices/uiSlice";
 
 // Anonymous status lookup using ONLY the access key, then a secure two-way thread.
@@ -20,11 +20,11 @@ export default function TrackCasePage() {
   const tracked = useSelector(selectTracked);
   const trackStatus = useSelector(selectTrackStatus);
   const trackError = useSelector(selectTrackError);
+  const sending = useSelector(selectTrackSending);
 
   const [accessKey, setAccessKey] = useState("");
   const [keyError, setKeyError] = useState("");
   const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
 
   const looking = trackStatus === "loading";
 
@@ -41,18 +41,16 @@ export default function TrackCasePage() {
   async function send(e) {
     e.preventDefault();
     if (!draft.trim() || !tracked) return;
-    setSending(true);
     try {
-      const { message } = await dispatch(
-        sendMessage({ caseId: tracked.report.id, sender: "Anonymous Whistleblower", text: draft }),
+      // The reducer appends the saved message to the thread on success, so the
+      // reporter sees it immediately without us re-fetching the whole case.
+      await dispatch(
+        sendTrackedMessage({ caseId: tracked.report.id, sender: "Anonymous Whistleblower", text: draft }),
       ).unwrap();
-      dispatch(appendTrackedMessage(message));
       setDraft("");
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
     } catch {
       dispatch(addToast({ type: "error", message: t("track.sendError") }));
-    } finally {
-      setSending(false);
     }
   }
 

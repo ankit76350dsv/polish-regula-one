@@ -21,6 +21,12 @@
 // works on localhost and in the EEA production environment. Defaults match the
 // local dev setup (RegulaOne backend on :8080, SafeVoice frontend on :1003).
 const REGULAONE_API_URL = import.meta.env.VITE_REGULAONE_API_URL ?? "http://localhost:8080";
+
+// The SafeVoice backend serves the whistleblower feature endpoints (/api/safevoice/…).
+// In local development it runs on its OWN port (9003), separate from the central
+// RegulaOne backend (8080) which only handles login/SSO. In production both sit behind
+// the same gateway, so this just points at the same origin there.
+const SAFEVOICE_API_URL = import.meta.env.VITE_SAFEVOICE_API_URL ?? "http://localhost:9003";
 const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:1003";
 const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? "http://localhost:3000/login";
 // The central RegulaOne "create an organisation account" page. SafeVoice has no
@@ -176,21 +182,36 @@ async function normaliseError(res) {
  *     if that fails. Other errors throw a normalised Error the UI can show.
  *
  * @param {string}  path     backend path beginning with "/"
- * @param {object}  options  fetch options
+ * @param {object}  options  fetch options. Two SafeVoice-specific extras:
+ *                           - baseUrl:  which backend to call (defaults to the
+ *                             RegulaOne auth backend). Public SafeVoice calls pass
+ *                             the SafeVoice backend base instead.
+ *                           - isPublic: true for anonymous whistleblower endpoints.
+ *                             The reporter has NO account, so a 401 must NOT bounce
+ *                             them to the staff login — we just surface the error.
  * @param {boolean} [_retry] internal flag — true on the single post-refresh retry
  *                           so we never loop refreshing forever.
  */
 export async function apiFetch(path, options = {}, _retry = false) {
-  const res = await fetch(`${REGULAONE_API_URL}${path}`, {
-    ...options,
+  // Pull our two custom flags out so they are never forwarded to fetch() as if they
+  // were real request options. Everything else passes straight through to fetch.
+  const { baseUrl = REGULAONE_API_URL, isPublic = false, ...fetchOptions } = options;
+
+  const res = await fetch(`${baseUrl}${path}`, {
+    ...fetchOptions,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...options.headers,
+      ...fetchOptions.headers,
     },
   });
 
   if (res.status === 401) {
+    // Anonymous reporter pages have no session to refresh and no login to go to,
+    // so we never redirect them — the caller handles the error message instead.
+    if (isPublic) {
+      throw await normaliseError(res);
+    }
     if (!_retry && (await tryRefreshSession())) {
       return apiFetch(path, options, true);
     }
@@ -231,6 +252,21 @@ export const api = {
   put: (path, body) => apiFetch(path, { method: "PUT", body: JSON.stringify(body) }),
   patch: (path, body) => apiFetch(path, { method: "PATCH", body: JSON.stringify(body) }),
   del: (path) => apiFetch(path, { method: "DELETE" }),
+};
+
+// Client for the PUBLIC, anonymous whistleblower endpoints. Two differences from the
+// staff `api` above: it targets the SafeVoice backend (where those endpoints live),
+// and it never redirects to the staff login on an auth error (reporters have no
+// account). Everything else — envelope unwrapping, error normalising — is identical.
+export const publicApi = {
+  get: (path) => apiFetch(path, { baseUrl: SAFEVOICE_API_URL, isPublic: true }),
+  post: (path, body) =>
+    apiFetch(path, {
+      baseUrl: SAFEVOICE_API_URL,
+      isPublic: true,
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
 
 // Exposed so the logout flow can reach the central login as a last-resort fallback,
