@@ -27,12 +27,16 @@ import java.util.List;
  *
  * These match exactly what the SafeVoice web form sends:
  *   POST   /api/safevoice/reports                  → submit a new report
- *   POST   /api/safevoice/reports/track            → look up a case by access key
- *   GET    /api/safevoice/reports/{caseId}/messages → read the case chat thread
+ *   POST   /api/safevoice/reports/track            → look up a case by access key (returns the chat thread too)
  *   POST   /api/safevoice/reports/{caseId}/messages → post a message into the thread
  *
  * The reporter's ONLY credential is a single 64-character access key. There is no
  * tracking code and no PIN. We store only the key's hash, so the channel stays anonymous.
+ *
+ * NOTE: there is deliberately NO public "GET messages" endpoint. Reading a thread by
+ * the (non-secret) case reference alone would let anyone who learns a reference read a
+ * confidential thread without the access key. Reporters get their messages from /track
+ * (proven by their key); staff read them via the authenticated internal cases API.
  */
 @RestController
 @RequestMapping("/api/safevoice/reports")
@@ -67,22 +71,6 @@ public class PublicCaseController {
                 .report(report)
                 .messages(messages)
                 .build());
-    }
-
-    /**
-     * Read the chat thread for a case. The case is found by its short reference (the id
-     * the reporter received after looking the case up with their key).
-     *
-     * SECURITY NOTE: this resolves the case by its reference alone. The reference is only
-     * known to someone who already proved they hold the access key, but it is not itself a
-     * secret. A stronger design would carry the access key on this call too; see the change
-     * report. For now this matches the web app's current contract.
-     */
-    @GetMapping("/{caseId}/messages")
-    public ResponseEntity<List<CaseMessage>> getMessages(@PathVariable String caseId) {
-        CaseReport report = caseReportService.getByCaseRef(caseId);
-        List<CaseMessage> messages = caseMessageService.getMessages(report.getId(), report.getTenantId());
-        return ResponseEntity.ok(messages);
     }
 
     /**
