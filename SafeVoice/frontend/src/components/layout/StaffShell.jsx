@@ -11,6 +11,7 @@ import { AppSidebar } from "./AppSidebar";
 import { MobileNavigation } from "./MobileNavigation";
 import { AuthGate } from "../auth";
 import { tryRefreshSession } from "../../services/api";
+import { socketService } from "../../services/socketService";
 import {
   initSession,
   signOut,
@@ -53,6 +54,15 @@ export function StaffShell({ currentPath, navigate, children }) {
     if (!isAuthenticated) return;
     const timer = setInterval(() => tryRefreshSession(), 55 * 60 * 1000);
     return () => clearInterval(timer);
+  }, [isAuthenticated]);
+
+  // Open the realtime (WebSocket) connection once the staff session is verified, and close
+  // it on sign-out. Auth uses the shared SSO cookie (sent automatically on the handshake).
+  // Phase 0: ping the server to confirm the pipeline; feature subscriptions come later.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    socketService.connectStaff(() => socketService.ping());
+    return () => socketService.disconnect();
   }, [isAuthenticated]);
 
   // After the central login returns to /auth/sso-callback, continue to the target.
