@@ -153,16 +153,16 @@ certificate works, this page will work too.
 **Frontend:** [`PermissionsManager.jsx`](../frontend/src/components/PermissionsManager.jsx) ·
 API calls in [`ksefApi.js`](../frontend/src/api/ksefApi.js) ·
 UI gating in [`permissions.js`](../frontend/src/lib/permissions.js)
-(`can.managePermissions` = `KSEF_TENANT_ADMIN`; `can.readPermissions` = admin / compliance / auditor).
+(`can.managePermissions` = `KSEF_ADMIN`; `can.readPermissions` = admin / compliance / auditor).
 
 **Our backend API** ([`KsefPermissionsController`](../backend/src/main/java/com/ksefflow/backend/controllers/KsefPermissionsController.java),
 base `/api/v1/permissions`):
 
 | Endpoint | Who | What it does |
 |---|---|---|
-| `POST /persons/grants?nip=` | `KSEF_TENANT_ADMIN` | Grant a person KSeF rights. Returns a `referenceNumber` (async). |
+| `POST /persons/grants?nip=` | `KSEF_ADMIN` | Grant a person KSeF rights. Returns a `referenceNumber` (async). |
 | `POST /query?nip=` | admin / compliance / auditor | List "who can do what" in this company context (paged). |
-| `DELETE /{permissionId}?nip=` | `KSEF_TENANT_ADMIN` | Revoke one grant. Returns a `referenceNumber` (async). |
+| `DELETE /{permissionId}?nip=` | `KSEF_ADMIN` | Revoke one grant. Returns a `referenceNumber` (async). |
 | `GET /operations/{referenceNumber}?nip=` | admin / compliance / auditor | Check whether a grant/revoke finished. |
 
 **Government KSeF API** is the real store. [`KsefPermissionsService`](../backend/src/main/java/com/ksefflow/backend/services/KsefPermissionsService.java)

@@ -423,7 +423,7 @@ public class UserService {
     // ! update user cross-app permissions
     // Replaces the user's entire permissions list with the one supplied by the admin.
     // Mirrors updateUserModules — same pattern, but for app permission codes such as
-    // KSEF_TENANT_ADMIN / KSEF_AUDITOR. Uses the MongoDB document id (not cognitoSub).
+    // KSEF_ADMIN / KSEF_AUDITOR. Uses the MongoDB document id (not cognitoSub).
     //
     // SECURITY: some codes are PLATFORM-LEVEL (see PROTECTED_PERMISSIONS). Only a ROLE_SUPER_ADMIN
     // may grant/revoke those. A company admin (ROLE_ADMIN) calls the same method, so here we make

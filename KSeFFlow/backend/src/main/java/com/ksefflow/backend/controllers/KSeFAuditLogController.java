@@ -40,7 +40,7 @@ public class KSeFAuditLogController {
      *   size    — entries per page                default 20
      *   sort    — field,direction                 default timestamp,desc
      */
-    // Permissions: KSEF_TENANT_ADMIN (full access), KSEF_AUDITOR (read audit logs + export),
+    // Permissions: KSEF_ADMIN (full access), KSEF_AUDITOR (read audit logs + export),
     //              KSEF_COMPLIANCE_OFFICER (oversight). Read-only — no write endpoint exists.
     @GetMapping
     public ResponseEntity<Page<KsefAuditLog>> listAuditLogs(
@@ -52,7 +52,7 @@ public class KSeFAuditLogController {
             @PageableDefault(size = 20) Pageable pageable) {
 
         // Read-only oversight — auditors, compliance officers, or the tenant admin.
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN,
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN,
                 KsefPermission.KSEF_AUDITOR, KsefPermission.KSEF_COMPLIANCE_OFFICER);
 
         String tenantId = caller.tenantId();

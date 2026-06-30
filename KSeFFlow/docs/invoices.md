@@ -256,7 +256,7 @@ user email or `system@ksefflow`). Appended by `recordStatus(...)` at every trans
 
 Base path: **`/api/v1/invoices`** — [`KSeFInvoiceController.java`](../backend/src/main/java/com/ksefflow/backend/controllers/KSeFInvoiceController.java).
 Auth: httpOnly `idToken` cookie → `AuthenticatedUser` (tenant resolved server-side).
-Permission codes (KSeF): `KSEF_TENANT_ADMIN`, `KSEF_CASE_MANAGER`, `KSEF_COMPLIANCE_OFFICER`,
+Permission codes (KSeF): `KSEF_ADMIN`, `KSEF_CASE_MANAGER`, `KSEF_COMPLIANCE_OFFICER`,
 `KSEF_AUDITOR` (see [permissions.md](./permissions.md)).
 
 | Method & path | Permission | Purpose |

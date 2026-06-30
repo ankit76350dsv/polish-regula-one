@@ -55,7 +55,7 @@ public class UserResponse {
     // Frontend reads this to show/hide sidebar items — a module absent here is hidden.
     private List<TenantModule> moduleIds;
 
-    // Added: cross-app permission codes for this user (e.g. KSEF_TENANT_ADMIN).
+    // Added: cross-app permission codes for this user (e.g. KSEF_ADMIN).
     // Other apps (KSeFFlow, etc.) read this from /me to decide what the user can do.
     // Always a list (never null) so callers can iterate without a null-check.
     private List<String> permissions;

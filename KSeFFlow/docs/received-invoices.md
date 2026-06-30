@@ -96,7 +96,7 @@ base `/api/v1/received-invoices`):
 
 | Our endpoint (KSeFFlow `:8081`) | Who | What it does |
 |---|---|---|
-| `POST /api/v1/received-invoices/sync?nip=&from=&to=` | `KSEF_TENANT_ADMIN`, `KSEF_CASE_MANAGER` | Pull purchase invoices from KSeF for a date window (default last 30 days), save new ones. Returns `{fetched, created, skipped}`. |
+| `POST /api/v1/received-invoices/sync?nip=&from=&to=` | `KSEF_ADMIN`, `KSEF_CASE_MANAGER` | Pull purchase invoices from KSeF for a date window (default last 30 days), save new ones. Returns `{fetched, created, skipped}`. |
 | `GET /api/v1/received-invoices?page=&size=` | admin / case manager / compliance / auditor | Paged list of saved invoices (metadata only), newest first. Read from MongoDB — no KSeF call. |
 | `GET /api/v1/received-invoices/{ksefNumber}/xml?nip=` | admin / case manager / compliance / auditor | Full FA(3) XML. Downloaded from KSeF on first request, then served from encrypted storage. |
 

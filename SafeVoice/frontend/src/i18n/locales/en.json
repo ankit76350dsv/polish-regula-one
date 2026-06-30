@@ -568,7 +568,7 @@
     "Critical": "Critical"
   },
   "roles": {
-    "SAFEVOICE_TENANT_ADMIN": "Tenant Admin",
+    "SAFEVOICE_ADMIN": "SafeVoice Admin",
     "SAFEVOICE_COMPLIANCE_OFFICER": "Compliance Officer",
     "SAFEVOICE_INVESTIGATOR": "Investigator",
     "SAFEVOICE_HR_MANAGER": "HR Manager",

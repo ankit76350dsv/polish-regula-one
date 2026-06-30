@@ -96,12 +96,12 @@ Controller: [`KsefAvailabilityController.java`](../backend/src/main/java/com/kse
 | `POST /unavailability` | `KSEF_PLATFORM_ADMIN` | declare OFFLINE_UNAVAILABILITY (reason required) |
 | `POST /online` | `KSEF_PLATFORM_ADMIN` | clear a manual declaration, hand back to the monitor |
 
-> **Why `KSEF_PLATFORM_ADMIN` and not `KSEF_TENANT_ADMIN`?** The state is **global** — one value
+> **Why `KSEF_PLATFORM_ADMIN` and not `KSEF_ADMIN`?** The state is **global** — one value
 > for every tenant (KSeF emergency/unavailability is a national fact from the Ministry of Finance).
-> Letting a per-company `KSEF_TENANT_ADMIN` flip it would change how *other* tenants issue invoices,
+> Letting a per-company `KSEF_ADMIN` flip it would change how *other* tenants issue invoices,
 > breaking tenant isolation (CLAUDE.md §9). So declaring is restricted to the **platform operator**
 > (`KSEF_PLATFORM_ADMIN`), granted only to the operator's own account and **not** offered in the
-> tenant permission picker. Tenant admins are **read-only** here.
+> tenant permission picker. KSEF admins are **read-only** here.
 
 The declare endpoints write an immutable audit entry (`KSEF_EMERGENCY_DECLARED`,
 `KSEF_UNAVAILABILITY_DECLARED`, `KSEF_ONLINE_DECLARED`) — see §6.
@@ -237,7 +237,7 @@ Codes from RegulaOne, checked via [`AuthenticatedUser.requireAnyPermission(...)`
 - **Declare** (`POST /emergency|unavailability|online`): **`KSEF_PLATFORM_ADMIN`** (platform operator).
 
 `KSEF_PLATFORM_ADMIN` is a platform-level code (see [`KsefPermission`](../backend/src/main/java/com/ksefflow/backend/security/KsefPermission.java)),
-distinct from the tenant-scoped `KSEF_TENANT_ADMIN`. It is granted from RegulaOne's **Platform Users**
+distinct from the tenant-scoped `KSEF_ADMIN`. It is granted from RegulaOne's **Platform Users**
 page (super-admin only) → a user's **Permissions** editor — the `KSEF_PLATFORM_ADMIN` option is
 shown **only to a `ROLE_SUPER_ADMIN`** and the save goes through `/api/superadmin/users/{id}/permissions`.
 A **Company Admin cannot see or grant it**: the option is hidden in their view, and the backend

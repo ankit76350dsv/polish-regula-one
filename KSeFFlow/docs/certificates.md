@@ -89,7 +89,7 @@ cookie-authenticated, tenant resolved server-side):
 
 UI gating:
 - **Upload / Request / Deactivate** are shown only to admins (`can.manageCertificates`, i.e.
-  `KSEF_TENANT_ADMIN`). Non-admins see a read-only notice.
+  `KSEF_ADMIN`). Non-admins see a read-only notice.
 - **Download (public cert)** is available to anyone who can view the list.
 
 ---
@@ -100,11 +100,11 @@ Controller: [`KSeFCertificateController.java`](../backend/src/main/java/com/ksef
 
 | Endpoint | Permission (`AuthenticatedUser.requireAnyPermission`) | Calls KSeF? | Service method |
 |---|---|---|---|
-| `POST /upload` | `KSEF_TENANT_ADMIN` | ❌ no | `CertificateService.storeCertificate` / `storePemCertificate` |
-| `POST /enroll` | `KSEF_TENANT_ADMIN` | ✅ yes | `KsefCertificateEnrollmentService.enrollAndStore` |
-| `GET /` (list) | `KSEF_TENANT_ADMIN`, `KSEF_AUDITOR` | ❌ no | `CertificateService.listCertificates` |
-| `GET /{id}/public` | `KSEF_TENANT_ADMIN`, `KSEF_AUDITOR` | ❌ no | `CertificateService.exportPublicCertificatePem` |
-| `PATCH /{id}/deactivate` | `KSEF_TENANT_ADMIN` | ❌ no | `CertificateService.deactivateCertificate` |
+| `POST /upload` | `KSEF_ADMIN` | ❌ no | `CertificateService.storeCertificate` / `storePemCertificate` |
+| `POST /enroll` | `KSEF_ADMIN` | ✅ yes | `KsefCertificateEnrollmentService.enrollAndStore` |
+| `GET /` (list) | `KSEF_ADMIN`, `KSEF_AUDITOR` | ❌ no | `CertificateService.listCertificates` |
+| `GET /{id}/public` | `KSEF_ADMIN`, `KSEF_AUDITOR` | ❌ no | `CertificateService.exportPublicCertificatePem` |
+| `PATCH /{id}/deactivate` | `KSEF_ADMIN` | ❌ no | `CertificateService.deactivateCertificate` |
 
 Validation & safety in the controller:
 - Max upload size 1 MB; only `.pfx/.p12/.pem/.crt` accepted; filename sanitised (no path traversal).
@@ -218,8 +218,8 @@ Permission codes come from RegulaOne and are checked on the KSeFFlow side via
 [`AuthenticatedUser.requireAnyPermission(...)`](../backend/src/main/java/com/ksefflow/backend/security/AuthenticatedUser.java)
 (see [`KsefPermission`](../backend/src/main/java/com/ksefflow/backend/security/KsefPermission.java)).
 
-- **Manage** (upload, request, deactivate): `KSEF_TENANT_ADMIN`.
-- **Read** (list, download public cert): `KSEF_TENANT_ADMIN` or `KSEF_AUDITOR`.
+- **Manage** (upload, request, deactivate): `KSEF_ADMIN`.
+- **Read** (list, download public cert): `KSEF_ADMIN` or `KSEF_AUDITOR`.
 
 (Tenant isolation: every query is scoped to the caller's `tenantId`, resolved from the verified
 session — never trusted from the client.)

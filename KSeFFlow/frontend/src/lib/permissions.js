@@ -12,7 +12,7 @@ export const KSEF = {
   // Platform-level operator (the SaaS operator, NOT a tenant). Only this code may declare the
   // GLOBAL KSeF emergency/unavailability state — granted only to the operator's own account.
   PLATFORM_ADMIN:     'KSEF_PLATFORM_ADMIN',
-  TENANT_ADMIN:       'KSEF_TENANT_ADMIN',
+  ADMIN:       'KSEF_ADMIN',
   CASE_MANAGER:       'KSEF_CASE_MANAGER',
   COMPLIANCE_OFFICER: 'KSEF_COMPLIANCE_OFFICER',
   AUDITOR:            'KSEF_AUDITOR',
@@ -30,17 +30,17 @@ export function hasAnyPermission(permissions, ...codes) {
 // endpoint accepts, so the UI gate and the API guard never disagree.
 export const can = {
   // POST /invoices/draft|submit|correct, POST /received-invoices/sync
-  issueInvoices: (p) => hasAnyPermission(p, KSEF.TENANT_ADMIN, KSEF.CASE_MANAGER),
+  issueInvoices: (p) => hasAnyPermission(p, KSEF.ADMIN, KSEF.CASE_MANAGER),
 
   // GET /invoices, GET /received-invoices
   readInvoices: (p) =>
-    hasAnyPermission(p, KSEF.TENANT_ADMIN, KSEF.CASE_MANAGER, KSEF.COMPLIANCE_OFFICER, KSEF.AUDITOR),
+    hasAnyPermission(p, KSEF.ADMIN, KSEF.CASE_MANAGER, KSEF.COMPLIANCE_OFFICER, KSEF.AUDITOR),
 
   // POST /certificates/upload|enroll, PATCH /certificates/{id}/deactivate
-  manageCertificates: (p) => hasAnyPermission(p, KSEF.TENANT_ADMIN),
+  manageCertificates: (p) => hasAnyPermission(p, KSEF.ADMIN),
 
   // GET /certificates
-  readCertificates: (p) => hasAnyPermission(p, KSEF.TENANT_ADMIN, KSEF.AUDITOR),
+  readCertificates: (p) => hasAnyPermission(p, KSEF.ADMIN, KSEF.AUDITOR),
 
   // POST /ksef-status/emergency|unavailability|online
   // Platform-operator only — this is a GLOBAL state shared by all tenants, so a tenant admin
@@ -48,13 +48,13 @@ export const can = {
   manageAvailability: (p) => hasAnyPermission(p, KSEF.PLATFORM_ADMIN),
 
   // POST /permissions/persons/grants, DELETE /permissions/{id}
-  managePermissions: (p) => hasAnyPermission(p, KSEF.TENANT_ADMIN),
+  managePermissions: (p) => hasAnyPermission(p, KSEF.ADMIN),
 
   // POST /permissions/query, GET /permissions/operations/{ref}
   readPermissions: (p) =>
-    hasAnyPermission(p, KSEF.TENANT_ADMIN, KSEF.COMPLIANCE_OFFICER, KSEF.AUDITOR),
+    hasAnyPermission(p, KSEF.ADMIN, KSEF.COMPLIANCE_OFFICER, KSEF.AUDITOR),
 
   // GET /audit-logs
   readAuditLogs: (p) =>
-    hasAnyPermission(p, KSEF.TENANT_ADMIN, KSEF.AUDITOR, KSEF.COMPLIANCE_OFFICER),
+    hasAnyPermission(p, KSEF.ADMIN, KSEF.AUDITOR, KSEF.COMPLIANCE_OFFICER),
 };

@@ -37,7 +37,7 @@ public class KsefAvailabilityController {
 
     // ── Read (any authenticated user) ────────────────────────────────────────────
 
-    // Permissions: any KSeF role (KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER,
+    // Permissions: any KSeF role (KSEF_ADMIN, KSEF_CASE_MANAGER,
     //              KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR, KSEF_EMPLOYEE) — read-only status.
     @GetMapping
     public ResponseEntity<KsefAvailabilityService.Status> getStatus(AuthenticatedUser caller) {

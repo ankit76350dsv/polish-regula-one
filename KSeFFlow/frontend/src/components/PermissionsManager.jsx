@@ -42,7 +42,7 @@ const getPermissionLabel = (code, lang) => {
 export default function PermissionsManager({ tenant, role, permissions: userPermissions, onAddNotification }) {
   const { language, t } = useLanguage();
   const nip = tenant?.nip || '';
-  // Granting/revoking KSeF permissions is KSEF_TENANT_ADMIN-only — matches the
+  // Granting/revoking KSeF permissions is KSEF_ADMIN-only — matches the
   // backend guards on POST /permissions/persons/grants and DELETE /permissions/{id}.
   // NOTE: renamed to userPermissions to avoid clashing with the `permissions` state
   // below (which holds the company's KSeF permission grants, a different concept).

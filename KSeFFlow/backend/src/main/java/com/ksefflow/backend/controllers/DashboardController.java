@@ -24,12 +24,12 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
 
-    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER, KSEF_COMPLIANCE_OFFICER,
+    // Permissions: read access — KSEF_ADMIN, KSEF_CASE_MANAGER, KSEF_COMPLIANCE_OFFICER,
     //              KSEF_AUDITOR (the same roles allowed to read invoices). The dashboard only shows
     //              aggregate, read-only figures for the caller's own tenant.
     @GetMapping("/summary")
     public ResponseEntity<DashboardSummaryResponse> getSummary(AuthenticatedUser caller) {
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
                 KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
         log.info("[getSummary]:1 GET /dashboard/summary — tenant={}", caller.tenantId());
         return ResponseEntity.ok(dashboardService.getSummary(caller.tenantId()));

@@ -570,7 +570,7 @@
     "Critical": "Krytyczna"
   },
   "roles": {
-    "SAFEVOICE_TENANT_ADMIN": "Administrator najemcy",
+    "SAFEVOICE_ADMIN": "Administrator SafeVoice",
     "SAFEVOICE_COMPLIANCE_OFFICER": "Specjalista ds. zgodności",
     "SAFEVOICE_INVESTIGATOR": "Prowadzący sprawę",
     "SAFEVOICE_HR_MANAGER": "Kierownik HR",

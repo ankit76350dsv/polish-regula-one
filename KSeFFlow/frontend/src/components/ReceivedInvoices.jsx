@@ -12,7 +12,7 @@ import { can } from '../lib/permissions';
 // open the full XML. The tenant's own NIP is the "I am the buyer" context for the backend.
 export default function ReceivedInvoices({ tenant, permissions, onAddNotification }) {
   const { language, t } = useLanguage();
-  // Pulling new invoices from KSeF requires KSEF_CASE_MANAGER (or KSEF_TENANT_ADMIN) —
+  // Pulling new invoices from KSeF requires KSEF_CASE_MANAGER (or KSEF_ADMIN) —
   // matches the backend guard on POST /received-invoices/sync. Browsing the list is
   // open to read roles, so only the Sync button is gated here.
   const canSync = can.issueInvoices(permissions);

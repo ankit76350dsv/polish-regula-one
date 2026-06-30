@@ -32,7 +32,7 @@ export const CAPABILITIES = [
 
 // What each SAFEVOICE_* role is allowed to do. Mirrors the RegulaOne role design.
 export const SAFEVOICE_ROLE_PERMISSIONS = {
-  SAFEVOICE_TENANT_ADMIN: {
+  SAFEVOICE_ADMIN: {
     viewReports: true, assignCases: true, closeCases: true, exportData: true,
     accessAudits: true, manageUsers: true, manageRetention: true,
   },
@@ -56,7 +56,7 @@ export const SAFEVOICE_ROLE_PERMISSIONS = {
 
 // Highest-privilege first — used to pick a single role label to display.
 const ROLE_PRIORITY = [
-  "SAFEVOICE_TENANT_ADMIN",
+  "SAFEVOICE_ADMIN",
   "SAFEVOICE_COMPLIANCE_OFFICER",
   "SAFEVOICE_AUDITOR",
   "SAFEVOICE_INVESTIGATOR",

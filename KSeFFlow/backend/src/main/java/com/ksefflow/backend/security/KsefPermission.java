@@ -20,7 +20,7 @@ package com.ksefflow.backend.security;
  *                              mirrors the official Ministry of Finance announcement.
  *                              Must be granted ONLY to the operator's own account —
  *                              never to a customer/tenant admin (cross-tenant safety).
- *   - KSEF_TENANT_ADMIN      → full control inside the company's KSeF: manage
+ *   - KSEF_ADMIN      → full control inside the company's KSeF: manage
  *                              certificates, grant/revoke KSeF permissions. May READ
  *                              the KSeF availability state, but may NOT declare it.
  *   - KSEF_CASE_MANAGER      → day-to-day invoicing: create, submit, and correct
@@ -33,7 +33,7 @@ package com.ksefflow.backend.security;
  */
 public enum KsefPermission {
     KSEF_PLATFORM_ADMIN,
-    KSEF_TENANT_ADMIN,
+    KSEF_ADMIN,
     KSEF_CASE_MANAGER,
     KSEF_COMPLIANCE_OFFICER,
     KSEF_AUDITOR,

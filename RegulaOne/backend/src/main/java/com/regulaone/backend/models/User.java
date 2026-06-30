@@ -62,7 +62,7 @@ public class User {
     // This is a simple list of permission "codes" (plain strings). RegulaOne does
     // NOT hard-code what each code means — every module owns its own set of codes.
     // For example the KSeF module uses:
-    //   KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER, KSEF_COMPLIANCE_OFFICER,
+    //   KSEF_ADMIN, KSEF_CASE_MANAGER, KSEF_COMPLIANCE_OFFICER,
     //   KSEF_AUDITOR, KSEF_EMPLOYEE
     // When a new app is added later it can define new codes (e.g. WORKPULSE_*,
     // SAFEVOICE_*) and simply store them here — no change to this model is needed.

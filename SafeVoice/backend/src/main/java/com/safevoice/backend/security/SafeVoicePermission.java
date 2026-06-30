@@ -16,7 +16,7 @@ package com.safevoice.backend.security;
  * external users who authenticate with a tracking code + PIN, never via RegulaOne RBAC.
  */
 public enum SafeVoicePermission {
-    SAFEVOICE_TENANT_ADMIN,        // full control: invite officers, manage retention/legal hold
+    SAFEVOICE_ADMIN,        // full control: invite officers, manage retention/legal hold
     SAFEVOICE_COMPLIANCE_OFFICER,  // triage, status, assign investigator, message reporter
     SAFEVOICE_INVESTIGATOR,        // work assigned cases, add evidence, post messages
     SAFEVOICE_HR_MANAGER,          // handle HR-handoff (labour-dispute) cases only

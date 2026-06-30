@@ -47,7 +47,7 @@ public class KSeFInvoiceController {
     // ── Create ─────────────────────────────────────────────────────────────────
 
     //!create draft of the invoce into the mongodb only...
-    // Permissions: KSEF_TENANT_ADMIN (full access), KSEF_CASE_MANAGER (issue invoices).
+    // Permissions: KSEF_ADMIN (full access), KSEF_CASE_MANAGER (issue invoices).
     //              KSEF_COMPLIANCE_OFFICER / KSEF_AUDITOR are read-only and cannot create.
     @PostMapping("/draft")
     public ResponseEntity<KsefInvoice> createInvoice(
@@ -56,7 +56,7 @@ public class KSeFInvoiceController {
             HttpServletRequest httpRequest) {
 
         // Only invoice issuers (or the tenant admin) may create invoices.
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER);
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN, KsefPermission.KSEF_CASE_MANAGER);
 
         log.info("[createInvoice]:1 ▶ POST /draft — invoiceNumber={} tenant={} user={}",
                 request.getInvoiceNumber(), caller.tenantId(), caller.userId());
@@ -90,7 +90,7 @@ public class KSeFInvoiceController {
      *
      * @param nip Company 10-digit NIP number
      */
-    // Permissions: KSEF_TENANT_ADMIN (full access), KSEF_CASE_MANAGER (submit to KSeF).
+    // Permissions: KSEF_ADMIN (full access), KSEF_CASE_MANAGER (submit to KSeF).
     //              Read-only roles (KSEF_COMPLIANCE_OFFICER / KSEF_AUDITOR) cannot submit.
     @PostMapping("/{invoiceId}/submit")
     public ResponseEntity<SubmitInvoiceResponse> submitInvoice(
@@ -100,7 +100,7 @@ public class KSeFInvoiceController {
             HttpServletRequest httpRequest) {
 
         // Only invoice issuers (or the tenant admin) may submit to KSeF.
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER);
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN, KsefPermission.KSEF_CASE_MANAGER);
 
         log.info("[submitInvoice]:1 POST /{}/submit — tenant={} nip={}", invoiceId, caller.tenantId(), nip);
 
@@ -151,7 +151,7 @@ public class KSeFInvoiceController {
      * @param reason         why the correction is needed (FA(3) PrzyczynaKorekty)
      * @param correctionType optional KSeF correction type 1/2/3 (FA(3) TypKorekty)
      */
-    // Permissions: KSEF_TENANT_ADMIN (full access), KSEF_CASE_MANAGER (issue corrections).
+    // Permissions: KSEF_ADMIN (full access), KSEF_CASE_MANAGER (issue corrections).
     //              Read-only roles cannot create correction invoices.
     @PostMapping("/{invoiceId}/correct")
     public ResponseEntity<KsefInvoice> correctInvoice(
@@ -163,7 +163,7 @@ public class KSeFInvoiceController {
             HttpServletRequest httpRequest) {
 
         // Only invoice issuers (or the tenant admin) may issue correction invoices.
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER);
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN, KsefPermission.KSEF_CASE_MANAGER);
 
         log.info("[correctInvoice]:1 POST /{}/correct — tenant={} newNumber={}",
                 invoiceId, caller.tenantId(), request.getInvoiceNumber());
@@ -184,13 +184,13 @@ public class KSeFInvoiceController {
      * waiting for the scheduled background retry job. Really re-attempts submission to KSeF and
      * returns the updated invoice (SENT on success, or still OFFLINE_MODE on failure).
      */
-    // Permissions: KSEF_TENANT_ADMIN (full access), KSEF_CASE_MANAGER (issue/submit invoices).
+    // Permissions: KSEF_ADMIN (full access), KSEF_CASE_MANAGER (issue/submit invoices).
     @PostMapping("/{invoiceId}/retry")
     public ResponseEntity<KsefInvoice> retryInvoice(
             AuthenticatedUser caller,
             @PathVariable String invoiceId,
             HttpServletRequest httpRequest) {
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER);
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN, KsefPermission.KSEF_CASE_MANAGER);
         log.info("[retryInvoice]:1 POST /{}/retry — tenant={}", invoiceId, caller.tenantId());
         KsefInvoice result = invoiceService.retryOfflineInvoice(
                 caller.tenantId(), invoiceId, caller.email(), extractClientIp(httpRequest));
@@ -216,14 +216,14 @@ public class KSeFInvoiceController {
      ** FAILED
      ** OFFLINE_MODE
      */
-    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER,
+    // Permissions: read access — KSEF_ADMIN, KSEF_CASE_MANAGER,
     //              KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR. (KSEF_EMPLOYEE has no invoice access.)
     @GetMapping("/{invoiceId}")
     public ResponseEntity<KsefInvoice> getInvoice(
             AuthenticatedUser caller,
             @PathVariable String invoiceId) {
         // Read access — issuers, oversight roles, or the tenant admin.
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
                 KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
         log.info("[getInvoice]:1 ▶ GET /{} — tenant={}", invoiceId, caller.tenantId());
         KsefInvoice invoice = invoiceService.getInvoice(caller.tenantId(), invoiceId);
@@ -238,21 +238,21 @@ public class KSeFInvoiceController {
      * ordered history of status changes (DRAFT → PENDING → SENT → ...), each with its own
      * timestamp, reason, and who made the change. Useful for a status/timeline UI widget.
      */
-    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER,
+    // Permissions: read access — KSEF_ADMIN, KSEF_CASE_MANAGER,
     //              KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR.
     @GetMapping("/{invoiceId}/status")
     public ResponseEntity<InvoiceStatusResponse> getInvoiceStatus(
             AuthenticatedUser caller,
             @PathVariable String invoiceId) {
         // Read access — issuers, oversight roles, or the tenant admin.
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
                 KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
         log.info("[getInvoiceStatus]:1 ▶ GET /{}/status — tenant={}", invoiceId, caller.tenantId());
         KsefInvoice invoice = invoiceService.getInvoice(caller.tenantId(), invoiceId);
         return ResponseEntity.ok(InvoiceStatusResponse.from(invoice));
     }
 
-    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER,
+    // Permissions: read access — KSEF_ADMIN, KSEF_CASE_MANAGER,
     //              KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR.
     /**
      * Returns the EXACT official FA(3) XML this invoice produces — the same document the submission
@@ -264,7 +264,7 @@ public class KSeFInvoiceController {
             AuthenticatedUser caller,
             @PathVariable String invoiceId) {
         // Read access — issuers, oversight roles, or the tenant admin.
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
                 KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
         log.info("[getInvoiceXml]:1 ▶ GET /{}/xml — tenant={}", invoiceId, caller.tenantId());
         return ResponseEntity.ok(invoiceService.generateInvoiceXml(caller.tenantId(), invoiceId));
@@ -283,7 +283,7 @@ public class KSeFInvoiceController {
      * ?status=DRAFT|PENDING|SENT|FAILED|OFFLINE_MODE|RETRYING
      * ?page=0&size=20&sort=createdAt,desc
      */
-    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER,
+    // Permissions: read access — KSEF_ADMIN, KSEF_CASE_MANAGER,
     //              KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR. (KSEF_EMPLOYEE has no invoice access.)
     @GetMapping
     public ResponseEntity<Page<KsefInvoice>> listInvoices(
@@ -293,7 +293,7 @@ public class KSeFInvoiceController {
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
 
         // Read access — issuers, oversight roles, or the tenant admin.
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN, KsefPermission.KSEF_CASE_MANAGER,
                 KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
 
         log.info("[listInvoices]:1 ▶ GET / (list) — tenant={} status={} search={} page={} size={}",

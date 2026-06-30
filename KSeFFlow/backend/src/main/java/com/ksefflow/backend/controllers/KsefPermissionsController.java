@@ -46,7 +46,7 @@ public class KsefPermissionsController {
 
     // ── Grant (admin only) ────────────────────────────────────────────────────────
 
-    // Permissions: KSEF_TENANT_ADMIN only — granting KSeF rights to a person is a
+    // Permissions: KSEF_ADMIN only — granting KSeF rights to a person is a
     //              legally significant administrative action.
     @PostMapping("/persons/grants")
     public ResponseEntity<Map<String, String>> grant(
@@ -63,7 +63,7 @@ public class KsefPermissionsController {
 
     // ── Query (any authenticated user) ───────────────────────────────────────────
 
-    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR
+    // Permissions: read access — KSEF_ADMIN, KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR
     //              (view "who can do what"). Does not change anything.
     @PostMapping("/query")
     public ResponseEntity<QueryPersonPermissionsResponse> query(
@@ -73,7 +73,7 @@ public class KsefPermissionsController {
             @RequestParam(defaultValue = "0") int pageOffset,
             @RequestParam(defaultValue = "20") int pageSize) {
         // Read access — oversight roles or the tenant admin may view "who can do what".
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN,
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN,
                 KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
         log.info("[query]:1 POST /permissions/query — tenant={}", caller.tenantId());
         String queryType = body != null ? body.queryType() : null;
@@ -84,7 +84,7 @@ public class KsefPermissionsController {
 
     // ── Revoke (admin only) ───────────────────────────────────────────────────────
 
-    // Permissions: KSEF_TENANT_ADMIN only — revoking KSeF rights is admin-only, like granting.
+    // Permissions: KSEF_ADMIN only — revoking KSeF rights is admin-only, like granting.
     @DeleteMapping("/{permissionId}")
     public ResponseEntity<Map<String, String>> revoke(
             AuthenticatedUser caller,
@@ -98,7 +98,7 @@ public class KsefPermissionsController {
 
     // ── Operation status (any authenticated user) ─────────────────────────────────
 
-    // Permissions: read access — KSEF_TENANT_ADMIN, KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR
+    // Permissions: read access — KSEF_ADMIN, KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR
     //              (poll the result of a grant/revoke). Does not change anything.
     @GetMapping("/operations/{referenceNumber}")
     public ResponseEntity<PermissionsOperationStatusResponse> operationStatus(
@@ -106,7 +106,7 @@ public class KsefPermissionsController {
             @PathVariable String referenceNumber,
             @RequestParam @NotBlank @Pattern(regexp = "\\d{10}", message = "NIP must be exactly 10 digits") String nip) {
         // Read access — oversight roles or the tenant admin may poll an operation's result.
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN,
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN,
                 KsefPermission.KSEF_COMPLIANCE_OFFICER, KsefPermission.KSEF_AUDITOR);
         log.info("[operationStatus]:1 GET /permissions/operations/{} — tenant={}", referenceNumber, caller.tenantId());
         return ResponseEntity.ok(permissionsService.getOperationStatus(caller.tenantId(), nip, referenceNumber));
@@ -114,9 +114,9 @@ public class KsefPermissionsController {
 
     // ── Helpers ────────────────────────────────────────────────────────────────────
 
-    // Only a KSEF_TENANT_ADMIN may grant/revoke KSeF permissions.
+    // Only a KSEF_ADMIN may grant/revoke KSeF permissions.
     private void requireAdmin(AuthenticatedUser caller) {
-        caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN);
+        caller.requireAnyPermission(KsefPermission.KSEF_ADMIN);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

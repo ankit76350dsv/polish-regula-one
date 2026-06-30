@@ -43,10 +43,10 @@ public record AuthenticatedUser(
      * least one of the permission codes passed in; otherwise throw 403 Forbidden.
      *
      * Pass exactly the permissions that the action requires — nothing else is allowed.
-     * For an admin-only action, pass just {@code KSEF_TENANT_ADMIN}. For an action that
-     * several roles may perform, list them all (include {@code KSEF_TENANT_ADMIN} when
+     * For an admin-only action, pass just {@code KSEF_ADMIN}. For an action that
+     * several roles may perform, list them all (include {@code KSEF_ADMIN} when
      * the admin should also have access). Call it at the top of a controller method:
-     * {@code caller.requireAnyPermission(KsefPermission.KSEF_TENANT_ADMIN, KsefPermission.KSEF_CASE_MANAGER);}
+     * {@code caller.requireAnyPermission(KsefPermission.KSEF_ADMIN, KsefPermission.KSEF_CASE_MANAGER);}
      */
     public void requireAnyPermission(KsefPermission... allowed) {
         for (KsefPermission p : allowed) {

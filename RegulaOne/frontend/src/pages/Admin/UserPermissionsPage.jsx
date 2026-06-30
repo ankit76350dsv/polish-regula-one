@@ -17,7 +17,7 @@ import { useAuthStore } from '../../store/authStore';
 // Catalogue of assignable permissions, grouped by the app that owns them.
 // Adding a new app later = add another group here; the page renders it automatically.
 // The codes MUST match what the backend/module expects (see KsefPermission on the
-// KSeFFlow side: KSEF_TENANT_ADMIN, KSEF_CASE_MANAGER, …).
+// KSeFFlow side: KSEF_ADMIN, KSEF_CASE_MANAGER, …).
 const PERMISSION_GROUPS = [
   {
     app: 'KSeFFlow',
@@ -33,8 +33,8 @@ const PERMISSION_GROUPS = [
         superAdminOnly: true,
       },
       {
-        code: 'KSEF_TENANT_ADMIN',
-        label: 'Tenant Admin',
+        code: 'KSEF_ADMIN',
+        label: 'KSEF Admin',
         desc: 'Full control within the company: manage certificates and grant/revoke KSeF permissions.',
       },
       {
@@ -65,8 +65,8 @@ const PERMISSION_GROUPS = [
     // Codes MUST match SafeVoicePermission on the SafeVoice backend.
     permissions: [
       {
-        code: 'SAFEVOICE_TENANT_ADMIN',
-        label: 'Tenant Admin',
+        code: 'SAFEVOICE_ADMIN',
+        label: 'SafeVoice Admin',
         desc: 'Full control: invite officers, manage retention and legal holds.',
       },
       {

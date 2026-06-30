@@ -19,7 +19,7 @@ import InvoiceStatusTimeline from './InvoiceStatusTimeline';
 
 export default function InvoiceForm({ tenant, role, permissions, onAddInvoice, onAddNotification, onNavigate, govStatus, existingInvoice }) {
   const { t, language } = useLanguage();
-  // Issuing/submitting invoices requires KSEF_CASE_MANAGER (or KSEF_TENANT_ADMIN) —
+  // Issuing/submitting invoices requires KSEF_CASE_MANAGER (or KSEF_ADMIN) —
   // same rule the backend enforces on POST /invoices/draft and /submit.
   const canModify = can.issueInvoices(permissions);
 

@@ -48,7 +48,7 @@ export default function InvoiceList({ tenant, role, permissions, onAddNotificati
   // The SENT invoice currently being corrected (opens the correction modal). null = closed.
   const [correctionFor, setCorrectionFor] = useState(null);
   // Only users who can issue invoices may issue a correction (KSEF_CASE_MANAGER /
-  // KSEF_TENANT_ADMIN) — matches the backend guard on POST /invoices/{id}/correct.
+  // KSEF_ADMIN) — matches the backend guard on POST /invoices/{id}/correct.
   const canCorrect = can.issueInvoices(permissions);
 
   // Debounce the search box so we don't hit the API on every keystroke.
