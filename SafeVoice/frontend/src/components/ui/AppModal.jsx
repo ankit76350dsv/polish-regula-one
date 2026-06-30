@@ -16,6 +16,13 @@ export function AppModal({
   const panelRef = useRef(null);
   // Remember what was focused before the dialog opened so we can give focus back on close.
   const previouslyFocused = useRef(null);
+  // Keep the latest onClose in a ref so the focus effect below can depend ONLY on `isOpen`.
+  // Callers usually pass an inline arrow (a new function every render); if the effect
+  // depended on it, each keystroke would re-run the effect and steal focus from the field.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   const motionProps = (props) => {
     if (!prefersReducedMotion) return props;
     return {
@@ -39,7 +46,7 @@ export function AppModal({
     // Esc closes the dialog; Tab is trapped so focus never leaves it (WCAG 2.1.2 / 2.4.3).
     const handleKeyDown = (e) => {
       if (e.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !panel) return;
@@ -64,7 +71,7 @@ export function AppModal({
       // Give focus back to whatever opened the dialog.
       previouslyFocused.current?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return (
     <AnimatePresence>

@@ -86,8 +86,10 @@ export default function UsersPermissionsMatrixPage() {
     try {
       await dispatch(removeUser(toRemove.id)).unwrap();
       dispatch(addToast({ type: "success", message: t("toast.accessRemoved") }));
-    } catch {
-      dispatch(addToast({ type: "error", message: t("toast.genericError") }));
+    } catch (e) {
+      // Show the backend's own reason when it has one (e.g. "this account is the
+      // organisation's primary contact and cannot be deleted"); otherwise a generic error.
+      dispatch(addToast({ type: "error", message: e?.message || t("toast.genericError") }));
     } finally {
       setToRemove(null);
     }

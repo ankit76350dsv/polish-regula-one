@@ -120,6 +120,24 @@ export function useUpdateUserStatus() {
   });
 }
 
+// Permanently deletes a user (from the database and Cognito) and refreshes both members
+// and stats on success. Caller passes the userId. The backend blocks deleting the
+// organisation's primary-contact account; that reason is surfaced via the error toast.
+export function useDeleteUser() {
+  const tenantId = useAuthStore((s) => s.user?.tenantId);
+  const qc       = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId) => userService.deleteUser(userId),
+    onSuccess: () => {
+      toast.success('User deleted successfully');
+      qc.invalidateQueries({ queryKey: TEAM_KEYS.members(tenantId) });
+      qc.invalidateQueries({ queryKey: TEAM_KEYS.stats(tenantId) });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to delete user'),
+  });
+}
+
 // ── Superadmin hooks ──────────────────────────────────────────────────────────
 
 // Fetches users for a specific tenant — used by superadmin's TenantDetailPage.

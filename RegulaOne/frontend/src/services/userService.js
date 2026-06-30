@@ -58,10 +58,11 @@ export const userService = {
   updateUserPermissions: (userId, permissions) =>
     api.patch(`/api/admin/users/${userId}/permissions`, { permissions }),
 
-  // DELETE /api/admin/users/{username}
-  // Kept here for future delete-user flow.
-  deleteUser: (username) =>
-    api.del(`/api/admin/users/${username}`),
+  // DELETE /api/admin/users/{identifier}
+  // Permanently deletes the user from the database and Cognito. The identifier may be the
+  // user's id, Cognito sub, or email; the backend blocks deleting the org's primary contact.
+  deleteUser: (identifier) =>
+    api.del(`/api/admin/users/${identifier}`),
 
   // ── Superadmin endpoints (no tenantId — platform-wide scope) ──────────────
 

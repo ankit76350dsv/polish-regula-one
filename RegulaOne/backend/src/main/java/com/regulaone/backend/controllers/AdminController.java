@@ -130,9 +130,14 @@ public class AdminController {
                 userService.updateUser(subId, request)));
     }
 
-    @DeleteMapping("/users/{username}")
-    public ResponseEntity<AppResponse<Void>> deleteUser(@PathVariable String username) {
-        userService.deleteUser(username);
+    /**
+     * Permanently delete a user from both the database and Cognito. The path value may be
+     * the user's id, Cognito sub, or email. The organisation's primary-contact account
+     * (whose email matches the tenant's email) cannot be deleted; any other user can.
+     */
+    @DeleteMapping("/users/{identifier}")
+    public ResponseEntity<AppResponse<Void>> deleteUser(@PathVariable String identifier) {
+        userService.deleteUser(identifier);
         return ResponseEntity.ok(AppResponse.success("User deleted successfully."));
     }
 }

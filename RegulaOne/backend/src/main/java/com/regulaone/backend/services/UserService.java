@@ -28,6 +28,7 @@ import com.regulaone.backend.models.User;
 import com.regulaone.backend.repository.PackageRepository;
 import com.regulaone.backend.repository.TenantRepository;
 import com.regulaone.backend.repository.UserRepository;
+import com.regulaone.backend.utils.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -603,10 +604,54 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
-    // ! delete
-    public void deleteUser(String username) {
-        cognitoService.adminDeleteUser(username);
-        userRepository.findByCognitoSub(username).ifPresent(userRepository::delete);
+    /**
+     * Permanently delete a user from BOTH our database and Cognito.
+     *
+     * The {@code identifier} may be the user's database id, their Cognito sub, or their
+     * email — we resolve whichever it is, so every caller (team management, module apps,
+     * the admin console) works without caring which key it holds.
+     *
+     * Rules and edge cases handled:
+     *  - Blank identifier → rejected (400).
+     *  - No matching user → 404 (we never pretend a delete happened).
+     *  - The organisation's PRIMARY CONTACT (the user whose email equals their tenant's
+     *    email) can NEVER be deleted — that account owns the organisation. Blocked (400).
+     *  - Cognito is removed using the email (Cognito's username). If the Cognito account
+     *    is already gone we still clean up our database, so no orphan record is left.
+     *  - A user with no email/Cognito link (edge data) is still removed from our database.
+     *
+     * @param identifier the user's id, Cognito sub, or email
+     */
+    public void deleteUser(String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            throw new IllegalArgumentException("A user identifier is required to delete a user");
+        }
+
+        // Resolve the user by whichever key we were given.
+        User user = userRepository.findById(identifier)
+                .or(() -> userRepository.findByCognitoSub(identifier))
+                .or(() -> userRepository.findByEmail(identifier))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        // Protect the organisation's primary-contact account: the user whose email matches
+        // the tenant's contact email is the owner and must not be removable here.
+        Tenant tenant = user.getTenant();
+        if (tenant != null
+                && tenant.getEmail() != null
+                && user.getEmail() != null
+                && tenant.getEmail().equalsIgnoreCase(user.getEmail())) {
+            throw new IllegalStateException(
+                    "This account is the organisation's primary contact and cannot be deleted.");
+        }
+
+        // Remove from Cognito by email (its username), tolerating an already-removed account
+        // so our database is always cleaned up.
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            cognitoService.adminDeleteUserIfExists(user.getEmail());
+        }
+
+        // Remove from our database.
+        userRepository.delete(user);
     }
 
     private Role parseRole(String roleStr) {

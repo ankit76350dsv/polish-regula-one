@@ -7,7 +7,12 @@ import userService from "../services/userService";
 
 export const fetchUsers = createAsyncThunk("users/fetch", () => userService.list());
 export const inviteUser = createAsyncThunk("users/invite", (payload) => userService.invite(payload));
-export const removeUser = createAsyncThunk("users/remove", (id) => userService.remove(id));
+// The delete endpoint returns no body, so we resolve with the id we removed and let the
+// reducer drop that row from the list.
+export const removeUser = createAsyncThunk("users/remove", async (id) => {
+  await userService.remove(id);
+  return id;
+});
 
 const usersSlice = createSlice({
   name: "users",
@@ -45,7 +50,7 @@ const usersSlice = createSlice({
         s.inviting = false;
       })
       .addCase(removeUser.fulfilled, (s, a) => {
-        s.list = s.list.filter((u) => u.id !== a.payload.id);
+        s.list = s.list.filter((u) => u.id !== a.payload);
       });
   },
 });
