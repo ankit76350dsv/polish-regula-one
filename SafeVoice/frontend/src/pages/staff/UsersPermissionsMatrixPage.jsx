@@ -98,7 +98,7 @@ export default function UsersPermissionsMatrixPage() {
   const err = (key) => (errors[key] ? t(errors[key].key, errors[key].params) : undefined);
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto leading-relaxed">
+    <div className="w-full min-w-0 space-y-5 leading-relaxed">
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 pb-4 gap-4">
         <div>
           <h1 className="text-lg font-bold text-slate-900 tracking-tight">{t("users.title")}</h1>
@@ -109,20 +109,20 @@ export default function UsersPermissionsMatrixPage() {
         </AppButton>
       </div>
 
-      <SecureCard title={t("users.personnel")}>
-        <AppTable headers={[t("users.colOfficer"), t("users.colRole"), t("users.colStatus"), t("users.colMfa"), t("users.colLastReview"), ""]}>
+      <SecureCard title={t("users.personnel")} className="min-w-0">
+        <AppTable className="min-w-0" headers={[t("users.colOfficer"), t("users.colRole"), t("users.colStatus"), t("users.colMfa"), t("users.colLastReview"), ""]}>
           {users.map((user) => (
             <tr
               key={user.id}
               className={`border-b border-slate-200 text-xs ${
                 user.hasAccess
                   ? "hover:bg-slate-50 bg-emerald-50/40 border-l-2 border-l-emerald-400"
-                  : "hover:bg-slate-50 opacity-60"
+                : "hover:bg-slate-50 opacity-60"
               }`}
             >
               <td className="px-4 py-3 font-bold text-slate-800">
-                <div className="flex items-center gap-2">
-                  {user.name}
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="break-words">{user.name}</span>
                   <span
                     className={`px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide border ${
                       user.hasAccess
@@ -133,7 +133,7 @@ export default function UsersPermissionsMatrixPage() {
                     {user.hasAccess ? t("users.hasAccess") : t("users.noAccess")}
                   </span>
                 </div>
-                <span className="block font-normal text-[10px] text-slate-500 mt-0.5">{user.email}</span>
+                <span className="block font-normal text-[10px] text-slate-500 mt-0.5 break-all">{user.email}</span>
               </td>
               <td className="px-4 py-3">
                 <span
@@ -168,13 +168,13 @@ export default function UsersPermissionsMatrixPage() {
         </AppTable>
       </SecureCard>
 
-      <SecureCard title={t("users.matrix")} subtitle={t("users.matrixSub")}>
-        <AppTable headers={[t("users.colRole"), ...PERMISSION_KEYS.map((k) => t(`users.perm.${k}`))]}>
+      <SecureCard title={t("users.matrix")} subtitle={t("users.matrixSub")} className="min-w-0">
+        <AppTable className="min-w-0" headers={[t("users.colRole"), ...PERMISSION_KEYS.map((k) => t(`users.perm.${k}`))]}>
           {rolePermissions.map((rule) => (
             <tr key={rule.role} className="hover:bg-slate-50 border-b border-slate-200">
-              <td className="px-4 py-3 font-mono text-xs font-bold text-cyan-700 uppercase">{t(`roles.${rule.role}`, rule.role)}</td>
+              <td className="px-4 py-3 font-mono text-xs font-bold text-cyan-700 uppercase whitespace-nowrap">{t(`roles.${rule.role}`, rule.role)}</td>
               {PERMISSION_KEYS.map((key) => (
-                <td key={key} className="px-4 py-3 text-center text-xs">
+                <td key={key} className="px-4 py-3 text-center text-xs whitespace-nowrap">
                   <span className={rule[key] ? "text-emerald-700 font-semibold" : "text-slate-400"}>
                     {rule[key] ? t("users.permAllowed") : t("users.permBlocked")}
                   </span>

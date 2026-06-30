@@ -80,7 +80,7 @@ export default function SecurityAuditTrailLogsPage() {
   const refreshing = status === "loading" && logs.length > 0;
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto leading-relaxed">
+    <div className="w-full min-w-0 space-y-5 leading-relaxed">
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 pb-4 gap-4">
         <div>
           <h1 className="text-lg font-bold text-slate-900 tracking-tight">{t("audit.title")}</h1>
@@ -93,9 +93,9 @@ export default function SecurityAuditTrailLogsPage() {
         )}
       </div>
 
-      <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs space-y-3">
-        <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
-          <div className="relative w-full md:max-w-xs">
+      <div className="min-w-0 bg-white p-4 rounded-lg border border-slate-200 shadow-xs space-y-3">
+        <div className="flex min-w-0 flex-col md:flex-row md:items-center gap-3 justify-between">
+          <div className="relative w-full md:max-w-sm">
             <label htmlFor="audit-search" className="sr-only">{t("common.search")}</label>
             <input
               id="audit-search"
@@ -116,14 +116,14 @@ export default function SecurityAuditTrailLogsPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:flex xl:flex-wrap xl:items-end">
+          <div className="min-w-0">
             <label htmlFor="audit-action" className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">{t("audit.colAction")}</label>
             <select
               id="audit-action"
               value={actionType}
               onChange={(e) => { setActionType(e.target.value); resetPage(); }}
-              className="bg-slate-50 border border-slate-300 text-slate-800 rounded-lg py-2 px-3 text-xs font-semibold outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              className="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg py-2 px-3 text-xs font-semibold outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
             >
               <option value="">{t("audit.allActions")}</option>
               {ACTION_TYPES.map((a) => (
@@ -131,13 +131,13 @@ export default function SecurityAuditTrailLogsPage() {
               ))}
             </select>
           </div>
-          <div>
+          <div className="min-w-0">
             <label htmlFor="audit-outcome" className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">{t("audit.colOutcome")}</label>
             <select
               id="audit-outcome"
               value={outcome}
               onChange={(e) => { setOutcome(e.target.value); resetPage(); }}
-              className="bg-slate-50 border border-slate-300 text-slate-800 rounded-lg py-2 px-3 text-xs font-semibold outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              className="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg py-2 px-3 text-xs font-semibold outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
             >
               <option value="">{t("audit.allOutcomes")}</option>
               {OUTCOMES.map((o) => (
@@ -145,24 +145,24 @@ export default function SecurityAuditTrailLogsPage() {
               ))}
             </select>
           </div>
-          <div>
+          <div className="min-w-0">
             <label htmlFor="audit-from" className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">{t("audit.dateFrom")}</label>
             <input
               id="audit-from"
               type="date"
               value={from}
               onChange={(e) => { setFrom(e.target.value); resetPage(); }}
-              className="bg-slate-50 border border-slate-300 text-slate-800 rounded-lg py-2 px-3 text-xs font-semibold outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              className="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg py-2 px-3 text-xs font-semibold outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <label htmlFor="audit-to" className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">{t("audit.dateTo")}</label>
             <input
               id="audit-to"
               type="date"
               value={to}
               onChange={(e) => { setTo(e.target.value); resetPage(); }}
-              className="bg-slate-50 border border-slate-300 text-slate-800 rounded-lg py-2 px-3 text-xs font-semibold outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              className="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-lg py-2 px-3 text-xs font-semibold outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
             />
           </div>
         </div>
@@ -180,8 +180,8 @@ export default function SecurityAuditTrailLogsPage() {
       ) : logs.length === 0 ? (
         <EmptyState title={t("audit.empty")} />
       ) : (
-        <div className={refreshing ? "opacity-60 transition-opacity pointer-events-none" : "transition-opacity"} aria-busy={refreshing}>
-          <AppTable headers={[t("audit.colTime"), t("audit.colActor"), t("audit.colAction"), t("audit.colSubject"), t("audit.colOutcome"), t("audit.colMetadata"), t("audit.colSeal")]}>
+        <div className={`min-w-0 ${refreshing ? "opacity-60 transition-opacity pointer-events-none" : "transition-opacity"}`} aria-busy={refreshing}>
+          <AppTable className="min-w-0" headers={[t("audit.colTime"), t("audit.colActor"), t("audit.colAction"), t("audit.colSubject"), t("audit.colOutcome"), t("audit.colMetadata"), t("audit.colSeal")]}>
             {logs.map((log) => (
               <tr key={log.id} className="hover:bg-slate-50 border-b border-slate-200 transition-colors">
                 <td className="px-4 py-3 text-xs font-mono text-slate-500 whitespace-nowrap">{log.timestamp}</td>
@@ -190,19 +190,19 @@ export default function SecurityAuditTrailLogsPage() {
                   <div className="text-[10px] text-slate-500 font-mono">{log.actorRef}</div>
                 </td>
                 <td className="px-4 py-3 text-xs text-slate-700">{pretty(log.actionType)}</td>
-                <td className="px-4 py-3 text-xs font-mono text-slate-500">{log.subjectId}</td>
+                <td className="px-4 py-3 text-xs font-mono text-slate-500 break-all">{log.subjectId}</td>
                 <td className="px-4 py-3 text-xs text-emerald-700 font-semibold">{log.outcome}</td>
-                <td className="px-4 py-3 text-xs text-slate-500 max-w-sm">
+                <td className="px-4 py-3 text-xs text-slate-500 max-w-sm break-words">
                   {log.metadataNotice}
                   {log.oldValue && log.newValue && (
-                    <div className="mt-1 flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
-                      <span>{log.oldValue}</span>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 font-mono">
+                      <span className="break-all">{log.oldValue}</span>
                       <ChevronRight className="w-3 h-3" aria-hidden="true" />
-                      <span className="text-cyan-700">{log.newValue}</span>
+                      <span className="text-cyan-700 break-all">{log.newValue}</span>
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 text-xs font-mono text-slate-400">{log.hashChain}</td>
+                <td className="px-4 py-3 text-xs font-mono text-slate-400 break-all">{log.hashChain}</td>
               </tr>
             ))}
           </AppTable>

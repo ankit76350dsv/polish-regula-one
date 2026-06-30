@@ -56,7 +56,7 @@ export default function CaseManagementPage({ navigate }) {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto leading-relaxed">
+    <div className="w-full min-w-0 space-y-5 leading-relaxed">
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 pb-4 gap-4">
         <div>
           <h1 className="text-lg font-bold text-slate-900 tracking-tight">{t("cases.title")}</h1>
@@ -64,8 +64,8 @@ export default function CaseManagementPage({ navigate }) {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row md:items-center gap-4 bg-white p-4 rounded-lg border border-slate-200 justify-between shadow-xs">
-        <div className="relative w-full md:max-w-xs">
+      <div className="flex min-w-0 flex-col md:flex-row md:items-center gap-4 bg-white p-4 rounded-lg border border-slate-200 justify-between shadow-xs">
+        <div className="relative w-full md:max-w-sm">
           <label htmlFor="case-search" className="sr-only">{t("common.search")}</label>
           <input
             id="case-search"
@@ -77,7 +77,7 @@ export default function CaseManagementPage({ navigate }) {
           />
           <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" aria-hidden="true" />
         </div>
-        <div className="flex flex-wrap gap-2 text-xs" role="group" aria-label={t("common.filter")}>
+        <div className="flex min-w-0 flex-wrap gap-2 text-xs" role="group" aria-label={t("common.filter")}>
           {FILTERS.map((f) => (
             <button
               key={f}
@@ -97,8 +97,9 @@ export default function CaseManagementPage({ navigate }) {
       {items.length === 0 ? (
         <EmptyState title={t("cases.empty")} />
       ) : (
-        <>
+        <div className="min-w-0">
           <AppTable
+            className="min-w-0"
             headers={[
               t("cases.colCase"),
               t("cases.colCategory"),
@@ -112,11 +113,11 @@ export default function CaseManagementPage({ navigate }) {
             {items.map((report) => (
               <tr key={report.id} className="hover:bg-slate-50 border-b border-slate-200 transition-colors">
                 <td className="px-4 py-3 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900">{report.caseReference || report.id}</span>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="font-bold text-slate-900 break-all">{report.caseReference || report.id}</span>
                     {report.unreadCount > 0 && (
                       <span
-                        className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-bold"
+                        className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-bold shrink-0"
                         title={t("cases.unreadMessages", { count: report.unreadCount })}
                         aria-label={t("cases.unreadMessages", { count: report.unreadCount })}
                       >
@@ -126,10 +127,10 @@ export default function CaseManagementPage({ navigate }) {
                   </div>
                   <div className="text-[10px] text-slate-500 font-mono">{report.disclosureMode}</div>
                 </td>
-                <td className="px-4 py-3 text-xs text-slate-700">{t(`categories.${report.category}`, report.category)}</td>
+                <td className="px-4 py-3 text-xs text-slate-700 break-words">{t(`categories.${report.category}`, report.category)}</td>
                 <td className="px-4 py-3 text-xs"><StatusBadge status={report.status} /></td>
                 <td className="px-4 py-3 text-xs"><SeverityBadge severity={report.severity} /></td>
-                <td className="px-4 py-3 text-xs text-slate-700">
+                <td className="px-4 py-3 text-xs text-slate-700 break-words">
                   {report.assignedInvestigator === "Unassigned" || !report.assignedInvestigator
                     ? t("cases.unassigned")
                     : report.assignedInvestigator}
@@ -144,7 +145,7 @@ export default function CaseManagementPage({ navigate }) {
             ))}
           </AppTable>
           <Pagination page={page} pageCount={totalPages || 1} total={total} onChange={setPage} />
-        </>
+        </div>
       )}
     </div>
   );
