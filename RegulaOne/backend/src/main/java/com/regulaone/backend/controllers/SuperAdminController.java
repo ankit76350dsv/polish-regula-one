@@ -8,6 +8,7 @@ import com.regulaone.backend.dto.Platform.PlatformOverviewResponse;
 import com.regulaone.backend.dto.Tenant.TeamManagementStatsResponse;
 import com.regulaone.backend.services.PlatformService;
 import com.regulaone.backend.services.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -56,7 +57,7 @@ public class SuperAdminController {
     @PatchMapping("/users/{userId}/status")
     public ResponseEntity<AppResponse<UserResponse>> updateUserStatus(
             @PathVariable String userId,
-            @RequestBody UpdateUserStatusRequest request) {
+            @Valid @RequestBody UpdateUserStatusRequest request) {
         return ResponseEntity.ok(AppResponse.success(
                 "User status updated successfully",
                 userService.updateUserStatus(userId, request)));

@@ -490,20 +490,181 @@ public class UserService {
                 .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
     }
 
-    // ! enable / disable user
+    /**
+     * Enables or disables a tenant user.
+     *
+     * Edge cases handled:
+     *  - Blank user id or missing body/enabled value → 400.
+     *  - Unknown target user → 404.
+     *  - Admins can update only users inside their own tenant (unless the caller is a
+     *    platform super-admin routed through another admin-capable endpoint).
+     *  - The tenant primary-contact account (user email == tenant email) cannot have its
+     *    status changed, matching the delete-user protection.
+     *  - Admins cannot disable their own account or the last enabled admin in a tenant.
+     *  - Re-sending the current status is a no-op and does not touch updatedAt.
+     */
+    @Transactional
+    public UserResponse updateUserStatus(
+            String userId,
+            UpdateUserStatusRequest request,
+            String actorCognitoSub) {
+
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("A user id is required to update status");
+        }
+        if (request == null || request.getEnabled() == null) {
+            throw new IllegalArgumentException("enabled is required");
+        }
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        User actor = requireStatusActor(actorCognitoSub);
+        assertStatusChangeIsTenantScoped(actor, targetUser);
+
+        boolean desiredEnabled = request.getEnabled();
+        if (targetUser.isEnabled() == desiredEnabled) {
+            return UserResponse.from(targetUser);
+        }
+
+        assertStatusChangeAllowed(actor, targetUser, desiredEnabled);
+
+        targetUser.setEnabled(desiredEnabled);
+        targetUser.setUpdatedAt(LocalDateTime.now());
+
+        userRepository.save(targetUser);
+
+        return UserResponse.from(targetUser);
+    }
+
+    // Backward-compatible service entry point for existing internal callers. It still
+    // applies all non-actor-specific safety rules.
+    @Transactional
     public UserResponse updateUserStatus(
             String userId,
             UpdateUserStatusRequest request) {
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("A user id is required to update status");
+        }
+        if (request == null || request.getEnabled() == null) {
+            throw new IllegalArgumentException("enabled is required");
+        }
 
-        user.setEnabled(request.isEnabled());
-        user.setUpdatedAt(LocalDateTime.now());
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        userRepository.save(user);
+        boolean desiredEnabled = request.getEnabled();
+        if (targetUser.isEnabled() == desiredEnabled) {
+            return UserResponse.from(targetUser);
+        }
 
-        return UserResponse.from(user);
+        assertStatusChangeAllowed(null, targetUser, desiredEnabled);
+
+        targetUser.setEnabled(desiredEnabled);
+        targetUser.setUpdatedAt(LocalDateTime.now());
+
+        userRepository.save(targetUser);
+
+        return UserResponse.from(targetUser);
+    }
+
+    private User requireStatusActor(String actorCognitoSub) {
+        if (actorCognitoSub == null || actorCognitoSub.isBlank()) {
+            throw new IllegalStateException("Authenticated admin could not be resolved");
+        }
+        return userRepository.findByCognitoSub(actorCognitoSub)
+                .orElseThrow(() -> new IllegalStateException("Authenticated admin account was not found"));
+    }
+
+    private void assertStatusChangeIsTenantScoped(User actor, User targetUser) {
+        if (callerIsSuperAdmin()) {
+            return;
+        }
+
+        String actorTenantId = tenantIdOf(actor);
+        String targetTenantId = tenantIdOf(targetUser);
+        if (actorTenantId == null || targetTenantId == null) {
+            throw new IllegalStateException("Both admin and target user must belong to an organisation");
+        }
+        if (!actorTenantId.equals(targetTenantId)) {
+            throw new IllegalStateException("Cannot update a user from another organisation");
+        }
+    }
+
+    private void assertStatusChangeAllowed(User actor, User targetUser, boolean desiredEnabled) {
+        if (isTenantPrimaryContact(targetUser)) {
+            throw new IllegalStateException(
+                    "This account is the organisation's primary contact and its status cannot be changed.");
+        }
+
+        if (actor != null && !desiredEnabled && sameUser(actor, targetUser)) {
+            throw new IllegalStateException("You cannot disable your own account.");
+        }
+
+        if (!desiredEnabled && targetUser.getRole() == Role.ROLE_ADMIN) {
+            String tenantId = tenantIdOf(targetUser);
+            if (tenantId != null) {
+                long enabledAdminCount = userRepository.findByTenant_IdAndEnabledTrue(tenantId).stream()
+                        .filter(user -> user.getRole() == Role.ROLE_ADMIN)
+                        .count();
+                if (enabledAdminCount <= 1) {
+                    throw new IllegalStateException(
+                            "Cannot disable the last active admin in this organisation.");
+                }
+            }
+        }
+    }
+
+    private boolean sameUser(User left, User right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        if (left.getId() != null && left.getId().equals(right.getId())) {
+            return true;
+        }
+        return left.getCognitoSub() != null && left.getCognitoSub().equals(right.getCognitoSub());
+    }
+
+    private String tenantIdOf(User user) {
+        if (user == null || user.getTenant() == null || user.getTenant().getId() == null
+                || user.getTenant().getId().isBlank()) {
+            return null;
+        }
+        return user.getTenant().getId();
+    }
+
+    private boolean isTenantPrimaryContact(User user) {
+        if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+            return false;
+        }
+
+        Tenant tenant = user.getTenant();
+        if (tenant == null) {
+            return false;
+        }
+
+        if (sameEmail(user.getEmail(), tenant.getEmail())) {
+            return true;
+        }
+
+        String tenantId = tenant.getId();
+        if (tenantId == null || tenantId.isBlank()) {
+            return false;
+        }
+
+        return tenantRepository.findById(tenantId)
+                .map(Tenant::getEmail)
+                .filter(email -> sameEmail(user.getEmail(), email))
+                .isPresent();
+    }
+
+    private boolean sameEmail(String left, String right) {
+        return left != null
+                && right != null
+                && !left.isBlank()
+                && !right.isBlank()
+                && left.trim().equalsIgnoreCase(right.trim());
     }
 
     
@@ -622,6 +783,7 @@ public class UserService {
      *
      * @param identifier the user's id, Cognito sub, or email
      */
+    //! delete user
     public void deleteUser(String identifier) {
         if (identifier == null || identifier.isBlank()) {
             throw new IllegalArgumentException("A user identifier is required to delete a user");
@@ -635,11 +797,7 @@ public class UserService {
 
         // Protect the organisation's primary-contact account: the user whose email matches
         // the tenant's contact email is the owner and must not be removable here.
-        Tenant tenant = user.getTenant();
-        if (tenant != null
-                && tenant.getEmail() != null
-                && user.getEmail() != null
-                && tenant.getEmail().equalsIgnoreCase(user.getEmail())) {
+        if (isTenantPrimaryContact(user)) {
             throw new IllegalStateException(
                     "This account is the organisation's primary contact and cannot be deleted.");
         }

@@ -90,10 +90,11 @@ public class AdminController {
     @PatchMapping("/users/{userId}/status")
     public ResponseEntity<AppResponse<UserResponse>> updateUserStatus(
             @PathVariable String userId,
-            @RequestBody UpdateUserStatusRequest request) {
+            @Valid @RequestBody UpdateUserStatusRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.ok(AppResponse.success(
                 "User status updated successfully",
-                userService.updateUserStatus(userId, request)));
+                userService.updateUserStatus(userId, request, jwt != null ? jwt.getSubject() : null)));
     }
 
     @GetMapping("/packages")
