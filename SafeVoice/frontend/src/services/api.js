@@ -320,3 +320,5 @@ export const staffApi = {
 export const CENTRAL_LOGIN_URL = CENTRAL_LOGIN;
 export const CENTRAL_SIGNUP_URL = CENTRAL_SIGNUP;
 export const REGULAONE_API_BASE = REGULAONE_API_URL;
+// Base URL of the SafeVoice backend — used to open the WebSocket ("/ws").
+export const SAFEVOICE_API_BASE = SAFEVOICE_API_URL;
