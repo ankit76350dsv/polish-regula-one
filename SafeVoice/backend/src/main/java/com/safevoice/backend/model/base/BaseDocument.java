@@ -9,7 +9,6 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.index.Indexed;
 
 import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Base document class that enforces system compliance guidelines:
