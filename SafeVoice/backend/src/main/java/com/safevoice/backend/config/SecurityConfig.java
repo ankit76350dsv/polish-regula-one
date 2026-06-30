@@ -31,6 +31,10 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/**").permitAll()
+                        // WebSocket (STOMP/SockJS) handshake must pass the HTTP filter freely —
+                        // the real authentication happens later at the STOMP CONNECT frame
+                        // (staff cookie-JWT or reporter access key), so leave the handshake open.
+                        .requestMatchers("/ws/**").permitAll()
                         // Anonymous whistleblower endpoints: submitting a report, looking it up
                         // with the access key, and the case chat thread. These MUST be public —
                         // the reporter has no account and no login by design.
