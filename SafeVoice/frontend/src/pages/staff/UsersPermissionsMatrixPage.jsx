@@ -6,6 +6,7 @@ import {
   AppButton,
   AppModal,
   AppTable,
+  Checkbox,
   ConfirmDialog,
   PageSpinner,
   SecureCard,
@@ -44,7 +45,15 @@ export default function UsersPermissionsMatrixPage() {
   const inviting = useSelector(selectInviting);
 
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", role: "Investigator" });
+  // Invite defaults: SafeVoice access is implied (module fixed), one or more SafeVoice
+  // permissions can be ticked below (optional — none by default), and the platform
+  // account role is USER.
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    permissions: [],
+    role: "ROLE_USER",
+  });
   const [errors, setErrors] = useState({});
   const [toRemove, setToRemove] = useState(null);
 
@@ -66,7 +75,7 @@ export default function UsersPermissionsMatrixPage() {
       await dispatch(inviteUser(form)).unwrap();
       dispatch(addToast({ type: "success", message: t("users.inviteSuccess", { email: form.email }) }));
       setInviteOpen(false);
-      setForm({ name: "", email: "", role: "Investigator" });
+      setForm({ name: "", email: "", permissions: [], role: "ROLE_USER" });
     } catch {
       dispatch(addToast({ type: "error", message: t("toast.genericError") }));
     }
@@ -179,10 +188,45 @@ export default function UsersPermissionsMatrixPage() {
         <form className="space-y-4" onSubmit={submitInvite} noValidate>
           <TextInput label={t("users.inviteName")} required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} error={err("name")} />
           <TextInput label={t("users.inviteEmail")} required type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} error={err("email")} />
-          <SelectField label={t("users.inviteRole")} value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
-            {rolePermissions.map((r) => (
-              <option key={r.role} value={r.role}>{t(`roles.${r.role}`, r.role)}</option>
-            ))}
+
+          {/* Module is fixed: an invite from SafeVoice always grants SafeVoice access. */}
+          <div>
+            <span className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">{t("users.inviteModule")}</span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold">
+              <UserCheck className="w-3.5 h-3.5" aria-hidden="true" /> SafeVoice
+            </span>
+          </div>
+
+          {/* The SafeVoice permission(s) to grant — what they may do inside SafeVoice.
+              Optional, and more than one may be ticked (the backend stores a list). */}
+          <div>
+            <span className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">
+              {t("users.invitePermission")}{" "}
+              <span className="text-slate-400 normal-case font-normal">({t("common.optional")})</span>
+            </span>
+            <div className="space-y-2 border border-slate-200 rounded-lg p-3">
+              {rolePermissions.map((r) => (
+                <Checkbox
+                  key={r.role}
+                  label={t(`roles.${r.role}`, r.role)}
+                  checked={form.permissions.includes(r.role)}
+                  onChange={(checked) =>
+                    setForm((f) => ({
+                      ...f,
+                      permissions: checked
+                        ? [...f.permissions, r.role]
+                        : f.permissions.filter((p) => p !== r.role),
+                    }))
+                  }
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* The platform account role, defaulting to USER. */}
+          <SelectField label={t("users.inviteAccountRole")} value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
+            <option value="ROLE_USER">{t("roles.ROLE_USER", "User")}</option>
+            <option value="ROLE_ADMIN">{t("roles.ROLE_ADMIN", "Admin")}</option>
           </SelectField>
           <div className="flex justify-end gap-2 pt-2">
             <AppButton type="button" variant="secondary" onClick={() => setInviteOpen(false)}>{t("common.cancel")}</AppButton>

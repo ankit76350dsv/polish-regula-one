@@ -13,6 +13,7 @@
  * of what each SAFEVOICE_* role may do, built from utils/permissions.js.
  */
 import { api } from "./api";
+import { getCurrentActor } from "./identity";
 import { formatDate } from "./caseNormalizer";
 import { SAFEVOICE_ROLE_PERMISSIONS, primarySafeVoiceRole } from "../utils/permissions";
 
@@ -64,12 +65,24 @@ export const userService = {
     return { users, rolePermissions: ROLE_MATRIX };
   },
 
-  // NOTE: inviting and removing users are RegulaOne (identity) admin actions and are not
-  // wired to a live endpoint yet — they need the RegulaOne admin invite/remove flow
-  // (tenant + module assignment, ROLE_ADMIN). Left here so the page keeps working; these
-  // will surface an error until that integration is done.
-  invite(payload) {
-    return api.post("/api/admin/users/invite", payload);
+  // Invite a new SafeVoice user. Inviting is a RegulaOne (identity) admin action, so we
+  // build the RegulaOne invite payload here:
+  //   - moduleIds is fixed to [SAFEVOICE] — an invite from SafeVoice always grants this app.
+  //   - permissions is the list of SAFEVOICE_* codes ticked on the form (what they may do
+  //     in SafeVoice). Optional — an invite with none simply grants the module but no role.
+  //   - role is the platform account role, defaulting to ROLE_USER.
+  //   - tenantId is the inviter's own organisation (from the session), never typed in.
+  // Returns the new user already mapped to the personnel-row shape.
+  async invite({ name, email, permissions, role }) {
+    const created = await api.post("/api/admin/users/invite", {
+      name,
+      email,
+      role: role || "ROLE_USER",
+      tenantId: getCurrentActor().tenantId,
+      moduleIds: [SAFEVOICE_MODULE],
+      permissions: Array.isArray(permissions) ? permissions : [],
+    });
+    return toPersonnel(created);
   },
   remove(id) {
     return api.del(`/api/admin/users/${encodeURIComponent(id)}`);
