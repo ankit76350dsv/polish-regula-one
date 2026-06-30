@@ -1,5 +1,6 @@
 package com.safevoice.backend.controller;
 
+import com.safevoice.backend.dto.PageResponse;
 import com.safevoice.backend.model.document.AuditLog;
 import com.safevoice.backend.service.AuditLogService;
 
@@ -10,8 +11,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /**
  * Internal (staff) endpoint for reading the immutable, tamper-evident audit trail.
@@ -29,14 +28,31 @@ public class InternalAuditController {
     private final AuditLogService auditLogService;
 
     /**
-     * Returns the most recent audit entries for the signed-in tenant, newest first.
+     * Returns ONE PAGE of the signed-in tenant's audit trail, newest first.
      *
-     * @param limit how many rows to return (default 200, capped server-side)
+     * Query parameters (all optional, with safe defaults):
+     *   page        1-based page number (default 1)
+     *   size        rows per page (default 20, capped server-side)
+     *   search      free text across actor, action, subject, outcome, notice
+     *   actionType  keep only this action (e.g. MESSAGE_POSTED)
+     *   outcome     keep only this outcome (e.g. RECORDED)
+     *   subjectId   keep only entries about this subject (e.g. one case id)
+     *   from        only entries at/after this date or date-time
+     *   to          only entries on/before this date (inclusive of the whole day)
      */
     @GetMapping
-    public ResponseEntity<List<AuditLog>> list(
+    public ResponseEntity<PageResponse<AuditLog>> list(
             @RequestHeader("X-Tenant-ID") String tenantId,
-            @RequestParam(defaultValue = "200") int limit) {
-        return ResponseEntity.ok(auditLogService.getRecent(tenantId, limit));
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String actionType,
+            @RequestParam(required = false) String outcome,
+            @RequestParam(required = false) String subjectId,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        PageResponse<AuditLog> logs = auditLogService.search(
+                tenantId, search, actionType, outcome, subjectId, from, to, page, size);
+        return ResponseEntity.ok(logs);
     }
 }
