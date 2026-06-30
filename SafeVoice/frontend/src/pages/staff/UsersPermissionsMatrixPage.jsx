@@ -101,13 +101,37 @@ export default function UsersPermissionsMatrixPage() {
       <SecureCard title={t("users.personnel")}>
         <AppTable headers={[t("users.colOfficer"), t("users.colRole"), t("users.colStatus"), t("users.colMfa"), t("users.colLastReview"), ""]}>
           {users.map((user) => (
-            <tr key={user.id} className="hover:bg-slate-50 border-b border-slate-200 text-xs">
+            <tr
+              key={user.id}
+              className={`border-b border-slate-200 text-xs ${
+                user.hasAccess
+                  ? "hover:bg-slate-50 bg-emerald-50/40 border-l-2 border-l-emerald-400"
+                  : "hover:bg-slate-50 opacity-60"
+              }`}
+            >
               <td className="px-4 py-3 font-bold text-slate-800">
-                {user.name}
+                <div className="flex items-center gap-2">
+                  {user.name}
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide border ${
+                      user.hasAccess
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-slate-100 text-slate-500 border-slate-200"
+                    }`}
+                  >
+                    {user.hasAccess ? t("users.hasAccess") : t("users.noAccess")}
+                  </span>
+                </div>
                 <span className="block font-normal text-[10px] text-slate-500 mt-0.5">{user.email}</span>
               </td>
               <td className="px-4 py-3">
-                <span className="bg-cyan-50 px-2.5 py-1 rounded border border-cyan-200 text-cyan-700 font-semibold uppercase tracking-wider">
+                <span
+                  className={`px-2.5 py-1 rounded border font-semibold uppercase tracking-wider ${
+                    user.hasAccess
+                      ? "bg-cyan-50 border-cyan-200 text-cyan-700"
+                      : "bg-slate-50 border-slate-200 text-slate-400"
+                  }`}
+                >
                   {t(`roles.${user.role}`, user.role)}
                 </span>
               </td>

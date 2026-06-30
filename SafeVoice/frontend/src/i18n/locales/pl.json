@@ -340,6 +340,8 @@
     "colStatus": "Status",
     "colMfa": "MFA",
     "colLastReview": "Ostatni przegląd",
+    "hasAccess": "Dostęp do SafeVoice",
+    "noAccess": "Brak dostępu",
     "mfaRequired": "Wymagane",
     "mfaMissing": "Brak",
     "matrix": "Macierz uprawnień",

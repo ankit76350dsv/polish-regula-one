@@ -338,6 +338,8 @@
     "colStatus": "Status",
     "colMfa": "MFA",
     "colLastReview": "Last review",
+    "hasAccess": "SafeVoice access",
+    "noAccess": "No access",
     "mfaRequired": "Required",
     "mfaMissing": "Missing",
     "matrix": "Permission matrix",

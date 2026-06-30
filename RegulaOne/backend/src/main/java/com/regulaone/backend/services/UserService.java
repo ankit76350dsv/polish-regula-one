@@ -321,6 +321,26 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * List ALL users of one tenant. Each returned user carries its enabled modules and
+     * permission codes, so a module app can show the whole team and highlight who has
+     * access to that module.
+     *
+     * Tenant-scoped, so one organisation can never see another's users. A blank tenant
+     * (a user with no organisation yet) simply yields an empty list rather than an error.
+     *
+     * @param tenantId the organisation whose users to list (required)
+     */
+    public List<UserResponse> getTenantUsers(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return List.of();
+        }
+        return userRepository.findByTenant_Id(tenantId)
+                .stream()
+                .map(UserResponse::from)
+                .collect(Collectors.toList());
+    }
+
     // ! team management dashboard stats
     public TeamManagementStatsResponse getTeamManagementStats(String tenantId) {
 

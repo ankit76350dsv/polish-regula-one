@@ -1,25 +1,78 @@
 /**
- * User & permission service — authorised staff and the role permission matrix.
+ * User & permission service for the "Users and permissions" page.
  *
- * These are staff-only endpoints, so they go through `staffApi` (which carries the
- * signed-in actor's identity headers).
+ * The authorised-staff LIST comes from RegulaOne (the identity service), not the
+ * SafeVoice backend: RegulaOne owns the user accounts. We ask it for ALL users of the
+ * caller's own organisation (GET /api/tenant/users) — the tenant is taken from the
+ * session on the server, so we only ever see our own organisation. That call goes
+ * through `api`, which targets the RegulaOne backend and uses the shared SSO cookie.
  *
- * NOTE: the SafeVoice backend does not expose these endpoints yet, so the "Access
- * controls" page will surface a load error until they are built. That is intentional —
- * the app no longer uses any mock data, so unfinished areas fail loudly rather than
- * showing fake records.
+ * Each user carries its enabled modules, so we flag who actually has SafeVoice access
+ * and sort those to the top; the page styles them as the "has access" theme and dims
+ * the rest. The role permission MATRIX is not fetched — it is fixed, app-side knowledge
+ * of what each SAFEVOICE_* role may do, built from utils/permissions.js.
  */
-import { staffApi } from "./api";
+import { api } from "./api";
+import { formatDate } from "./caseNormalizer";
+import { SAFEVOICE_ROLE_PERMISSIONS, primarySafeVoiceRole } from "../utils/permissions";
+
+// The compliance module this app represents (matches RegulaOne's TenantModule enum).
+const SAFEVOICE_MODULE = "SAFEVOICE";
+
+// The permission matrix rows: one per SAFEVOICE_* role with its capability flags.
+// Built once from the shared role→capability map so the table can never drift from
+// what the app actually enforces.
+const ROLE_MATRIX = Object.entries(SAFEVOICE_ROLE_PERMISSIONS).map(([role, caps]) => ({
+  role,
+  ...caps,
+}));
+
+// Turn one RegulaOne user record into the shape the personnel table expects.
+function toPersonnel(user) {
+  const permissions = user.permissions || [];
+  const modules = user.moduleIds || [];
+  // Does this teammate actually have SafeVoice access? (the module is enabled for them)
+  const hasAccess = modules.includes(SAFEVOICE_MODULE);
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    hasAccess,
+    // The SafeVoice display role is the highest SAFEVOICE_* role the user holds; only
+    // users with access have one, so others fall back to their platform role.
+    role: primarySafeVoiceRole(permissions) || user.role,
+    status: user.enabled ? "Active" : "Disabled",
+    // RegulaOne enforces MFA at the identity layer for every account, so we show it as
+    // required. (There is no per-user MFA flag on this response to vary it.)
+    mfaRequired: true,
+    // Best-available "last review" signal: when the account was last changed.
+    lastLoginReview: formatDate(user.updatedAt || user.createdAt) || "—",
+  };
+}
+
+// Order: teammates WITH SafeVoice access first, then everyone else, each group by name.
+function byAccessThenName(a, b) {
+  if (a.hasAccess !== b.hasAccess) return a.hasAccess ? -1 : 1;
+  return (a.name || "").localeCompare(b.name || "");
+}
 
 export const userService = {
-  list() {
-    return staffApi.get("/api/safevoice/users");
+  // Returns { users, rolePermissions } — the shape the users page/slice expects.
+  async list() {
+    const raw = await api.get("/api/tenant/users");
+    const users = Array.isArray(raw) ? raw.map(toPersonnel).sort(byAccessThenName) : [];
+    return { users, rolePermissions: ROLE_MATRIX };
   },
+
+  // NOTE: inviting and removing users are RegulaOne (identity) admin actions and are not
+  // wired to a live endpoint yet — they need the RegulaOne admin invite/remove flow
+  // (tenant + module assignment, ROLE_ADMIN). Left here so the page keeps working; these
+  // will surface an error until that integration is done.
   invite(payload) {
-    return staffApi.post("/api/safevoice/users/invite", payload);
+    return api.post("/api/admin/users/invite", payload);
   },
   remove(id) {
-    return staffApi.del(`/api/safevoice/users/${encodeURIComponent(id)}`);
+    return api.del(`/api/admin/users/${encodeURIComponent(id)}`);
   },
 };
 
