@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { Lock, Send, ShieldCheck } from "lucide-react";
@@ -12,6 +12,7 @@ import {
   trackReport,
 } from "../../slices/reportsSlice";
 import { addToast } from "../../slices/uiSlice";
+import { socketService } from "../../services/socketService";
 
 // Anonymous status lookup using ONLY the access key, then a secure two-way thread.
 export default function TrackCasePage() {
@@ -27,6 +28,16 @@ export default function TrackCasePage() {
   const [draft, setDraft] = useState("");
 
   const looking = trackStatus === "loading";
+
+  // Once a case is found, open the reporter's realtime connection, authenticated by the
+  // access key and pinned to this one case. Phase 0: ping to confirm the pipeline; the
+  // live thread/typing/presence subscriptions come in later phases. Closes on leave.
+  useEffect(() => {
+    if (!tracked?.report || !accessKey.trim()) return undefined;
+    socketService.connectReporter(accessKey.trim(), () => socketService.ping());
+    return () => socketService.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracked?.report?.id]);
 
   function lookup(e) {
     e.preventDefault();
