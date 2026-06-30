@@ -23,6 +23,7 @@ import com.safevoice.backend.repository.CaseReportRepository;
 import com.safevoice.backend.repository.TenantRepository;
 import com.safevoice.backend.service.AuditLogService;
 import com.safevoice.backend.service.report.utils.CaseReportUtils;
+import com.safevoice.backend.websocket.CaseEventPublisher;
 
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,8 @@ public class CaseReportService {
     // that fixed repository methods cannot express. MongoTemplate lets us build the
     // query dynamically and safely (user text is escaped before it reaches the DB).
     private final MongoTemplate mongoTemplate;
+    // Announces new cases live to the tenant's staff over WebSocket.
+    private final CaseEventPublisher caseEventPublisher;
 
     // Hard ceiling on page size, so a caller can never ask for a giant page that would
     // strain the database or the browser. Requests above this are clamped down to it.
@@ -65,12 +68,14 @@ public class CaseReportService {
                              CaseMessageRepository caseMessageRepository,
                              TenantRepository tenantRepository,
                              AuditLogService auditLogService,
-                             MongoTemplate mongoTemplate) {
+                             MongoTemplate mongoTemplate,
+                             CaseEventPublisher caseEventPublisher) {
         this.caseReportRepository = caseReportRepository;
         this.caseMessageRepository = caseMessageRepository;
         this.tenantRepository = tenantRepository;
         this.auditLogService = auditLogService;
         this.mongoTemplate = mongoTemplate;
+        this.caseEventPublisher = caseEventPublisher;
     }
 
     /**
@@ -206,6 +211,10 @@ public class CaseReportService {
                 "Report category: " + saved.getCategory().name(),
                 "Metadata stripped automatically on intake. Access key stored as a hash only."
         );
+
+        // Tell the tenant's staff, live, that a new case has arrived — so their Cases list
+        // and Inbox update without a refresh. Best-effort: never blocks the submission.
+        caseEventPublisher.publishNewCase(tenantId, toSummary(saved));
 
         // Return the plain key ONCE for display (null for HR grievances). It is now forgotten.
         return CaseSubmissionResponse.builder()

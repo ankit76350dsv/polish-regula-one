@@ -252,7 +252,8 @@
     "unassigned": "Unassigned",
     "unreadMessages": "{{count}} unread message(s) from the reporter",
     "empty": "No cases match your filters.",
-    "loadError": "Could not load cases."
+    "loadError": "Could not load cases.",
+    "newReport": "New report received: {{ref}}"
   },
   "case": {
     "submittedVia": "{{category}} submitted via {{channel}}",

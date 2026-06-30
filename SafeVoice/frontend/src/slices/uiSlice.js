@@ -45,13 +45,15 @@ const uiSlice = createSlice({
         /* ignore */
       }
     },
-    // addToast({ type: 'success' | 'error' | 'info', message }) — id is auto-generated.
+    // addToast({ type: 'success' | 'error' | 'info', message, persistent }) — id auto-generated.
+    // persistent: true keeps the toast on screen until the user dismisses it (no auto-hide);
+    // used for notifications the user should not miss (e.g. a new report arriving).
     addToast: {
       reducer(state, action) {
         state.toasts.push(action.payload);
       },
-      prepare({ type = "info", message }) {
-        return { payload: { id: nanoid(), type, message } };
+      prepare({ type = "info", message, persistent = false }) {
+        return { payload: { id: nanoid(), type, message, persistent } };
       },
     },
     removeToast(state, action) {

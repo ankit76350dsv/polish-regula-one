@@ -254,7 +254,8 @@
     "unassigned": "Nieprzypisane",
     "unreadMessages": "Nieprzeczytane wiadomości od zgłaszającego: {{count}}",
     "empty": "Żadna sprawa nie pasuje do filtrów.",
-    "loadError": "Nie udało się wczytać spraw."
+    "loadError": "Nie udało się wczytać spraw.",
+    "newReport": "Otrzymano nowe zgłoszenie: {{ref}}"
   },
   "case": {
     "submittedVia": "{{category}} — złożono przez {{channel}}",

@@ -23,9 +23,11 @@ function Toast({ toast, onClose }) {
   const Icon = ICONS[toast.type] || Info;
 
   useEffect(() => {
+    // Persistent toasts stay until the user dismisses them with the close (X) button.
+    if (toast.persistent) return undefined;
     const timer = setTimeout(onClose, 4500);
     return () => clearTimeout(timer);
-  }, [onClose]);
+  }, [onClose, toast.persistent]);
 
   return (
     <motion.div

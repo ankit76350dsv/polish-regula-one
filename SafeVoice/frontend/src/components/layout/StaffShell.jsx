@@ -6,12 +6,14 @@
  */
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useTranslation } from "react-i18next";
 import { AppNavbar } from "./AppNavbar";
 import { AppSidebar } from "./AppSidebar";
 import { MobileNavigation } from "./MobileNavigation";
 import { AuthGate } from "../auth";
 import { tryRefreshSession } from "../../services/api";
 import { socketService } from "../../services/socketService";
+import { normalizeReport } from "../../services/caseNormalizer";
 import {
   initSession,
   signOut,
@@ -20,12 +22,15 @@ import {
   selectCurrentUser,
   selectIsAuthenticated,
 } from "../../slices/authSlice";
+import { caseReceived } from "../../slices/reportsSlice";
+import { addToast } from "../../slices/uiSlice";
 import { isStaffSection, toBrowserPath } from "../../utils/routing";
 
 const SSO_CALLBACK_PATH = "/auth/sso-callback";
 
 export function StaffShell({ currentPath, navigate, children }) {
   const dispatch = useDispatch();
+  const { t } = useTranslation();
   const status = useSelector(selectAuthStatus);
   const user = useSelector(selectCurrentUser);
   const isAuthenticated = useSelector(selectIsAuthenticated);
@@ -58,12 +63,37 @@ export function StaffShell({ currentPath, navigate, children }) {
 
   // Open the realtime (WebSocket) connection once the staff session is verified, and close
   // it on sign-out. Auth uses the shared SSO cookie (sent automatically on the handshake).
-  // Phase 0: ping the server to confirm the pipeline; feature subscriptions come later.
+  //
+  // While connected we listen on this organisation's case feed, so whenever a new report is
+  // submitted anywhere in the tenant we (a) drop it into the Cases list + Inbox live and
+  // (b) show a notification — no matter which page the user is on. The backend only lets us
+  // listen to our OWN tenant's feed, so we never hear another organisation's reports.
   useEffect(() => {
-    if (!isAuthenticated) return;
-    socketService.connectStaff(() => socketService.ping());
-    return () => socketService.disconnect();
-  }, [isAuthenticated]);
+    if (!isAuthenticated || !tenantId) return undefined;
+    socketService.connectStaff();
+    const unsubscribe = socketService.subscribe(`/topic/tenant.${tenantId}.cases`, (frame) => {
+      let summary;
+      try {
+        summary = normalizeReport(JSON.parse(frame.body));
+      } catch {
+        return;
+      }
+      if (!summary?.id) return;
+      dispatch(caseReceived(summary));
+      dispatch(
+        addToast({
+          type: "info",
+          message: t("cases.newReport", { ref: summary.caseReference || summary.id }),
+          // Keep new-report notifications on screen until the user dismisses them.
+          persistent: true,
+        }),
+      );
+    });
+    return () => {
+      unsubscribe();
+      socketService.disconnect();
+    };
+  }, [isAuthenticated, tenantId, dispatch, t]);
 
   // After the central login returns to /auth/sso-callback, continue to the target.
   useEffect(() => {

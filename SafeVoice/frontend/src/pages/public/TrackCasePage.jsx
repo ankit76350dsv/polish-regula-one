@@ -34,7 +34,7 @@ export default function TrackCasePage() {
   // live thread/typing/presence subscriptions come in later phases. Closes on leave.
   useEffect(() => {
     if (!tracked?.report || !accessKey.trim()) return undefined;
-    socketService.connectReporter(accessKey.trim(), () => socketService.ping());
+    socketService.connectReporter(accessKey.trim());
     return () => socketService.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracked?.report?.id]);

@@ -98,6 +98,20 @@ const reportsSlice = createSlice({
       state.trackStatus = "idle";
       state.trackError = null;
     },
+    // A new case arrived live over WebSocket. Put it at the top of both the full list
+    // (used by the Inbox/Dashboard) and the register page (the Cases table), unless it is
+    // already there — so it shows up without a refresh and never appears twice.
+    caseReceived(state, action) {
+      const incoming = action.payload;
+      if (!incoming || !incoming.id) return;
+      if (!state.list.some((r) => r.id === incoming.id)) {
+        state.list.unshift(incoming);
+      }
+      if (!state.register.items.some((r) => r.id === incoming.id)) {
+        state.register.items.unshift(incoming);
+        state.register.total += 1;
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -201,7 +215,7 @@ const reportsSlice = createSlice({
   },
 });
 
-export const { clearSubmission, clearTracked } = reportsSlice.actions;
+export const { clearSubmission, clearTracked, caseReceived } = reportsSlice.actions;
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
 export const selectReports = (s) => s.reports.list;
