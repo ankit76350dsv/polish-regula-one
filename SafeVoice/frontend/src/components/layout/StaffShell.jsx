@@ -9,7 +9,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { AppNavbar } from "./AppNavbar";
 import { AppSidebar } from "./AppSidebar";
 import { MobileNavigation } from "./MobileNavigation";
-import { SiteFooter } from "./SiteFooter";
 import { AuthGate } from "../auth";
 import { tryRefreshSession } from "../../services/api";
 import {
@@ -121,7 +120,6 @@ export function StaffShell({ currentPath, navigate, children }) {
 
           <main id="main-content" className="flex-1 overflow-y-auto flex flex-col">
             <div className="p-4 md:p-6 lg:p-8 w-full mx-auto flex-1">{children}</div>
-            <SiteFooter navigate={navigate} />
           </main>
         </div>
       </div>
