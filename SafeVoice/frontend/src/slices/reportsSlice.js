@@ -47,8 +47,8 @@ export const updateReport = createAsyncThunk("reports/update", ({ id, patch }) =
 // shares the same `tracked` state the track lookup filled in.
 export const sendTrackedMessage = createAsyncThunk(
   "reports/sendTrackedMessage",
-  ({ caseId, sender, text, files }) =>
-    reportService.postPublicMessage(caseId, { sender, text, files }),
+  ({ caseId, text, files, accessKey }) =>
+    reportService.postPublicMessage(caseId, { text, files, accessKey }),
 );
 
 // ── Slice ───────────────────────────────────────────────────────────────────

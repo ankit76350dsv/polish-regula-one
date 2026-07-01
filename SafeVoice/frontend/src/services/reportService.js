@@ -42,11 +42,12 @@ export const reportService = {
   },
 
   // The reporter posts one message (optionally with evidence files) into their own case's
-  // chat thread. The endpoint is multipart: "sender" + "text" fields, plus "files" parts.
-  // The case is identified by the reference they received (carried in the URL path).
-  async postPublicMessage(caseId, { sender, text, files = [] }) {
+  // chat thread. The endpoint is multipart and AUTHENTICATED: the reporter's access key must
+  // match the case id in the path (proves ownership). The sender label is fixed by the server,
+  // so we send only the access key, the text and the files.
+  async postPublicMessage(caseId, { text, files = [], accessKey }) {
     const form = new FormData();
-    if (sender) form.append("sender", sender);
+    form.append("accessKey", accessKey ?? "");
     form.append("text", text ?? "");
     files.forEach((file) => form.append("files", file));
     const message = await publicApi.postForm(

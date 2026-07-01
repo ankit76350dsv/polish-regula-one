@@ -83,9 +83,9 @@ export default function TrackCasePage() {
       await dispatch(
         sendTrackedMessage({
           caseId: tracked.report.id,
-          sender: "Anonymous Whistleblower",
           text: draft,
           files,
+          accessKey: accessKey.trim(), // proves ownership of this case
         }),
       ).unwrap();
       setDraft("");

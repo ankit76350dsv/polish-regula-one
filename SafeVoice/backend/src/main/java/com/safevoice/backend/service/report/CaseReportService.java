@@ -283,14 +283,32 @@ public class CaseReportService {
     }
 
     /**
-     * Look a case up by its short case reference (the document id, e.g. "SV-1A2B3C4D5E").
-     * Used by the message endpoints, where the reporter is already inside their case view.
-     * No tenant filter is applied because the reporter has no tenant context.
+     * AUTHENTICATE a reporter write action (posting a message / uploading a file) and return
+     * their case. The reporter proves ownership with their access key — exactly like the
+     * tracking page — and the key MUST belong to the case id in the request path.
+     *
+     * This replaces the old unauthenticated {@code getByCaseRef(id)} lookup: a case id (a Mongo
+     * ObjectId) is NOT a secret — it is disclosed in /track responses and WebSocket topics — so
+     * resolving a case by id alone let anyone who learned an id post into a confidential thread.
+     * Now the secret access key is the credential.
+     *
+     * Throws a single, non-revealing {@link CaseNotFoundException} for a missing/invalid/deleted
+     * case OR when the key belongs to a DIFFERENT case than the path id, so nothing about other
+     * cases (existence, ownership) can be probed.
      */
-    public CaseReport getByCaseRef(String caseRef) {
-        return caseReportRepository.findById(caseRef)
-                .filter(r -> !r.isDeleted())
-                .orElseThrow(() -> new CaseNotFoundException("No case found for reference: " + caseRef));
+    public CaseReport resolveOwnedCase(String accessKey, String caseId) {
+        if (accessKey == null || accessKey.isBlank()) {
+            throw new IllegalArgumentException("Access key is required");
+        }
+        String keyHash = CaseReportUtils.sha256Hex(accessKey.trim());
+        CaseReport report = caseReportRepository.findByKeyHash(keyHash)
+                .orElseThrow(() -> new CaseNotFoundException("No case found for the provided access key"));
+        // Same neutral error whether the key is wrong, the case is deleted, or the key is valid
+        // but for another case — never confirm anything about a case the caller can't prove.
+        if (report.isDeleted() || !report.getId().equals(caseId)) {
+            throw new CaseNotFoundException("No case found for the provided access key");
+        }
+        return report;
     }
 
     /**

@@ -82,23 +82,23 @@ public class PublicCaseController {
 
     /**
      * Post a message (with optional evidence files) into a case's chat thread (reporter side).
-     * Sent as multipart/form-data: a "text" field, an optional "sender", and zero or more
+     * Sent as multipart/form-data: the reporter's "accessKey", a "text" field, and zero or more
      * "files" parts.
      */
     // Allowed permissions: NONE — public, anonymous reporter endpoint (no staff role).
-    // Why: this is the REPORTER's side of the two-way thread; they authenticate with their
-    // access key (staff post replies via the internal cases API instead).
+    // Why: this is the REPORTER's side of the two-way thread. They MUST authenticate with their
+    // secret access key (which has to match the case id in the path) — a case id alone is not a
+    // secret, so without the key anyone could inject messages into a confidential thread. The
+    // sender label is fixed server-side to "Anonymous Whistleblower" and never taken from the
+    // client, so a caller cannot impersonate a staff role.
     @PostMapping(value = "/{caseId}/messages", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CaseMessage> postMessage(
             @PathVariable String caseId,
-            @RequestParam(value = "sender", required = false) String sender,
+            @RequestParam("accessKey") String accessKey,
             @RequestParam(value = "text", required = false) String text,
             @RequestParam(value = "files", required = false) List<MultipartFile> files) {
-        CaseReport report = caseReportService.getByCaseRef(caseId);
-
-        String senderName = (sender == null || sender.isBlank())
-                ? "Anonymous Whistleblower"
-                : sender;
+        // Authenticate the reporter: the access key must resolve to THIS case.
+        CaseReport report = caseReportService.resolveOwnedCase(accessKey, caseId);
 
         // Validate + store any attached files first (type/size/count checks live in the service).
         List<EvidenceAttachment> attachments = attachmentService.uploadAll(files);
@@ -106,7 +106,7 @@ public class PublicCaseController {
         CaseMessage message = caseMessageService.postMessage(
                 report.getId(),
                 text,
-                senderName,
+                "Anonymous Whistleblower", // fixed server-side — never client-controlled
                 report.getTenantId(),
                 "Public Portal",
                 "Anonymous Whistleblower",
@@ -145,16 +145,19 @@ public class PublicCaseController {
     /**
      * Upload an evidence file for an existing case. Not used by the standard submit flow
      * (the form sends file metadata inside the submit request), but kept for clients that
-     * upload the actual file later. Ownership is resolved by the case reference.
+     * upload the actual file later. Sent as multipart/form-data: the reporter's "accessKey"
+     * and the "file".
      */
     // Allowed permissions: NONE — public, anonymous reporter endpoint (no staff role).
-    // Why: it lets the reporter attach their own evidence to their own case (ownership is
-    // resolved from the case reference); it is not a staff action.
+    // Why: it lets the reporter attach their own evidence to their OWN case. Ownership is proven
+    // by the access key (which must match the case id in the path), not by knowing the id.
     @PostMapping(value = "/{caseId}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<EvidenceAttachment> uploadAttachment(
             @PathVariable String caseId,
+            @RequestParam("accessKey") String accessKey,
             @RequestParam("file") MultipartFile file) {
-        CaseReport report = caseReportService.getByCaseRef(caseId);
+        // Authenticate the reporter: the access key must resolve to THIS case.
+        CaseReport report = caseReportService.resolveOwnedCase(accessKey, caseId);
 
         EvidenceAttachment attachment = attachmentService.upload(file);
         caseReportService.addAttachment(report.getId(), attachment, report.getTenantId());
