@@ -8,3 +8,4 @@ export { default as CentralEncryptedInboxPage } from "./CentralEncryptedInboxPag
 export { default as SecurityAuditTrailLogsPage } from "./SecurityAuditTrailLogsPage.jsx";
 export { default as UsersPermissionsMatrixPage } from "./UsersPermissionsMatrixPage.jsx";
 export { default as ComplianceSettingsPage } from "./ComplianceSettingsPage.jsx";
+export { default as ProfilePage } from "./ProfilePage.jsx";

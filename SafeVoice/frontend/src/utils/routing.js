@@ -17,7 +17,7 @@
 
 // The staff sections that live under /company/{tenantId}/… . Everything else
 // (report, track, report/success, access-denied, auth/sso-callback) stays flat.
-export const STAFF_SECTIONS = ["dashboard", "cases", "messages", "audits", "users", "settings"];
+export const STAFF_SECTIONS = ["dashboard", "cases", "messages", "audits", "users", "settings", "profile"];
 
 // Drop any "?query" / "#hash" so we only reason about the path itself.
 function pathOnly(p) {

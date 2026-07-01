@@ -49,10 +49,17 @@ export function AppNavbar({ currentPath, navigate, mobileOpen, setMobileOpen, us
 
         {user && (
           <div className="hidden md:flex items-center gap-2.5 border-l border-slate-200 pl-4">
-            <div className="flex flex-col items-end">
+            {/* Clicking the name/role opens the profile page. */}
+            <button
+              type="button"
+              onClick={() => navigate("/profile")}
+              title={t("profile.title")}
+              aria-label={t("profile.title")}
+              className="flex flex-col items-end rounded-md px-1 py-0.5 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            >
               <span className="text-xs font-semibold text-slate-800 leading-none truncate max-w-[12rem]">{user.name || user.email}</span>
               <span className="text-[10px] font-mono text-slate-500 mt-1 uppercase font-bold tracking-wider">{t(`roles.${user.safeVoiceRole || user.role}`, user.safeVoiceRole || user.role)}</span>
-            </div>
+            </button>
             <button
               type="button"
               onClick={onLogout}

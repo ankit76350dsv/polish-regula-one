@@ -15,6 +15,7 @@ import settingsReducer from "../slices/settingsSlice";
 import uiReducer from "../slices/uiSlice";
 import consentReducer from "../slices/consentSlice";
 import dashboardReducer from "../slices/dashboardSlice";
+import orgReducer from "../slices/orgSlice";
 import { setCurrentActor } from "../services/identity";
 
 export const store = configureStore({
@@ -28,6 +29,7 @@ export const store = configureStore({
     ui: uiReducer,
     consent: consentReducer,
     dashboard: dashboardReducer,
+    org: orgReducer,
   },
 });
 

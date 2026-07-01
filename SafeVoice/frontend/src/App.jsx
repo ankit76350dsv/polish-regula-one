@@ -11,6 +11,7 @@ import {
   InvalidTenantPage,
   LandingPage,
   NotFoundPage,
+  ProfilePage,
   PublicReportPortal,
   ReportSuccessPage,
   SecurityAuditTrailLogsPage,
@@ -95,6 +96,7 @@ const TITLE_KEYS = {
   "/audits": "nav.audit",
   "/users": "nav.users",
   "/settings": "nav.settings",
+  "/profile": "profile.title",
 };
 
 export default function App() {
@@ -188,6 +190,7 @@ export default function App() {
     if (currentPath === "/audits") return { element: <SecurityAuditTrailLogsPage navigate={navigate} />, world: "staff" };
     if (currentPath === "/users") return { element: <UsersPermissionsMatrixPage navigate={navigate} />, world: "staff" };
     if (currentPath === "/settings") return { element: <ComplianceSettingsPage navigate={navigate} />, world: "staff" };
+    if (currentPath === "/profile") return { element: <ProfilePage navigate={navigate} />, world: "staff" };
     if (currentPath === "/access-denied") return { element: <AccessDeniedPage navigate={navigate} />, world: "staff" };
 
     // Anything else → a public 404 (no login forced for a mistyped URL).

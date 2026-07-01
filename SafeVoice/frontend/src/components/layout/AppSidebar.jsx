@@ -73,13 +73,22 @@ export function AppSidebar({ currentPath, navigate, collapsed, setCollapsed, use
         {user &&
           (!collapsed ? (
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 shrink-0 rounded-full bg-cyan-50 border border-cyan-200 flex items-center justify-center font-bold text-cyan-700 text-[11px]">
-                {initialsOf(user)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-slate-800 truncate">{user.name || user.email}</p>
-                <p className="text-[10px] text-slate-500 truncate">{t(`roles.${user.safeVoiceRole || user.role}`, user.safeVoiceRole || user.role)}</p>
-              </div>
+              {/* Clicking the user's name/avatar opens their profile page. */}
+              <button
+                type="button"
+                onClick={() => navigate("/profile")}
+                title={t("profile.title")}
+                aria-label={t("profile.title")}
+                className="flex items-center gap-2.5 min-w-0 flex-1 text-left rounded-lg p-1 -m-1 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              >
+                <div className="w-8 h-8 shrink-0 rounded-full bg-cyan-50 border border-cyan-200 flex items-center justify-center font-bold text-cyan-700 text-[11px]">
+                  {initialsOf(user)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-slate-800 truncate">{user.name || user.email}</p>
+                  <p className="text-[10px] text-slate-500 truncate">{t(`roles.${user.safeVoiceRole || user.role}`, user.safeVoiceRole || user.role)}</p>
+                </div>
+              </button>
               <button
                 type="button"
                 onClick={onLogout}
