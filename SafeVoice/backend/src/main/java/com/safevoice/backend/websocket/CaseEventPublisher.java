@@ -1,6 +1,8 @@
 package com.safevoice.backend.websocket;
 
+import com.safevoice.backend.dto.CaseActivityEvent;
 import com.safevoice.backend.dto.CaseSummaryResponse;
+import com.safevoice.backend.model.document.CaseMessage;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +46,49 @@ public class CaseEventPublisher {
         } catch (Exception e) {
             // Never break the report submission because a live notification could not be sent.
             log.warn("[CaseEventPublisher] failed to publish new case to {}: {}",
+                    destination, e.getMessage());
+        }
+    }
+
+    /**
+     * Broadcast a chat message to everyone currently viewing that ONE case — the reporter
+     * and any staff with the case open — so the new message appears instantly on both sides.
+     * The case channel ("/topic/case.{caseId}") is locked by the WebSocket security layer to
+     * that case's reporter and that case's tenant, so the message can't leak elsewhere.
+     *
+     * @param caseId  the case the message belongs to
+     * @param message the saved message (text is already decrypted in memory, as the REST API returns it)
+     */
+    public void publishMessage(String caseId, CaseMessage message) {
+        if (caseId == null || caseId.isBlank()) {
+            return;
+        }
+        String destination = "/topic/case." + caseId;
+        try {
+            messagingTemplate.convertAndSend(destination, message);
+        } catch (Exception e) {
+            // Never break sending the message because the live broadcast could not be sent;
+            // the message is already saved and will appear on the next load.
+            log.warn("[CaseEventPublisher] failed to publish message to {}: {}",
+                    destination, e.getMessage());
+        }
+    }
+
+    /**
+     * Tell ALL of a tenant's staff that a case just had activity (a message), so their
+     * Cases list / Inbox can move it to the top, update its unread badge, and show a "new
+     * reply" notification — even if they are not viewing that case. Goes to the tenant-wide
+     * activity channel, which only that tenant's staff are allowed to listen to.
+     */
+    public void publishActivity(String tenantId, CaseActivityEvent event) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return;
+        }
+        String destination = "/topic/tenant." + tenantId + ".activity";
+        try {
+            messagingTemplate.convertAndSend(destination, event);
+        } catch (Exception e) {
+            log.warn("[CaseEventPublisher] failed to publish activity to {}: {}",
                     destination, e.getMessage());
         }
     }

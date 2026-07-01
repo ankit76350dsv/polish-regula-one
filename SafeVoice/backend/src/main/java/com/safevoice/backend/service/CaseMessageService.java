@@ -1,5 +1,6 @@
 package com.safevoice.backend.service;
 
+import com.safevoice.backend.dto.CaseActivityEvent;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.embedded.TimelineEvent;
@@ -8,6 +9,7 @@ import com.safevoice.backend.model.enums.audit.AuditOutcome;
 import com.safevoice.backend.repository.CaseMessageRepository;
 import com.safevoice.backend.repository.CaseReportRepository;
 import com.safevoice.backend.service.report.CaseReportService;
+import com.safevoice.backend.websocket.CaseEventPublisher;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -25,17 +27,21 @@ public class CaseMessageService {
     private final CaseReportRepository caseReportRepository;
     private final CaseReportService caseReportService;
     private final AuditLogService auditLogService;
+    // Broadcasts the saved message live to anyone viewing the case.
+    private final CaseEventPublisher caseEventPublisher;
 
     @Autowired
     public CaseMessageService(
             CaseMessageRepository caseMessageRepository,
             CaseReportRepository caseReportRepository,
             CaseReportService caseReportService,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            CaseEventPublisher caseEventPublisher) {
         this.caseMessageRepository = caseMessageRepository;
         this.caseReportRepository = caseReportRepository;
         this.caseReportService = caseReportService;
         this.auditLogService = auditLogService;
+        this.caseEventPublisher = caseEventPublisher;
     }
 
     /**
@@ -102,6 +108,21 @@ public class CaseMessageService {
                 saved.getId(),
                 "Message posted inside case channel."
         );
+
+        // Push the message live to anyone viewing this case (reporter + staff with it open).
+        // Best-effort: the message is already saved, so a failed broadcast must not throw.
+        caseEventPublisher.publishMessage(caseId, saved);
+
+        // Also tell the whole tenant's staff that this case had activity, so their lists
+        // reorder (most-recent first), unread badges update, and off-case staff get a
+        // "new reply" notification — no matter which page they are on.
+        caseEventPublisher.publishActivity(tenantId, CaseActivityEvent.builder()
+                .caseId(caseId)
+                .caseReference(report.getCaseReference())
+                .sender(sender)
+                .fromReporter(fromReporter)
+                .at(saved.getTimestamp())
+                .build());
 
         return saved;
     }
