@@ -255,7 +255,8 @@
     "unreadMessages": "Nieprzeczytane wiadomości od zgłaszającego: {{count}}",
     "empty": "Żadna sprawa nie pasuje do filtrów.",
     "loadError": "Nie udało się wczytać spraw.",
-    "newReport": "Otrzymano nowe zgłoszenie: {{ref}}"
+    "newReport": "Otrzymano nowe zgłoszenie: {{ref}}",
+    "newReply": "Nowa odpowiedź w {{ref}}"
   },
   "case": {
     "submittedVia": "{{category}} — złożono przez {{channel}}",
