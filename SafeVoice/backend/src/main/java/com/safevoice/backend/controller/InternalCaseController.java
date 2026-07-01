@@ -46,6 +46,10 @@ public class InternalCaseController {
      *   search free text matched against case reference and category
      *   filter one of: all | critical | unassigned | feedbackDue
      */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_INVESTIGATOR,
+    //                       SAFEVOICE_HR_MANAGER, SAFEVOICE_AUDITOR
+    // Why: read-only listing of the case register. Every SafeVoice role has "view reports",
+    // so all of them may see the list (it exposes no case content, only summary columns).
     @GetMapping
     public ResponseEntity<PageResponse<CaseSummaryResponse>> list(
             @RequestHeader("X-Tenant-ID") String tenantId,
@@ -61,6 +65,9 @@ public class InternalCaseController {
     /**
      * Retrieve complete case report details.
      */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_INVESTIGATOR,
+    //                       SAFEVOICE_HR_MANAGER, SAFEVOICE_AUDITOR
+    // Why: opening a single case to read it is view access, which every SafeVoice role holds.
     @GetMapping("/{caseId}")
     public ResponseEntity<CaseReport> getById(
             @PathVariable String caseId,
@@ -72,6 +79,9 @@ public class InternalCaseController {
     /**
      * Update case status.
      */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER
+    // Why: moving a case through its lifecycle (e.g. to Closed) is a case-management decision.
+    // View-only roles (Investigator, HR Manager, Auditor) must not change case state.
     @PatchMapping("/{caseId}/status")
     public ResponseEntity<CaseReport> updateStatus(
             @PathVariable String caseId,
@@ -86,6 +96,9 @@ public class InternalCaseController {
     /**
      * Update case severity.
      */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER
+    // Why: re-assessing severity/priority is a triage decision reserved for case managers;
+    // view-only roles should not be able to re-prioritise a case.
     @PatchMapping("/{caseId}/severity")
     public ResponseEntity<CaseReport> updateSeverity(
             @PathVariable String caseId,
@@ -100,6 +113,9 @@ public class InternalCaseController {
     /**
      * Assign investigator to case.
      */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER
+    // Why: assigning ownership of a case is the "assign cases" management capability; only
+    // admins and compliance officers hold it. Investigators receive cases, they do not route them.
     @PatchMapping("/{caseId}/assign")
     public ResponseEntity<CaseReport> assignInvestigator(
             @PathVariable String caseId,
@@ -114,6 +130,10 @@ public class InternalCaseController {
     /**
      * Post chat message as internal manager.
      */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_INVESTIGATOR
+    // Why: replying in the case thread is active case work done by handlers and the assigned
+    // investigator. Auditors are strictly read-only, and HR managers only triage grievances,
+    // so neither writes to the reporter thread.
     @PostMapping("/{caseId}/messages")
     public ResponseEntity<CaseMessage> postMessage(
             @PathVariable String caseId,
@@ -135,6 +155,10 @@ public class InternalCaseController {
     /**
      * Get chat log stream.
      */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_INVESTIGATOR,
+    //                       SAFEVOICE_HR_MANAGER, SAFEVOICE_AUDITOR
+    // Why: reading the case thread is part of viewing a case, which every SafeVoice role may do
+    // (posting to it is separately restricted above).
     @GetMapping("/{caseId}/messages")
     public ResponseEntity<List<CaseMessage>> getMessages(
             @PathVariable String caseId,
@@ -146,6 +170,11 @@ public class InternalCaseController {
     /**
      * Download attachment file securely from vault.
      */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_INVESTIGATOR,
+    //                       SAFEVOICE_AUDITOR
+    // Why: downloading the raw evidence file (not just its metadata) is case work for the
+    // investigator/compliance officer and review/export for the auditor. HR managers only
+    // triage grievances and do not handle evidence, so they are excluded.
     @GetMapping("/{caseId}/attachments/{attachmentId}")
     public ResponseEntity<byte[]> downloadAttachment(
             @PathVariable String caseId,

@@ -52,6 +52,9 @@ public class PublicCaseController {
      * Validation failures and bad input are turned into clear JSON errors by the
      * global exception handler.
      */
+    // Allowed permissions: NONE — public, anonymous reporter endpoint (no staff role).
+    // Why: whistleblowers have no account; a report is created before any credential exists,
+    // so requiring a SAFEVOICE_* permission here would make anonymous reporting impossible.
     @PostMapping
     public ResponseEntity<CaseSubmissionResponse> submit(
             @Valid @RequestBody CaseSubmissionRequest request) {
@@ -62,6 +65,9 @@ public class PublicCaseController {
     /**
      * Look up a case using only the access key, and return the case plus its chat thread.
      */
+    // Allowed permissions: NONE — public, anonymous reporter endpoint (no staff role).
+    // Why: the reporter proves who they are with their own 64-char access key, not a staff
+    // permission; this is how an anonymous reporter reads their own case and thread.
     @PostMapping("/track")
     public ResponseEntity<CaseTrackingResponse> track(
             @Valid @RequestBody CaseRetrievalRequest request) {
@@ -76,6 +82,9 @@ public class PublicCaseController {
     /**
      * Post a message into a case's chat thread (reporter side).
      */
+    // Allowed permissions: NONE — public, anonymous reporter endpoint (no staff role).
+    // Why: this is the REPORTER's side of the two-way thread; they authenticate with their
+    // access key (staff post replies via the internal cases API instead).
     @PostMapping("/{caseId}/messages")
     public ResponseEntity<CaseMessage> postMessage(
             @PathVariable String caseId,
@@ -102,6 +111,9 @@ public class PublicCaseController {
      * (the form sends file metadata inside the submit request), but kept for clients that
      * upload the actual file later. Ownership is resolved by the case reference.
      */
+    // Allowed permissions: NONE — public, anonymous reporter endpoint (no staff role).
+    // Why: it lets the reporter attach their own evidence to their own case (ownership is
+    // resolved from the case reference); it is not a staff action.
     @PostMapping(value = "/{caseId}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<EvidenceAttachment> uploadAttachment(
             @PathVariable String caseId,

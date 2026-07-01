@@ -31,6 +31,10 @@ public class InternalDashboardController {
      * Returns the four dashboard stat-card values for the signed-in tenant:
      * open reports, unread replies, within-SLA percentage, and sealed audit entries.
      */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_INVESTIGATOR,
+    //                       SAFEVOICE_HR_MANAGER, SAFEVOICE_AUDITOR
+    // Why: these are non-sensitive aggregate counts (open reports, unread, SLA %, audit total).
+    // Any staff role that can see the workspace may see this operational summary.
     @GetMapping("/stats")
     public ResponseEntity<DashboardStatsResponse> stats(
             @RequestHeader("X-Tenant-ID") String tenantId) {
@@ -41,6 +45,10 @@ public class InternalDashboardController {
      * Returns the "cases needing attention" queue: active cases with NO investigator
      * assigned yet, newest first, as slim summaries. Drives the dashboard's priority queue.
      */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER
+    // Why: this is the assignment worklist (unassigned cases needing an owner). Only the roles
+    // that can actually assign a case act on it, so per least privilege it is limited to them
+    // rather than every view-only role.
     @GetMapping("/attention")
     public ResponseEntity<List<CaseSummaryResponse>> attention(
             @RequestHeader("X-Tenant-ID") String tenantId,

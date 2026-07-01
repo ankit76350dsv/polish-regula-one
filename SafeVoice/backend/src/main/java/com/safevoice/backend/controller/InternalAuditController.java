@@ -40,6 +40,10 @@ public class InternalAuditController {
      *   from        only entries at/after this date or date-time
      *   to          only entries on/before this date (inclusive of the whole day)
      */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_AUDITOR
+    // Why: the immutable audit trail is a compliance/oversight record, so it is limited to the
+    // roles that hold audit access. Investigators and HR managers do case work but are not
+    // granted oversight of the whole tenant's activity log.
     @GetMapping
     public ResponseEntity<PageResponse<AuditLog>> list(
             @RequestHeader("X-Tenant-ID") String tenantId,
