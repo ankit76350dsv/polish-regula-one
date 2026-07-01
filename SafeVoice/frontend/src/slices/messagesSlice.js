@@ -12,9 +12,9 @@ export const fetchMessages = createAsyncThunk("messages/fetch", async (caseId) =
 
 // The staff sender is NOT passed from the UI: the backend labels the message with the
 // caller's SafeVoice role from the verified session, and the saved message comes back
-// with that sender. So we only send the text.
-export const sendMessage = createAsyncThunk("messages/send", async ({ caseId, text }) => {
-  const message = await messageService.send(caseId, { text });
+// with that sender. We send the text plus any attached files (raw File objects).
+export const sendMessage = createAsyncThunk("messages/send", async ({ caseId, text, files }) => {
+  const message = await messageService.send(caseId, { text, files });
   return { caseId, message };
 });
 

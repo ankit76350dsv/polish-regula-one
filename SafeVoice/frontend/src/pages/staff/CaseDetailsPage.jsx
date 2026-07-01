@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
-import { FileText, Lock, MessageSquare, Send, ShieldCheck } from "lucide-react";
+import { Eye, FileText, Lock, MessageSquare, Send, ShieldCheck } from "lucide-react";
 import {
   AppButton,
   AppTable,
+  AttachmentPreviewModal,
   ConfirmDialog,
   ErrorState,
+  MessageAttachmentList,
+  MessageComposerAttachments,
   PageSpinner,
   SecureCard,
   SelectField,
@@ -31,6 +34,8 @@ import { selectCurrentUser } from "../../slices/authSlice";
 import { can } from "../../utils/permissions";
 import { socketService } from "../../services/socketService";
 import { normalizeMessage } from "../../services/caseNormalizer";
+import { messageService } from "../../services/messageService";
+import { reportService } from "../../services/reportService";
 
 export default function CaseDetailsPage({ caseId, navigate }) {
   const { t } = useTranslation();
@@ -49,6 +54,8 @@ export default function CaseDetailsPage({ caseId, navigate }) {
 
   const [pending, setPending] = useState(null); // { field, value, toastKey } | { action }
   const [draft, setDraft] = useState("");
+  const [files, setFiles] = useState([]); // raw File[] attached to the next message
+  const [preview, setPreview] = useState(null); // { messageId, attachment } being previewed
 
   useEffect(() => {
     dispatch(fetchReport(caseId));
@@ -109,10 +116,12 @@ export default function CaseDetailsPage({ caseId, navigate }) {
 
   async function send(e) {
     e.preventDefault();
-    if (!draft.trim()) return;
+    // A message needs either text or at least one file.
+    if (!draft.trim() && files.length === 0) return;
     try {
-      await dispatch(sendMessage({ caseId: report.id, text: draft })).unwrap();
+      await dispatch(sendMessage({ caseId: report.id, text: draft, files })).unwrap();
       setDraft("");
+      setFiles([]);
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
       // Refresh the shared case list so this case is at the top (latest activity) when
       // the user returns to the inbox or register.
@@ -197,12 +206,29 @@ export default function CaseDetailsPage({ caseId, navigate }) {
 
           <SecureCard title={t("case.evidence")} subtitle={t("case.evidenceSub")}>
             {report.attachments.length > 0 ? (
-              <AppTable headers={[t("case.evidenceRef"), t("case.evidenceSize"), t("case.evidenceNote")]}>
+              <AppTable headers={[t("case.evidenceRef"), t("case.evidenceSize"), t("case.evidenceNote"), ""]}>
                 {report.attachments.map((file) => (
                   <tr key={file.id} className="border-b border-slate-200">
                     <td className="px-4 py-3 text-xs font-semibold text-slate-800">{file.displayName}</td>
                     <td className="px-4 py-3 text-xs font-mono text-slate-500">{file.sizeLabel}</td>
                     <td className="px-4 py-3 text-xs text-emerald-700">{t("case.metadataStripped")}</td>
+                    <td className="px-4 py-3 text-right">
+                      {canExport && file.storageVaultRef && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreview({
+                              attachment: file,
+                              fetch: () => reportService.fetchCaseAttachment(report.id, file.id),
+                            })
+                          }
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-700 hover:text-cyan-900 focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded px-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" aria-hidden="true" />
+                          {t("evidence.view")}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </AppTable>
@@ -231,24 +257,40 @@ export default function CaseDetailsPage({ caseId, navigate }) {
                             <span className="font-mono text-[10px] opacity-80">{message.timestamp}</span>
                           </div>
                           <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>
+                          <MessageAttachmentList
+                            attachments={message.attachments}
+                            dark={!isReporter}
+                            onOpen={
+                              canExport
+                                ? (a) =>
+                                    setPreview({
+                                      attachment: a,
+                                      fetch: () => messageService.fetchAttachment(report.id, message.id, a.id),
+                                    })
+                                : undefined
+                            }
+                          />
                         </div>
                       </div>
                     );
                   })
                 )}
               </div>
-              <form className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3" onSubmit={send}>
-                <label htmlFor="case-msg" className="sr-only">{t("case.messagePlaceholder")}</label>
-                <input
-                  id="case-msg"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={t("case.messagePlaceholder")}
-                  className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-                />
-                <AppButton type="submit" variant="primary" disabled={sending || !draft.trim()} icon={sending ? null : <Send className="w-4 h-4" />}>
-                  {sending ? <Spinner size={16} /> : t("common.send")}
-                </AppButton>
+              <form className="flex flex-col gap-2" onSubmit={send}>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+                  <label htmlFor="case-msg" className="sr-only">{t("case.messagePlaceholder")}</label>
+                  <input
+                    id="case-msg"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder={t("case.messagePlaceholder")}
+                    className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  />
+                  <AppButton type="submit" variant="primary" disabled={sending || (!draft.trim() && files.length === 0)} icon={sending ? null : <Send className="w-4 h-4" />}>
+                    {sending ? <Spinner size={16} /> : t("common.send")}
+                  </AppButton>
+                </div>
+                <MessageComposerAttachments files={files} onFilesChanged={setFiles} disabled={sending} />
               </form>
             </div>
           </SecureCard>
@@ -315,6 +357,13 @@ export default function CaseDetailsPage({ caseId, navigate }) {
         tone={pending?.action === "export" ? "primary" : "secure"}
         onConfirm={confirmPending}
         onCancel={() => setPending(null)}
+      />
+
+      <AttachmentPreviewModal
+        open={Boolean(preview)}
+        attachment={preview?.attachment}
+        onClose={() => setPreview(null)}
+        fetchBlob={preview?.fetch}
       />
     </div>
   );

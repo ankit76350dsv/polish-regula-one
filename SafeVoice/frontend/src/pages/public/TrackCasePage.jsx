@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { Lock, Send, ShieldCheck } from "lucide-react";
-import { AppButton, SecureCard, Spinner, TextInput } from "../../components/ui";
+import {
+  AppButton,
+  AttachmentPreviewModal,
+  MessageAttachmentList,
+  MessageComposerAttachments,
+  SecureCard,
+  Spinner,
+  TextInput,
+} from "../../components/ui";
 import {
   selectTracked,
   selectTrackError,
@@ -15,6 +23,7 @@ import {
 import { addToast } from "../../slices/uiSlice";
 import { socketService } from "../../services/socketService";
 import { normalizeMessage } from "../../services/caseNormalizer";
+import { reportService } from "../../services/reportService";
 
 // Anonymous status lookup using ONLY the access key, then a secure two-way thread.
 export default function TrackCasePage() {
@@ -28,6 +37,8 @@ export default function TrackCasePage() {
   const [accessKey, setAccessKey] = useState("");
   const [keyError, setKeyError] = useState("");
   const [draft, setDraft] = useState("");
+  const [files, setFiles] = useState([]); // raw File[] attached to the next message
+  const [preview, setPreview] = useState(null); // { messageId, attachment } being previewed
 
   const looking = trackStatus === "loading";
 
@@ -65,19 +76,34 @@ export default function TrackCasePage() {
 
   async function send(e) {
     e.preventDefault();
-    if (!draft.trim() || !tracked) return;
+    if ((!draft.trim() && files.length === 0) || !tracked) return;
     try {
       // The reducer appends the saved message to the thread on success, so the
       // reporter sees it immediately without us re-fetching the whole case.
       await dispatch(
-        sendTrackedMessage({ caseId: tracked.report.id, sender: "Anonymous Whistleblower", text: draft }),
+        sendTrackedMessage({
+          caseId: tracked.report.id,
+          sender: "Anonymous Whistleblower",
+          text: draft,
+          files,
+        }),
       ).unwrap();
       setDraft("");
+      setFiles([]);
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
     } catch {
       dispatch(addToast({ type: "error", message: t("track.sendError") }));
     }
   }
+
+  // Fetch a file from the reporter's own thread for the preview modal; the access key
+  // (baked into this closure) proves ownership.
+  const fetchPreview = () =>
+    reportService.fetchPublicAttachment({
+      accessKey: accessKey.trim(),
+      messageId: preview.messageId,
+      attachmentId: preview.attachment.id,
+    });
 
   const report = tracked?.report;
   const thread = tracked?.messages || [];
@@ -159,6 +185,11 @@ export default function TrackCasePage() {
                             <span className="text-[9px] font-mono opacity-80">{message.timestamp}</span>
                           </div>
                           <p className="leading-relaxed whitespace-pre-wrap">{message.text}</p>
+                          <MessageAttachmentList
+                            attachments={message.attachments}
+                            dark={isReporter}
+                            onOpen={(a) => setPreview({ messageId: message.id, attachment: a })}
+                          />
                         </div>
                       </div>
                     );
@@ -166,23 +197,33 @@ export default function TrackCasePage() {
                 )}
               </div>
 
-              <form className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 border-t border-slate-200 pt-4" onSubmit={send}>
-                <label htmlFor="track-msg" className="sr-only">{t("track.messagePlaceholder")}</label>
-                <input
-                  id="track-msg"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={t("track.messagePlaceholder")}
-                  className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-                />
-                <AppButton type="submit" variant="primary" disabled={sending || !draft.trim()} icon={sending ? null : <Send className="w-4 h-4" />}>
-                  {sending ? <Spinner size={16} /> : t("common.send")}
-                </AppButton>
+              <form className="flex flex-col gap-2 border-t border-slate-200 pt-4" onSubmit={send}>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+                  <label htmlFor="track-msg" className="sr-only">{t("track.messagePlaceholder")}</label>
+                  <input
+                    id="track-msg"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder={t("track.messagePlaceholder")}
+                    className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  />
+                  <AppButton type="submit" variant="primary" disabled={sending || (!draft.trim() && files.length === 0)} icon={sending ? null : <Send className="w-4 h-4" />}>
+                    {sending ? <Spinner size={16} /> : t("common.send")}
+                  </AppButton>
+                </div>
+                <MessageComposerAttachments files={files} onFilesChanged={setFiles} disabled={sending} />
               </form>
             </div>
           )}
         </SecureCard>
       </div>
+
+      <AttachmentPreviewModal
+        open={Boolean(preview)}
+        attachment={preview?.attachment}
+        onClose={() => setPreview(null)}
+        fetchBlob={preview ? fetchPreview : undefined}
+      />
     </div>
   );
 }

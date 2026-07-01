@@ -196,11 +196,15 @@ export async function apiFetch(path, options = {}, _retry = false) {
   // were real request options. Everything else passes straight through to fetch.
   const { baseUrl = REGULAONE_API_URL, isPublic = false, ...fetchOptions } = options;
 
+  // When the body is FormData (a multipart upload) we must NOT set Content-Type ourselves —
+  // the browser adds it WITH the multipart boundary. For everything else we send JSON.
+  const isForm = fetchOptions.body instanceof FormData;
+
   const res = await fetch(`${baseUrl}${path}`, {
     ...fetchOptions,
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
+      ...(isForm ? {} : { "Content-Type": "application/json" }),
       ...fetchOptions.headers,
     },
   });
@@ -245,6 +249,38 @@ export async function apiFetch(path, options = {}, _retry = false) {
   return json;
 }
 
+/**
+ * Fetch a BINARY file (e.g. an evidence attachment) with the same auth behaviour as apiFetch:
+ * cookie auth, and — for staff — one silent refresh on 401 before giving up. Returns
+ * { blob, filename }, reading the server-suggested name from Content-Disposition when present.
+ */
+export async function downloadFile(path, options = {}, _retry = false) {
+  const { baseUrl = SAFEVOICE_API_URL, isPublic = false, ...fetchOptions } = options;
+  const isForm = fetchOptions.body instanceof FormData;
+
+  const res = await fetch(`${baseUrl}${path}`, {
+    ...fetchOptions,
+    credentials: "include",
+    headers: {
+      ...(isForm ? {} : { "Content-Type": "application/json" }),
+      ...fetchOptions.headers,
+    },
+  });
+
+  if (res.status === 401) {
+    if (isPublic) throw await normaliseError(res);
+    if (!_retry && (await tryRefreshSession())) return downloadFile(path, options, true);
+    redirectToLogin();
+    throw new Error("Session expired — redirecting to login");
+  }
+  if (!res.ok) throw await normaliseError(res);
+
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+  return { blob, filename: match ? match[1] : "attachment" };
+}
+
 export const api = {
   get: (path) => apiFetch(path),
   post: (path, body) => apiFetch(path, { method: "POST", body: JSON.stringify(body) }),
@@ -261,6 +297,22 @@ export const publicApi = {
   get: (path) => apiFetch(path, { baseUrl: SAFEVOICE_API_URL, isPublic: true }),
   post: (path, body) =>
     apiFetch(path, {
+      baseUrl: SAFEVOICE_API_URL,
+      isPublic: true,
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  // Multipart POST for anonymous reporter uploads (a message + evidence files).
+  postForm: (path, formData) =>
+    apiFetch(path, {
+      baseUrl: SAFEVOICE_API_URL,
+      isPublic: true,
+      method: "POST",
+      body: formData,
+    }),
+  // Download a file from the reporter's own case thread (access key travels in the JSON body).
+  downloadFile: (path, body) =>
+    downloadFile(path, {
       baseUrl: SAFEVOICE_API_URL,
       isPublic: true,
       method: "POST",
@@ -284,16 +336,16 @@ export const staffApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  // Post a RAW string body (Content-Type text/plain). The internal "post message"
-  // endpoint takes the message as a plain `@RequestBody String`, so we must NOT
-  // JSON-encode it — sending `"hi"` as JSON would store the text with quotes around it.
-  postText: (path, text) =>
+  // Multipart POST for staff uploads (a message + evidence files). The internal message
+  // endpoint reads a "text" field and zero or more "files" parts.
+  postForm: (path, formData) =>
     apiFetch(path, {
       baseUrl: SAFEVOICE_API_URL,
       method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: text,
+      body: formData,
     }),
+  // Download an evidence file (staff side); gated server-side to the export roles.
+  downloadFile: (path) => downloadFile(path, { baseUrl: SAFEVOICE_API_URL }),
   // PATCH endpoints carry their inputs as query params (?status=…), so most calls
   // send no body; `body` stays optional for the rare case one is needed.
   patch: (path, body) =>

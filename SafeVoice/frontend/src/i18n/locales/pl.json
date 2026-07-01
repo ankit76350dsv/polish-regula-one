@@ -191,16 +191,26 @@
     }
   },
   "evidence": {
-    "dropPrompt": "Upuść plik tutaj lub kliknij, aby wybrać",
-    "fileTypes": "PDF, PNG, JPG, XML lub DOCX · maks. 10 MB · nazwy i metadane usuwane",
+    "dropPrompt": "Upuść pliki tutaj lub kliknij, aby wybrać",
+    "fileTypes": "PDF, PNG, JPG, XML lub DOCX · maks. 10 MB każdy · do {{max}} plików",
     "unsupported": "Nieobsługiwany typ pliku. Dozwolone: PDF, PNG, JPG, XML, DOCX.",
     "tooLarge": "Plik jest za duży. Maksymalny rozmiar to 10 MB.",
+    "tooMany": "Możesz dołączyć maksymalnie {{max}} plików.",
+    "limitReached": "Osiągnięto limit załączników ({{max}} plików).",
+    "empty": "Ten plik jest pusty, więc został pominięty.",
+    "readError": "Nie udało się odczytać pliku. Spróbuj ponownie.",
+    "reading": "Dołączanie…",
     "scanning": "Skanowanie i oczyszczanie",
     "refs": "{{count}} odniesienie do dowodu",
     "refs_few": "{{count}} odniesienia do dowodów",
     "refs_many": "{{count}} odniesień do dowodów",
     "refs_other": "{{count}} odniesień do dowodów",
-    "removeFile": "Usuń plik"
+    "removeFile": "Usuń plik",
+    "attach": "Dołącz pliki",
+    "download": "Pobierz",
+    "view": "Podgląd",
+    "noPreview": "Podgląd nie jest dostępny dla tego typu pliku. Użyj przycisku Pobierz, aby go otworzyć.",
+    "file": "Plik"
   },
   "success": {
     "title": "Twoje zgłoszenie zostało przyjęte",

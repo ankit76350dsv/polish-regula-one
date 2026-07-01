@@ -191,14 +191,24 @@
     }
   },
   "evidence": {
-    "dropPrompt": "Drop a file here, or click to choose",
-    "fileTypes": "PDF, PNG, JPG, XML or DOCX · max 10 MB · names and metadata removed",
+    "dropPrompt": "Drop files here, or click to choose",
+    "fileTypes": "PDF, PNG, JPG, XML or DOCX · max 10 MB each · up to {{max}} files",
     "unsupported": "Unsupported file type. Allowed: PDF, PNG, JPG, XML, DOCX.",
     "tooLarge": "File is too large. Maximum size is 10 MB.",
+    "tooMany": "You can attach at most {{max}} files.",
+    "limitReached": "Attachment limit reached ({{max}} files).",
+    "empty": "That file is empty, so it was skipped.",
+    "readError": "Could not read that file. Please try again.",
+    "reading": "Attaching…",
     "scanning": "Scanning & sanitising",
     "refs": "{{count}} evidence reference",
     "refs_other": "{{count}} evidence references",
-    "removeFile": "Remove file"
+    "removeFile": "Remove file",
+    "attach": "Attach files",
+    "download": "Download",
+    "view": "View",
+    "noPreview": "Preview is not available for this file type. Use Download to open it.",
+    "file": "File"
   },
   "success": {
     "title": "Your report has been received",

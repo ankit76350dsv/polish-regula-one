@@ -61,12 +61,21 @@ public class CaseSubmissionRequest {
     private List<AttachmentMetadata> attachments = new ArrayList<>();
 
     /**
-     * Lightweight description of one uploaded evidence file. We deliberately store
-     * just the name and a size label so nothing about the reporter's device leaks.
+     * One uploaded evidence file from the report form.
+     *
+     * The web form sends the anonymised {@code displayName} + {@code sizeLabel} for display,
+     * PLUS the actual file so it can be stored: {@code fileName} (used to validate the
+     * extension), {@code mimeType}, {@code sizeBytes}, and {@code content} — the file bytes
+     * Base64-encoded. When {@code content} is present the backend decodes it and stores the
+     * file in S3; when it is absent we keep only the lightweight metadata (backward compatible).
      */
     @Data
     public static class AttachmentMetadata {
         private String displayName;
         private String sizeLabel;
+        private String fileName;
+        private String mimeType;
+        private Long sizeBytes;
+        private String content; // Base64-encoded file bytes (no data: prefix)
     }
 }

@@ -3,18 +3,23 @@ package com.safevoice.backend.service;
 import com.safevoice.backend.dto.CaseActivityEvent;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
+import com.safevoice.backend.model.embedded.EvidenceAttachment;
 import com.safevoice.backend.model.embedded.TimelineEvent;
 import com.safevoice.backend.model.enums.audit.AuditActionType;
 import com.safevoice.backend.model.enums.audit.AuditOutcome;
+import com.safevoice.backend.model.enums.case_report.CaseStatus;
 import com.safevoice.backend.repository.CaseMessageRepository;
 import com.safevoice.backend.repository.CaseReportRepository;
 import com.safevoice.backend.service.report.CaseReportService;
 import com.safevoice.backend.websocket.CaseEventPublisher;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -54,20 +59,38 @@ public class CaseMessageService {
             String sender,
             String tenantId,
             String actorRole,
-            String actorId) {
+            String actorId,
+            List<EvidenceAttachment> attachments) {
 
         if (tenantId == null || tenantId.trim().isEmpty()) {
             throw new IllegalArgumentException("Tenant ID context is required");
         }
 
+        // A message must carry something: either text, or at least one file. This lets a
+        // reporter/handler send a file with no words, but blocks a truly empty message.
+        boolean hasText = text != null && !text.trim().isEmpty();
+        boolean hasFiles = attachments != null && !attachments.isEmpty();
+        if (!hasText && !hasFiles) {
+            throw new IllegalArgumentException("A message must include text or at least one file");
+        }
+
         // Verify parent case exists and belongs to the tenant
         CaseReport report = caseReportService.getById(caseId, tenantId);
+
+        // Do not allow new messages/files on a closed case. The two-way channel is only open
+        // while the case is being handled; once CLOSED the record is final (finality + a clean
+        // retention lifecycle). Callers get a 409 they can show to the user.
+        if (report.getStatus() == CaseStatus.CLOSED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This case is closed, so no new messages or files can be added.");
+        }
 
         CaseMessage message = new CaseMessage();
         message.setTenantId(tenantId);
         message.setCaseId(caseId);
         message.setSender(sender);
         message.setText(text);
+        message.setAttachments(attachments != null ? attachments : new ArrayList<>());
         message.setTimestamp(Instant.now());
 
         // Work out whether the writer is the reporter or a staff member. The public web
@@ -135,5 +158,29 @@ public class CaseMessageService {
         // Enforce validation by fetching case details first (triggers NoSuchElement if invalid/cross-tenant)
         caseReportService.getById(caseId, tenantId);
         return caseMessageRepository.findAllByTenantIdAndCaseIdOrderByTimestampAsc(tenantId, caseId);
+    }
+
+    /**
+     * Find ONE attachment on ONE message of a case, after checking it really belongs to this
+     * tenant and case. Used by the download endpoints so a caller can only ever reach a file
+     * that is part of a case they are allowed to see. Throws if anything does not line up.
+     */
+    public EvidenceAttachment getMessageAttachment(
+            String caseId, String messageId, String attachmentId, String tenantId) {
+        // Tenant + case guard (throws if the case is not this tenant's).
+        caseReportService.getById(caseId, tenantId);
+
+        CaseMessage message = caseMessageRepository.findById(messageId)
+                .orElseThrow(() -> new IllegalArgumentException("Message not found"));
+
+        // The message must belong to the SAME tenant and case as the request path.
+        if (!tenantId.equals(message.getTenantId()) || !caseId.equals(message.getCaseId())) {
+            throw new IllegalArgumentException("Message does not belong to this case");
+        }
+
+        return message.getAttachments().stream()
+                .filter(a -> attachmentId.equals(a.getId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Attachment not found in this message"));
     }
 }

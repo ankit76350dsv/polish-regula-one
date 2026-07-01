@@ -19,6 +19,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -154,21 +155,25 @@ public class InternalCaseController {
     }
 
     /**
-     * Post chat message as internal manager.
+     * Post a chat message (with optional evidence files) as internal staff. Sent as
+     * multipart/form-data: a "text" field plus zero or more "files" parts.
      */
     // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_INVESTIGATOR
-    // Why: replying in the case thread is active case work done by handlers and the assigned
-    // investigator. Auditors are strictly read-only, and HR managers only triage grievances,
-    // so neither writes to the reporter thread.
-    @PostMapping("/{caseId}/messages")
+    // Why: replying in the case thread (and attaching files to it) is active case work done by
+    // handlers and the assigned investigator. Auditors are strictly read-only, and HR managers
+    // only triage grievances, so neither writes to the reporter thread.
+    @PostMapping(value = "/{caseId}/messages", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CaseMessage> postMessage(
             @PathVariable String caseId,
-            @RequestBody String text,
+            @RequestParam(value = "text", required = false) String text,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files,
             AuthenticatedUser caller) {
         caller.requireAnyPermission(
                 SafeVoicePermission.SAFEVOICE_ADMIN,
                 SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
                 SafeVoicePermission.SAFEVOICE_INVESTIGATOR);
+        // Validate + store any attached files first (type/size/count checks live in the service).
+        List<EvidenceAttachment> attachments = attachmentService.uploadAll(files);
         // Sender label and audit actor both come from the verified session, not a header,
         // so a reporter can trust which staff role replied.
         String actorRole = caller.primarySafeVoiceRole(); // e.g. SAFEVOICE_COMPLIANCE_OFFICER
@@ -178,7 +183,8 @@ public class InternalCaseController {
                 actorRole,
                 caller.tenantId(),
                 actorRole,
-                caller.userId()
+                caller.userId(),
+                attachments
         );
         return ResponseEntity.ok(message);
     }
@@ -228,6 +234,34 @@ public class InternalCaseController {
                 .filter(a -> a.getId().equals(attachmentId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Attachment not found in this case"));
+
+        byte[] fileBytes = attachmentService.getFile(attachment.getStorageVaultRef());
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + attachment.getDisplayName() + "\"")
+                .body(fileBytes);
+    }
+
+    /**
+     * Download a file that is attached to ONE chat message in the thread (as opposed to a
+     * file attached to the case at submission time, handled above).
+     */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_AUDITOR
+    // Why: same "Export" (Eksport) capability as the case-level download — pulling the raw
+    // bytes out is limited to Administrator and Auditor, per the permission matrix.
+    @GetMapping("/{caseId}/messages/{messageId}/attachments/{attachmentId}")
+    public ResponseEntity<byte[]> downloadMessageAttachment(
+            @PathVariable String caseId,
+            @PathVariable String messageId,
+            @PathVariable String attachmentId,
+            AuthenticatedUser caller) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_AUDITOR);
+        // The service checks the message really belongs to this tenant + case before returning it.
+        EvidenceAttachment attachment = caseMessageService.getMessageAttachment(
+                caseId, messageId, attachmentId, caller.tenantId());
 
         byte[] fileBytes = attachmentService.getFile(attachment.getStorageVaultRef());
 

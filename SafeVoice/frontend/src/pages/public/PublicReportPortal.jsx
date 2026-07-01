@@ -104,7 +104,18 @@ export default function PublicReportPortal({ tenantId, navigate }) {
           facts: form.facts,
           channel: form.channel,
           requestMeeting: form.requestMeeting,
-          attachments: files.map((f) => ({ displayName: f.displayName, sizeLabel: f.sizeLabel })),
+          // Evidence files. We send the actual bytes (base64 `content`) plus the details
+          // the backend needs to validate and store them. `displayName`/`sizeLabel` are the
+          // fields today's backend already reads; `fileName`/`mimeType`/`sizeBytes`/`content`
+          // are what the upcoming backend file-storage step will consume.
+          attachments: files.map((f, i) => ({
+            displayName: `Evidence ${i + 1} (${f.extension})`,
+            sizeLabel: f.sizeLabel,
+            fileName: f.fileName,
+            mimeType: f.mimeType,
+            sizeBytes: f.sizeBytes,
+            content: f.content,
+          })),
         }),
       ).unwrap();
       navigate?.("/report/success");

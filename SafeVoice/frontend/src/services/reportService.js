@@ -41,14 +41,30 @@ export const reportService = {
     };
   },
 
-  // The reporter posts one message into their own case's chat thread. The case is
-  // identified by the id they received from the track lookup (carried in the URL path).
-  async postPublicMessage(caseId, { sender, text }) {
-    const message = await publicApi.post(
+  // The reporter posts one message (optionally with evidence files) into their own case's
+  // chat thread. The endpoint is multipart: "sender" + "text" fields, plus "files" parts.
+  // The case is identified by the reference they received (carried in the URL path).
+  async postPublicMessage(caseId, { sender, text, files = [] }) {
+    const form = new FormData();
+    if (sender) form.append("sender", sender);
+    form.append("text", text ?? "");
+    files.forEach((file) => form.append("files", file));
+    const message = await publicApi.postForm(
       `/api/safevoice/reports/${encodeURIComponent(caseId)}/messages`,
-      { sender, text },
+      form,
     );
     return normalizeMessage(message);
+  },
+
+  // The reporter fetches one file from their own case thread. They prove ownership with their
+  // access key (sent in the body, never the URL). Returns { blob, filename } for the preview
+  // modal (which also offers the download).
+  fetchPublicAttachment({ accessKey, messageId, attachmentId }) {
+    return publicApi.downloadFile("/api/safevoice/reports/attachments/download", {
+      accessKey,
+      messageId,
+      attachmentId,
+    });
   },
 
   // ── STAFF (internal compliance dashboard) ────────────────────────────────────
@@ -78,6 +94,17 @@ export const reportService = {
       total: data?.total ?? 0,
       totalPages: data?.totalPages ?? 0,
     };
+  },
+
+  // Fetch the bytes of a CASE-LEVEL attachment (a file uploaded WITH the report at
+  // submission, as opposed to one on a thread message). Staff side; gated to export roles
+  // server-side. Returns { blob, filename } for the preview modal.
+  fetchCaseAttachment(caseId, attachmentId) {
+    return staffApi.downloadFile(
+      `/api/v1/internal/cases/${encodeURIComponent(caseId)}/attachments/${encodeURIComponent(
+        attachmentId,
+      )}`,
+    );
   },
 
   // Load one case by its id.

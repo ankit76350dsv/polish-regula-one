@@ -21,15 +21,28 @@ export const messageService = {
     return normalizeMessages(messages);
   },
 
-  // Post one staff message. The internal endpoint takes the raw text as a plain-string
-  // body and labels the sender from the caller's session (not from any header), so we
-  // send just the text (as text/plain, via postText).
-  async send(caseId, { text }) {
-    const message = await staffApi.postText(
+  // Post one staff message, optionally with evidence files. The internal endpoint is
+  // multipart: a "text" field plus zero or more "files" parts. The sender is labelled
+  // from the caller's verified session (not sent here).
+  async send(caseId, { text, files = [] }) {
+    const form = new FormData();
+    form.append("text", text ?? "");
+    files.forEach((file) => form.append("files", file));
+    const message = await staffApi.postForm(
       `/api/v1/internal/cases/${encodeURIComponent(caseId)}/messages`,
-      text,
+      form,
     );
     return normalizeMessage(message);
+  },
+
+  // Fetch the bytes of one file attached to a thread message (staff side; gated to the
+  // export roles server-side). Returns { blob, filename } for preview + download in the modal.
+  fetchAttachment(caseId, messageId, attachmentId) {
+    return staffApi.downloadFile(
+      `/api/v1/internal/cases/${encodeURIComponent(caseId)}/messages/${encodeURIComponent(
+        messageId,
+      )}/attachments/${encodeURIComponent(attachmentId)}`,
+    );
   },
 };
 

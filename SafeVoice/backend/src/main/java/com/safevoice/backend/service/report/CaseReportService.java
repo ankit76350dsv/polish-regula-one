@@ -21,6 +21,7 @@ import com.safevoice.backend.model.enums.case_report.ReportCategory;
 import com.safevoice.backend.repository.CaseMessageRepository;
 import com.safevoice.backend.repository.CaseReportRepository;
 import com.safevoice.backend.repository.TenantRepository;
+import com.safevoice.backend.service.AttachmentService;
 import com.safevoice.backend.service.AuditLogService;
 import com.safevoice.backend.service.report.utils.CaseReportUtils;
 import com.safevoice.backend.websocket.CaseEventPublisher;
@@ -38,6 +39,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -57,6 +59,8 @@ public class CaseReportService {
     private final MongoTemplate mongoTemplate;
     // Announces new cases live to the tenant's staff over WebSocket.
     private final CaseEventPublisher caseEventPublisher;
+    // Stores uploaded evidence files (S3). Used to save files sent WITH the report.
+    private final AttachmentService attachmentService;
 
     // Hard ceiling on page size, so a caller can never ask for a giant page that would
     // strain the database or the browser. Requests above this are clamped down to it.
@@ -69,13 +73,15 @@ public class CaseReportService {
                              TenantRepository tenantRepository,
                              AuditLogService auditLogService,
                              MongoTemplate mongoTemplate,
-                             CaseEventPublisher caseEventPublisher) {
+                             CaseEventPublisher caseEventPublisher,
+                             AttachmentService attachmentService) {
         this.caseReportRepository = caseReportRepository;
         this.caseMessageRepository = caseMessageRepository;
         this.tenantRepository = tenantRepository;
         this.auditLogService = auditLogService;
         this.mongoTemplate = mongoTemplate;
         this.caseEventPublisher = caseEventPublisher;
+        this.attachmentService = attachmentService;
     }
 
     /**
@@ -173,15 +179,32 @@ public class CaseReportService {
             caseReport.getRiskFlags().add("Oral reporting requested");
         }
 
-        // Keep ONLY the evidence file's name and size label — never any device/telemetry data.
+        // Store any evidence files that came with the report. The form sends each file's bytes
+        // Base64-encoded in `content`; we decode it and save it to S3 (encrypted, UUID key) via
+        // the same AttachmentService the case thread uses. We keep the anonymised display label
+        // the portal already chose (e.g. "Evidence 1 (PDF)") instead of the raw filename, so a
+        // reporter's original filename is never shown to staff.
         if (request.getAttachments() != null) {
             for (CaseSubmissionRequest.AttachmentMetadata meta : request.getAttachments()) {
-                EvidenceAttachment attachment = new EvidenceAttachment();
-                attachment.setDisplayName(meta.getDisplayName());
-                attachment.setSizeLabel(meta.getSizeLabel());
-                attachment.setMetadataStripped(true);
-                attachment.setOriginalNameStored(false);
-                caseReport.getAttachments().add(attachment);
+                if (meta.getContent() != null && !meta.getContent().isBlank()) {
+                    byte[] fileBytes = Base64.getDecoder().decode(meta.getContent());
+                    EvidenceAttachment stored =
+                            attachmentService.uploadBytes(fileBytes, meta.getFileName(), meta.getMimeType());
+                    // Hide the raw filename: show the portal's anonymised label instead.
+                    if (meta.getDisplayName() != null && !meta.getDisplayName().isBlank()) {
+                        stored.setDisplayName(meta.getDisplayName());
+                        stored.setOriginalNameStored(false);
+                    }
+                    caseReport.getAttachments().add(stored);
+                } else {
+                    // Backward-compatible fallback: no bytes sent, keep the lightweight metadata.
+                    EvidenceAttachment attachment = new EvidenceAttachment();
+                    attachment.setDisplayName(meta.getDisplayName());
+                    attachment.setSizeLabel(meta.getSizeLabel());
+                    attachment.setMetadataStripped(true);
+                    attachment.setOriginalNameStored(false);
+                    caseReport.getAttachments().add(attachment);
+                }
             }
         }
 

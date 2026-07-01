@@ -2,7 +2,16 @@ import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { FileText, Lock, Send } from "lucide-react";
-import { AppButton, EmptyState, PageSpinner, SecureCard, Spinner } from "../../components/ui";
+import {
+  AppButton,
+  AttachmentPreviewModal,
+  EmptyState,
+  MessageAttachmentList,
+  MessageComposerAttachments,
+  PageSpinner,
+  SecureCard,
+  Spinner,
+} from "../../components/ui";
 import { fetchReports, selectReports, selectReportsStatus } from "../../slices/reportsSlice";
 import {
   clearSelectedThread,
@@ -14,8 +23,11 @@ import {
   sendMessage,
 } from "../../slices/messagesSlice";
 import { addToast, setActiveCase, clearActiveCase } from "../../slices/uiSlice";
+import { selectCurrentUser } from "../../slices/authSlice";
+import { can } from "../../utils/permissions";
 import { socketService } from "../../services/socketService";
 import { normalizeMessage } from "../../services/caseNormalizer";
+import { messageService } from "../../services/messageService";
 
 export default function CentralEncryptedInboxPage({ navigate }) {
   const { t } = useTranslation();
@@ -39,6 +51,10 @@ export default function CentralEncryptedInboxPage({ navigate }) {
   const activeRef = activeThread?.caseReference || activeId;
   const messages = useSelector(selectMessagesFor(activeId));
   const [draft, setDraft] = useState("");
+  const [files, setFiles] = useState([]); // raw File[] attached to the next message
+  const [preview, setPreview] = useState(null); // { messageId, attachment } being previewed
+  const currentUser = useSelector(selectCurrentUser);
+  const canExport = can(currentUser, "exportData");
 
   useEffect(() => {
     if (status === "idle") dispatch(fetchReports());
@@ -78,10 +94,11 @@ export default function CentralEncryptedInboxPage({ navigate }) {
 
   async function send(e) {
     e.preventDefault();
-    if (!draft.trim() || !activeId) return;
+    if ((!draft.trim() && files.length === 0) || !activeId) return;
     try {
-      await dispatch(sendMessage({ caseId: activeId, text: draft })).unwrap();
+      await dispatch(sendMessage({ caseId: activeId, text: draft, files })).unwrap();
       setDraft("");
+      setFiles([]);
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
       // Refresh the thread list so this case jumps to the top (it now has the latest
       // activity), matching the WhatsApp-style ordering the backend returns.
@@ -168,6 +185,15 @@ export default function CentralEncryptedInboxPage({ navigate }) {
                             <span className="shrink-0 text-[9px] font-mono opacity-80">{message.timestamp}</span>
                           </div>
                           <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                          <MessageAttachmentList
+                            attachments={message.attachments}
+                            dark={!isReporter}
+                            onOpen={
+                              canExport
+                                ? (a) => setPreview({ messageId: message.id, attachment: a })
+                                : undefined
+                            }
+                          />
                         </div>
                       </div>
                     );
@@ -175,18 +201,21 @@ export default function CentralEncryptedInboxPage({ navigate }) {
                 )}
               </div>
 
-              <form className="grid min-w-0 grid-cols-1 gap-3 border-t border-slate-200 pt-4 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={send}>
-                <label htmlFor="inbox-msg" className="sr-only">{t("inbox.messagePlaceholder")}</label>
-                <input
-                  id="inbox-msg"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={t("inbox.messagePlaceholder")}
-                  className="min-w-0 rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-                />
-                <AppButton type="submit" variant="primary" disabled={sending || !draft.trim()} icon={sending ? null : <Send className="w-4 h-4" />}>
-                  {sending ? <Spinner size={16} /> : t("common.send")}
-                </AppButton>
+              <form className="flex min-w-0 flex-col gap-2 border-t border-slate-200 pt-4" onSubmit={send}>
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <label htmlFor="inbox-msg" className="sr-only">{t("inbox.messagePlaceholder")}</label>
+                  <input
+                    id="inbox-msg"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder={t("inbox.messagePlaceholder")}
+                    className="min-w-0 rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  />
+                  <AppButton type="submit" variant="primary" disabled={sending || (!draft.trim() && files.length === 0)} icon={sending ? null : <Send className="w-4 h-4" />}>
+                    {sending ? <Spinner size={16} /> : t("common.send")}
+                  </AppButton>
+                </div>
+                <MessageComposerAttachments files={files} onFilesChanged={setFiles} disabled={sending} />
               </form>
             </div>
           </SecureCard>
@@ -196,6 +225,17 @@ export default function CentralEncryptedInboxPage({ navigate }) {
           </SecureCard>
         )}
       </div>
+
+      <AttachmentPreviewModal
+        open={Boolean(preview)}
+        attachment={preview?.attachment}
+        onClose={() => setPreview(null)}
+        fetchBlob={
+          preview
+            ? () => messageService.fetchAttachment(activeId, preview.messageId, preview.attachment.id)
+            : undefined
+        }
+      />
     </div>
   );
 }

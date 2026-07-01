@@ -1,10 +1,10 @@
 package com.safevoice.backend.controller;
 
-import com.safevoice.backend.dto.CaseMessageRequest;
 import com.safevoice.backend.dto.CaseRetrievalRequest;
 import com.safevoice.backend.dto.CaseSubmissionRequest;
 import com.safevoice.backend.dto.CaseSubmissionResponse;
 import com.safevoice.backend.dto.CaseTrackingResponse;
+import com.safevoice.backend.dto.ReporterAttachmentRequest;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
@@ -15,6 +15,7 @@ import com.safevoice.backend.service.report.CaseReportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -80,30 +81,65 @@ public class PublicCaseController {
     }
 
     /**
-     * Post a message into a case's chat thread (reporter side).
+     * Post a message (with optional evidence files) into a case's chat thread (reporter side).
+     * Sent as multipart/form-data: a "text" field, an optional "sender", and zero or more
+     * "files" parts.
      */
     // Allowed permissions: NONE — public, anonymous reporter endpoint (no staff role).
     // Why: this is the REPORTER's side of the two-way thread; they authenticate with their
     // access key (staff post replies via the internal cases API instead).
-    @PostMapping("/{caseId}/messages")
+    @PostMapping(value = "/{caseId}/messages", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CaseMessage> postMessage(
             @PathVariable String caseId,
-            @Valid @RequestBody CaseMessageRequest request) {
+            @RequestParam(value = "sender", required = false) String sender,
+            @RequestParam(value = "text", required = false) String text,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files) {
         CaseReport report = caseReportService.getByCaseRef(caseId);
 
-        String sender = (request.getSender() == null || request.getSender().isBlank())
+        String senderName = (sender == null || sender.isBlank())
                 ? "Anonymous Whistleblower"
-                : request.getSender();
+                : sender;
+
+        // Validate + store any attached files first (type/size/count checks live in the service).
+        List<EvidenceAttachment> attachments = attachmentService.uploadAll(files);
 
         CaseMessage message = caseMessageService.postMessage(
                 report.getId(),
-                request.getText(),
-                sender,
+                text,
+                senderName,
                 report.getTenantId(),
                 "Public Portal",
-                "Anonymous Whistleblower"
+                "Anonymous Whistleblower",
+                attachments
         );
         return ResponseEntity.ok(message);
+    }
+
+    /**
+     * Download one file from the reporter's own case thread. The reporter proves ownership
+     * with their access key (in the request body, never the URL). Lets a reporter retrieve a
+     * document a case handler sent them, or re-download their own attachment.
+     */
+    // Allowed permissions: NONE — public, anonymous reporter endpoint (no staff role).
+    // Why: the reporter's access key is their credential; the server re-checks it and only
+    // returns a file that belongs to that same case.
+    @PostMapping("/attachments/download")
+    public ResponseEntity<byte[]> downloadAttachment(
+            @Valid @RequestBody ReporterAttachmentRequest request) {
+        // Resolve the case from the access key (throws if the key is wrong).
+        CaseReport report = caseReportService.retrieveByAccessKey(request.getAccessKey());
+
+        // The service checks the message really belongs to this case before returning the file.
+        EvidenceAttachment attachment = caseMessageService.getMessageAttachment(
+                report.getId(), request.getMessageId(), request.getAttachmentId(), report.getTenantId());
+
+        byte[] fileBytes = attachmentService.getFile(attachment.getStorageVaultRef());
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + attachment.getDisplayName() + "\"")
+                .body(fileBytes);
     }
 
     /**

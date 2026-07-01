@@ -11,6 +11,9 @@ export { AppTable } from "./AppTable";
 export { AppModal } from "./AppModal";
 export { TimelineWidget } from "./TimelineWidget";
 export { AttachmentUploader } from "./AttachmentUploader";
+export { MessageComposerAttachments } from "./MessageComposerAttachments";
+export { MessageAttachmentList } from "./MessageAttachmentList";
+export { AttachmentPreviewModal } from "./AttachmentPreviewModal";
 export { ChatBubble } from "./ChatBubble";
 
 // Newer primitives that complete the production UX (loading/empty/error, toasts,

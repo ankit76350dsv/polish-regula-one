@@ -39,6 +39,13 @@
 			<artifactId>kms</artifactId>
 			<version>2.25.15</version>
 		</dependency>
+		<!-- S3: whistleblower evidence files are stored in the shared "regulaone" bucket
+		     (encrypted at rest), instead of the local disk vault. -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>2.25.15</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
