@@ -2,9 +2,9 @@
  * Message service — the staff side of the secure two-way case thread.
  *
  * These are the INTERNAL compliance endpoints (/api/v1/internal/cases/{id}/messages),
- * so every call goes through `staffApi`, which attaches the signed-in actor's identity
- * headers. The backend records the message under the actor's role (from the header),
- * so we do not send a "sender" — only the text.
+ * so every call goes through `staffApi`, which authenticates with the shared idToken
+ * cookie. The backend identifies the caller from that verified session and records the
+ * message under their SafeVoice role, so we do not send a "sender" — only the text.
  *
  * (The anonymous reporter's own messages are handled separately, by reportService
  * through the public endpoint, so the two worlds never cross.)
@@ -22,8 +22,8 @@ export const messageService = {
   },
 
   // Post one staff message. The internal endpoint takes the raw text as a plain-string
-  // body and labels the sender from the actor headers, so we send just the text
-  // (as text/plain, via postText).
+  // body and labels the sender from the caller's session (not from any header), so we
+  // send just the text (as text/plain, via postText).
   async send(caseId, { text }) {
     const message = await staffApi.postText(
       `/api/v1/internal/cases/${encodeURIComponent(caseId)}/messages`,

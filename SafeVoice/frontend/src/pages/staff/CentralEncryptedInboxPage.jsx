@@ -80,7 +80,7 @@ export default function CentralEncryptedInboxPage({ navigate }) {
     e.preventDefault();
     if (!draft.trim() || !activeId) return;
     try {
-      await dispatch(sendMessage({ caseId: activeId, sender: "Compliance Officer", text: draft })).unwrap();
+      await dispatch(sendMessage({ caseId: activeId, text: draft })).unwrap();
       setDraft("");
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
       // Refresh the thread list so this case jumps to the top (it now has the latest

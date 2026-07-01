@@ -33,10 +33,11 @@ export const store = configureStore({
   },
 });
 
-// Keep the staff HTTP client's identity in sync with who is signed in. Whenever the
-// auth user changes, copy their tenant/role/email into the identity holder so every
-// staff API call carries the right X-Tenant-ID / X-Actor-Role / X-Actor-ID headers.
-// We only write when the user reference actually changes, so this stays cheap.
+// Keep the signed-in user's tenantId in sync for the plain-JS service layer. Whenever
+// the auth user changes, copy their tenantId into the identity holder so userService can
+// read it for the RegulaOne invite payload (staff SafeVoice calls send no identity — the
+// backend derives it from the session cookie). We only write when the user reference
+// actually changes, so this stays cheap.
 let lastUser;
 store.subscribe(() => {
   const user = store.getState().auth.user;

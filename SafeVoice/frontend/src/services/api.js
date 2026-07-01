@@ -16,8 +16,6 @@
  * Only if that fails do we send the browser to the central login page with a
  * ?redirect_uri that brings the user back here afterwards.
  */
-import { getCurrentActor } from "./identity";
-
 // All endpoints are configurable through environment variables so the same build
 // works on localhost and in the EEA production environment. Defaults match the
 // local dev setup (RegulaOne backend on :8080, SafeVoice frontend on :1003).
@@ -271,25 +269,19 @@ export const publicApi = {
 };
 
 // Client for the STAFF (internal compliance) endpoints. It targets the SafeVoice
-// backend and attaches the three identity headers the internal API expects, read
-// from whoever is signed in right now (kept current by the store). It keeps the
-// normal staff-auth behaviour: a 401 tries a silent refresh and then the login.
-function staffHeaders() {
-  const actor = getCurrentActor();
-  return {
-    "X-Tenant-ID": actor.tenantId,
-    "X-Actor-Role": actor.actorRole,
-    "X-Actor-ID": actor.actorId,
-  };
-}
-
+// backend. Authentication is the shared httpOnly idToken cookie ONLY (sent by
+// credentials:'include' in apiFetch): the SafeVoice backend forwards it to RegulaOne
+// to identify the caller and derives the tenant + acting user from that verified
+// session. So this client sends NO tenant/actor headers — doing so would be both
+// pointless (the backend ignores them) and unsafe (client-supplied identity can be
+// spoofed). It keeps the normal staff-auth behaviour: a 401 tries a silent refresh
+// and then the login.
 export const staffApi = {
-  get: (path) => apiFetch(path, { baseUrl: SAFEVOICE_API_URL, headers: staffHeaders() }),
+  get: (path) => apiFetch(path, { baseUrl: SAFEVOICE_API_URL }),
   post: (path, body) =>
     apiFetch(path, {
       baseUrl: SAFEVOICE_API_URL,
       method: "POST",
-      headers: staffHeaders(),
       body: JSON.stringify(body),
     }),
   // Post a RAW string body (Content-Type text/plain). The internal "post message"
@@ -299,7 +291,7 @@ export const staffApi = {
     apiFetch(path, {
       baseUrl: SAFEVOICE_API_URL,
       method: "POST",
-      headers: { ...staffHeaders(), "Content-Type": "text/plain" },
+      headers: { "Content-Type": "text/plain" },
       body: text,
     }),
   // PATCH endpoints carry their inputs as query params (?status=…), so most calls
@@ -308,11 +300,10 @@ export const staffApi = {
     apiFetch(path, {
       baseUrl: SAFEVOICE_API_URL,
       method: "PATCH",
-      headers: staffHeaders(),
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
   del: (path) =>
-    apiFetch(path, { baseUrl: SAFEVOICE_API_URL, method: "DELETE", headers: staffHeaders() }),
+    apiFetch(path, { baseUrl: SAFEVOICE_API_URL, method: "DELETE" }),
 };
 
 // Exposed so the logout flow can reach the central login as a last-resort fallback,

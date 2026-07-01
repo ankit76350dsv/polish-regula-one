@@ -111,7 +111,7 @@ export default function CaseDetailsPage({ caseId, navigate }) {
     e.preventDefault();
     if (!draft.trim()) return;
     try {
-      await dispatch(sendMessage({ caseId: report.id, sender: "Compliance Officer", text: draft })).unwrap();
+      await dispatch(sendMessage({ caseId: report.id, text: draft })).unwrap();
       setDraft("");
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
       // Refresh the shared case list so this case is at the top (latest activity) when
