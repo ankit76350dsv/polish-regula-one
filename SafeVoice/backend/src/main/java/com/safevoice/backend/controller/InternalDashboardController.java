@@ -2,13 +2,14 @@ package com.safevoice.backend.controller;
 
 import com.safevoice.backend.dto.CaseSummaryResponse;
 import com.safevoice.backend.dto.DashboardStatsResponse;
+import com.safevoice.backend.security.AuthenticatedUser;
+import com.safevoice.backend.security.SafeVoicePermission;
 import com.safevoice.backend.service.DashboardService;
 import com.safevoice.backend.service.report.CaseReportService;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,7 +18,9 @@ import java.util.List;
 
 /**
  * Internal (staff) endpoint that serves the dashboard's headline numbers.
- * Tenant-scoped via the X-Tenant-ID header, like the other internal endpoints.
+ *
+ * Tenant-scoped from the verified session ({@link AuthenticatedUser#tenantId()}), never a
+ * client header, and gated per action with {@code caller.requireAnyPermission(...)}.
  */
 @RestController
 @RequestMapping("/api/v1/internal/dashboard")
@@ -36,9 +39,14 @@ public class InternalDashboardController {
     // Why: these are non-sensitive aggregate counts (open reports, unread, SLA %, audit total).
     // Any staff role that can see the workspace may see this operational summary.
     @GetMapping("/stats")
-    public ResponseEntity<DashboardStatsResponse> stats(
-            @RequestHeader("X-Tenant-ID") String tenantId) {
-        return ResponseEntity.ok(dashboardService.getStats(tenantId));
+    public ResponseEntity<DashboardStatsResponse> stats(AuthenticatedUser caller) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
+                SafeVoicePermission.SAFEVOICE_INVESTIGATOR,
+                SafeVoicePermission.SAFEVOICE_HR_MANAGER,
+                SafeVoicePermission.SAFEVOICE_AUDITOR);
+        return ResponseEntity.ok(dashboardService.getStats(caller.tenantId()));
     }
 
     /**
@@ -51,8 +59,11 @@ public class InternalDashboardController {
     // rather than every view-only role.
     @GetMapping("/attention")
     public ResponseEntity<List<CaseSummaryResponse>> attention(
-            @RequestHeader("X-Tenant-ID") String tenantId,
+            AuthenticatedUser caller,
             @RequestParam(defaultValue = "20") int limit) {
-        return ResponseEntity.ok(caseReportService.attentionCases(tenantId, limit));
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER);
+        return ResponseEntity.ok(caseReportService.attentionCases(caller.tenantId(), limit));
     }
 }

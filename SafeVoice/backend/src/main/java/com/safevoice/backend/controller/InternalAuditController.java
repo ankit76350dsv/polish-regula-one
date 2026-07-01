@@ -2,19 +2,21 @@ package com.safevoice.backend.controller;
 
 import com.safevoice.backend.dto.PageResponse;
 import com.safevoice.backend.model.document.AuditLog;
+import com.safevoice.backend.security.AuthenticatedUser;
+import com.safevoice.backend.security.SafeVoicePermission;
 import com.safevoice.backend.service.AuditLogService;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Internal (staff) endpoint for reading the immutable, tamper-evident audit trail.
- * Tenant-scoped via the X-Tenant-ID header, like the other internal endpoints.
+ * Tenant-scoped from the verified session ({@link AuthenticatedUser#tenantId()}), never a
+ * client header, and gated with {@code caller.requireAnyPermission(...)}.
  *
  * Read-only by design: there is NO create/update/delete here. Audit entries are written
  * only as a side effect of real actions (through AuditLogService.log), never by hand, so
@@ -46,7 +48,7 @@ public class InternalAuditController {
     // granted oversight of the whole tenant's activity log.
     @GetMapping
     public ResponseEntity<PageResponse<AuditLog>> list(
-            @RequestHeader("X-Tenant-ID") String tenantId,
+            AuthenticatedUser caller,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String search,
@@ -55,8 +57,12 @@ public class InternalAuditController {
             @RequestParam(required = false) String subjectId,
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
+                SafeVoicePermission.SAFEVOICE_AUDITOR);
         PageResponse<AuditLog> logs = auditLogService.search(
-                tenantId, search, actionType, outcome, subjectId, from, to, page, size);
+                caller.tenantId(), search, actionType, outcome, subjectId, from, to, page, size);
         return ResponseEntity.ok(logs);
     }
 }

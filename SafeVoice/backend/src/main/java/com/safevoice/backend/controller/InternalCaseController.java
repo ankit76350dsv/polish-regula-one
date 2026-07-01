@@ -7,6 +7,8 @@ import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
 import com.safevoice.backend.model.enums.case_report.CaseSeverity;
 import com.safevoice.backend.model.enums.case_report.CaseStatus;
+import com.safevoice.backend.security.AuthenticatedUser;
+import com.safevoice.backend.security.SafeVoicePermission;
 import com.safevoice.backend.service.AttachmentService;
 import com.safevoice.backend.service.CaseMessageService;
 import com.safevoice.backend.service.report.CaseReportService;
@@ -22,7 +24,13 @@ import java.util.List;
 
 /**
  * REST controller representing internal compliance/investigator dashboards.
- * Enforces tenant isolation via headers and records audits.
+ *
+ * Every method receives an {@link AuthenticatedUser} — resolved from the caller's session by
+ * asking RegulaOne "who is this?" — which is both the auth gate (no valid session → 401) and
+ * the source of truth for the tenant and the acting user. We NEVER take the tenant or actor
+ * from a client-supplied header: doing so would let any valid user spoof another organisation.
+ * Each method then calls {@code caller.requireAnyPermission(...)} to allow only the SafeVoice
+ * roles that may perform that specific action (least privilege).
  */
 @RestController
 @RequestMapping("/api/v1/internal/cases")
@@ -52,13 +60,19 @@ public class InternalCaseController {
     // so all of them may see the list (it exposes no case content, only summary columns).
     @GetMapping
     public ResponseEntity<PageResponse<CaseSummaryResponse>> list(
-            @RequestHeader("X-Tenant-ID") String tenantId,
+            AuthenticatedUser caller,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String filter) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
+                SafeVoicePermission.SAFEVOICE_INVESTIGATOR,
+                SafeVoicePermission.SAFEVOICE_HR_MANAGER,
+                SafeVoicePermission.SAFEVOICE_AUDITOR);
         PageResponse<CaseSummaryResponse> reports =
-                caseReportService.listSummaries(tenantId, search, filter, page, size);
+                caseReportService.listSummaries(caller.tenantId(), search, filter, page, size);
         return ResponseEntity.ok(reports);
     }
 
@@ -71,8 +85,14 @@ public class InternalCaseController {
     @GetMapping("/{caseId}")
     public ResponseEntity<CaseReport> getById(
             @PathVariable String caseId,
-            @RequestHeader("X-Tenant-ID") String tenantId) {
-        CaseReport report = caseReportService.getById(caseId, tenantId);
+            AuthenticatedUser caller) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
+                SafeVoicePermission.SAFEVOICE_INVESTIGATOR,
+                SafeVoicePermission.SAFEVOICE_HR_MANAGER,
+                SafeVoicePermission.SAFEVOICE_AUDITOR);
+        CaseReport report = caseReportService.getById(caseId, caller.tenantId());
         return ResponseEntity.ok(report);
     }
 
@@ -86,10 +106,12 @@ public class InternalCaseController {
     public ResponseEntity<CaseReport> updateStatus(
             @PathVariable String caseId,
             @RequestParam("status") CaseStatus status,
-            @RequestHeader("X-Tenant-ID") String tenantId,
-            @RequestHeader("X-Actor-Role") String actorRole,
-            @RequestHeader("X-Actor-ID") String actorId) {
-        CaseReport updated = caseReportService.updateStatus(caseId, status, tenantId, actorRole, actorId);
+            AuthenticatedUser caller) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER);
+        CaseReport updated = caseReportService.updateStatus(
+                caseId, status, caller.tenantId(), caller.primarySafeVoiceRole(), caller.userId());
         return ResponseEntity.ok(updated);
     }
 
@@ -103,10 +125,12 @@ public class InternalCaseController {
     public ResponseEntity<CaseReport> updateSeverity(
             @PathVariable String caseId,
             @RequestParam("severity") CaseSeverity severity,
-            @RequestHeader("X-Tenant-ID") String tenantId,
-            @RequestHeader("X-Actor-Role") String actorRole,
-            @RequestHeader("X-Actor-ID") String actorId) {
-        CaseReport updated = caseReportService.updateSeverity(caseId, severity, tenantId, actorRole, actorId);
+            AuthenticatedUser caller) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER);
+        CaseReport updated = caseReportService.updateSeverity(
+                caseId, severity, caller.tenantId(), caller.primarySafeVoiceRole(), caller.userId());
         return ResponseEntity.ok(updated);
     }
 
@@ -120,10 +144,12 @@ public class InternalCaseController {
     public ResponseEntity<CaseReport> assignInvestigator(
             @PathVariable String caseId,
             @RequestParam("investigator") String investigator,
-            @RequestHeader("X-Tenant-ID") String tenantId,
-            @RequestHeader("X-Actor-Role") String actorRole,
-            @RequestHeader("X-Actor-ID") String actorId) {
-        CaseReport updated = caseReportService.assignInvestigator(caseId, investigator, tenantId, actorRole, actorId);
+            AuthenticatedUser caller) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER);
+        CaseReport updated = caseReportService.assignInvestigator(
+                caseId, investigator, caller.tenantId(), caller.primarySafeVoiceRole(), caller.userId());
         return ResponseEntity.ok(updated);
     }
 
@@ -138,16 +164,21 @@ public class InternalCaseController {
     public ResponseEntity<CaseMessage> postMessage(
             @PathVariable String caseId,
             @RequestBody String text,
-            @RequestHeader("X-Tenant-ID") String tenantId,
-            @RequestHeader("X-Actor-Role") String actorRole,
-            @RequestHeader("X-Actor-ID") String actorId) {
+            AuthenticatedUser caller) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
+                SafeVoicePermission.SAFEVOICE_INVESTIGATOR);
+        // Sender label and audit actor both come from the verified session, not a header,
+        // so a reporter can trust which staff role replied.
+        String actorRole = caller.primarySafeVoiceRole(); // e.g. SAFEVOICE_COMPLIANCE_OFFICER
         CaseMessage message = caseMessageService.postMessage(
                 caseId,
                 text,
-                actorRole, // e.g. "Compliance Officer"
-                tenantId,
                 actorRole,
-                actorId
+                caller.tenantId(),
+                actorRole,
+                caller.userId()
         );
         return ResponseEntity.ok(message);
     }
@@ -162,26 +193,35 @@ public class InternalCaseController {
     @GetMapping("/{caseId}/messages")
     public ResponseEntity<List<CaseMessage>> getMessages(
             @PathVariable String caseId,
-            @RequestHeader("X-Tenant-ID") String tenantId) {
-        List<CaseMessage> messages = caseMessageService.getMessages(caseId, tenantId);
+            AuthenticatedUser caller) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
+                SafeVoicePermission.SAFEVOICE_INVESTIGATOR,
+                SafeVoicePermission.SAFEVOICE_HR_MANAGER,
+                SafeVoicePermission.SAFEVOICE_AUDITOR);
+        List<CaseMessage> messages = caseMessageService.getMessages(caseId, caller.tenantId());
         return ResponseEntity.ok(messages);
     }
 
     /**
      * Download attachment file securely from vault.
      */
-    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_INVESTIGATOR,
-    //                       SAFEVOICE_AUDITOR
-    // Why: downloading the raw evidence file (not just its metadata) is case work for the
-    // investigator/compliance officer and review/export for the auditor. HR managers only
-    // triage grievances and do not handle evidence, so they are excluded.
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_AUDITOR
+    // Why: this maps to the "Export" (Eksport) capability in the permission matrix — pulling the
+    // raw evidence bytes OUT of the vault, not just seeing that a file exists (the case view shows
+    // filenames/metadata to every role). The matrix grants Export only to the Administrator and
+    // the Auditor, so Compliance Officer, Investigator and HR Manager are blocked here.
     @GetMapping("/{caseId}/attachments/{attachmentId}")
     public ResponseEntity<byte[]> downloadAttachment(
             @PathVariable String caseId,
             @PathVariable String attachmentId,
-            @RequestHeader("X-Tenant-ID") String tenantId) {
+            AuthenticatedUser caller) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_AUDITOR);
         // Enforce tenant authorization and case existence
-        CaseReport report = caseReportService.getById(caseId, tenantId);
+        CaseReport report = caseReportService.getById(caseId, caller.tenantId());
 
         // Find the attachment metadata entry
         EvidenceAttachment attachment = report.getAttachments().stream()

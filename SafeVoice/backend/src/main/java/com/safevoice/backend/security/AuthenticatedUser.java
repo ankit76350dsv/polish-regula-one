@@ -42,6 +42,32 @@ public record AuthenticatedUser(
         permissions = (permissions != null) ? List.copyOf(permissions) : List.of();
     }
 
+    // Most-privileged first. Used to pick ONE role code to attribute a caller's action to
+    // (audit "actor role" and the reporter-facing thread sender label), matching the frontend's
+    // display priority so what the reporter sees stays the same.
+    private static final SafeVoicePermission[] ROLE_PRIORITY = {
+            SafeVoicePermission.SAFEVOICE_ADMIN,
+            SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
+            SafeVoicePermission.SAFEVOICE_AUDITOR,
+            SafeVoicePermission.SAFEVOICE_INVESTIGATOR,
+            SafeVoicePermission.SAFEVOICE_HR_MANAGER,
+    };
+
+    /**
+     * The single SafeVoice role code to attribute this caller's actions to (for audit logging
+     * and the thread sender label), derived from the verified session — never from a client
+     * header. Picks the most privileged SafeVoice permission the caller holds; falls back to the
+     * platform role when they hold none (e.g. a super admin acting cross-tenant).
+     */
+    public String primarySafeVoiceRole() {
+        for (SafeVoicePermission p : ROLE_PRIORITY) {
+            if (hasAnyPermission(p)) {
+                return p.name();
+            }
+        }
+        return role;
+    }
+
     /** True if the caller holds at least one of the given SafeVoice permissions. */
     public boolean hasAnyPermission(SafeVoicePermission... allowed) {
         for (SafeVoicePermission p : allowed) {
