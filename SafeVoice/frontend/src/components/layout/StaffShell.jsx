@@ -4,7 +4,7 @@
  * here, so it ONLY runs in the staff world — the public/anonymous pages never mount
  * it and therefore never touch a session (an anonymity requirement).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { AppNavbar } from "./AppNavbar";
@@ -22,8 +22,8 @@ import {
   selectCurrentUser,
   selectIsAuthenticated,
 } from "../../slices/authSlice";
-import { caseReceived } from "../../slices/reportsSlice";
-import { addToast } from "../../slices/uiSlice";
+import { caseActivity, caseReceived } from "../../slices/reportsSlice";
+import { addToast, selectActiveCaseId } from "../../slices/uiSlice";
 import { isStaffSection, toBrowserPath } from "../../utils/routing";
 
 const SSO_CALLBACK_PATH = "/auth/sso-callback";
@@ -38,6 +38,15 @@ export function StaffShell({ currentPath, navigate, children }) {
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // The case the user currently has open. Kept in a ref so the long-lived socket callback
+  // below always reads the LATEST value (a plain closure would capture a stale one) — used
+  // to suppress the "new reply" toast for the case being viewed.
+  const activeCaseId = useSelector(selectActiveCaseId);
+  const activeCaseRef = useRef(activeCaseId);
+  useEffect(() => {
+    activeCaseRef.current = activeCaseId;
+  }, [activeCaseId]);
 
   // Verify the SSO session. We only kick it off when it has not run yet ("idle")
   // so /api/auth/me is called at most once for the whole app — the landing page may
@@ -89,8 +98,44 @@ export function StaffShell({ currentPath, navigate, children }) {
         }),
       );
     });
+
+    // Tenant activity feed: any message in any case. Reorder that case to the top of the
+    // lists (most-recent first) and update its unread badge, everywhere and instantly. If
+    // the user is NOT currently viewing that case, also show a "new reply" notification
+    // (WhatsApp-style: no notification for the chat you already have open).
+    const unsubscribeActivity = socketService.subscribe(
+      `/topic/tenant.${tenantId}.activity`,
+      (frame) => {
+        let event;
+        try {
+          event = JSON.parse(frame.body);
+        } catch {
+          return;
+        }
+        if (!event?.caseId) return;
+        const isViewing = activeCaseRef.current === event.caseId;
+        dispatch(
+          caseActivity({
+            caseId: event.caseId,
+            // Only the reporter's messages add to the staff unread count, and not for the
+            // case you are actively reading.
+            incrementUnread: event.fromReporter && !isViewing,
+          }),
+        );
+        if (!isViewing) {
+          dispatch(
+            addToast({
+              type: "info",
+              message: t("cases.newReply", { ref: event.caseReference || event.caseId }),
+            }),
+          );
+        }
+      },
+    );
+
     return () => {
       unsubscribe();
+      unsubscribeActivity();
       socketService.disconnect();
     };
   }, [isAuthenticated, tenantId, dispatch, t]);

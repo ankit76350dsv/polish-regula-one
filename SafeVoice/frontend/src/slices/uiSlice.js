@@ -27,8 +27,19 @@ const uiSlice = createSlice({
   initialState: {
     theme: initialTheme(),
     toasts: [],
+    // The case the user is currently viewing (CaseDetails open, or the selected Inbox
+    // thread), or null. Used to suppress the "new reply" notification for that case — you
+    // are already looking at it, like WhatsApp not notifying you about the open chat.
+    activeCaseId: null,
   },
   reducers: {
+    // Mark which case the user is currently viewing (null = none).
+    setActiveCase(state, action) {
+      state.activeCaseId = action.payload;
+    },
+    clearActiveCase(state) {
+      state.activeCaseId = null;
+    },
     setTheme(state, action) {
       state.theme = action.payload === "dark" ? "dark" : "light";
       try {
@@ -62,9 +73,11 @@ const uiSlice = createSlice({
   },
 });
 
-export const { setTheme, toggleTheme, addToast, removeToast } = uiSlice.actions;
+export const { setTheme, toggleTheme, addToast, removeToast, setActiveCase, clearActiveCase } =
+  uiSlice.actions;
 
 export const selectTheme = (s) => s.ui.theme;
 export const selectToasts = (s) => s.ui.toasts;
+export const selectActiveCaseId = (s) => s.ui.activeCaseId;
 
 export default uiSlice.reducer;

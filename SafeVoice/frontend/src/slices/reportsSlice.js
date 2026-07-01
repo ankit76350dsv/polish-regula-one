@@ -112,6 +112,32 @@ const reportsSlice = createSlice({
         state.register.total += 1;
       }
     },
+    // A chat message arrived live over WebSocket for the reporter's currently tracked case.
+    // Append it unless already present (the reporter also receives their own broadcast, and
+    // the REST reply may have added it first).
+    trackedMessageReceived(state, action) {
+      const message = action.payload;
+      if (!state.tracked || !message?.id) return;
+      if (!state.tracked.messages.some((m) => m.id === message.id)) {
+        state.tracked.messages.push(message);
+      }
+    },
+    // A case had activity (a message) somewhere in the tenant. Move it to the TOP of both
+    // lists (most-recent-activity first, like a chat app), and — when the reporter wrote and
+    // the viewer is not already on that case — bump its unread badge. `incrementUnread` is
+    // decided by the caller (it knows which case is currently open).
+    caseActivity(state, action) {
+      const { caseId, incrementUnread } = action.payload;
+      const moveToTop = (arr) => {
+        const i = arr.findIndex((r) => r.id === caseId);
+        if (i === -1) return; // not in this loaded page → next fetch will order it correctly
+        const [row] = arr.splice(i, 1);
+        if (incrementUnread) row.unreadCount = (row.unreadCount || 0) + 1;
+        arr.unshift(row);
+      };
+      moveToTop(state.list);
+      moveToTop(state.register.items);
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -206,8 +232,11 @@ const reportsSlice = createSlice({
       })
       .addCase(sendTrackedMessage.fulfilled, (s, a) => {
         s.trackSending = false;
-        // Show the just-sent message in the thread immediately, without re-fetching.
-        if (s.tracked) s.tracked.messages.push(a.payload);
+        // Show the just-sent message immediately. Dedup in case the live WebSocket
+        // broadcast already added it.
+        if (s.tracked && !s.tracked.messages.some((m) => m.id === a.payload.id)) {
+          s.tracked.messages.push(a.payload);
+        }
       })
       .addCase(sendTrackedMessage.rejected, (s) => {
         s.trackSending = false;
@@ -215,7 +244,13 @@ const reportsSlice = createSlice({
   },
 });
 
-export const { clearSubmission, clearTracked, caseReceived } = reportsSlice.actions;
+export const {
+  clearSubmission,
+  clearTracked,
+  caseReceived,
+  trackedMessageReceived,
+  caseActivity,
+} = reportsSlice.actions;
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
 export const selectReports = (s) => s.reports.list;
