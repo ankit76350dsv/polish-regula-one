@@ -2,8 +2,9 @@ package com.safevoice.backend.websocket;
 
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.repository.CaseReportRepository;
+import com.safevoice.backend.security.AuthenticatedUser;
+import com.safevoice.backend.security.RegulaOneAuthClient;
 import com.safevoice.backend.service.report.utils.CaseReportUtils;
-import com.safevoice.backend.websocket.RegulaOneAuthClient.StaffIdentity;
 
 import lombok.RequiredArgsConstructor;
 
@@ -80,7 +81,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             throw new MessagingException("Not authenticated: no access key and no session cookie");
         }
 
-        StaffIdentity staff = regulaOneAuthClient.resolveByIdToken(token.toString())
+        AuthenticatedUser staff = regulaOneAuthClient.resolveByIdToken(token.toString())
                 .orElseThrow(() -> new MessagingException(
                         "Not authenticated: session is invalid, expired, or has no organisation"));
         return SafeVoicePrincipal.staff(staff.email(), staff.tenantId(), staff.permissions());
