@@ -35,6 +35,17 @@ const messagesSlice = createSlice({
     clearSelectedThread(state) {
       state.selectedThreadId = null;
     },
+    // A message arrived live over WebSocket for a case. Append it to that case's thread,
+    // unless it is already there (the sender also receives their own broadcast, and the
+    // REST reply may have added it first) — so messages never appear twice.
+    messageReceived(state, action) {
+      const { caseId, message } = action.payload;
+      if (!caseId || !message?.id) return;
+      const thread = state.byCase[caseId] || (state.byCase[caseId] = []);
+      if (!thread.some((m) => m.id === message.id)) {
+        thread.push(message);
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -55,7 +66,11 @@ const messagesSlice = createSlice({
       .addCase(sendMessage.fulfilled, (s, a) => {
         s.sending = false;
         const { caseId, message } = a.payload;
-        s.byCase[caseId] = [...(s.byCase[caseId] || []), message];
+        const thread = s.byCase[caseId] || (s.byCase[caseId] = []);
+        // Dedup: the live WebSocket broadcast may have already added this message.
+        if (!thread.some((m) => m.id === message.id)) {
+          thread.push(message);
+        }
       })
       .addCase(sendMessage.rejected, (s, a) => {
         s.sending = false;
@@ -64,7 +79,7 @@ const messagesSlice = createSlice({
   },
 });
 
-export const { selectThread, clearSelectedThread } = messagesSlice.actions;
+export const { selectThread, clearSelectedThread, messageReceived } = messagesSlice.actions;
 
 export const selectMessagesFor = (caseId) => (s) => s.messages.byCase[caseId] || [];
 export const selectMessagesStatus = (s) => s.messages.status;

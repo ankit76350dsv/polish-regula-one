@@ -24,11 +24,13 @@ import {
   selectUpdating,
   updateReport,
 } from "../../slices/reportsSlice";
-import { fetchMessages, selectMessagesFor, selectSending, selectThread, sendMessage } from "../../slices/messagesSlice";
+import { fetchMessages, messageReceived, selectMessagesFor, selectSending, selectThread, sendMessage } from "../../slices/messagesSlice";
 import { fetchUsers, selectUsers } from "../../slices/usersSlice";
-import { addToast } from "../../slices/uiSlice";
+import { addToast, setActiveCase, clearActiveCase } from "../../slices/uiSlice";
 import { selectCurrentUser } from "../../slices/authSlice";
 import { can } from "../../utils/permissions";
+import { socketService } from "../../services/socketService";
+import { normalizeMessage } from "../../services/caseNormalizer";
 
 export default function CaseDetailsPage({ caseId, navigate }) {
   const { t } = useTranslation();
@@ -53,6 +55,28 @@ export default function CaseDetailsPage({ caseId, navigate }) {
     dispatch(fetchMessages(caseId));
     if (users.length === 0) dispatch(fetchUsers());
   }, [caseId, dispatch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Live chat: while this case is open, listen on its channel and append any new message
+  // (reporter's or another staffer's) instantly. The staff socket is already connected by
+  // StaffShell; the backend only lets us listen to cases in our own tenant.
+  //
+  // We also mark this as the "active" case so the app suppresses the "new reply" toast for
+  // it (we are already looking at it) — cleared when we leave the page.
+  useEffect(() => {
+    dispatch(setActiveCase(caseId));
+    const unsubscribe = socketService.subscribe(`/topic/case.${caseId}`, (frame) => {
+      try {
+        const message = normalizeMessage(JSON.parse(frame.body));
+        dispatch(messageReceived({ caseId, message }));
+      } catch {
+        /* ignore malformed frame */
+      }
+    });
+    return () => {
+      unsubscribe();
+      dispatch(clearActiveCase());
+    };
+  }, [caseId, dispatch]);
 
   if (status === "loading" || !report) {
     if (status === "failed") return <ErrorState message={t("case.loadError")} onRetry={() => dispatch(fetchReport(caseId))} />;

@@ -7,12 +7,15 @@ import { fetchReports, selectReports, selectReportsStatus } from "../../slices/r
 import {
   clearSelectedThread,
   fetchMessages,
+  messageReceived,
   selectMessagesFor,
   selectSelectedThreadId,
   selectSending,
   sendMessage,
 } from "../../slices/messagesSlice";
-import { addToast } from "../../slices/uiSlice";
+import { addToast, setActiveCase, clearActiveCase } from "../../slices/uiSlice";
+import { socketService } from "../../services/socketService";
+import { normalizeMessage } from "../../services/caseNormalizer";
 
 export default function CentralEncryptedInboxPage({ navigate }) {
   const { t } = useTranslation();
@@ -50,6 +53,26 @@ export default function CentralEncryptedInboxPage({ navigate }) {
     if (activeId) dispatch(fetchMessages(activeId));
   }, [activeId, dispatch]);
 
+  // Live chat for the open thread: subscribe to the active case's channel and append new
+  // messages instantly. Re-subscribes whenever the selected thread changes. We also mark
+  // the open thread as the "active" case so its "new reply" toast is suppressed.
+  useEffect(() => {
+    if (!activeId) return undefined;
+    dispatch(setActiveCase(activeId));
+    const unsubscribe = socketService.subscribe(`/topic/case.${activeId}`, (frame) => {
+      try {
+        const message = normalizeMessage(JSON.parse(frame.body));
+        dispatch(messageReceived({ caseId: activeId, message }));
+      } catch {
+        /* ignore malformed frame */
+      }
+    });
+    return () => {
+      unsubscribe();
+      dispatch(clearActiveCase());
+    };
+  }, [activeId, dispatch]);
+
   if (status === "loading" && reports.length === 0) return <PageSpinner label={t("common.loading")} />;
 
   async function send(e) {
@@ -68,18 +91,18 @@ export default function CentralEncryptedInboxPage({ navigate }) {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto leading-relaxed">
+    <div className="w-full min-w-0 space-y-5 leading-relaxed">
       <div className="border-b border-slate-200 pb-4">
         <h1 className="text-lg font-bold text-slate-900 tracking-tight">{t("inbox.title")}</h1>
         <p className="text-xs text-slate-500 mt-1">{t("inbox.subtitle")}</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[22rem_1fr] gap-6">
-        <SecureCard title={t("inbox.threadsTitle")} subtitle={t("inbox.subtitle")}>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:grid-cols-[21rem_minmax(0,1fr)]">
+        <SecureCard title={t("inbox.threadsTitle")} subtitle={t("inbox.subtitle")} className="min-w-0 self-start">
           {threads.length === 0 ? (
             <EmptyState title={t("inbox.empty")} />
           ) : (
-            <div className="space-y-2">
+            <div className="max-h-[calc(100vh-17rem)] space-y-2 overflow-y-auto pr-1">
               {threads.map((report) => (
                 <button
                   key={report.id}
@@ -90,7 +113,7 @@ export default function CentralEncryptedInboxPage({ navigate }) {
                     report.id === activeId ? "border-cyan-200 bg-cyan-50" : "border-slate-200 bg-slate-50 hover:bg-white"
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3 min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-xs font-bold text-slate-900 truncate">{report.caseReference || report.id}</span>
                       {report.unreadCount > 0 && (
@@ -115,6 +138,7 @@ export default function CentralEncryptedInboxPage({ navigate }) {
         {activeId ? (
           <SecureCard
             isEncrypted
+            className="min-w-0 self-start"
             title={t("inbox.thread", { id: activeRef })}
             subtitle={t("inbox.twoWay")}
             headerAction={
@@ -123,26 +147,26 @@ export default function CentralEncryptedInboxPage({ navigate }) {
               </AppButton>
             }
           >
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4">
               <div className="flex items-start gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
                 <Lock className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
                 {t("inbox.twoWay")}
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 min-h-[24rem] max-h-[32rem] overflow-y-auto">
+              <div className="min-h-[24rem] max-h-[calc(100vh-18rem)] overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3 sm:p-4">
                 {messages.length === 0 ? (
                   <p className="text-xs text-slate-500 text-center py-6">{t("inbox.empty")}</p>
                 ) : (
                   messages.map((message) => {
                     const isReporter = message.sender === "Anonymous Whistleblower";
                     return (
-                      <div key={message.id} className={`flex ${isReporter ? "justify-start" : "justify-end"} mb-4`}>
-                        <div className={`max-w-[80%] rounded-lg p-3 text-xs shadow-sm border ${isReporter ? "bg-white text-slate-800 border-slate-200" : "bg-cyan-600 text-white border-cyan-500"}`}>
-                          <div className="flex items-center justify-between gap-5 mb-1.5 border-b border-white/20 pb-1">
-                            <span className="font-semibold">{message.sender}</span>
-                            <span className="text-[9px] font-mono opacity-80">{message.timestamp}</span>
+                      <div key={message.id} className={`flex min-w-0 ${isReporter ? "justify-start" : "justify-end"} mb-4`}>
+                        <div className={`max-w-[min(86%,44rem)] min-w-0 rounded-lg p-3 text-xs shadow-sm border ${isReporter ? "bg-white text-slate-800 border-slate-200" : "bg-cyan-600 text-white border-cyan-500"}`}>
+                          <div className="mb-1.5 flex min-w-0 flex-wrap items-center justify-between gap-x-5 gap-y-1 border-b border-white/20 pb-1">
+                            <span className="min-w-0 font-semibold break-words">{message.sender}</span>
+                            <span className="shrink-0 text-[9px] font-mono opacity-80">{message.timestamp}</span>
                           </div>
-                          <p className="whitespace-pre-wrap">{message.text}</p>
+                          <p className="whitespace-pre-wrap break-words">{message.text}</p>
                         </div>
                       </div>
                     );
@@ -150,14 +174,14 @@ export default function CentralEncryptedInboxPage({ navigate }) {
                 )}
               </div>
 
-              <form className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 border-t border-slate-200 pt-4" onSubmit={send}>
+              <form className="grid min-w-0 grid-cols-1 gap-3 border-t border-slate-200 pt-4 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={send}>
                 <label htmlFor="inbox-msg" className="sr-only">{t("inbox.messagePlaceholder")}</label>
                 <input
                   id="inbox-msg"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder={t("inbox.messagePlaceholder")}
-                  className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  className="min-w-0 rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
                 />
                 <AppButton type="submit" variant="primary" disabled={sending || !draft.trim()} icon={sending ? null : <Send className="w-4 h-4" />}>
                   {sending ? <Spinner size={16} /> : t("common.send")}

@@ -9,10 +9,12 @@ import {
   selectTrackSending,
   selectTrackStatus,
   sendTrackedMessage,
+  trackedMessageReceived,
   trackReport,
 } from "../../slices/reportsSlice";
 import { addToast } from "../../slices/uiSlice";
 import { socketService } from "../../services/socketService";
+import { normalizeMessage } from "../../services/caseNormalizer";
 
 // Anonymous status lookup using ONLY the access key, then a secure two-way thread.
 export default function TrackCasePage() {
@@ -29,13 +31,25 @@ export default function TrackCasePage() {
 
   const looking = trackStatus === "loading";
 
-  // Once a case is found, open the reporter's realtime connection, authenticated by the
-  // access key and pinned to this one case. Phase 0: ping to confirm the pipeline; the
-  // live thread/typing/presence subscriptions come in later phases. Closes on leave.
+  // Once a case is found, open the reporter's realtime connection (authenticated by the
+  // access key and pinned to this one case) and subscribe to its channel, so any reply from
+  // staff appears instantly. Closes on leave.
   useEffect(() => {
-    if (!tracked?.report || !accessKey.trim()) return undefined;
+    const caseId = tracked?.report?.id;
+    if (!caseId || !accessKey.trim()) return undefined;
     socketService.connectReporter(accessKey.trim());
-    return () => socketService.disconnect();
+    const unsubscribe = socketService.subscribe(`/topic/case.${caseId}`, (frame) => {
+      try {
+        const message = normalizeMessage(JSON.parse(frame.body));
+        dispatch(trackedMessageReceived(message));
+      } catch {
+        /* ignore malformed frame */
+      }
+    });
+    return () => {
+      unsubscribe();
+      socketService.disconnect();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracked?.report?.id]);
 
