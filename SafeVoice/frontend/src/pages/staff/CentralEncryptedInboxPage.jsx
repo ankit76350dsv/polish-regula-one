@@ -29,9 +29,10 @@ export default function CentralEncryptedInboxPage({ navigate }) {
   // by their disclosure mode instead.
   const threads = reports.filter((r) => r.disclosureMode === "Anonymous");
   // If we arrived here from a case's detail page ("Open in inbox"), start on that thread.
+  // Otherwise NO thread is open until the user clicks one — we do not auto-open the first.
   const preselectId = useSelector(selectSelectedThreadId);
   const [selectedId, setSelectedId] = useState(preselectId);
-  const activeId = selectedId || threads[0]?.id || null;
+  const activeId = selectedId || null;
   // The readable reference (e.g. "SV/2026/0629/1408") for the open thread, used in the
   // header instead of the raw database id. Falls back to the id if not loaded yet.
   const activeThread = threads.find((r) => r.id === activeId);
