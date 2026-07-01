@@ -42,7 +42,11 @@ public class SecurityConfig {
                                 "/api/safevoice/reports",
                                 "/api/safevoice/reports/track",
                                 "/api/safevoice/reports/*/messages",
-                                "/api/safevoice/reports/*/attachments"
+                                "/api/safevoice/reports/*/attachments",
+                                // Reporter downloads a file from their OWN thread; ownership is
+                                // proven by the access key in the request body, not a login. This
+                                // literal path is separate from the "*/attachments" pattern above.
+                                "/api/safevoice/reports/attachments/download"
                         ).permitAll()
                         .anyRequest().authenticated());
         return http.build();
