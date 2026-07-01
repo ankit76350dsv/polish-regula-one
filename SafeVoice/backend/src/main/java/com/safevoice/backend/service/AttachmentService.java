@@ -156,14 +156,21 @@ public class AttachmentService {
 
             String sizeLabel = getHumanReadableSize(fileBytes.length);
 
+            // ANONYMITY: we never persist or show the reporter's original filename (it could
+            // reveal their identity, e.g. "jan_kowalski_payslip.pdf"). The stored display name is
+            // a neutral "Evidence (EXT)" label; the raw name is used ONLY above to validate the
+            // extension, then discarded. This matches the report-submission behaviour so both the
+            // intake files and the case-thread files are anonymised the same way.
+            String anonymisedName = "Evidence (" + extension.name() + ")";
+
             return new EvidenceAttachment(
                     new org.bson.types.ObjectId().toHexString(),
-                    originalFilename,
+                    anonymisedName,
                     extension,
                     sizeLabel,
                     EvidenceStatus.METADATA_STRIPPED,
-                    true, // metadataStripped
-                    true, // originalNameStored
+                    true,  // metadataStripped
+                    false, // originalNameStored — the original name is intentionally NOT kept
                     Instant.now(),
                     storageRef, // the S3 object key
                     checksum
@@ -193,11 +200,17 @@ public class AttachmentService {
             throw new IllegalArgumentException(
                     "Too many files. You can attach at most " + MAX_FILES_PER_MESSAGE + " files.");
         }
+        int index = 0;
         for (MultipartFile file : files) {
             if (file == null || file.isEmpty()) {
                 continue; // skip empty parts (e.g. an empty "files" field with no real file)
             }
-            stored.add(upload(file));
+            index++;
+            EvidenceAttachment att = upload(file);
+            // Number the anonymised label so several files on one message are distinguishable,
+            // e.g. "Evidence 1 (PDF)", "Evidence 2 (JPG)" — still no original filename.
+            att.setDisplayName("Evidence " + index + " (" + att.getExtension().name() + ")");
+            stored.add(att);
         }
         return stored;
     }
