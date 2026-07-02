@@ -158,6 +158,7 @@ public class PublicCaseController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + attachment.getDisplayName() + "\"")
+                .header("X-Content-Type-Options", "nosniff")
                 .body(fileBytes);
     }
 

@@ -7,13 +7,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Resolves the authenticated caller by delegating to the RegulaOne backend.
@@ -36,9 +40,28 @@ public class RegulaOneAuthClient {
 
     private final RestClient restClient;
 
-    public RegulaOneAuthClient(@Value("${regulaone.api.base-url}") String baseUrl) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
-        log.info("[RegulaOneAuthClient]: auth authority base URL: {}", baseUrl);
+    // Short-TTL cache of resolved sessions, keyed by idToken. Every REST request AND the new
+    // security filter resolve the caller; without this each would trigger a /api/auth/me round
+    // trip. Trade-off: a token revoked at RegulaOne is still honoured here for up to the TTL
+    // (kept short — default 30s — to bound that window).
+    private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
+    private final long cacheTtlMs;
+    private static final int MAX_CACHE_ENTRIES = 10_000;
+
+    public RegulaOneAuthClient(
+            @Value("${regulaone.api.base-url}") String baseUrl,
+            @Value("${regulaone.api.connect-timeout-ms:3000}") int connectTimeoutMs,
+            @Value("${regulaone.api.read-timeout-ms:5000}") int readTimeoutMs,
+            @Value("${regulaone.api.me-cache-ttl-ms:30000}") long cacheTtlMs) {
+        // Explicit connect/read timeouts so a slow or hung RegulaOne cannot pin request threads
+        // indefinitely (availability coupling). Without these the client would wait forever.
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
+        this.restClient = RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
+        this.cacheTtlMs = cacheTtlMs;
+        log.info("[RegulaOneAuthClient]: auth authority base URL: {} (connect {}ms, read {}ms, /me cache {}ms)",
+                baseUrl, connectTimeoutMs, readTimeoutMs, cacheTtlMs);
     }
 
     /**
@@ -51,14 +74,7 @@ public class RegulaOneAuthClient {
         if (idToken == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing authentication session");
         }
-        MeData d = fetchMe(idToken);
-
-        boolean isSuperAdmin = "ROLE_SUPER_ADMIN".equals(d.role());
-        if (!isSuperAdmin && (d.tenantId() == null || d.tenantId().isBlank())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Your account is not associated with an organisation");
-        }
-        return toUser(d);
+        return resolveUser(idToken);
     }
 
     /**
@@ -71,16 +87,47 @@ public class RegulaOneAuthClient {
             return Optional.empty();
         }
         try {
-            MeData d = fetchMe(idToken);
-            if (d.tenantId() == null || d.tenantId().isBlank()) {
-                return Optional.empty(); // socket staff must belong to a tenant
+            AuthenticatedUser user = resolveUser(idToken);
+            // A socket connection must belong to a tenant (super admins have no socket use case).
+            if (user.tenantId() == null || user.tenantId().isBlank()) {
+                return Optional.empty();
             }
-            return Optional.of(toUser(d));
+            return Optional.of(user);
         } catch (ResponseStatusException e) {
             log.warn("[resolveByIdToken]: /api/auth/me did not authenticate the socket: {}",
                     e.getReason());
             return Optional.empty();
         }
+    }
+
+    /**
+     * Resolve (and cache) the caller for a given idToken. Returns a fully-validated
+     * {@link AuthenticatedUser} or throws {@link ResponseStatusException} — 401 (invalid session),
+     * 403 (no organisation), 503 (RegulaOne unreachable). Successful results are cached for the
+     * configured TTL; failures are never cached.
+     */
+    private AuthenticatedUser resolveUser(String idToken) {
+        long now = System.currentTimeMillis();
+        CacheEntry cached = cache.get(idToken);
+        if (cached != null && cached.expiresAtMs() > now) {
+            return cached.user();
+        }
+
+        MeData d = fetchMe(idToken); // throws 401 / 503
+
+        boolean isSuperAdmin = "ROLE_SUPER_ADMIN".equals(d.role());
+        if (!isSuperAdmin && (d.tenantId() == null || d.tenantId().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Your account is not associated with an organisation");
+        }
+
+        AuthenticatedUser user = toUser(d);
+        // Best-effort bound on the cache: drop expired entries once it grows large.
+        if (cache.size() > MAX_CACHE_ENTRIES) {
+            cache.entrySet().removeIf(e -> e.getValue().expiresAtMs() <= now);
+        }
+        cache.put(idToken, new CacheEntry(user, now + cacheTtlMs));
+        return user;
     }
 
     // Shared /api/auth/me call. Throws 401 for a rejected/invalid session, 503 when RegulaOne
@@ -128,6 +175,9 @@ public class RegulaOneAuthClient {
         }
         return null;
     }
+
+    // A cached, already-validated session with its expiry time (epoch millis).
+    private record CacheEntry(AuthenticatedUser user, long expiresAtMs) {}
 
     // Minimal projections of RegulaOne's AppResponse<UserResponse> envelope; ignore the rest.
     @JsonIgnoreProperties(ignoreUnknown = true)

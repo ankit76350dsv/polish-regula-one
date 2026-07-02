@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
@@ -38,11 +39,19 @@ public class AuthenticatedUserArgumentResolver implements HandlerMethodArgumentR
                                   ModelAndViewContainer mavContainer,
                                   NativeWebRequest webRequest,
                                   WebDataBinderFactory binderFactory) {
+        // The SessionAuthenticationFilter has already resolved and validated the caller for
+        // /api/v1/** and put them in the security context, so read them straight from there —
+        // this avoids a second /api/auth/me round trip per request.
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUser user) {
+            return user;
+        }
+        // Fallback (e.g. a caller outside the filtered path): resolve directly. Delegates to
+        // RegulaOne /api/auth/me (forwards the idToken cookie); result is cached in the client.
         HttpServletRequest request = webRequest.getNativeRequest(HttpServletRequest.class);
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "No request context available");
         }
-        // Delegates to RegulaOne /api/auth/me (forwards the idToken cookie).
         return authClient.resolve(request);
     }
 }

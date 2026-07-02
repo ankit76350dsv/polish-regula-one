@@ -13,7 +13,10 @@ const MIME_BY_EXTENSION = {
   PDF: "application/pdf",
   PNG: "image/png",
   JPG: "image/jpeg",
-  XML: "application/xml",
+  // SECURITY: XML is previewed as PLAIN TEXT, never application/xml. An evidence file is
+  // untrusted; served as application/xml the browser could parse it as XHTML/HTML and run
+  // embedded scripts. As text/plain it is shown verbatim (and the iframe is sandboxed too).
+  XML: "text/plain",
   DOCX: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
@@ -85,7 +88,18 @@ export function AttachmentPreviewModal({ open, attachment, fetchBlob, onClose })
           ) : state.url && isImage(ext) ? (
             <img src={state.url} alt={title} className="max-h-[70vh] max-w-full object-contain" />
           ) : state.url && (ext === "PDF" || ext === "XML") ? (
-            <iframe src={state.url} title={title} className="w-full h-[70vh] bg-white" />
+            // SECURITY: sandboxed WITHOUT allow-same-origin, so even if a malicious file runs
+            // script, it executes in an opaque origin and cannot touch the app's session,
+            // cookies, DOM or make credentialed same-origin requests. allow-scripts is kept only
+            // so the browser's PDF viewer (e.g. Firefox pdf.js) works; combining it with
+            // allow-same-origin would let the frame escape the sandbox, so we never do that.
+            <iframe
+              src={state.url}
+              title={title}
+              sandbox="allow-scripts"
+              referrerPolicy="no-referrer"
+              className="w-full h-[70vh] bg-white"
+            />
           ) : (
             <p className="text-xs text-slate-500 p-6 text-center">{t("evidence.noPreview")}</p>
           )}
