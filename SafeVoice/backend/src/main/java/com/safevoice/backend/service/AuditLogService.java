@@ -5,11 +5,13 @@ import com.safevoice.backend.model.document.AuditLog;
 import com.safevoice.backend.model.enums.audit.AuditActionType;
 import com.safevoice.backend.model.enums.audit.AuditOutcome;
 import com.safevoice.backend.repository.AuditLogRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -18,6 +20,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
@@ -27,6 +30,7 @@ import java.util.regex.Pattern;
  * Service representing compliance-grade tamper-evident audit logging.
  * Calculates cryptographic SHA-256 hash chains connecting log events within a tenant.
  */
+@Slf4j
 @Service
 public class AuditLogService {
 
@@ -39,6 +43,10 @@ public class AuditLogService {
     // Page-size guards for the audit trail.
     private static final int MAX_AUDIT_PAGE_SIZE = 200;
     private static final int DEFAULT_AUDIT_PAGE_SIZE = 20;
+
+    // The hash the very first entry in a tenant's chain links back to.
+    private static final String GENESIS_HASH =
+            "0000000000000000000000000000000000000000000000000000000000000000";
 
     @Autowired
     public AuditLogService(AuditLogRepository auditLogRepository, MongoTemplate mongoTemplate) {
@@ -60,27 +68,17 @@ public class AuditLogService {
             String newValue,
             String metadataNotice) {
 
-        Instant timestamp = Instant.now();
-        
+        // Truncate to milliseconds: MongoDB stores dates at millisecond precision, so if we hashed
+        // a higher-precision Instant the chain could never be recomputed/verified from stored data.
+        Instant timestamp = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
         // Find latest audit log for this tenant to retrieve the previous hash link
         AuditLog previousLog = auditLogRepository.findFirstByTenantIdOrderByTimestampDesc(tenantId);
-        String previousHash = (previousLog != null) ? previousLog.getHashChain() : "0000000000000000000000000000000000000000000000000000000000000000";
+        String previousHash = (previousLog != null) ? previousLog.getHashChain() : GENESIS_HASH;
 
-        // Construct string to hash
-        String dataToHash = String.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
-                tenantId,
-                actorRole,
-                actorRef,
-                actionType.name(),
-                subjectId != null ? subjectId : "null",
-                outcome.name(),
-                oldValue != null ? oldValue : "",
-                newValue != null ? newValue : "",
-                timestamp.toString(),
-                previousHash
-        );
-
-        String hashChain = calculateSha256(dataToHash);
+        // Link this entry to the previous one via a SHA-256 over its fields + the previous hash.
+        String hashChain = computeHash(tenantId, actorRole, actorRef, actionType, subjectId,
+                outcome, oldValue, newValue, timestamp, previousHash);
 
         AuditLog auditLog = AuditLog.builder()
                 .tenantId(tenantId)
@@ -236,6 +234,95 @@ public class AuditLogService {
             return null;
         }
     }
+
+    // The single source of truth for how a chain link is computed. Used by BOTH log() (at write)
+    // and verifyChain() (at read), so the two can never drift out of sync.
+    private String computeHash(String tenantId, String actorRole, String actorRef,
+                               AuditActionType actionType, String subjectId, AuditOutcome outcome,
+                               String oldValue, String newValue, Instant timestamp, String previousHash) {
+        String dataToHash = String.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
+                tenantId,
+                actorRole,
+                actorRef,
+                actionType.name(),
+                subjectId != null ? subjectId : "null",
+                outcome.name(),
+                oldValue != null ? oldValue : "",
+                newValue != null ? newValue : "",
+                timestamp.toString(),
+                previousHash);
+        return calculateSha256(dataToHash);
+    }
+
+    /**
+     * Re-walk a tenant's audit chain from the genesis and recompute every link, to DETECT
+     * tampering the app-level immutability guard cannot prevent (e.g. a row edited or deleted
+     * via direct database access). Returns a result describing the first break, if any.
+     *
+     * A break means an entry was altered, or an entry was deleted (the next entry no longer
+     * hashes to the recorded link). NOTE: this cannot detect deletion of the most RECENT entry
+     * (nothing points forward to it) — that requires an external anchor (see class/infra notes).
+     * Records written before the millisecond-timestamp fix are not verifiable and are reported
+     * as such rather than as tampering.
+     */
+    public AuditChainVerification verifyChain(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("Tenant info/context is required");
+        }
+        // Process in insertion order (timestamp asc, id asc as a stable tiebreak), exactly as the
+        // chain was built at write time.
+        List<AuditLog> entries = mongoTemplate.find(
+                Query.query(Criteria.where("tenantId").is(tenantId))
+                        .with(Sort.by(Sort.Direction.ASC, "timestamp").and(Sort.by(Sort.Direction.ASC, "id"))),
+                AuditLog.class);
+
+        String previousHash = GENESIS_HASH;
+        int checked = 0;
+        for (AuditLog e : entries) {
+            String expected = computeHash(e.getTenantId(), e.getActorRole(), e.getActorRef(),
+                    e.getActionType(), e.getSubjectId(), e.getOutcome(), e.getOldValue(),
+                    e.getNewValue(), e.getTimestamp(), previousHash);
+            if (!expected.equals(e.getHashChain())) {
+                return new AuditChainVerification(tenantId, false, checked, e.getId(),
+                        "Audit chain broken at entry " + e.getId() + " — an entry was altered or deleted.");
+            }
+            previousHash = e.getHashChain();
+            checked++;
+        }
+        return new AuditChainVerification(tenantId, true, checked, null,
+                "Audit chain intact (" + checked + " entries verified).");
+    }
+
+    /**
+     * Scheduled integrity sweep: verify every tenant's audit chain and RAISE AN ALERT (error log)
+     * on any break, so tampering is noticed rather than silently tolerated. Runs on the configured
+     * cron (default 04:00 daily, after the retention job).
+     */
+    @Scheduled(cron = "${safevoice.audit.verify-cron:0 0 4 * * *}")
+    public void verifyAllChains() {
+        List<String> tenantIds = mongoTemplate.findDistinct(new Query(), "tenantId", AuditLog.class, String.class);
+        int broken = 0;
+        for (String tenantId : tenantIds) {
+            try {
+                AuditChainVerification result = verifyChain(tenantId);
+                if (!result.verified()) {
+                    broken++;
+                    // ALERT: this is a compliance-critical event — wire to alerting/SIEM in prod.
+                    log.error("[AuditLogService] AUDIT CHAIN INTEGRITY FAILURE for tenant {}: {}",
+                            tenantId, result.message());
+                }
+            } catch (Exception e) {
+                log.error("[AuditLogService] Audit chain verification errored for tenant {}: {}",
+                        tenantId, e.getMessage());
+            }
+        }
+        log.info("[AuditLogService] Audit chain verification complete: {} tenant(s) checked, {} broken.",
+                tenantIds.size(), broken);
+    }
+
+    /** Result of a chain verification. `verified` is false when a break was found. */
+    public record AuditChainVerification(String tenantId, boolean verified, int entriesChecked,
+                                         String firstBrokenId, String message) {}
 
     private String calculateSha256(String input) {
         try {

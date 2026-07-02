@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clock, FileText, Lock, Scale } from "lucide-react";
-import { AppTable, PageSpinner, SecureCard } from "../../components/ui";
-import { fetchSettings, selectComplianceReview, selectSettingsStatus } from "../../slices/settingsSlice";
+import { AppTable, SecureCard } from "../../components/ui";
 
 const TABS = [
   { key: "security", icon: Lock },
@@ -17,14 +15,8 @@ const RETENTION_ITEMS = ["default", "irrelevant", "hold", "destruction"];
 
 export default function ComplianceSettingsPage() {
   const { t } = useTranslation();
-  const dispatch = useDispatch();
-  const review = useSelector(selectComplianceReview);
-  const status = useSelector(selectSettingsStatus);
+  const review = [];
   const [tab, setTab] = useState("security");
-
-  useEffect(() => {
-    if (status === "idle") dispatch(fetchSettings());
-  }, [status, dispatch]);
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto leading-relaxed">
@@ -102,23 +94,19 @@ export default function ComplianceSettingsPage() {
 
           {tab === "review" && (
             <SecureCard title={t("settings.reviewTitle")}>
-              {status === "loading" ? (
-                <PageSpinner label={t("common.loading")} />
-              ) : (
-                <AppTable headers={[t("settings.review.colArea"), t("settings.review.colFeature"), t("settings.review.colDecision"), t("settings.review.colJustification"), t("settings.review.colRisk")]}>
-                  {review.map((item) => (
-                    <tr key={`${item.area}-${item.decision}`} className="border-b border-slate-200 hover:bg-slate-50">
-                      <td className="px-4 py-3 text-xs font-bold text-slate-800">{item.area}</td>
-                      <td className="px-4 py-3 text-xs text-slate-600">{item.feature}</td>
-                      <td className="px-4 py-3 text-xs">
-                        <span className="bg-cyan-50 border border-cyan-200 rounded px-2 py-1 text-cyan-700 font-mono">{item.decision}</span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-500">{item.justification}</td>
-                      <td className="px-4 py-3 text-xs text-amber-800 font-semibold">{item.risk}</td>
-                    </tr>
-                  ))}
-                </AppTable>
-              )}
+              <AppTable headers={[t("settings.review.colArea"), t("settings.review.colFeature"), t("settings.review.colDecision"), t("settings.review.colJustification"), t("settings.review.colRisk")]}>
+                {review.map((item) => (
+                  <tr key={`${item.area}-${item.decision}`} className="border-b border-slate-200 hover:bg-slate-50">
+                    <td className="px-4 py-3 text-xs font-bold text-slate-800">{item.area}</td>
+                    <td className="px-4 py-3 text-xs text-slate-600">{item.feature}</td>
+                    <td className="px-4 py-3 text-xs">
+                      <span className="bg-cyan-50 border border-cyan-200 rounded px-2 py-1 text-cyan-700 font-mono">{item.decision}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{item.justification}</td>
+                    <td className="px-4 py-3 text-xs text-amber-800 font-semibold">{item.risk}</td>
+                  </tr>
+                ))}
+              </AppTable>
             </SecureCard>
           )}
         </div>

@@ -11,6 +11,7 @@ import {
   selectAuthError,
   selectCurrentUser,
   selectSsoLoop,
+  ssoLoopCleared,
 } from "../../slices/authSlice";
 
 // Guard wrapped around the STAFF area only. In priority order: loading → error →
@@ -62,7 +63,7 @@ export default function AuthGate({ children }) {
 
   // 3. Not signed in → central login flow.
   if (status !== "authenticated" || ssoLoop) {
-    return <Login />;
+    return <Login looped={ssoLoop} onResetLoop={() => dispatch(ssoLoopCleared())} />;
   }
 
   // 4. Signed in but not allowed into SafeVoice.

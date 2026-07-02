@@ -134,6 +134,10 @@ const authSlice = createSlice({
     ssoLoopDetected(state) {
       state.ssoLoop = true;
     },
+    // Lets the user deliberately clear the guard from the stable login screen.
+    ssoLoopCleared(state) {
+      state.ssoLoop = false;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -181,7 +185,7 @@ const authSlice = createSlice({
   },
 });
 
-export const { ssoLoopDetected } = authSlice.actions;
+export const { ssoLoopDetected, ssoLoopCleared } = authSlice.actions;
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
 export const selectAuthStatus = (s) => s.auth.status;

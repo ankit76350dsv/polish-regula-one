@@ -65,4 +65,21 @@ public class InternalAuditController {
                 caller.tenantId(), search, actionType, outcome, subjectId, from, to, page, size);
         return ResponseEntity.ok(logs);
     }
+
+    /**
+     * Verify the integrity of this tenant's audit chain on demand: re-walks the SHA-256 hash
+     * chain and reports whether any entry was altered or deleted. Lets an auditor/admin confirm
+     * the trail is intact (a scheduled job also runs this and alerts on breaks).
+     */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_AUDITOR
+    // Why: verifying the compliance trail's integrity is an oversight action, restricted to the
+    // same audit-access roles that may read the trail.
+    @GetMapping("/verify")
+    public ResponseEntity<AuditLogService.AuditChainVerification> verify(AuthenticatedUser caller) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
+                SafeVoicePermission.SAFEVOICE_AUDITOR);
+        return ResponseEntity.ok(auditLogService.verifyChain(caller.tenantId()));
+    }
 }

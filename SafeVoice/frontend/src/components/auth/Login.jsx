@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Shield } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { LogIn, Shield } from "lucide-react";
 import {
   SSO_CALLBACK_URL,
   registerSsoRedirect,
@@ -9,25 +10,24 @@ import {
 
 // SIMPLE EXPLANATION:
 // SafeVoice has no login form of its own. When a staff member opens a protected page
-// without a valid session, this screen sends the browser to the central RegulaOne login
-// page, which signs them in and sends them back here.
+// without a valid session, this screen sends them to the central RegulaOne login page,
+// which signs them in and sends them back here.
 //
 // LOOP PROTECTION (why this exists):
 // If the session cookie is not valid for the address being used (common right after a
 // machine's IP changes — the old cookie was set for the old host), the login keeps bouncing
-// us back and failing. To the user that looks like the page "keeps reloading". The shared
-// redirect counter (registerSsoRedirect) stops us after a few tries and shows the reason.
-export default function Login() {
-  const [looped, setLooped] = useState(false);
+// us back and failing. To the user that looks like the page "keeps reloading". We never
+// auto-redirect on render; the redirect only starts after a deliberate button click.
+export default function Login({ looped: detectedLoop = false, onResetLoop = () => {} }) {
+  const { t } = useTranslation();
+  const [looped, setLooped] = useState(detectedLoop);
+  const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
-    // registerSsoRedirect() returns false once we've redirected too many times in 30s.
-    if (!registerSsoRedirect()) {
-      setLooped(true);
-      return;
-    }
+    if (detectedLoop) setLooped(true);
+  }, [detectedLoop]);
 
-    // Normal path: go to the central login, asking it to send us back here afterwards.
+  const buildLoginUrl = () => {
     const currentPath = window.location.pathname + window.location.search;
     const isGeneric =
       currentPath === "/" || currentPath === "/login" || currentPath === "/auth/sso-callback";
@@ -35,14 +35,26 @@ export default function Login() {
       ? SSO_CALLBACK_URL
       : `${SSO_CALLBACK_URL}?returnPath=${encodeURIComponent(currentPath)}`;
 
-    const returnTo = encodeURIComponent(callbackUrl);
-    window.location.href = `${CENTRAL_LOGIN_URL}?redirect_uri=${returnTo}`;
-  }, []);
+    return `${CENTRAL_LOGIN_URL}?redirect_uri=${encodeURIComponent(callbackUrl)}`;
+  };
+
+  const startSignIn = () => {
+    // registerSsoRedirect() returns false once we've redirected too many times in 30s.
+    if (!registerSsoRedirect()) {
+      setLooped(true);
+      return;
+    }
+
+    setRedirecting(true);
+    window.location.assign(buildLoginUrl());
+  };
 
   // Let the user clear the guard and try the whole flow again.
   const retry = () => {
     clearSsoRedirectGuard();
-    window.location.reload();
+    onResetLoop();
+    setLooped(false);
+    setRedirecting(false);
   };
 
   // Loop detected — explain instead of reloading forever.
@@ -56,18 +68,14 @@ export default function Login() {
               SafeVoice
             </span>
           </div>
-          <h1 className="text-base font-bold text-slate-800">Sign-in could not complete</h1>
+          <h1 className="text-base font-bold text-slate-800">{t("auth.loopTitle")}</h1>
           <p className="text-xs text-slate-600 leading-relaxed">
-            We kept getting sent back to the login page. This usually means your session
-            cookie is not valid for this address.
+            {t("auth.loopBody")}
           </p>
           <ul className="text-[11px] text-slate-500 list-disc pl-4 space-y-1">
-            <li>Make sure you are opening SafeVoice on the same host as RegulaOne.</li>
-            <li>
-              Confirm the RegulaOne backend sets the session cookie for host{" "}
-              <span className="font-mono">{window.location.hostname}</span>.
-            </li>
-            <li>Try signing in again from the central RegulaOne app.</li>
+            <li>{t("auth.loopHint1")}</li>
+            <li>{t("auth.loopHint2", { host: window.location.hostname })}</li>
+            <li>{t("auth.loopHint3")}</li>
           </ul>
           <div className="flex gap-2 pt-1">
             <button
@@ -75,13 +83,13 @@ export default function Login() {
               onClick={retry}
               className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold py-2 px-4 rounded-xl transition cursor-pointer"
             >
-              Try again
+              {t("auth.resetSignIn")}
             </button>
             <a
               href={CENTRAL_LOGIN_URL}
               className="flex-1 text-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold py-2 px-4 rounded-xl transition"
             >
-              Open RegulaOne login
+              {t("auth.openLogin")}
             </a>
           </div>
         </div>
@@ -90,11 +98,35 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <div className="text-center space-y-4">
-        <div className="w-10 h-10 mx-auto border-4 border-cyan-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-slate-700 text-sm font-medium">Redirecting to RegulaOne sign-in…</p>
-        <p className="text-slate-500 text-xs">You will return to SafeVoice once signed in.</p>
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5 border border-slate-200 text-center">
+        <div className="mx-auto w-12 h-12 rounded-xl bg-cyan-50 flex items-center justify-center text-cyan-700">
+          <Shield className="w-6 h-6" aria-hidden="true" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-base font-bold text-slate-800">
+            {t("auth.signInRequiredTitle")}
+          </h1>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            {t("auth.signInRequiredBody")}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={startSignIn}
+          disabled={redirecting}
+          className="inline-flex w-full items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold py-2.5 px-4 rounded-xl transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500"
+        >
+          {redirecting ? (
+            <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+          ) : (
+            <LogIn className="h-4 w-4" aria-hidden="true" />
+          )}
+          {redirecting ? t("auth.openingLogin") : t("auth.continueToLogin")}
+        </button>
+        <p className="text-[11px] text-slate-500">
+          {t("auth.redirectingHint")}
+        </p>
       </div>
     </div>
   );
