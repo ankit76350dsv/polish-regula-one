@@ -14,7 +14,9 @@ import org.springframework.web.client.RestClientException;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -27,14 +29,27 @@ public class SafeVoiceEmailNotificationService {
             "SAFEVOICE_HR_MANAGER"
     );
 
-    private static final String SUBJECT = "A SafeVoice case requires your attention";
-    private static final String TEXT_BODY = """
+    // A brand-new report arrived.
+    private static final String NEW_REPORT_SUBJECT = "A SafeVoice case requires your attention";
+    private static final String NEW_REPORT_TEXT = """
             A new SafeVoice case requires attention.
 
             Sign in to RegulaOne SafeVoice to review it.
             """;
-    private static final String HTML_BODY = """
+    private static final String NEW_REPORT_HTML = """
             <p>A new SafeVoice case requires attention.</p>
+            <p>Sign in to RegulaOne SafeVoice to review it.</p>
+            """;
+
+    // A reporter checked their case (via a valid access key) and is waiting for a response.
+    private static final String REPORTER_WAITING_SUBJECT = "A SafeVoice reporter is waiting for your response";
+    private static final String REPORTER_WAITING_TEXT = """
+            A SafeVoice reporter has checked their case and is waiting for a response.
+
+            Sign in to RegulaOne SafeVoice to review it.
+            """;
+    private static final String REPORTER_WAITING_HTML = """
+            <p>A SafeVoice reporter has checked their case and is waiting for a response.</p>
             <p>Sign in to RegulaOne SafeVoice to review it.</p>
             """;
 
@@ -43,13 +58,21 @@ public class SafeVoiceEmailNotificationService {
     private final String serviceToken;
     private final boolean notificationsEnabled;
 
+    // Per-case cooldown for the "reporter is waiting" email, so a reporter refreshing/re-checking
+    // their status does not spam staff — at most one email per case per cooldown window.
+    // In-memory (single instance); a multi-node deployment would send at most one email per node.
+    private final long reporterWaitingCooldownMs;
+    private final Map<String, Long> reporterWaitingLastSentMs = new ConcurrentHashMap<>();
+    private static final int MAX_TRACKED_CASES = 100_000;
+
     public SafeVoiceEmailNotificationService(
             RegulaOneUserRepository userRepository,
             @Value("${regulaone.api.base-url}") String baseUrl,
             @Value("${regulaone.api.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${regulaone.api.read-timeout-ms:5000}") int readTimeoutMs,
             @Value("${regulaone.email.service-token:}") String serviceToken,
-            @Value("${safevoice.email-notifications.enabled:true}") boolean notificationsEnabled) {
+            @Value("${safevoice.email-notifications.enabled:true}") boolean notificationsEnabled,
+            @Value("${safevoice.email-notifications.reporter-waiting-cooldown-ms:1800000}") long reporterWaitingCooldownMs) {
         this.userRepository = userRepository;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
@@ -60,21 +83,66 @@ public class SafeVoiceEmailNotificationService {
                 .build();
         this.serviceToken = serviceToken;
         this.notificationsEnabled = notificationsEnabled;
+        this.reporterWaitingCooldownMs = reporterWaitingCooldownMs;
     }
 
     // Runs on the background email pool (see AsyncConfig) so the reporter's submit returns
     // immediately — the report is already saved by the time this fires, and email is best-effort.
     @Async("emailNotificationExecutor")
     public void notifyNewReport(String tenantId) {
+        dispatch(tenantId, "new report", NEW_REPORT_SUBJECT, NEW_REPORT_TEXT, NEW_REPORT_HTML);
+    }
+
+    // Runs on the background email pool so the reporter's status lookup (/track) returns
+    // immediately. Fired when a reporter opens their case with a valid access key — a signal they
+    // are waiting for a reply. Best-effort, content-free (no case detail leaves the system).
+    // Throttled to at most ONE email per case per cooldown window so repeated status checks by
+    // the same reporter do not spam staff.
+    @Async("emailNotificationExecutor")
+    public void notifyReporterWaiting(String tenantId, String caseId) {
+        if (!withinCooldownAllows(caseId)) {
+            log.debug("[SafeVoiceEmail] reporter-waiting email suppressed by cooldown; caseId={}", caseId);
+            return;
+        }
+        dispatch(tenantId, "reporter waiting", REPORTER_WAITING_SUBJECT, REPORTER_WAITING_TEXT, REPORTER_WAITING_HTML);
+    }
+
+    // Atomically decide whether a "reporter waiting" email may be sent for this case now, and if
+    // so record the send time. Returns true to send. Using compute() makes the check-and-set
+    // atomic, so two near-simultaneous status checks can never both slip through.
+    private boolean withinCooldownAllows(String caseId) {
+        if (caseId == null || caseId.isBlank()) {
+            return true; // nothing to throttle on — allow
+        }
+        long now = System.currentTimeMillis();
+        boolean[] allow = {false};
+        reporterWaitingLastSentMs.compute(caseId, (key, lastSent) -> {
+            if (lastSent == null || now - lastSent >= reporterWaitingCooldownMs) {
+                allow[0] = true;
+                return now; // record this send
+            }
+            return lastSent; // still cooling down — keep the old time, don't send
+        });
+        // Keep the map from growing without bound: drop entries whose cooldown has fully elapsed.
+        if (reporterWaitingLastSentMs.size() > MAX_TRACKED_CASES) {
+            reporterWaitingLastSentMs.entrySet()
+                    .removeIf(entry -> now - entry.getValue() >= reporterWaitingCooldownMs);
+        }
+        return allow[0];
+    }
+
+    // Shared sender: resolve the tenant's eligible staff and email each one the same content-free
+    // alert. `kind` is only used in logs. Never throws — email is best-effort.
+    private void dispatch(String tenantId, String kind, String subject, String textBody, String htmlBody) {
         if (!notificationsEnabled) {
             return;
         }
         if (tenantId == null || tenantId.isBlank()) {
-            log.warn("[SafeVoiceEmail] skipped new report email: missing tenant id");
+            log.warn("[SafeVoiceEmail] skipped {} email: missing tenant id", kind);
             return;
         }
         if (serviceToken == null || serviceToken.isBlank()) {
-            log.error("[SafeVoiceEmail] regulaone.email.service-token is not configured; email notification skipped");
+            log.error("[SafeVoiceEmail] regulaone.email.service-token is not configured; {} email skipped", kind);
             return;
         }
 
@@ -90,28 +158,28 @@ public class SafeVoiceEmailNotificationService {
                 .toList();
 
         if (recipients.isEmpty()) {
-            log.info("[SafeVoiceEmail] no eligible recipients for new report notification; tenantId={}", tenantId);
+            log.info("[SafeVoiceEmail] no eligible recipients for {} notification; tenantId={}", kind, tenantId);
             return;
         }
 
         int sentCount = 0;
         for (String recipient : recipients) {
-            if (sendToRecipient(recipient)) {
+            if (sendToRecipient(recipient, subject, textBody, htmlBody)) {
                 sentCount++;
             }
         }
-        log.info("[SafeVoiceEmail] sent new report email notification for {}/{} eligible recipients; tenantId={}",
-                sentCount, recipients.size(), tenantId);
+        log.info("[SafeVoiceEmail] sent {} email notification to {}/{} eligible recipients; tenantId={}",
+                kind, sentCount, recipients.size(), tenantId);
     }
 
-    private boolean sendToRecipient(String recipient) {
+    private boolean sendToRecipient(String recipient, String subject, String textBody, String htmlBody) {
         SendEmailRequest request = new SendEmailRequest(
                 List.of(recipient),
                 List.of(),
                 List.of(),
-                SUBJECT,
-                TEXT_BODY,
-                HTML_BODY
+                subject,
+                textBody,
+                htmlBody
         );
         try {
             emailClient.post()
@@ -123,7 +191,7 @@ public class SafeVoiceEmailNotificationService {
                     .toBodilessEntity();
             return true;
         } catch (RestClientException e) {
-            log.error("[SafeVoiceEmail] failed to send new report email notification: {}", e.getMessage());
+            log.error("[SafeVoiceEmail] failed to send email notification: {}", e.getMessage());
             return false;
         }
     }

@@ -13,6 +13,7 @@ import com.safevoice.backend.model.enums.audit.AuditOutcome;
 import com.safevoice.backend.service.AttachmentService;
 import com.safevoice.backend.service.AuditLogService;
 import com.safevoice.backend.service.CaseMessageService;
+import com.safevoice.backend.service.notification.SafeVoiceEmailNotificationService;
 import com.safevoice.backend.service.report.CaseReportService;
 
 import jakarta.validation.Valid;
@@ -51,6 +52,7 @@ public class PublicCaseController {
     private final CaseMessageService caseMessageService;
     private final AttachmentService attachmentService;
     private final AuditLogService auditLogService;
+    private final SafeVoiceEmailNotificationService emailNotificationService;
 
     /**
      * Submit a new report. Returns the one-time access key (null for HR grievances).
@@ -78,6 +80,10 @@ public class PublicCaseController {
             @Valid @RequestBody CaseRetrievalRequest request) {
         CaseReport report = caseReportService.retrieveByAccessKey(request.getAccessKey());
         List<CaseMessage> messages = caseMessageService.getMessages(report.getId(), report.getTenantId());
+        // The reporter opened their case with a valid access key → they are waiting for a reply.
+        // Nudge the tenant's staff (content-free, background, and throttled to once per case per
+        // cooldown window so repeated status checks don't spam staff).
+        emailNotificationService.notifyReporterWaiting(report.getTenantId(), report.getId());
         return ResponseEntity.ok(CaseTrackingResponse.builder()
                 .report(report)
                 .messages(messages)
