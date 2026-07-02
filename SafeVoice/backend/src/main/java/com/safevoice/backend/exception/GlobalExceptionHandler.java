@@ -102,4 +102,27 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(body(ex.getMessage(), "INVALID_REQUEST", HttpStatus.BAD_REQUEST));
     }
+
+    /**
+     * The malware scanner reported the uploaded file as infected. Answered as 422 with
+     * errorCode "MALWARE_DETECTED". We deliberately do NOT echo the malware signature.
+     */
+    @ExceptionHandler(MalwareDetectedException.class)
+    public ResponseEntity<Map<String, Object>> handleMalwareDetected(MalwareDetectedException ex) {
+        log.warn("[handleMalwareDetected]: upload rejected by malware scanner");
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(body(ex.getMessage(), "MALWARE_DETECTED", HttpStatus.UNPROCESSABLE_ENTITY));
+    }
+
+    /**
+     * Malware scanning is enabled but the scanner could not be reached. We FAIL CLOSED and
+     * reject the upload. Answered as 503 with errorCode "SCAN_UNAVAILABLE" so the client can
+     * ask the reporter to try again shortly.
+     */
+    @ExceptionHandler(MalwareScanUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleScanUnavailable(MalwareScanUnavailableException ex) {
+        log.error("[handleScanUnavailable]: malware scanner unavailable — upload failed closed");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(body(ex.getMessage(), "SCAN_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE));
+    }
 }

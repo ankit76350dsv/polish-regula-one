@@ -63,13 +63,18 @@ public class AttachmentService {
 
     private S3Client s3Client;
 
+    // Scans file bytes for malware before anything is written to storage.
+    private final MalwareScanService malwareScanService;
+
     public AttachmentService(
             @Value("${safevoice.vault.s3-bucket:regulaone}") String bucket,
             @Value("${safevoice.encryption.aws.region:eu-central-1}") String region,
-            @Value("${safevoice.vault.s3-endpoint:}") String endpointOverride) {
+            @Value("${safevoice.vault.s3-endpoint:}") String endpointOverride,
+            MalwareScanService malwareScanService) {
         this.bucket = bucket;
         this.region = region;
         this.endpointOverride = endpointOverride;
+        this.malwareScanService = malwareScanService;
     }
 
     @PostConstruct
@@ -136,6 +141,12 @@ public class AttachmentService {
             throw new IllegalArgumentException("Unsupported file extension. Approved: PDF, PNG, JPG, XML, DOCX");
         }
 
+        // Antivirus / malware scan BEFORE the file is ever written to storage. Fails closed:
+        // an infected or unscannable file throws (rejected) and is never persisted. This is
+        // OUTSIDE the storage try/catch below on purpose, so the malware/unavailable exceptions
+        // reach the global handler (422/503) instead of being masked as a generic 500.
+        malwareScanService.assertClean(fileBytes, originalFilename);
+
         try {
             // Calculate SHA-256 Checksum for later integrity validation.
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -168,7 +179,7 @@ public class AttachmentService {
                     anonymisedName,
                     extension,
                     sizeLabel,
-                    EvidenceStatus.METADATA_STRIPPED,
+                    EvidenceStatus.SCANNED_CLEAN, // passed the malware scan above
                     true,  // metadataStripped
                     false, // originalNameStored — the original name is intentionally NOT kept
                     Instant.now(),
