@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -61,6 +62,9 @@ public class SafeVoiceEmailNotificationService {
         this.notificationsEnabled = notificationsEnabled;
     }
 
+    // Runs on the background email pool (see AsyncConfig) so the reporter's submit returns
+    // immediately — the report is already saved by the time this fires, and email is best-effort.
+    @Async("emailNotificationExecutor")
     public void notifyNewReport(String tenantId) {
         if (!notificationsEnabled) {
             return;
