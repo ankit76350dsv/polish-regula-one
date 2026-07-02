@@ -1,6 +1,8 @@
 package com.safevoice.backend.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -56,8 +58,12 @@ public class CaseSubmissionRequest {
     // True if the reporter is exercising their legal right to request a face-to-face meeting.
     private boolean requestMeeting;
 
-    // Metadata about uploaded evidence files. We keep ONLY the display name and a
-    // human size label — no IP, device, or other tracking data — to protect anonymity.
+    // Uploaded evidence files. Capped at 5 (matches the frontend and the thread-upload limit)
+    // and @Valid so each entry's own size limits are enforced. These bounds are checked at
+    // request binding — BEFORE any base64 is decoded — so an oversized/overlong payload is
+    // rejected with 400 instead of being buffered and decoded.
+    @Size(max = 5, message = "At most 5 attachments are allowed")
+    @Valid
     private List<AttachmentMetadata> attachments = new ArrayList<>();
 
     /**
@@ -71,11 +77,24 @@ public class CaseSubmissionRequest {
      */
     @Data
     public static class AttachmentMetadata {
+        @Size(max = 255, message = "Attachment name is too long")
         private String displayName;
+
+        @Size(max = 64, message = "Attachment size label is too long")
         private String sizeLabel;
+
+        @Size(max = 255, message = "File name is too long")
         private String fileName;
+
+        @Size(max = 128, message = "MIME type is too long")
         private String mimeType;
+
         private Long sizeBytes;
-        private String content; // Base64-encoded file bytes (no data: prefix)
+
+        // Base64-encoded file bytes (no data: prefix). Capped at ~14 MB of base64, which is a
+        // ~10 MB file — the per-file limit. Bounds each entry before it is decoded/stored; the
+        // decoded bytes are re-checked against the 10 MB limit in AttachmentService.
+        @Size(max = 14_680_064, message = "Attachment is too large")
+        private String content;
     }
 }
