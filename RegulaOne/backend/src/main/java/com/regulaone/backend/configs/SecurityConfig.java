@@ -70,6 +70,9 @@ public class SecurityConfig {
                         // Internal service-to-service notification ingest — NOT user-authenticated.
                         // Guarded by the X-Service-Token header check inside NotificationIngestController.
                         .requestMatchers("/api/internal/**").permitAll()
+                        // Internal service-to-service email sending. The controller itself
+                        // requires X-Service-Token; this route is not browser/user-authenticated.
+                        .requestMatchers("/api/email/send").permitAll()
 
                         // Allow Swagger UI and OpenAPI spec without authentication
                         .requestMatchers(

@@ -25,6 +25,7 @@ import com.safevoice.backend.repository.CaseReportRepository;
 import com.safevoice.backend.repository.TenantRepository;
 import com.safevoice.backend.service.AttachmentService;
 import com.safevoice.backend.service.AuditLogService;
+import com.safevoice.backend.service.notification.SafeVoiceEmailNotificationService;
 import com.safevoice.backend.service.report.utils.CaseReportUtils;
 import com.safevoice.backend.websocket.CaseEventPublisher;
 
@@ -64,6 +65,8 @@ public class CaseReportService {
     private final CaseEventPublisher caseEventPublisher;
     // Stores uploaded evidence files (S3). Used to save files sent WITH the report.
     private final AttachmentService attachmentService;
+    // Sends content-free staff email alerts through RegulaOne's internal email relay.
+    private final SafeVoiceEmailNotificationService emailNotificationService;
 
     // Hard ceiling on page size, so a caller can never ask for a giant page that would
     // strain the database or the browser. Requests above this are clamped down to it.
@@ -88,7 +91,8 @@ public class CaseReportService {
                              AuditLogService auditLogService,
                              MongoTemplate mongoTemplate,
                              CaseEventPublisher caseEventPublisher,
-                             AttachmentService attachmentService) {
+                             AttachmentService attachmentService,
+                             SafeVoiceEmailNotificationService emailNotificationService) {
         this.caseReportRepository = caseReportRepository;
         this.caseMessageRepository = caseMessageRepository;
         this.tenantRepository = tenantRepository;
@@ -96,6 +100,7 @@ public class CaseReportService {
         this.mongoTemplate = mongoTemplate;
         this.caseEventPublisher = caseEventPublisher;
         this.attachmentService = attachmentService;
+        this.emailNotificationService = emailNotificationService;
     }
 
     /**
@@ -261,6 +266,7 @@ public class CaseReportService {
         // Tell the tenant's staff, live, that a new case has arrived — so their Cases list
         // and Inbox update without a refresh. Best-effort: never blocks the submission.
         caseEventPublisher.publishNewCase(tenantId, toSummary(saved));
+        emailNotificationService.notifyNewReport(tenantId);
 
         // Return the plain key ONCE for display (null for HR grievances). It is now forgotten.
         return CaseSubmissionResponse.builder()
