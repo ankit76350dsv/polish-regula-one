@@ -36,6 +36,8 @@ public class User {
     @Builder.Default
     private boolean enabled = true;
 
+    @Builder.Default
+    private Boolean emailNotification = true;
 
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

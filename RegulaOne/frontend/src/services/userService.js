@@ -28,11 +28,21 @@ export const userService = {
   updateUserStatus: (userId, data) =>
     api.patch(`/api/admin/users/${userId}/status`, data),
 
+  // PATCH /api/admin/users/{userId}/email-notification
+  // Body: { emailNotification: boolean } — toggles email notification delivery for a user.
+  updateUserEmailNotification: (userId, emailNotification) =>
+    api.patch(`/api/admin/users/${userId}/email-notification`, { emailNotification }),
+
   // PATCH /api/superadmin/users/{userId}/status
   // Same logic as updateUserStatus but under the superadmin route namespace so
   // ROLE_SUPER_ADMIN is authorised to call it.
   updateUserStatusSuperAdmin: (userId, data) =>
     api.patch(`/api/superadmin/users/${userId}/status`, data),
+
+  // PATCH /api/superadmin/users/{userId}/email-notification
+  // Same toggle as updateUserEmailNotification, under the superadmin namespace.
+  updateUserEmailNotificationSuperAdmin: (userId, emailNotification) =>
+    api.patch(`/api/superadmin/users/${userId}/email-notification`, { emailNotification }),
 
   // PATCH /api/superadmin/users/{userId}/permissions
   // Body: { permissions: string[] } — same as updateUserPermissions but under the superadmin

@@ -7,10 +7,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ShieldCheck, Loader2, AlertTriangle, Check } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Loader2, AlertTriangle, Check, Mail } from 'lucide-react';
 import {
   useTeamMembers, useUpdateUserPermissions,
   useSuperAdminUsers, useUpdateSuperAdminUserPermissions,
+  useUpdateUserEmailNotification, useUpdateSuperAdminUserEmailNotification,
 } from '../../hooks/useTeam';
 import { useAuthStore } from '../../store/authStore';
 
@@ -125,6 +126,9 @@ export default function UserPermissionsPage() {
   const adminUpdate = useUpdateUserPermissions();
   const superUpdate = useUpdateSuperAdminUserPermissions();
   const updatePermissions = isSuperAdmin ? superUpdate : adminUpdate;
+  const adminEmailUpdate = useUpdateUserEmailNotification();
+  const superEmailUpdate = useUpdateSuperAdminUserEmailNotification();
+  const updateEmailNotification = isSuperAdmin ? superEmailUpdate : adminEmailUpdate;
 
   // Hide platform-operator-only permissions from anyone who is not a platform operator.
   const visibleGroups = useMemo(
@@ -160,6 +164,13 @@ export default function UserPermissionsPage() {
       { userId, permissions: selected },
       { onSuccess: goBack },
     );
+  };
+
+  const handleEmailNotificationToggle = () => {
+    updateEmailNotification.mutate({
+      userId,
+      emailNotification: !(user.emailNotification ?? true),
+    });
   };
 
   // True when the working copy differs from what's stored — gates the Save button.
@@ -211,6 +222,45 @@ export default function UserPermissionsPage() {
               <span className="ml-auto px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border bg-slate-100 text-slate-600 border-slate-200">
                 {user.role?.replace('ROLE_', '') ?? user.role}
               </span>
+            </CardContent>
+          </Card>
+
+          {/* ── Email notification preference ──────────────────────────────── */}
+          <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
+            <CardContent className="py-5 px-6 flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="p-2 rounded-full bg-red-50 flex-shrink-0">
+                  <Mail className="h-4 w-4 text-red-600" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-900">Email notifications</h3>
+                  <p className="text-xs text-slate-400 mt-0.5 font-medium">
+                    Allow RegulaOne to send email alerts to this user.
+                  </p>
+                  {!user.enabled && (
+                    <p className="text-[11px] text-amber-600 mt-1 font-semibold">
+                      Disabled users cannot receive email notifications.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={user.emailNotification ?? true}
+                onClick={handleEmailNotificationToggle}
+                disabled={updateEmailNotification.isPending || (!user.enabled && !(user.emailNotification ?? true))}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${
+                  user.emailNotification ?? true ? 'bg-red-600' : 'bg-slate-300'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                    user.emailNotification ?? true ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
             </CardContent>
           </Card>
 

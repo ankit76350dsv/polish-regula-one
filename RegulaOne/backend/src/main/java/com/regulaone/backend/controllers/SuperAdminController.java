@@ -1,6 +1,7 @@
 package com.regulaone.backend.controllers;
 
 import com.regulaone.backend.dto.AppResponse;
+import com.regulaone.backend.dto.Auth.UpdateEmailNotificationRequest;
 import com.regulaone.backend.dto.Auth.UpdatePermissionsRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
@@ -74,5 +75,14 @@ public class SuperAdminController {
         return ResponseEntity.ok(AppResponse.success(
                 "User permissions updated successfully",
                 userService.updateUserPermissions(userId, request)));
+    }
+
+    @PatchMapping("/users/{userId}/email-notification")
+    public ResponseEntity<AppResponse<UserResponse>> updateUserEmailNotification(
+            @PathVariable String userId,
+            @Valid @RequestBody UpdateEmailNotificationRequest request) {
+        return ResponseEntity.ok(AppResponse.success(
+                "User email notification preference updated successfully",
+                userService.updateEmailNotification(userId, request)));
     }
 }

@@ -6,6 +6,7 @@
 //   useTeamMembers()             — GET /api/admin/users/{tenantId}
 //   useInviteUser()              — POST /api/admin/users/invite
 //   useUpdateUserStatus()        — PATCH /api/admin/users/{userId}/status
+//   useUpdateUserEmailNotification() — PATCH /api/admin/users/{userId}/email-notification
 //
 // ROLE_SUPER_ADMIN (platform-wide) hooks:
 //   useSuperAdminStats()         — GET /api/superadmin/team-management
@@ -99,6 +100,23 @@ export function useUpdateUserPermissions() {
       qc.invalidateQueries({ queryKey: TEAM_KEYS.members(tenantId) });
     },
     onError: (err) => toast.error(err.message ?? 'Failed to update permissions'),
+  });
+}
+
+// Toggles user email notification delivery and refreshes the members list.
+// Caller passes { userId, emailNotification }.
+export function useUpdateUserEmailNotification() {
+  const tenantId = useAuthStore((s) => s.user?.tenantId);
+  const qc       = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, emailNotification }) =>
+      userService.updateUserEmailNotification(userId, emailNotification),
+    onSuccess: (_, { emailNotification }) => {
+      toast.success(emailNotification ? 'Email notifications enabled' : 'Email notifications disabled');
+      qc.invalidateQueries({ queryKey: TEAM_KEYS.members(tenantId) });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to update email notifications'),
   });
 }
 
@@ -206,5 +224,20 @@ export function useUpdateSuperAdminUserPermissions() {
       qc.invalidateQueries({ queryKey: SUPERADMIN_KEYS.users });
     },
     onError: (err) => toast.error(err.message ?? 'Failed to update permissions'),
+  });
+}
+
+// Toggles email notification delivery from the superadmin context.
+export function useUpdateSuperAdminUserEmailNotification() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, emailNotification }) =>
+      userService.updateUserEmailNotificationSuperAdmin(userId, emailNotification),
+    onSuccess: (_, { emailNotification }) => {
+      toast.success(emailNotification ? 'Email notifications enabled' : 'Email notifications disabled');
+      qc.invalidateQueries({ queryKey: SUPERADMIN_KEYS.users });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to update email notifications'),
   });
 }

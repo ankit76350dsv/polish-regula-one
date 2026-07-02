@@ -23,6 +23,7 @@ public class UserResponse {
     private String email;
     private String role;
     private boolean enabled;
+    private boolean emailNotification;
     private boolean tempPassword;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -118,6 +119,7 @@ public class UserResponse {
                 .email(user.getEmail())
                 .role(user.getRole().name())
                 .enabled(user.isEnabled())
+                .emailNotification(user.getEmailNotification() == null || user.getEmailNotification())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .tenantId(tenantId)

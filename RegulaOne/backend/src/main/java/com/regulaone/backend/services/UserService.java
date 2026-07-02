@@ -9,6 +9,7 @@ import com.regulaone.backend.dto.Auth.LoginRequest;
 import com.regulaone.backend.dto.Auth.LoginResponse;
 import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
 import com.regulaone.backend.dto.Auth.SignupRequest;
+import com.regulaone.backend.dto.Auth.UpdateEmailNotificationRequest;
 import com.regulaone.backend.dto.Auth.UpdatePermissionsRequest;
 import com.regulaone.backend.dto.Auth.UpdateProfileRequest;
 import com.regulaone.backend.dto.Auth.UpdateModulesRequest;
@@ -529,8 +530,7 @@ public class UserService {
 
         assertStatusChangeAllowed(actor, targetUser, desiredEnabled);
 
-        targetUser.setEnabled(desiredEnabled);
-        targetUser.setUpdatedAt(LocalDateTime.now());
+        applyStatusChange(targetUser, desiredEnabled);
 
         userRepository.save(targetUser);
 
@@ -561,12 +561,78 @@ public class UserService {
 
         assertStatusChangeAllowed(null, targetUser, desiredEnabled);
 
-        targetUser.setEnabled(desiredEnabled);
-        targetUser.setUpdatedAt(LocalDateTime.now());
+        applyStatusChange(targetUser, desiredEnabled);
 
         userRepository.save(targetUser);
 
         return UserResponse.from(targetUser);
+    }
+
+    private void applyStatusChange(User targetUser, boolean desiredEnabled) {
+        targetUser.setEnabled(desiredEnabled);
+        if (!desiredEnabled) {
+            targetUser.setEmailNotification(false);
+        }
+        targetUser.setUpdatedAt(LocalDateTime.now());
+    }
+
+    @Transactional
+    public UserResponse updateEmailNotification(
+            String userId,
+            UpdateEmailNotificationRequest request,
+            String actorCognitoSub) {
+
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("A user id is required to update email notifications");
+        }
+        if (request == null || request.getEmailNotification() == null) {
+            throw new IllegalArgumentException("emailNotification is required");
+        }
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        User actor = requireStatusActor(actorCognitoSub);
+        assertStatusChangeIsTenantScoped(actor, targetUser);
+
+        return applyEmailNotificationChange(targetUser, request.getEmailNotification());
+    }
+
+    @Transactional
+    public UserResponse updateEmailNotification(
+            String userId,
+            UpdateEmailNotificationRequest request) {
+
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("A user id is required to update email notifications");
+        }
+        if (request == null || request.getEmailNotification() == null) {
+            throw new IllegalArgumentException("emailNotification is required");
+        }
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        return applyEmailNotificationChange(targetUser, request.getEmailNotification());
+    }
+
+    private UserResponse applyEmailNotificationChange(User targetUser, boolean emailNotification) {
+        if (emailNotification && !targetUser.isEnabled()) {
+            throw new IllegalStateException("Email notifications cannot be enabled for a disabled user.");
+        }
+        if (emailNotificationEnabled(targetUser) == emailNotification) {
+            return UserResponse.from(targetUser);
+        }
+
+        targetUser.setEmailNotification(emailNotification);
+        targetUser.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(targetUser);
+
+        return UserResponse.from(targetUser);
+    }
+
+    private boolean emailNotificationEnabled(User user) {
+        return user.getEmailNotification() == null || user.getEmailNotification();
     }
 
     private User requireStatusActor(String actorCognitoSub) {

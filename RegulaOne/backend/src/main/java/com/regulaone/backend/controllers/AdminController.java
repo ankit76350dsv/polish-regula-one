@@ -5,6 +5,7 @@ import com.regulaone.backend.dto.Admin.AdminPackageResponse;
 import com.regulaone.backend.dto.Admin.InvoiceResponse;
 import com.regulaone.backend.dto.Auth.InviteUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateModulesRequest;
+import com.regulaone.backend.dto.Auth.UpdateEmailNotificationRequest;
 import com.regulaone.backend.dto.Auth.UpdatePermissionsRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
@@ -85,6 +86,16 @@ public class AdminController {
         return ResponseEntity.ok(AppResponse.success(
                 "User permissions updated successfully",
                 userService.updateUserPermissions(userId, request)));
+    }
+
+    @PatchMapping("/users/{userId}/email-notification")
+    public ResponseEntity<AppResponse<UserResponse>> updateUserEmailNotification(
+            @PathVariable String userId,
+            @Valid @RequestBody UpdateEmailNotificationRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(AppResponse.success(
+                "User email notification preference updated successfully",
+                userService.updateEmailNotification(userId, request, jwt != null ? jwt.getSubject() : null)));
     }
 
     @PatchMapping("/users/{userId}/status")
