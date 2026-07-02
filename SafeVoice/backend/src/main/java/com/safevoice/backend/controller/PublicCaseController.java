@@ -8,7 +8,10 @@ import com.safevoice.backend.dto.ReporterAttachmentRequest;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
+import com.safevoice.backend.model.enums.audit.AuditActionType;
+import com.safevoice.backend.model.enums.audit.AuditOutcome;
 import com.safevoice.backend.service.AttachmentService;
+import com.safevoice.backend.service.AuditLogService;
 import com.safevoice.backend.service.CaseMessageService;
 import com.safevoice.backend.service.report.CaseReportService;
 
@@ -47,6 +50,7 @@ public class PublicCaseController {
     private final CaseReportService caseReportService;
     private final CaseMessageService caseMessageService;
     private final AttachmentService attachmentService;
+    private final AuditLogService auditLogService;
 
     /**
      * Submit a new report. Returns the one-time access key (null for HR grievances).
@@ -134,6 +138,21 @@ public class PublicCaseController {
                 report.getId(), request.getMessageId(), request.getAttachmentId(), report.getTenantId());
 
         byte[] fileBytes = attachmentService.getFile(attachment.getStorageVaultRef());
+
+        // Audit the export. The actor is the anonymous reporter (no identity is recorded — the
+        // access key proved ownership); we log the case + attachment id/checksum, never PII.
+        auditLogService.log(
+                report.getTenantId(),
+                "Public Portal",
+                "Anonymous Whistleblower",
+                AuditActionType.EVIDENCE_EXPORTED,
+                report.getId(),
+                AuditOutcome.RECORDED,
+                null,
+                attachment.getId(),
+                "Reporter exported evidence from their own case (sha256="
+                        + attachment.getSha256Checksum() + ")."
+        );
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)

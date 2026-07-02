@@ -5,11 +5,14 @@ import com.safevoice.backend.dto.PageResponse;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
+import com.safevoice.backend.model.enums.audit.AuditActionType;
+import com.safevoice.backend.model.enums.audit.AuditOutcome;
 import com.safevoice.backend.model.enums.case_report.CaseSeverity;
 import com.safevoice.backend.model.enums.case_report.CaseStatus;
 import com.safevoice.backend.security.AuthenticatedUser;
 import com.safevoice.backend.security.SafeVoicePermission;
 import com.safevoice.backend.service.AttachmentService;
+import com.safevoice.backend.service.AuditLogService;
 import com.safevoice.backend.service.CaseMessageService;
 import com.safevoice.backend.service.report.CaseReportService;
 
@@ -41,6 +44,7 @@ public class InternalCaseController {
     private final CaseReportService caseReportService;
     private final CaseMessageService caseMessageService;
     private final AttachmentService attachmentService;
+    private final AuditLogService auditLogService;
 
     /**
      * Lists whistleblower cases for the tenant as a PAGE of slim summaries — only the
@@ -237,6 +241,21 @@ public class InternalCaseController {
 
         byte[] fileBytes = attachmentService.getFile(attachment.getStorageVaultRef());
 
+        // Record WHO exported WHICH evidence, WHEN — the most sensitive action in the system.
+        // Identity comes from the verified session; we log the attachment id + checksum, never
+        // the file contents or the reporter's identity.
+        auditLogService.log(
+                caller.tenantId(),
+                caller.primarySafeVoiceRole(),
+                caller.userId(),
+                AuditActionType.EVIDENCE_EXPORTED,
+                caseId,
+                AuditOutcome.RECORDED,
+                null,
+                attachment.getId(),
+                "Case evidence file exported (sha256=" + attachment.getSha256Checksum() + ")."
+        );
+
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + attachment.getDisplayName() + "\"")
@@ -264,6 +283,20 @@ public class InternalCaseController {
                 caseId, messageId, attachmentId, caller.tenantId());
 
         byte[] fileBytes = attachmentService.getFile(attachment.getStorageVaultRef());
+
+        // Audit the export (see downloadAttachment above). Include the message id in the notice.
+        auditLogService.log(
+                caller.tenantId(),
+                caller.primarySafeVoiceRole(),
+                caller.userId(),
+                AuditActionType.EVIDENCE_EXPORTED,
+                caseId,
+                AuditOutcome.RECORDED,
+                null,
+                attachment.getId(),
+                "Thread evidence file exported (messageId=" + messageId
+                        + ", sha256=" + attachment.getSha256Checksum() + ")."
+        );
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
