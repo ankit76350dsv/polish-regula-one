@@ -10,6 +10,7 @@ import com.safevoice.backend.exception.TenantNotFoundException;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.document.Tenant;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
+import com.safevoice.backend.model.embedded.RetentionPolicy;
 import com.safevoice.backend.model.embedded.TimelineEvent;
 import com.safevoice.backend.model.enums.audit.AuditActionType;
 import com.safevoice.backend.model.enums.audit.AuditOutcome;
@@ -18,6 +19,7 @@ import com.safevoice.backend.model.enums.case_report.CaseStatus;
 import com.safevoice.backend.model.enums.case_report.DisclosureMode;
 import com.safevoice.backend.model.enums.case_report.IntakeChannel;
 import com.safevoice.backend.model.enums.case_report.ReportCategory;
+import com.safevoice.backend.model.enums.retention.RetentionState;
 import com.safevoice.backend.repository.CaseMessageRepository;
 import com.safevoice.backend.repository.CaseReportRepository;
 import com.safevoice.backend.repository.TenantRepository;
@@ -28,6 +30,7 @@ import com.safevoice.backend.websocket.CaseEventPublisher;
 
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
@@ -66,6 +69,17 @@ public class CaseReportService {
     // strain the database or the browser. Requests above this are clamped down to it.
     private static final int MAX_PAGE_SIZE = 200;
     private static final int DEFAULT_PAGE_SIZE = 20;
+
+    // How long a whistleblower case is kept before the retention job destroys it. This MUST be
+    // set to the legally verified period for whistleblower data under the Polish Act — keep it
+    // configurable and confirm the exact value against the statute (see CLAUDE.md §16/§24).
+    @Value("${safevoice.retention.years:5}")
+    private int retentionYears;
+    // Deadline by which staff should review and remove personal data that is manifestly not
+    // relevant to the report (EU Directive Art. 18(1) / Polish Act). A review marker, not an
+    // auto-delete — surfaced to staff on the case page.
+    @Value("${safevoice.retention.irrelevant-review-days:30}")
+    private int irrelevantReviewDays;
 
     @Autowired
     public CaseReportService(CaseReportRepository caseReportRepository,
@@ -170,6 +184,15 @@ public class CaseReportService {
         // Compliance SLAs: 7-day acknowledgement, 90-day (3-month) feedback deadline.
         caseReport.setAcknowledgementDue(now.plus(7, ChronoUnit.DAYS));
         caseReport.setFeedbackDue(now.plus(90, ChronoUnit.DAYS));
+
+        // Retention lifecycle (GDPR storage limitation, Art. 5(1)(e) + Directive Art. 18).
+        // Set the clock NOW so the scheduled retention job can destroy the case once it expires.
+        // deleteAfter uses ~365-day years (approximate is fine for a multi-year window).
+        RetentionPolicy retention = caseReport.getRetention();
+        retention.setState(RetentionState.ACTIVE);
+        retention.setRetentionYears(retentionYears);
+        retention.setDeleteAfter(now.plus(retentionYears * 365L, ChronoUnit.DAYS));
+        retention.setIrrelevantPersonalDataDeletionDue(now.plus(irrelevantReviewDays, ChronoUnit.DAYS));
 
         // Record the reporter's communication choices as risk flags so staff can act on them.
         if (request.isRequestMeeting()) {

@@ -15,6 +15,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -244,6 +245,26 @@ public class AttachmentService {
             throw new IllegalArgumentException("File not found in storage");
         } catch (Exception e) {
             throw new RuntimeException("Failed to read file from storage", e);
+        }
+    }
+
+    /**
+     * Permanently delete a stored file from S3 by its object key. Used by the retention job when
+     * a case is destroyed after its retention period. Best-effort: a missing object is not an
+     * error (idempotent), and a failure is logged rather than thrown so one bad object does not
+     * abort a whole retention run.
+     */
+    public void delete(String storageVaultRef) {
+        if (storageVaultRef == null || storageVaultRef.isBlank()) {
+            return;
+        }
+        try {
+            s3Client.deleteObject(DeleteObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(storageVaultRef)
+                    .build());
+        } catch (Exception e) {
+            log.warn("[AttachmentService] Failed to delete S3 object '{}': {}", storageVaultRef, e.getMessage());
         }
     }
 

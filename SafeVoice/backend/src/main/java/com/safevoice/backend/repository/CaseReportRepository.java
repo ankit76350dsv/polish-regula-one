@@ -3,6 +3,7 @@ package com.safevoice.backend.repository;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.enums.case_report.CaseStatus;
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -57,4 +58,17 @@ public interface CaseReportRepository extends MongoRepository<CaseReport, String
      */
     long countByTenantIdAndDeletedFalseAndStatusNotAndFeedbackDueBefore(
             String tenantId, CaseStatus status, Instant time);
+
+    // ── Retention ────────────────────────────────────────────────────────────────
+
+    /**
+     * Cases whose retention period has expired and that are eligible for destruction:
+     * not already deleted, `retention.deleteAfter` is at/before now, and the retention state
+     * is ACTIVE or DELETION_SCHEDULED. Cases on LEGAL_HOLD (or already DESTROYED) are excluded,
+     * so a legal hold always suspends automatic deletion. Cases with no deleteAfter set (legacy,
+     * pre-retention-fix) are not matched and need a one-off backfill.
+     */
+    @Query("{ 'deleted': false, 'retention.deleteAfter': { $lte: ?0 }, "
+            + "'retention.state': { $in: ['ACTIVE', 'DELETION_SCHEDULED'] } }")
+    List<CaseReport> findDueForDeletion(Instant now);
 }
