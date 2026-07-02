@@ -104,4 +104,8 @@ public class CaseReport extends BaseDocument {
     private List<String> riskFlags = new ArrayList<>();
 
     private List<TimelineEvent> timeline = new ArrayList<>();
+
+    // True once the case has been escalated for approaching/breaching its 3-month feedback
+    // deadline, so the compliance job escalates each case only once.
+    private boolean feedbackEscalated = false;
 }

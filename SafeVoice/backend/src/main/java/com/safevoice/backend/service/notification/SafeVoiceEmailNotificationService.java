@@ -41,6 +41,18 @@ public class SafeVoiceEmailNotificationService {
             <p>Sign in to RegulaOne SafeVoice to review it.</p>
             """;
 
+    // A case is approaching (or has passed) its 3-month feedback deadline.
+    private static final String FEEDBACK_DEADLINE_SUBJECT = "A SafeVoice case is nearing its response deadline";
+    private static final String FEEDBACK_DEADLINE_TEXT = """
+            A SafeVoice case is approaching (or has passed) its legal feedback deadline.
+
+            Sign in to RegulaOne SafeVoice to review and respond.
+            """;
+    private static final String FEEDBACK_DEADLINE_HTML = """
+            <p>A SafeVoice case is approaching (or has passed) its legal feedback deadline.</p>
+            <p>Sign in to RegulaOne SafeVoice to review and respond.</p>
+            """;
+
     // A reporter checked their case (via a valid access key) and is waiting for a response.
     private static final String REPORTER_WAITING_SUBJECT = "A SafeVoice reporter is waiting for your response";
     private static final String REPORTER_WAITING_TEXT = """
@@ -129,6 +141,13 @@ public class SafeVoiceEmailNotificationService {
                     .removeIf(entry -> now - entry.getValue() >= reporterWaitingCooldownMs);
         }
         return allow[0];
+    }
+
+    // Runs on the background email pool. Fired by the compliance job when a case nears/passes its
+    // 3-month feedback deadline — one email per tenant per escalation run. Content-free.
+    @Async("emailNotificationExecutor")
+    public void notifyFeedbackDeadline(String tenantId) {
+        dispatch(tenantId, "feedback deadline", FEEDBACK_DEADLINE_SUBJECT, FEEDBACK_DEADLINE_TEXT, FEEDBACK_DEADLINE_HTML);
     }
 
     // Shared sender: resolve the tenant's eligible staff and email each one the same content-free

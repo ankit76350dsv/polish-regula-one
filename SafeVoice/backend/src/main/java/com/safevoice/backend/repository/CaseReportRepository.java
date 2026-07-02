@@ -71,4 +71,22 @@ public interface CaseReportRepository extends MongoRepository<CaseReport, String
     @Query("{ 'deleted': false, 'retention.deleteAfter': { $lte: ?0 }, "
             + "'retention.state': { $in: ['ACTIVE', 'DELETION_SCHEDULED'] } }")
     List<CaseReport> findDueForDeletion(Instant now);
+
+    // ── Compliance deadlines (7-day acknowledgement, 3-month feedback) ────────────
+
+    /**
+     * Active cases still awaiting the automatic reporter acknowledgement (status RECEIVED means
+     * no one has acknowledged/triaged them yet). The compliance job acknowledges these promptly,
+     * well within the 7-day legal deadline.
+     */
+    List<CaseReport> findByStatusAndDeletedFalse(CaseStatus status);
+
+    /**
+     * Open cases (not closed, not deleted) that are AT or PAST the given feedback-deadline
+     * threshold and have not yet been escalated. `$ne: true` matches both false and legacy docs
+     * where the field is missing, so old cases are covered too.
+     */
+    @Query("{ 'deleted': false, 'feedbackEscalated': { $ne: true }, "
+            + "'status': { $ne: 'CLOSED' }, 'feedbackDue': { $lte: ?0 } }")
+    List<CaseReport> findFeedbackDeadlineDue(Instant threshold);
 }
