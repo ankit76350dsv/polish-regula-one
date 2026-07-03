@@ -1,6 +1,0 @@
-{
-  "name": "PrivacyPilot",
-  "description": "GPDR Compliance Platform - PrivacyPilot module of RegulaOne",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

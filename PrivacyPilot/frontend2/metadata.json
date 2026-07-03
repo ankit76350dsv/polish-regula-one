@@ -1,8 +1,0 @@
-{
-  "name": "PrivacyPilot",
-  "description": "Premium enterprise GDPR and RODO compliance management platform for Polish and EU businesses.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
