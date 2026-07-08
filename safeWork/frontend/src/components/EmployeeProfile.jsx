@@ -17,25 +17,241 @@ const API_BASE_URL = "http://localhost:8082/api";
 // automatically when we set `withCredentials: true` on the request.
 
 // ─── Constants (mirrored from AddEmployee) ─────────────────────────────────────
+// List of company departments an employee can belong to.
+// These cover the common departments found in industrial, manufacturing,
+// warehouse and logistics companies (the industries this app serves).
+//
+// NOTE ON COMPLIANCE: Unlike job roles (KZiS) and contract types (Kodeks pracy),
+// company departments are NOT defined by any Polish government standard — a
+// company organises its own internal structure. So these are sensible industry
+// names, shown BILINGUALLY (Polish / English) to match the Polish-market UI.
+//
+// Each item has:
+//   value -> the text we SAVE (kept exactly as the original English name, so
+//            employees saved before this change still match — backward compatible)
+//   label -> the text we SHOW in the dropdown ("Polish / English")
+// MUST stay in sync with the DEPARTMENTS lists in AddEmployee.jsx and EmployeeList.jsx.
 const DEPARTMENTS = [
-  "Warehouse", "Operations", "Manufacturing", "Logistics",
-  "Admin", "HR", "IT", "Finance", "Security",
+  { value: "Warehouse",              label: "Magazyn / Warehouse" },
+  { value: "Operations",             label: "Operacje / Operations" },
+  { value: "Manufacturing",          label: "Wytwarzanie / Manufacturing" },
+  { value: "Production",             label: "Produkcja / Production" },
+  { value: "Logistics",              label: "Logistyka / Logistics" },
+  { value: "Supply Chain",           label: "Łańcuch dostaw / Supply Chain" },
+  { value: "Procurement",            label: "Zakupy / Procurement" },
+  { value: "Transport",              label: "Transport" },
+  { value: "Distribution",           label: "Dystrybucja / Distribution" },
+  { value: "Maintenance",            label: "Utrzymanie ruchu / Maintenance" },
+  { value: "Engineering",            label: "Inżynieria / Engineering" },
+  { value: "Quality Assurance",      label: "Zapewnienie jakości / Quality Assurance" },
+  { value: "Quality Control",        label: "Kontrola jakości / Quality Control" },
+  { value: "Research & Development", label: "Badania i rozwój / R&D" },
+  { value: "Health & Safety (BHP)",  label: "BHP / Health & Safety" },
+  { value: "Environmental",          label: "Ochrona środowiska / Environmental" },
+  { value: "Facilities",             label: "Obsługa obiektu / Facilities" },
+  { value: "Admin",                  label: "Administracja / Admin" },
+  { value: "HR",                     label: "Kadry / HR" },
+  { value: "IT",                     label: "Informatyka / IT" },
+  { value: "Finance",                label: "Finanse / Finance" },
+  { value: "Accounting",             label: "Księgowość / Accounting" },
+  { value: "Legal",                  label: "Dział prawny / Legal" },
+  { value: "Compliance",             label: "Zgodność / Compliance" },
+  { value: "Sales",                  label: "Sprzedaż / Sales" },
+  { value: "Marketing",              label: "Marketing" },
+  { value: "Customer Service",       label: "Obsługa klienta / Customer Service" },
+  { value: "Security",               label: "Ochrona / Security" },
+  { value: "Training & Development", label: "Szkolenia i rozwój / Training & Development" },
+  { value: "Project Management",     label: "Zarządzanie projektami / Project Management" },
 ];
+// Job roles (positions) an employee can have.
+//
+// These are the OFFICIAL Polish job titles from KZiS — "Klasyfikacja Zawodów
+// i Specjalności na potrzeby rynku pracy" (Classification of Occupations and
+// Specialties), maintained by the Ministry of Family, Labour and Social
+// Policy. Each entry shows the official Polish name plus its 6-digit KZiS code,
+// e.g. "Magazynier — KZiS 432103". Using official codes makes the data ready
+// for government reporting (GUS, ZUS) and audits.
+//
+// The list is grouped by department (English comments) only to stay readable —
+// it is still ONE flat list because the position dropdown shows every role and
+// the user can just type to search by name or by code.
+//
+// This MUST stay in sync with the JOB_ROLES list in AddEmployee.jsx.
+// Legal source: KZiS, consolidated text Dz.U. 2018 poz. 227 with later
+// amendments (Dz.U. 2021 poz. 2285; 2022 poz. 853; 2024 poz. 1372).
+// Portal: https://psz.praca.gov.pl and https://klasyfikacje.stat.gov.pl/Kzis.
 const JOB_ROLES = [
-  "Warehouse Operator", "Forklift Driver", "Machine Operator", "Driver",
-  "HR Assistant", "Site Manager", "Office Admin", "Engineer",
-  "Security Guard", "Team Lead",
+  // ── Management & Directors (KZiS major group 1) ──
+  "Dyrektor generalny — KZiS 112007",
+  "Dyrektor operacyjny — KZiS 112011",
+  "Dyrektor produkcji — KZiS 112012",
+  "Dyrektor finansowy — KZiS 112006",
+  "Dyrektor handlowy — KZiS 112008",
+  "Dyrektor marketingu — KZiS 112010",
+  "Dyrektor logistyki — KZiS 112009",
+  "Dyrektor do spraw informatyki / informacji — KZiS 112004",
+  "Dyrektor do spraw badawczo-rozwojowych — KZiS 112002",
+  "Dyrektor do spraw administracyjnych — KZiS 112001",
+  "Dyrektor departamentu — KZiS 121301",
+  // ── Department managers (Kierownicy) ──
+  "Kierownik produkcji w przemyśle — KZiS 132103",
+  "Kierownik do spraw kontroli jakości — KZiS 132102",
+  "Kierownik działu logistyki — KZiS 132401",
+  "Kierownik magazynu — KZiS 132404",
+  "Kierownik działu zakupów — KZiS 132403",
+  "Kierownik utrzymania ruchu — KZiS 132105",
+  "Główny księgowy — KZiS 121101",
+  "Kierownik działu finansowego — KZiS 121103",
+  "Kierownik działu kadr i płac — KZiS 121201",
+  "Kierownik działu zarządzania zasobami ludzkimi — KZiS 121203",
+  "Kierownik działu szkoleń — KZiS 121202",
+  "Kierownik działu informatyki — KZiS 133001",
+  "Kierownik do spraw sprzedaży — KZiS 122102",
+  "Kierownik do spraw marketingu — KZiS 122101",
+  "Kierownik do spraw rozwoju produktu — KZiS 122301",
+  "Kierownik działu badawczo-rozwojowego — KZiS 122302",
+  "Kierownik projektu — KZiS 121904",
+  "Kierownik działu administracyjno-gospodarczego — KZiS 121901",
+  "Kierownik agencji ochrony mienia i osób — KZiS 134903",
+  // ── Warehouse (Magazyn) ──
+  "Magazynier — KZiS 432103",
+  "Magazynier-logistyk — KZiS 432106",
+  "Robotnik magazynowy — KZiS 933304",
+  "Kierowca operator wózków jezdniowych (widłowych) — KZiS 834401",
+  "Wydawca materiałów — KZiS 932914",
+  // ── Logistics & Forwarding (Logistyka / Spedycja) ──
+  "Specjalista do spraw logistyki — KZiS 242108",
+  "Pracownik działu logistyki — KZiS 333104",
+  "Technik logistyk — KZiS 333107",
+  "Spedytor — KZiS 333105",
+  "Technik spedytor — KZiS 333108",
+  "Dyspozytor transportu samochodowego — KZiS 432302",
+  "Ekspedytor — KZiS 432303",
+  "Inżynier zaopatrzenia, transportu i magazynowania — KZiS 214104",
+  // ── Transport (Kierowcy) ──
+  "Kierowca samochodu ciężarowego — KZiS 833203",
+  "Kierowca ciągnika siodłowego — KZiS 833202",
+  "Kierowca samochodu dostawczego — KZiS 832202",
+  "Kierowca samochodu osobowego — KZiS 832203",
+  "Kierowca autobusu — KZiS 833101",
+  // ── Procurement (Zakupy / Zaopatrzenie) ──
+  "Specjalista do spraw zamówień publicznych — KZiS 242225",
+  "Agent do spraw zakupów — KZiS 332301",
+  "Zaopatrzeniowiec — KZiS 332302",
+  // ── Production & Manufacturing (Produkcja) ──
+  "Mistrz produkcji w przemyśle elektromaszynowym — KZiS 312203",
+  "Mistrz produkcji w przemyśle samochodowym — KZiS 312207",
+  "Operator zautomatyzowanej linii produkcyjnej — KZiS 313904",
+  "Operator robotów i manipulatorów przemysłowych — KZiS 313903",
+  "Monter maszyn i urządzeń przemysłowych — KZiS 821105",
+  "Monter maszyn elektrycznych — KZiS 821204",
+  "Monter wiązek elektrycznych — KZiS 821207",
+  "Pomocniczy robotnik przemysłowy — KZiS 932911",
+  "Pakowacz ręczny — KZiS 932101",
+  "Sortowacz — KZiS 932913",
+  // ── Maintenance & Trades (Utrzymanie ruchu / rzemiosło) ──
+  "Ślusarz — KZiS 722204",
+  "Ślusarz narzędziowy — KZiS 722206",
+  "Spawacz — KZiS 721204",
+  "Elektryk — KZiS 741103",
+  "Elektromonter instalacji elektrycznych — KZiS 741101",
+  "Elektromonter (elektryk) zakładowy — KZiS 741207",
+  "Technik utrzymania ruchu — KZiS 311514",
+  "Konserwator budynków i stanu technicznego pomieszczeń — KZiS 711101",
+  "Pomocnik mechanika — KZiS 932908",
+  // ── Engineering (Inżynierowie) ──
+  "Inżynier mechanik – maszyny i urządzenia przemysłowe — KZiS 214404",
+  "Inżynier mechanik – technologia mechaniczna — KZiS 214407",
+  "Inżynier elektryk — KZiS 215103",
+  "Inżynier utrzymania ruchu — KZiS 214103",
+  "Główny technolog — KZiS 214111",
+  "Technik mechanik maszyn i urządzeń — KZiS 311508",
+  "Technik elektryk — KZiS 311303",
+  // ── Quality (Kontrola jakości) ──
+  "Specjalista kontroli jakości — KZiS 214109",
+  "Kontroler jakości wyrobów przemysłowych — KZiS 311937",
+  "Kontroler jakości połączeń spawalniczych — KZiS 311517",
+  // ── Health & Safety (BHP) ──
+  "Specjalista bezpieczeństwa i higieny pracy — KZiS 229103",
+  "Inspektor bezpieczeństwa i higieny pracy — KZiS 325502",
+  "Technik bezpieczeństwa i higieny pracy — KZiS 325509",
+  "Inspektor ochrony przeciwpożarowej — KZiS 311214",
+  // ── Environmental (Ochrona środowiska) ──
+  "Specjalista ochrony środowiska — KZiS 213303",
+  "Inspektor ochrony środowiska — KZiS 325504",
+  "Operator maszyn i urządzeń w gospodarce odpadami — KZiS 313211",
+  "Operator spalarni odpadów komunalnych — KZiS 313206",
+  // ── HR & Payroll (Kadry i płace) ──
+  "Specjalista do spraw kadr — KZiS 242307",
+  "Specjalista do spraw rekrutacji pracowników — KZiS 242309",
+  "Specjalista do spraw wynagrodzeń — KZiS 242310",
+  "Pracownik obsługi płacowej — KZiS 431301",
+  // ── Training & Development (Szkolenia) ──
+  "Specjalista do spraw szkoleń — KZiS 242403",
+  // ── IT ──
+  "Informatyk — KZiS 251106",
+  "Programista aplikacji — KZiS 251401",
+  "Programista aplikacji mobilnych — KZiS 251402",
+  "Specjalista do spraw rozwoju oprogramowania — KZiS 251202",
+  "Specjalista do spraw jakości oprogramowania — KZiS 251404",
+  "Tester oprogramowania komputerowego — KZiS 251903",
+  "Administrator baz danych — KZiS 252101",
+  "Administrator systemów komputerowych — KZiS 252201",
+  "Inżynier systemów i sieci komputerowych — KZiS 252302",
+  "Specjalista bezpieczeństwa oprogramowania — KZiS 252901",
+  // ── Finance & Accounting (Finanse i księgowość) ──
+  "Specjalista do spraw rachunkowości — KZiS 241103",
+  "Specjalista do spraw rachunkowości podatkowej — KZiS 241105",
+  "Kontroler finansowy — KZiS 241107",
+  "Analityk finansowy — KZiS 241306",
+  "Ekonomista — KZiS 263102",
+  // ── Legal, Compliance & Data protection (RODO/GDPR) ──
+  "Inspektor ochrony danych — KZiS 242111",
+  "Inspektor ochrony danych osobowych — KZiS 242212",
+  "Specjalista ochrony informacji niejawnych — KZiS 242110",
+  "Sekretarka w kancelarii prawnej — KZiS 334201",
+  // ── Sales, Marketing & Customer Service ──
+  "Przedstawiciel handlowy — KZiS 332203",
+  "Sprzedawca — KZiS 522301",
+  "Specjalista do spraw marketingu i handlu — KZiS 243106",
+  "Pracownik centrum elektronicznej obsługi klienta — KZiS 332202",
+  "Pracownik obsługi klienta instytucji finansowej — KZiS 331203",
+  // ── Security (Ochrona osób i mienia) ──
+  "Pracownik ochrony fizycznej — KZiS 541307",
+  "Technik ochrony fizycznej osób i mienia — KZiS 541315",
+  "Portier — KZiS 541306",
+  "Dozorca — KZiS 962902",
+  // ── Administration & Office (Biuro / Administracja) ──
+  "Pracownik biurowy — KZiS 411003",
+  "Sekretarka — KZiS 412001",
+  "Recepcjonista — KZiS 422602",
+  // ── Facilities & Cleaning (Obsługa obiektu) ──
+  "Zarządca nieruchomości — KZiS 244003",
+  "Kierownik firmy sprzątającej — KZiS 143907",
+  "Robotnik gospodarczy — KZiS 515303",
+  "Pracownik utrzymania czystości (sprzątaczka) — KZiS 911207",
+  // ── Fallback for anything not on the official list ──
+  "Inne / Other (poza klasyfikacją KZiS)",
 ];
 const SITES = [
   "Warsaw Site", "Krakow Site", "Gdansk Site",
   "Poznan Site", "Warsaw HQ", "Wroclaw Site",
 ];
+// Contract types allowed under Polish law (Kodeks pracy + Civil Code).
+// The "value" MUST match the contractType enum in the backend
+// (models/Employee.js) and the list in AddEmployee.jsx. "UOP" is kept as a
+// general option so employees saved before we split it into subtypes still work.
+// Source: gov.pl — Ministry of Family, Labour and Social Policy.
 const CONTRACT_TYPES = [
-  { value: "UOP",   label: "UOP — Employment contract" },
-  { value: "UZ",    label: "UZ — Contract of mandate" },
-  { value: "UOD",   label: "UOD — Contract for specific work" },
-  { value: "B2B",   label: "B2B — Business to business" },
-  { value: "OTHER", label: "Other" },
+  { value: "UOP",            label: "UOP — Employment contract (general)" },
+  { value: "UOP_PROBATION",  label: "UOP — Trial period (na okres próbny)" },
+  { value: "UOP_FIXED",      label: "UOP — Fixed-term (na czas określony)" },
+  { value: "UOP_INDEFINITE", label: "UOP — Permanent (na czas nieokreślony)" },
+  { value: "UZ",             label: "UZ — Contract of mandate" },
+  { value: "UOD",            label: "UOD — Contract for specific work" },
+  { value: "B2B",            label: "B2B — Business to business" },
+  { value: "INTERNSHIP",     label: "Internship / Traineeship (praktyka / staż)" },
+  { value: "OTHER",          label: "Other" },
 ];
 const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH"];
 const MEDICAL_EXAM_TYPES = ["Initial", "Periodic", "Control", "Specialized"];
@@ -160,6 +376,94 @@ function SelectInput({ value, onChange, children, disabled }) {
     >
       {children}
     </select>
+  );
+}
+
+// A dropdown you can TYPE in to search.
+// We use this for long lists (like Position and Department) so the user does
+// not have to scroll through 100+ items — they just type a few letters and
+// the list shrinks to matching options.
+//
+//   value       -> the currently stored value (what gets saved)
+//   onChange    -> called with the picked value (just the value, not an event)
+//   options     -> either an array of strings, OR an array of { value, label }
+//                  objects. Objects let us SAVE one thing (e.g. "Warehouse")
+//                  but SHOW another (e.g. "Magazyn / Warehouse").
+//   placeholder -> greyed-out hint shown when nothing is selected
+function SearchableSelect({ value, onChange, options, placeholder = "Select..." }) {
+  const [open, setOpen] = useState(false);   // is the dropdown list showing?
+  const [query, setQuery] = useState("");    // what the user has typed to search
+  const boxRef = useRef(null);               // the whole widget, used to detect outside clicks
+
+  // Turn every option into the same { value, label } shape so the rest of the
+  // code does not care whether we were given plain strings or objects.
+  const items = options.map((opt) =>
+    typeof opt === "string" ? { value: opt, label: opt } : opt
+  );
+
+  // Find the label to show for the value that is currently saved.
+  // If the saved value is not in the list (e.g. an old record), just show it.
+  const selectedLabel = items.find((it) => it.value === value)?.label || value;
+
+  // Close the list when the user clicks anywhere outside this widget.
+  useEffect(() => {
+    function handleOutside(e) {
+      if (boxRef.current && !boxRef.current.contains(e.target)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
+  // Keep only the options whose label contains the typed text (any case).
+  const filtered = items.filter((it) =>
+    it.label.toLowerCase().includes(query.trim().toLowerCase())
+  );
+
+  // The user clicked an option: save its value and close the list.
+  function choose(val) {
+    onChange(val);
+    setOpen(false);
+    setQuery("");
+  }
+
+  return (
+    <div ref={boxRef} className="relative">
+      <input
+        type="text"
+        // When open we show what the user is typing; when closed we show the label.
+        value={open ? query : selectedLabel}
+        // If something is already chosen, keep showing it as a faint hint while searching.
+        placeholder={selectedLabel || placeholder}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+      />
+      {open && (
+        <ul className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+          {filtered.length === 0 ? (
+            <li className="px-4 py-2 text-sm text-slate-400">No matches found</li>
+          ) : (
+            filtered.map((it) => (
+              <li
+                key={it.value}
+                // We use onMouseDown (not onClick) so the pick registers before
+                // the input's blur/outside-click handler can close the list.
+                onMouseDown={() => choose(it.value)}
+                className={`cursor-pointer px-4 py-2 text-sm hover:bg-blue-50 ${
+                  it.value === value ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-700"
+                }`}
+              >
+                {it.label}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -837,16 +1141,20 @@ function EmployeeProfile() {
                   <SectionTitle title="Role & Workplace" subtitle="Job role, department, and site assignment" />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <FormField label="Department" required>
-                      <SelectInput value={editForm.department} onChange={(e) => updateEdit("department", e.target.value)}>
-                        <option value="">Select department</option>
-                        {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-                      </SelectInput>
+                      <SearchableSelect
+                        value={editForm.department}
+                        onChange={(v) => updateEdit("department", v)}
+                        options={DEPARTMENTS}
+                        placeholder="Search department..."
+                      />
                     </FormField>
                     <FormField label="Position" required>
-                      <SelectInput value={editForm.position} onChange={(e) => updateEdit("position", e.target.value)}>
-                        <option value="">Select position</option>
-                        {JOB_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                      </SelectInput>
+                      <SearchableSelect
+                        value={editForm.position}
+                        onChange={(v) => updateEdit("position", v)}
+                        options={JOB_ROLES}
+                        placeholder="Search position..."
+                      />
                     </FormField>
                     <FormField label="Work Site" required>
                       <SelectInput value={editForm.site} onChange={(e) => updateEdit("site", e.target.value)}>

@@ -66,7 +66,20 @@ const employeeProfileSchema = new mongoose.Schema(
 
     contractType: {
       type: String,
-      enum: ['UOP', 'UZ', 'UOD', 'B2B', 'OTHER'],
+      // Contract types allowed by Polish law (Kodeks pracy + Civil Code).
+      // 'UOP' is the general employment contract and is KEPT so employees
+      // saved before this change still validate. The three UOP_* values are
+      // the specific employment-contract subtypes defined by the Labour Code:
+      //   UOP_PROBATION  -> umowa na okres próbny (trial period, max 3 months)
+      //   UOP_FIXED      -> umowa na czas określony (fixed-term, max 33 months)
+      //   UOP_INDEFINITE -> umowa na czas nieokreślony (permanent)
+      // The rest are civil-law / other legal forms:
+      //   UZ  -> umowa zlecenie (contract of mandate)
+      //   UOD -> umowa o dzieło (contract for specific work)
+      //   B2B -> self-employment (business-to-business)
+      //   INTERNSHIP -> umowa o praktykę absolwencką / staż (graduate internship / traineeship)
+      // Source: gov.pl (Ministry of Family, Labour and Social Policy).
+      enum: ['UOP', 'UOP_PROBATION', 'UOP_FIXED', 'UOP_INDEFINITE', 'UZ', 'UOD', 'B2B', 'INTERNSHIP', 'OTHER'],
       default: 'UOP',
     },
 

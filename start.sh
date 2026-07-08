@@ -17,21 +17,31 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-# Open a new Terminal tab and run a command in it
+# Open a new Terminal window and run a command in it.
+#
+# We used to press Cmd+T via "System Events" to make a new TAB, but that
+# needs special "Accessibility" permission. Without it macOS blocks the
+# keystroke and NOTHING opens. So instead we use Terminal's own
+# "do script" command, which opens a brand new window on its own and
+# does NOT need any extra permission. This is much more reliable.
+#
+# Note: we no longer hide errors. If something goes wrong you will see it.
 open_tab() {
   local label="$1"
   local cmd="$2"
+  # We set the window/tab title using a printf escape code, then run the command.
   osascript \
     -e 'tell application "Terminal"' \
     -e '  activate' \
-    -e '  tell application "System Events" to keystroke "t" using command down' \
-    -e "  delay 0.3" \
-    -e "  do script \"printf '\\\\033]0;${label}\\\\007' ; ${cmd}\" in front window" \
+    -e "  do script \"printf '\\\\033]0;${label}\\\\007' ; ${cmd}\"" \
     -e 'end tell' \
-    > /dev/null 2>&1
+    > /dev/null
 }
 
-# Start a Spring Boot backend if the directory exists
+# Start a backend if the directory exists.
+# Some backends are Java/Spring Boot (have a pom.xml) and some are
+# Node.js (have a package.json). We look at the files inside the folder
+# and pick the right way to start each one.
 start_backend() {
   local module="$1"   # e.g. RegulaOne
   local port="$2"
@@ -42,14 +52,32 @@ start_backend() {
     return
   fi
 
-  local mvn_cmd
-  if [ -f "${dir}/mvnw" ]; then
-    mvn_cmd="./mvnw"
+  local run_cmd
+  if [ -f "${dir}/pom.xml" ]; then
+    # This is a Java / Spring Boot project. Use the Maven wrapper if it
+    # exists, otherwise fall back to a globally installed "mvn".
+    local mvn_cmd
+    if [ -f "${dir}/mvnw" ]; then
+      mvn_cmd="./mvnw"
+    else
+      mvn_cmd="mvn"
+    fi
+    run_cmd="${mvn_cmd} spring-boot:run -Dspring-boot.run.arguments=--server.port=${port}"
+  elif [ -f "${dir}/package.json" ]; then
+    # This is a Node.js project. We pass the port through the PORT env var
+    # (the app should read process.env.PORT). We prefer "npm run dev" if a
+    # dev script exists, otherwise fall back to "npm start".
+    if grep -q '"dev"' "${dir}/package.json"; then
+      run_cmd="PORT=${port} npm run dev"
+    else
+      run_cmd="PORT=${port} npm start"
+    fi
   else
-    mvn_cmd="mvn"
+    echo "  [skip] ${module} backend — no pom.xml or package.json"
+    return
   fi
 
-  local cmd="cd '${dir}' && echo '▶ Starting ${module} backend on :${port}' && ${mvn_cmd} spring-boot:run -Dspring-boot.run.arguments=--server.port=${port} ; exec \$SHELL"
+  local cmd="cd '${dir}' && echo '▶ Starting ${module} backend on :${port}' && ${run_cmd} ; exec \$SHELL"
   open_tab "${module} Backend :${port}" "$cmd"
   echo "  [✓] ${module} backend  → http://localhost:${port}"
 }
