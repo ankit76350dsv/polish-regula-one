@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* Small fade-in used by toasts / banners. */
+@keyframes fade-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-down {
+  animation: fade-in-down 0.18s ease-out forwards;
+}

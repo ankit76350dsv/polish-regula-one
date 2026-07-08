@@ -1,38 +1,21 @@
-HELP.md
-target/
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+# Dependencies
+node_modules/
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+# Environment files — NEVER commit real secrets
+.env
+.env.local
+.env.*.local
 
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
+# Logs
+logs/
+*.log
+npm-debug.log*
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
+# OS / editor
+.DS_Store
 .vscode/
+.idea/
 
-### Sensitive config ###
-src/main/resources/application.properties
-src/main/resources/application-dev.properties
-src/main/resources/application-prod.properties
+# Build / temp
+dist/
+tmp/
