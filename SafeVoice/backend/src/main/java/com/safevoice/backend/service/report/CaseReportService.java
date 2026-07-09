@@ -1,18 +1,23 @@
 package com.safevoice.backend.service.report;
 
+import com.safevoice.backend.dto.CaseKeysResponse;
 import com.safevoice.backend.dto.CaseSubmissionRequest;
 import com.safevoice.backend.dto.CaseSubmissionResponse;
 import com.safevoice.backend.dto.CaseSummaryResponse;
+import com.safevoice.backend.dto.DataKeyResponse;
+import com.safevoice.backend.dto.EncryptedPayloadDto;
 import com.safevoice.backend.dto.PageResponse;
 import com.safevoice.backend.exception.CaseNotFoundException;
 import com.safevoice.backend.exception.CaseReferenceConflictException;
-import com.safevoice.backend.exception.ClientSideEncryptionRequiredException;
 import com.safevoice.backend.exception.TenantNotFoundException;
+import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.document.Tenant;
+import com.safevoice.backend.model.embedded.EncryptedPayload;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
 import com.safevoice.backend.model.embedded.RetentionPolicy;
 import com.safevoice.backend.model.embedded.TimelineEvent;
+import com.safevoice.backend.service.crypto.EnvelopeEncryptionService;
 import com.safevoice.backend.model.enums.audit.AuditActionType;
 import com.safevoice.backend.model.enums.audit.AuditOutcome;
 import com.safevoice.backend.model.enums.case_report.CaseSeverity;
@@ -30,6 +35,7 @@ import com.safevoice.backend.service.notification.SafeVoiceEmailNotificationServ
 import com.safevoice.backend.service.report.utils.CaseReportUtils;
 import com.safevoice.backend.websocket.CaseEventPublisher;
 
+import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,12 +51,15 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
  * Service orchestrating operations on CaseReport documents.
  */
+@Slf4j
 @Service
 public class CaseReportService {
 
@@ -68,14 +77,14 @@ public class CaseReportService {
     private final AttachmentService attachmentService;
     // Sends content-free staff email alerts through RegulaOne's internal email relay.
     private final SafeVoiceEmailNotificationService emailNotificationService;
+    // Talks to AWS KMS to unwrap (unlock) the one-time data keys so a reader's browser can
+    // decrypt a case. We never decrypt the report text on the server — only the small keys.
+    private final EnvelopeEncryptionService envelopeEncryptionService;
 
     // Hard ceiling on page size, so a caller can never ask for a giant page that would
     // strain the database or the browser. Requests above this are clamped down to it.
     private static final int MAX_PAGE_SIZE = 200;
     private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final String CLIENT_ENCRYPTION_PENDING_MESSAGE =
-            "Normal SafeVoice report narratives must be submitted as client-side encrypted payloads. "
-                    + "That payload format is not wired yet.";
 
     // How long a whistleblower case is kept before the retention job destroys it. This MUST be
     // set to the legally verified period for whistleblower data under the Polish Act — keep it
@@ -100,7 +109,8 @@ public class CaseReportService {
                              MongoTemplate mongoTemplate,
                              CaseEventPublisher caseEventPublisher,
                              AttachmentService attachmentService,
-                             SafeVoiceEmailNotificationService emailNotificationService) {
+                             SafeVoiceEmailNotificationService emailNotificationService,
+                             EnvelopeEncryptionService envelopeEncryptionService) {
         this.caseReportRepository = caseReportRepository;
         this.caseMessageRepository = caseMessageRepository;
         this.tenantRepository = tenantRepository;
@@ -109,6 +119,7 @@ public class CaseReportService {
         this.caseEventPublisher = caseEventPublisher;
         this.attachmentService = attachmentService;
         this.emailNotificationService = emailNotificationService;
+        this.envelopeEncryptionService = envelopeEncryptionService;
     }
 
     /**
@@ -144,9 +155,29 @@ public class CaseReportService {
         ReportCategory category = ReportCategory.fromLabel(request.getCategory());
         boolean isHrOnly = category == ReportCategory.LABOUR_DISPUTE;
 
-        // Temporary local-testing bypass: default is false, so production still fails closed.
-        if (!isHrOnly && !allowPlaintextIntakeForLocalTesting) {
-            throw new ClientSideEncryptionRequiredException(CLIENT_ENCRYPTION_PENDING_MESSAGE);
+        // Decide how the report narrative is stored. EVERY report — including HR grievances
+        // (LABOUR_DISPUTE) — must arrive already locked (encrypted) in the reporter's browser.
+        // (This is stricter than CLAUDE.md Module 4's original "do not encrypt labour disputes"
+        // rule; it was changed on request so ALL report content is encrypted at rest.)
+        // The local-testing flag is the ONLY way to accept plain text, and it defaults to false
+        // so production always requires real client-side encryption.
+        EncryptedPayload encryptedContent = null;
+        boolean hasEncrypted = request.getEncryptedContent() != null
+                && request.getEncryptedContent().getCiphertext() != null
+                && !request.getEncryptedContent().getCiphertext().isBlank();
+        boolean hasPlainFacts = request.getFacts() != null && !request.getFacts().isBlank();
+
+        if (hasEncrypted) {
+            // Done the right way: store the browser-locked payload, no plain text.
+            encryptedContent = toEncryptedPayload(request.getEncryptedContent());
+        } else if (allowPlaintextIntakeForLocalTesting && hasPlainFacts) {
+            // Local dev only: allow plain text so the flow can be tested without AWS KMS.
+            log.warn("[submit] Accepting PLAINTEXT report narrative — local-testing flag is ON. "
+                    + "This must never happen in production.");
+        } else {
+            // Neither an encrypted payload nor a dev bypass → reject clearly.
+            throw new IllegalArgumentException(
+                    "This report must be sent as client-side encrypted content.");
         }
 
         String accessKey = null;
@@ -181,7 +212,15 @@ public class CaseReportService {
         caseReport.setTenantId(tenantId);
         caseReport.setKeyHash(keyHash); //! Hashed of genarated...
         caseReport.setCategory(category);
-        caseReport.setDescription(request.getFacts());
+        // Store the narrative the RIGHT way for this category: HR grievances (and the dev-only
+        // plaintext bypass) keep plain text; every normal report keeps only the browser-locked
+        // payload and NO plain text. See the branching above where these were worked out.
+        if (encryptedContent != null) {
+            caseReport.setEncryptedContent(encryptedContent);
+            caseReport.setDescription(null);
+        } else {
+            caseReport.setDescription(request.getFacts());
+        }
         caseReport.setIncidentDate(CaseReportUtils.parseIncidentDate(request.getIncidentDate()));
         caseReport.setDepartment(request.getArea());
         caseReport.setDisclosureMode(isHrOnly ? DisclosureMode.HR_HANDOFF : DisclosureMode.ANONYMOUS);
@@ -662,5 +701,93 @@ public class CaseReportService {
         );
 
         return saved;
+    }
+
+    // ── Client-side encryption support (envelope encryption via AWS KMS) ──────────────────────
+
+    /**
+     * Give the browser a brand-new, one-time key to LOCK (encrypt) a report before sending it.
+     *
+     * We first make sure the organisation is real and active — this stops strangers from making
+     * the server call AWS KMS (which costs money) for organisations that do not exist. The key is
+     * tied to this exact organisation, so it can never be reused to unlock another company's data.
+     *
+     * @param tenantId the organisation the report is for
+     * @return the plain key (used once in the browser) and the wrapped key (safe to store)
+     */
+    public DataKeyResponse issueDataKey(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("Tenant info/context is required");
+        }
+        String id = tenantId.trim();
+        Tenant tenant = tenantRepository.findById(id)
+                .orElseThrow(() -> new TenantNotFoundException("Unknown tenant: " + id));
+        if (!"ACTIVE".equalsIgnoreCase(tenant.getStatus())) {
+            throw new TenantNotFoundException("Tenant is not active: " + id);
+        }
+        return envelopeEncryptionService.generateDataKey(id);
+    }
+
+    /**
+     * Give the REPORTER the keys to READ their own case in the browser.
+     *
+     * The reporter proves ownership with their access key (same as the tracking page). We resolve
+     * their case and unwrap ONLY the keys that belong to THAT case — the main report and each
+     * message in its thread. We never unwrap a key the caller supplies, so a stolen wrapped key
+     * cannot be brought here to be unlocked.
+     */
+    public CaseKeysResponse buildReporterCaseKeys(String accessKey) {
+        CaseReport report = retrieveByAccessKey(accessKey);
+        return decryptCaseKeys(report);
+    }
+
+    /**
+     * Give authorised STAFF the keys to READ one case in the browser. The case must belong to the
+     * staff member's own organisation (tenant isolation), which {@link #getById} enforces.
+     */
+    public CaseKeysResponse buildStaffCaseKeys(String caseId, String tenantId) {
+        CaseReport report = getById(caseId, tenantId);
+        return decryptCaseKeys(report);
+    }
+
+    // Unwrap every data key that belongs to ONE case (its report + all its messages) so the
+    // browser can unlock the whole case. Each unwrap is bound to the case's own tenant, so KMS
+    // will only unlock keys that were made for this same organisation.
+    private CaseKeysResponse decryptCaseKeys(CaseReport report) {
+        String tenantId = report.getTenantId();
+
+        String contentKey = null;
+        if (report.getEncryptedContent() != null
+                && report.getEncryptedContent().getWrappedKey() != null) {
+            contentKey = envelopeEncryptionService.unwrapDataKey(
+                    tenantId, report.getEncryptedContent().getWrappedKey());
+        }
+
+        Map<String, String> messageKeys = new HashMap<>();
+        List<CaseMessage> messages = caseMessageRepository
+                .findAllByTenantIdAndCaseIdOrderByTimestampAsc(tenantId, report.getId());
+        for (CaseMessage message : messages) {
+            EncryptedPayload enc = message.getEncryptedText();
+            if (enc != null && enc.getWrappedKey() != null) {
+                messageKeys.put(message.getId(),
+                        envelopeEncryptionService.unwrapDataKey(tenantId, enc.getWrappedKey()));
+            }
+        }
+
+        return CaseKeysResponse.builder()
+                .contentKey(contentKey)
+                .messageKeys(messageKeys)
+                .build();
+    }
+
+    // Copy the browser-sent encrypted payload into the shape we store in the database, and stamp
+    // it with the algorithm label so future readers know how it was locked.
+    private EncryptedPayload toEncryptedPayload(EncryptedPayloadDto dto) {
+        EncryptedPayload payload = new EncryptedPayload();
+        payload.setCiphertext(dto.getCiphertext());
+        payload.setIv(dto.getIv());
+        payload.setWrappedKey(dto.getWrappedKey());
+        payload.setAlgorithm(dto.getAlgorithm() != null ? dto.getAlgorithm() : "AES-256-GCM");
+        return payload;
     }
 }

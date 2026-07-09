@@ -19,9 +19,13 @@ import java.util.List;
 /**
  * Main MongoDB document mapping case reports.
  * Employs UUID primary key (inherited from BaseDocument) and indexing on trackingCode.
- * Adheres to RODO/GDPR with automated retention policies. The backend no longer performs
- * field encryption/decryption here; normal whistleblower plaintext intake is blocked until
- * client-side encrypted payload support is wired in.
+ * Adheres to RODO/GDPR with automated retention policies.
+ *
+ * ENCRYPTION MODEL: ALL report text — HR grievances (LABOUR_DISPUTE) included — is locked
+ * (encrypted) in the reporter's browser BEFORE it ever reaches us and is stored in
+ * {@link #encryptedContent}. The server cannot read it; only AWS KMS (to unwrap the key) plus
+ * the reader's browser (to unlock the text) can. The plain {@link #description} field is used
+ * only under the dev-only local-testing plaintext flag.
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -61,7 +65,14 @@ public class CaseReport extends BaseDocument {
 
     private ReportCategory category;
 
+    // Plain-text report narrative. Normally stays null — it is used ONLY under the dev-only
+    // local-testing plaintext flag. In production every report (HR included) is encrypted.
     private String description;
+
+    // The report narrative, locked (AES-256-GCM) in the reporter's browser using a one-time data
+    // key that AWS KMS wrapped. The server stores it but cannot read it. Set for every report,
+    // including HR grievances.
+    private EncryptedPayload encryptedContent;
 
     private Instant incidentDate;
 

@@ -15,11 +15,15 @@ SafeVoice keeps the **good part** (data is encrypted/decrypted on the user's dev
 
 | Data | How it is stored |
 |---|---|
-| Normal report narrative | `CaseReport.encryptedContent` (AES-256-GCM, browser-locked) |
-| Normal thread messages | `CaseMessage.encryptedText` (AES-256-GCM, browser-locked) |
-| HR grievances (`LABOUR_DISPUTE`) | Plain `description` / `text` — kept unencrypted **by policy** (CLAUDE.md Module 4) |
-| System notices (7-day acknowledgement) | Plain `text` — fixed, non-confidential boilerplate |
+| Report narrative (ALL categories, HR included) | `CaseReport.encryptedContent` (AES-256-GCM, browser-locked) |
+| Thread messages (ALL categories, HR included) | `CaseMessage.encryptedText` (AES-256-GCM, browser-locked) |
+| System notices (7-day acknowledgement) | Plain `text` — fixed, non-confidential boilerplate (no browser to encrypt it) |
 | Evidence files | Already encrypted at rest in S3 (SSE-AES256) — unchanged |
+
+> **Note:** HR grievances (`LABOUR_DISPUTE`) are now encrypted too, on request. This is stricter
+> than CLAUDE.md Module 4's original "do not encrypt labour disputes" rule — that rule should be
+> updated to match, or this deviation recorded. HR grievances have no reporter access key, so only
+> HR **staff** decrypt them (via the internal `case-keys` endpoint).
 
 ## 3. The flow
 

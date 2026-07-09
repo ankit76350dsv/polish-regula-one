@@ -98,6 +98,7 @@ public class ComplianceDeadlineService {
         caseMessageService.postMessage(
                 report.getId(),
                 ACKNOWLEDGEMENT_MESSAGE,
+                null, // no encrypted payload: this is a fixed, non-confidential system notice
                 "System",
                 report.getTenantId(),
                 "System",

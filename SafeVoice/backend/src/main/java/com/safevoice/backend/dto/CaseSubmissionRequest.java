@@ -48,9 +48,16 @@ public class CaseSubmissionRequest {
     // Free-text location/area where the incident took place. Stored as "department".
     private String area;
 
-    // The actual description of what happened. This is the heart of the report.
-    @NotBlank(message = "A description of the facts is required")
+    // The actual description of what happened, as PLAIN text. This is now used ONLY for HR
+    // grievances (LABOUR_DISPUTE), which are kept unencrypted by policy. For a normal report the
+    // browser sends the locked text in `encryptedContent` below instead, so this stays empty.
+    // (Validation of "which one is required" is done in the service, based on the category.)
     private String facts;
+
+    // The report narrative already locked (encrypted) in the reporter's browser. Required for a
+    // normal report; left out for HR grievances. @Valid so its own size limits are enforced.
+    @Valid
+    private EncryptedPayloadDto encryptedContent;
 
     // How the reporter wants to communicate: "written" (default) or "oral".
     private String channel;

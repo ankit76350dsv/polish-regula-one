@@ -128,8 +128,9 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Server-side field encryption has been removed, so normal whistleblower plaintext
-     * must not be accepted until the client-side encrypted payload format is implemented.
+     * Legacy guard kept for backward compatibility: it used to block plaintext while client-side
+     * encryption was not yet wired. Client-side encryption is now implemented, so this is no
+     * longer thrown, but the mapping stays so any old caller still gets a clean 503.
      */
     @ExceptionHandler(ClientSideEncryptionRequiredException.class)
     public ResponseEntity<Map<String, Object>> handleClientSideEncryptionRequired(
@@ -137,5 +138,17 @@ public class GlobalExceptionHandler {
         log.warn("[handleClientSideEncryptionRequired]: rejected sensitive plaintext intake");
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(body(ex.getMessage(), "CLIENT_ENCRYPTION_REQUIRED", HttpStatus.SERVICE_UNAVAILABLE));
+    }
+
+    /**
+     * An AWS KMS operation (make a data key, or unlock one) failed or is not configured. We answer
+     * with a neutral 503 so the client can ask the user to try again shortly. We NEVER include the
+     * underlying AWS error in the response — only a short, safe message (CLAUDE.md §17).
+     */
+    @ExceptionHandler(CryptoOperationException.class)
+    public ResponseEntity<Map<String, Object>> handleCryptoOperation(CryptoOperationException ex) {
+        log.error("[handleCryptoOperation]: KMS operation failed (detail hidden)");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(body(ex.getMessage(), "CRYPTO_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE));
     }
 }
