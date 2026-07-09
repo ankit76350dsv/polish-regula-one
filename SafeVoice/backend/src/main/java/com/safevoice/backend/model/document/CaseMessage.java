@@ -1,6 +1,5 @@
 package com.safevoice.backend.model.document;
 
-import com.safevoice.backend.model.annotation.Encrypted;
 import com.safevoice.backend.model.base.BaseDocument;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
 import lombok.Data;
@@ -15,7 +14,8 @@ import java.util.List;
 /**
  * MongoDB document representing chat logs within a case channel.
  * Indexed by caseId for quick message retrieval.
- * Employs encryption on the message body (text).
+ * The backend no longer performs field encryption/decryption on message text; normal
+ * whistleblower plaintext messages are blocked until client-side encrypted payload support lands.
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -27,7 +27,6 @@ public class CaseMessage extends BaseDocument {
 
     private String sender; // e.g., Reporter, Compliance Officer, Investigator, HR Manager, System
 
-    @Encrypted
     private String text;
 
     private Instant timestamp;
