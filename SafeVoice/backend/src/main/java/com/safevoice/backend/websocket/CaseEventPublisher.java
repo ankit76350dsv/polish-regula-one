@@ -57,7 +57,7 @@ public class CaseEventPublisher {
      * that case's reporter and that case's tenant, so the message can't leak elsewhere.
      *
      * @param caseId  the case the message belongs to
-     * @param message the saved message (text is already decrypted in memory, as the REST API returns it)
+     * @param message the saved message returned by the REST API
      */
     public void publishMessage(String caseId, CaseMessage message) {
         if (caseId == null || caseId.isBlank()) {
