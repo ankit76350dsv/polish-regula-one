@@ -1,7 +1,6 @@
 package com.safevoice.backend.model.document;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.safevoice.backend.model.annotation.Encrypted;
 import com.safevoice.backend.model.base.BaseDocument;
 import com.safevoice.backend.model.embedded.*;
 import com.safevoice.backend.model.enums.case_report.*;
@@ -20,8 +19,9 @@ import java.util.List;
 /**
  * Main MongoDB document mapping case reports.
  * Employs UUID primary key (inherited from BaseDocument) and indexing on trackingCode.
- * Adheres to RODO/GDPR with automated retention policies and AES-256-GCM encryption
- * flags on sensitive fields (description, contactVaultRef).
+ * Adheres to RODO/GDPR with automated retention policies. The backend no longer performs
+ * field encryption/decryption here; normal whistleblower plaintext intake is blocked until
+ * client-side encrypted payload support is wired in.
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -61,7 +61,6 @@ public class CaseReport extends BaseDocument {
 
     private ReportCategory category;
 
-    @Encrypted
     private String description;
 
     private Instant incidentDate;
@@ -84,7 +83,6 @@ public class CaseReport extends BaseDocument {
 
     private DisclosureMode disclosureMode;
 
-    @Encrypted
     private String contactVaultRef;
 
     private IntakeChannel intakeChannel;
