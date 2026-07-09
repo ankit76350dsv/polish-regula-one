@@ -125,4 +125,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(body(ex.getMessage(), "SCAN_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE));
     }
+
+    /**
+     * Server-side field encryption has been removed, so normal whistleblower plaintext
+     * must not be accepted until the client-side encrypted payload format is implemented.
+     */
+    @ExceptionHandler(ClientSideEncryptionRequiredException.class)
+    public ResponseEntity<Map<String, Object>> handleClientSideEncryptionRequired(
+            ClientSideEncryptionRequiredException ex) {
+        log.warn("[handleClientSideEncryptionRequired]: rejected sensitive plaintext intake");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(body(ex.getMessage(), "CLIENT_ENCRYPTION_REQUIRED", HttpStatus.SERVICE_UNAVAILABLE));
+    }
 }
