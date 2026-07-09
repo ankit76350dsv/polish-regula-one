@@ -29,8 +29,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * Two token buckets per client IP:
  *   • a GENERAL bucket applied to every /api/safevoice/** request, and
- *   • a stricter SENSITIVE bucket applied additionally to the two credential-checking endpoints
- *     (/track and /attachments/download), where brute-force is the concern.
+ *   • a stricter SENSITIVE bucket applied additionally to the credential-checking / KMS-calling
+ *     endpoints (/track, /attachments/download, /crypto/data-key, /crypto/case-keys), where
+ *     brute-force and AWS KMS cost abuse are the concern.
  *
  * NOTE: this is an in-memory limiter, correct for a SINGLE instance. A multi-instance / horizontally
  * scaled deployment must move this to a shared store (Redis via bucket4j) or enforce it at the
@@ -48,6 +49,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final String PUBLIC_PREFIX = "/api/safevoice/";
     private static final String TRACK_PATH = "/api/safevoice/reports/track";
     private static final String DOWNLOAD_PATH = "/api/safevoice/reports/attachments/download";
+    // Crypto helpers make the server call AWS KMS (which costs money) and, for case-keys, check a
+    // credential. Throttle them harder, like the other credential endpoints, to blunt cost abuse
+    // and brute-force.
+    private static final String DATA_KEY_PATH = "/api/safevoice/crypto/data-key";
+    private static final String CASE_KEYS_PATH = "/api/safevoice/crypto/case-keys";
 
     // Keep memory bounded: cap how many IPs we track and evict buckets idle beyond this window.
     private static final int MAX_TRACKED_IPS = 50_000;
@@ -112,7 +118,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return false;
         }
         String uri = request.getRequestURI();
-        return TRACK_PATH.equals(uri) || DOWNLOAD_PATH.equals(uri);
+        return TRACK_PATH.equals(uri) || DOWNLOAD_PATH.equals(uri)
+                || DATA_KEY_PATH.equals(uri) || CASE_KEYS_PATH.equals(uri);
     }
 
     private boolean consume(Map<String, Bucket> buckets, String ip, int perMinute, long now) {
