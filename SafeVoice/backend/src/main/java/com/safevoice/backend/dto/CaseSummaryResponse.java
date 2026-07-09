@@ -17,7 +17,7 @@ import java.time.Instant;
  * Why a separate, smaller object instead of the whole CaseReport:
  *  - The register only shows a handful of columns (reference, category, status,
  *    severity, investigator, feedback-due) plus an unread-message badge.
- *  - The full case document holds sensitive content — the encrypted description,
+ *  - The full case document holds sensitive content — the report narrative,
  *    the access-key fingerprint, the timeline, attachment metadata — none of which
  *    the list needs. Sending only this summary keeps that data off the wire for the
  *    list view (data minimisation, GDPR/RODO). The full case is fetched on its own,
