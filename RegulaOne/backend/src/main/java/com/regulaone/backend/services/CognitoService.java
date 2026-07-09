@@ -29,6 +29,7 @@ public class CognitoService {
     @Value("${aws.cognito.client-secret:}")
     private String clientSecret;
 
+    @SuppressWarnings("deprecation")
     public CognitoService(@Value("${aws.cognito.region}") String region) {
         this.cognitoClient = CognitoIdentityProviderClient.builder()
                 .region(Region.of(region))
