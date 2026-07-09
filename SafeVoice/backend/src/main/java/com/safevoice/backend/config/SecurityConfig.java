@@ -53,7 +53,12 @@ public class SecurityConfig {
                                 // Reporter downloads a file from their OWN thread; ownership is
                                 // proven by the access key in the request body, not a login. This
                                 // literal path is separate from the "*/attachments" pattern above.
-                                "/api/safevoice/reports/attachments/download"
+                                "/api/safevoice/reports/attachments/download",
+                                // Anonymous crypto helpers: get a one-time key to LOCK a report
+                                // before submitting it, and (with the access key) get the keys to
+                                // READ the reporter's own case. No login by design; rate-limited.
+                                "/api/safevoice/crypto/data-key",
+                                "/api/safevoice/crypto/case-keys"
                         ).permitAll()
                         // Let the framework's error dispatch through without auth.
                         .requestMatchers("/error").permitAll()

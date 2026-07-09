@@ -41,6 +41,15 @@
 			<artifactId>s3</artifactId>
 			<version>2.25.15</version>
 		</dependency>
+		<!-- AWS KMS: the master key (CMK) that WRAPS the one-time data keys used for
+		     client-side envelope encryption of report/message content. The browser encrypts
+		     the text; KMS only ever protects the small data keys, and the master key itself
+		     never leaves AWS. Same SDK version as S3 so both share one AWS SDK on the classpath. -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>kms</artifactId>
+			<version>2.25.15</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
