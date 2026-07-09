@@ -41,14 +41,14 @@ import java.util.UUID;
  *
  * The bucket must live in the EEA (region defaults to eu-central-1 / Frankfurt) to satisfy
  * the data-residency rules. Credentials are resolved by the AWS default provider chain
- * (environment / IAM role) — never hardcoded, exactly like the KMS client.
+ * (environment / IAM role) — never hardcoded.
  */
 @Slf4j
 @Service
 public class AttachmentService {
 
-    // Which bucket and where. Region is shared with the KMS setting so all AWS access for
-    // this app stays in one EEA region. The optional endpoint override lets local dev point
+    // Which bucket and where. The region setting keeps SafeVoice AWS access in the configured
+    // EEA region. The optional endpoint override lets local dev point
     // at a LocalStack/MinIO S3 without touching real AWS.
     private final String bucket;
     private final String region;
@@ -69,7 +69,7 @@ public class AttachmentService {
 
     public AttachmentService(
             @Value("${safevoice.vault.s3-bucket:regulaone}") String bucket,
-            @Value("${safevoice.encryption.aws.region:eu-central-1}") String region,
+            @Value("${safevoice.aws.region:eu-central-1}") String region,
             @Value("${safevoice.vault.s3-endpoint:}") String endpointOverride,
             MalwareScanService malwareScanService) {
         this.bucket = bucket;
