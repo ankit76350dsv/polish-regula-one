@@ -1,6 +1,7 @@
 package com.safevoice.backend.service;
 
 import com.safevoice.backend.dto.CaseActivityEvent;
+import com.safevoice.backend.exception.ClientSideEncryptionRequiredException;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
@@ -8,6 +9,7 @@ import com.safevoice.backend.model.embedded.TimelineEvent;
 import com.safevoice.backend.model.enums.audit.AuditActionType;
 import com.safevoice.backend.model.enums.audit.AuditOutcome;
 import com.safevoice.backend.model.enums.case_report.CaseStatus;
+import com.safevoice.backend.model.enums.case_report.ReportCategory;
 import com.safevoice.backend.repository.CaseMessageRepository;
 import com.safevoice.backend.repository.CaseReportRepository;
 import com.safevoice.backend.service.report.CaseReportService;
@@ -34,6 +36,9 @@ public class CaseMessageService {
     private final AuditLogService auditLogService;
     // Broadcasts the saved message live to anyone viewing the case.
     private final CaseEventPublisher caseEventPublisher;
+    private static final String CLIENT_ENCRYPTION_PENDING_MESSAGE =
+            "Normal SafeVoice case messages must be submitted as client-side encrypted payloads. "
+                    + "That payload format is not wired yet.";
 
     @Autowired
     public CaseMessageService(
@@ -83,6 +88,9 @@ public class CaseMessageService {
         if (report.getStatus() == CaseStatus.CLOSED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "This case is closed, so no new messages or files can be added.");
+        }
+        if (report.getCategory() != ReportCategory.LABOUR_DISPUTE && hasText) {
+            throw new ClientSideEncryptionRequiredException(CLIENT_ENCRYPTION_PENDING_MESSAGE);
         }
 
         CaseMessage message = new CaseMessage();
