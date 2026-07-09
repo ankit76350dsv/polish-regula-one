@@ -21,6 +21,12 @@ export default {
   // Wspólne
   'common.save': 'Zapisz',
   'common.cancel': 'Anuluj',
+  'common.add': 'Dodaj',
+  'common.action': 'Akcja',
+  'common.region': 'Region',
+  'common.switchLanguage': 'Zmień język',
+  'common.you': 'Ty',
+  'common.emailExists': 'Ten adres e-mail już istnieje',
   'common.delete': 'Usuń',
   'common.edit': 'Edytuj',
   'common.back': 'Wstecz',
@@ -57,6 +63,7 @@ export default {
   'status.completed': 'Zakończone',
   'status.in_progress': 'W toku',
   'status.pending': 'Oczekujące',
+  'status.refused': 'Odmowa',
 
   // Logowanie
   'auth.title': 'Zaloguj się do PrivacyPilot',
@@ -129,6 +136,7 @@ export default {
   'dpia.priorConsultation': 'Ryzyko rezydualne pozostaje wysokie — wymagane uprzednie konsultacje z Prezesem UODO przed przetwarzaniem (art. 36(1)).',
   'dpia.sign': 'Zatwierdź DPIA',
   'dpia.empty': 'Brak DPIA. Uruchom kreator — czynności spełniające kryteria UODO pojawią się tutaj.',
+  'dpia.approvalBlocked': 'Ta czynność wymaga DPIA (art. 35(1)). Wykonaj i zatwierdź ją przed zatwierdzeniem czynności.',
 
   // Klauzule
   'notices.title': 'Generator klauzul informacyjnych',
@@ -172,6 +180,12 @@ export default {
   'breach.riskRationale': 'Uzasadnienie decyzji o ryzyku',
   'breach.discovered': 'Stwierdzono',
   'breach.expired': 'okno minęło',
+  'breach.dataCategories': 'Kategorie danych objętych naruszeniem (art. 33(3)(a))',
+  'breach.recordsCount': 'Liczba rekordów (ok.)',
+  'breach.markSubjectsNotified': 'Oznacz powiadomienie osób',
+  'breach.subjectsNotified': 'Osoby powiadomione (art. 34)',
+  'breach.subjectsPending': 'Zawiadomienie osób, których dane dotyczą, jest nadal wymagane (art. 34).',
+  'breach.addRemediation': 'Dodaj działanie naprawcze',
 
   // Wnioski
   'dsar.title': 'Wnioski osób, których dane dotyczą',
@@ -185,6 +199,11 @@ export default {
   'dsar.identity': 'Weryfikacja tożsamości',
   'dsar.identityHint': 'Weryfikuj proporcjonalnie — żądaj tylko tego, co niezbędne do potwierdzenia tożsamości. UODO karał za nadmiarowe kopie dokumentów.',
   'dsar.complete': 'Oznacz jako zakończony',
+  'dsar.refuse': 'Odmów realizacji',
+  'dsar.refuseHint': 'Udokumentuj podstawę odmowy (art. 12(5)-(6) — żądanie ewidentnie nieuzasadnione/nadmierne — lub np. obowiązek retencji wykluczający usunięcie danych).',
+  'dsar.refused': 'Odmówiono realizacji wniosku',
+  'dsar.addTask': 'Dodaj zadanie zbierania danych',
+  'dsar.receivedAt': 'Data otrzymania',
 
   // Dziennik
   'audit.title': 'Dziennik zdarzeń',

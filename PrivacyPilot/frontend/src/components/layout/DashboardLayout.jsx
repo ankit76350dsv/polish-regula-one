@@ -128,7 +128,7 @@ export default function DashboardLayout() {
               variant="outline"
               size="sm"
               onClick={() => dispatch(setLanguage(lang === 'pl' ? 'en' : 'pl'))}
-              aria-label="Switch language"
+              aria-label={t('common.switchLanguage')}
             >
               <Languages />
               {lang === 'pl' ? 'PL' : 'EN'}

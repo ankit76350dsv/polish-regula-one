@@ -23,7 +23,7 @@ import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { DSAR_TYPES, labelOf, byId } from '../../lib/gdpr';
 
-const EMPTY_FORM = { type: 'access', requesterName: '', requesterEmail: '', relation: '', notes: '' };
+const EMPTY_FORM = { type: 'access', requesterName: '', requesterEmail: '', relation: '', notes: '', receivedAt: '' };
 
 export default function DsarPage() {
   const { t, lang } = useT();
@@ -34,7 +34,13 @@ export default function DsarPage() {
   const [form, setForm] = useState(EMPTY_FORM);
 
   const submit = async () => {
-    const action = await dispatch(createDsar(form));
+    // A request may be logged after it was received — let the user set the true
+    // receipt date so the Art. 12(3) one-month deadline is calculated correctly.
+    // Empty → the service defaults to now.
+    const payload = { ...form };
+    if (form.receivedAt) payload.receivedAt = new Date(form.receivedAt).toISOString();
+    else delete payload.receivedAt;
+    const action = await dispatch(createDsar(payload));
     if (action.error) toast.error(t('common.notAuthorized'));
     else { toast.success(t('common.save')); setOpen(false); setForm(EMPTY_FORM); }
   };
@@ -118,6 +124,11 @@ export default function DsarPage() {
             </FormField>
             <FormField label={lang === 'pl' ? 'Relacja (np. były pracownik, klient)' : 'Relation (e.g. former employee, customer)'}>
               {(fid) => <Input id={fid} value={form.relation} onChange={(e) => setForm({ ...form, relation: e.target.value })} />}
+            </FormField>
+            <FormField label={t('dsar.receivedAt')}
+              hint={lang === 'pl' ? 'Domyślnie dziś. Termin 1 miesiąca liczy się od tej daty.' : 'Defaults to today. The 1-month deadline runs from this date.'}>
+              {(fid) => <Input id={fid} type="date" value={form.receivedAt}
+                onChange={(e) => setForm({ ...form, receivedAt: e.target.value })} />}
             </FormField>
             <FormField label={lang === 'pl' ? 'Notatki' : 'Notes'}>
               {(fid) => <Textarea id={fid} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />}

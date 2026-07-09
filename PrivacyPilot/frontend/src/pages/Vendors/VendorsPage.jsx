@@ -73,7 +73,7 @@ export default function VendorsPage() {
               <TableRow>
                 <TableHead>{lang === 'pl' ? 'Podmiot' : 'Processor'}</TableHead>
                 <TableHead>{t('vendors.country')}</TableHead>
-                <TableHead>Region</TableHead>
+                <TableHead>{t('common.region')}</TableHead>
                 <TableHead>{t('vendors.dpaStatus')}</TableHead>
                 <TableHead>{t('vendors.subprocessors')}</TableHead>
                 <TableHead>{lang === 'pl' ? 'Ostatni przegląd' : 'Last review'}</TableHead>

@@ -22,12 +22,16 @@ import { fetchBreaches, createBreach } from '../../store/slices/breachesSlice';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { UODO_WINDOW_MS } from '../../services/breachService';
+import { cn } from '@/lib/utils';
+import { DATA_CATEGORIES } from '../../lib/gdpr';
 
 const EMPTY_FORM = {
-  title: '', description: '', subjectsCount: 0, riskLevel: 'medium',
+  title: '', description: '', subjectsCount: 0, recordsCount: 0, riskLevel: 'medium',
   uodoNotificationRequired: true, subjectsNotificationRequired: false,
   riskRationale: '', dataCategories: [],
 };
+
+const toggleId = (list, id) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
 export function BreachClockBadge({ breach, now }) {
   const { t } = useT();
@@ -65,6 +69,7 @@ export default function BreachesPage() {
     const action = await dispatch(createBreach({
       ...form,
       subjectsCount: Number(form.subjectsCount) || 0,
+      recordsCount: Number(form.recordsCount) || 0,
       discoveredAt: new Date().toISOString(),
     }));
     if (action.error) toast.error(t('common.notAuthorized'));
@@ -129,6 +134,30 @@ export default function BreachesPage() {
                 {(fid) => <Input id={fid} type="number" min="0" value={form.subjectsCount}
                   onChange={(e) => setForm({ ...form, subjectsCount: e.target.value })} />}
               </FormField>
+              <FormField label={t('breach.recordsCount')}>
+                {(fid) => <Input id={fid} type="number" min="0" value={form.recordsCount}
+                  onChange={(e) => setForm({ ...form, recordsCount: e.target.value })} />}
+              </FormField>
+            </div>
+            <FormField label={t('breach.dataCategories')}>
+              <div className="flex flex-wrap gap-1.5">
+                {DATA_CATEGORIES.map((c) => {
+                  const active = form.dataCategories.includes(c.id);
+                  return (
+                    <button key={c.id} type="button" aria-pressed={active}
+                      onClick={() => setForm({ ...form, dataCategories: toggleId(form.dataCategories, c.id) })}
+                      className={cn(
+                        'rounded-full border px-3 py-1 text-xs transition-colors',
+                        active ? 'border-primary bg-primary/15 text-primary'
+                          : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                      )}>
+                      {c[lang]}
+                    </button>
+                  );
+                })}
+              </div>
+            </FormField>
+            <div className="grid grid-cols-2 gap-3">
               <FormField label={lang === 'pl' ? 'Poziom ryzyka' : 'Risk level'}>
                 {(fid) => (
                   <Select id={fid} value={form.riskLevel} onChange={(e) => setForm({ ...form, riskLevel: e.target.value })}>

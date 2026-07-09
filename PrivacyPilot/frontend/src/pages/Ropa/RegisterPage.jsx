@@ -29,16 +29,51 @@ import {
   RECIPIENT_CATEGORIES, TOMS, labelOf,
 } from '../../lib/gdpr';
 
-/** Build the full Art. 30 CSV, prefixed with the controller + DPO identity block. */
-function buildRegisterCsv({ settings, activities, lang }) {
+/**
+ * Build the Art. 30 CSV, prefixed with the company + DPO identity block.
+ * The controller register (Art. 30(1)) and the processor register (Art. 30(2))
+ * have DIFFERENT mandatory columns, so the export branches on `tab`:
+ *   - controller → purpose, lawful basis, Art. 9(2), recipients, retention…
+ *   - processor  → controllers served (Art. 30(2)(a)), categories of processing,
+ *                  transfers and security measures ONLY — no lawful basis or
+ *                  recipients, which are the controller's record, not the
+ *                  processor's. The old export reused the controller headers and
+ *                  dropped Art. 30(2)(a) entirely, mislabelling processors.
+ */
+function buildRegisterCsv({ settings, activities, lang, tab }) {
   const esc = (v) => `"${String(v ?? '').replaceAll('"', '""')}"`;
+  const isProcessor = tab === 'processor';
   const lines = [];
-  // Art. 30(1)(a): controller + DPO identity on the register itself.
-  lines.push(`${esc('Administrator / Controller')},${esc(settings.company.name)}`);
+  // Identity block on the register itself. For the processor register this is
+  // the processor's own identity (Art. 30(2)(a)); for controllers it is Art. 30(1)(a).
+  lines.push(`${esc(isProcessor ? 'Podmiot przetwarzający / Processor' : 'Administrator / Controller')},${esc(settings.company.name)}`);
   lines.push(`${esc('Adres / Address')},${esc(settings.company.address)}`);
   lines.push(`${esc('NIP')},${esc(settings.company.nip)},${esc('REGON')},${esc(settings.company.regon)}`);
   lines.push(`${esc('IOD / DPO')},${esc(`${settings.dpo.name}, ${settings.dpo.email}, ${settings.dpo.phone}`)}`);
   lines.push('');
+
+  if (isProcessor) {
+    const headers = [
+      'ID', 'Name', 'Department', 'Status', 'Controllers served (Art. 30(2)(a))',
+      'Categories of processing (Art. 30(2)(b))', 'Data subjects', 'Data categories',
+      'Third-country transfer (Art. 30(2)(c))', 'Security measures (Art. 32 / 30(2)(d))', 'Updated',
+    ];
+    lines.push(headers.map(esc).join(','));
+    for (const a of activities) {
+      lines.push([
+        a.id, a.name, labelOf(DEPARTMENTS, a.department, lang), a.status,
+        a.controllersServed,
+        a.purpose,
+        (a.dataSubjects ?? []).map((s) => labelOf(DATA_SUBJECT_CATEGORIES, s, lang)).join('; '),
+        (a.dataCategories ?? []).map((c) => labelOf(DATA_CATEGORIES, c, lang)).join('; '),
+        a.transfer ? 'yes' : 'no',
+        (a.toms ?? []).map((tm) => labelOf(TOMS, tm, lang)).join('; '),
+        a.updatedAt,
+      ].map(esc).join(','));
+    }
+    return lines.join('\r\n');
+  }
+
   const headers = [
     'ID', 'Name', 'Role', 'Department', 'Status', 'Purpose', 'Lawful basis (Art. 6)',
     'Art. 9(2) condition', 'Art. 10', 'Data subjects', 'Data categories', 'Recipients',
@@ -105,7 +140,7 @@ export default function RegisterPage() {
     if (!settings.data) return;
     download(
       `ROPA_${tab}_${new Date().toISOString().slice(0, 10)}.csv`,
-      buildRegisterCsv({ settings: settings.data, activities: filtered, lang }),
+      buildRegisterCsv({ settings: settings.data, activities: filtered, lang, tab }),
     );
   };
 

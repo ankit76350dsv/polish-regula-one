@@ -26,7 +26,7 @@ import { fetchVendors } from '../../store/slices/vendorsSlice';
 import { fetchTransfers } from '../../store/slices/transfersSlice';
 import {
   ART6_BASES, ART9_CONDITIONS, DATA_CATEGORIES, DATA_SUBJECT_CATEGORIES,
-  RECIPIENT_CATEGORIES, TOMS, DEPARTMENTS, labelOf,
+  RECIPIENT_CATEGORIES, TOMS, DEPARTMENTS, SPECIAL_CATEGORY_IDS, labelOf,
 } from '../../lib/gdpr';
 import { DPIA_CRITERIA, evaluateDpia, suggestCriteria } from '../../lib/dpiaCriteria';
 
@@ -36,7 +36,9 @@ const STEP_KEYS = [
   'wizard.step.toms', 'wizard.step.dpia', 'wizard.step.review',
 ];
 
-const SPECIAL_IDS = ['health', 'biometric_id', 'genetic', 'trade_union'];
+// Derived from the single source of truth so the Art. 9(2) picker triggers for
+// every special category, not a stale hardcoded subset.
+const SPECIAL_IDS = SPECIAL_CATEGORY_IDS;
 
 const EMPTY = {
   name: '', role: 'controller', department: 'hr', ownerName: '', status: 'draft',

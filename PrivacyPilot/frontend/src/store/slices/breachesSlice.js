@@ -12,6 +12,8 @@ export const updateBreach = createAsyncThunk('breaches/update', ({ id, patch }, 
   breachService.update(actor(getState), id, patch));
 export const markBreachNotified = createAsyncThunk('breaches/markNotified', (id, { getState }) =>
   breachService.markNotified(actor(getState), id));
+export const markBreachSubjectsNotified = createAsyncThunk('breaches/markSubjectsNotified', (id, { getState }) =>
+  breachService.markSubjectsNotified(actor(getState), id));
 
 const breachesSlice = createSlice({
   name: 'breaches',
@@ -22,6 +24,7 @@ const breachesSlice = createSlice({
     addMutationCases(builder, createBreach);
     addMutationCases(builder, updateBreach);
     addMutationCases(builder, markBreachNotified);
+    addMutationCases(builder, markBreachSubjectsNotified);
   },
 });
 

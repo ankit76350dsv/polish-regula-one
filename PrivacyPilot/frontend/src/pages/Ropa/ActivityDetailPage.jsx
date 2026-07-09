@@ -16,7 +16,7 @@ import { useSliceData } from '../../hooks/useSliceData';
 import {
   fetchActivities, archiveActivity, approveActivity,
 } from '../../store/slices/activitiesSlice';
-import { createDpiaForActivity } from '../../store/slices/dpiasSlice';
+import { createDpiaForActivity, fetchDpias } from '../../store/slices/dpiasSlice';
 import { fetchVendors } from '../../store/slices/vendorsSlice';
 import { fetchTransfers } from '../../store/slices/transfersSlice';
 import { useT } from '../../i18n';
@@ -55,6 +55,7 @@ export default function ActivityDetailPage() {
   const { items, status, error, refetch } = useSliceData('activities', fetchActivities);
   const { items: vendors } = useSliceData('vendors', fetchVendors);
   const { items: transfers } = useSliceData('transfers', fetchTransfers);
+  const { items: dpias } = useSliceData('dpias', fetchDpias);
   const [confirmArchive, setConfirmArchive] = useState(false);
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={6} />;
@@ -65,6 +66,14 @@ export default function ActivityDetailPage() {
 
   const isController = activity.role !== 'processor';
   const pct = activityCompleteness(activity);
+
+  // Art. 35(1): a DPIA must be carried out BEFORE processing where it is required.
+  // So an activity screened as "DPIA required" cannot be approved until its linked
+  // DPIA exists and has been approved. This enforces the order the law requires,
+  // instead of letting the register show "approved" but non-compliant activities.
+  const linkedDpia = activity.dpiaId ? dpias.find((d) => d.id === activity.dpiaId) : null;
+  const dpiaBlocksApproval =
+    activity.dpiaVerdict === 'required' && linkedDpia?.status !== 'approved';
 
   const startDpia = async () => {
     const action = await dispatch(createDpiaForActivity(activity.id));
@@ -77,6 +86,11 @@ export default function ActivityDetailPage() {
   };
 
   const approve = async () => {
+    // Block approval when a required DPIA is not yet approved (Art. 35(1)).
+    if (dpiaBlocksApproval) {
+      toast.error(t('dpia.approvalBlocked'));
+      return;
+    }
     const action = await dispatch(approveActivity(activity.id));
     if (action.error) toast.error(t('common.notAuthorized'));
     else toast.success(t('status.approved'));
@@ -97,7 +111,10 @@ export default function ActivityDetailPage() {
           </Button>
         )}
         {can(user.role, ACTIONS.APPROVE_ACTIVITY) && activity.status === 'in_review' && (
-          <Button onClick={approve}><CheckCircle2 /> {t('status.approved')}</Button>
+          <Button onClick={approve} disabled={dpiaBlocksApproval}
+            title={dpiaBlocksApproval ? t('dpia.approvalBlocked') : undefined}>
+            <CheckCircle2 /> {t('status.approved')}
+          </Button>
         )}
         {can(user.role, ACTIONS.DELETE_ACTIVITY) && activity.status !== 'archived' && (
           <Button variant="destructive" onClick={() => setConfirmArchive(true)}>
@@ -224,6 +241,12 @@ export default function ActivityDetailPage() {
               )
             )}
           </div>
+          {dpiaBlocksApproval && (
+            <p className="mt-3 flex items-start gap-2 rounded-lg border border-(--status-warn)/40 bg-(--status-warn)/5 p-2 text-xs text-(--status-warn)">
+              <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              {t('dpia.approvalBlocked')}
+            </p>
+          )}
         </Section>
       </div>
 

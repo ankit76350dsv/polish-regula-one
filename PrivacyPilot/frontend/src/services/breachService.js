@@ -70,6 +70,27 @@ export const breachService = {
       },
     }).then((r) => r.updated),
 
+  /** Art. 34: record that the affected data subjects were communicated with
+   *  (timestamped + audited), mirroring the UODO notification flow. Without this
+   *  a high-risk breach that must be told to individuals could not be evidenced. */
+  markSubjectsNotified: (actor, id) =>
+    apiMutate({
+      actor,
+      action: ACTIONS.MANAGE_BREACHES,
+      audit: (breach) => ({
+        action: 'SUBJECTS_NOTIFIED', entityType: 'breach', entityId: id,
+        entityLabel: breach.title, oldValue: { subjectsNotifiedAt: null },
+        newValue: { subjectsNotifiedAt: breach.subjectsNotifiedAt },
+      }),
+      mutator: (db) => {
+        const breach = db.breaches.find((b) => b.id === id);
+        if (!breach) throw new Error('NOT_FOUND');
+        breach.subjectsNotifiedAt = new Date().toISOString();
+        breach.updatedAt = breach.subjectsNotifiedAt;
+        return breach;
+      },
+    }),
+
   /** Record that the UODO notification was submitted (timestamped). */
   markNotified: (actor, id) =>
     apiMutate({

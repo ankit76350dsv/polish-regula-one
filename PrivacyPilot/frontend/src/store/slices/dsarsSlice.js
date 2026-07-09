@@ -14,6 +14,8 @@ export const extendDsar = createAsyncThunk('dsars/extend', ({ id, reason }, { ge
   dsarService.extend(actor(getState), id, reason));
 export const completeDsar = createAsyncThunk('dsars/complete', (id, { getState }) =>
   dsarService.complete(actor(getState), id));
+export const refuseDsar = createAsyncThunk('dsars/refuse', ({ id, reason }, { getState }) =>
+  dsarService.refuse(actor(getState), id, reason));
 
 const dsarsSlice = createSlice({
   name: 'dsars',
@@ -25,6 +27,7 @@ const dsarsSlice = createSlice({
     addMutationCases(builder, updateDsar);
     addMutationCases(builder, extendDsar);
     addMutationCases(builder, completeDsar);
+    addMutationCases(builder, refuseDsar);
   },
 });
 

@@ -8,6 +8,9 @@
 // not a hard statutory threshold. (Frontend B overstated it as "legally
 // required minimum 2"; that wording is wrong and is not used here.)
 
+// Single source of truth for which data categories are Art. 9 special categories.
+import { SPECIAL_CATEGORY_IDS } from './gdpr';
+
 export const DPIA_CRITERIA = [
   {
     id: 'evaluation_scoring', ref: 'M.P. 2019 poz. 666, pkt 1',
@@ -95,15 +98,41 @@ export const DPIA_CRITERIA = [
   },
 ];
 
+// Art. 35(3) GDPR lists processing for which a DPIA is ALWAYS mandatory —
+// it does not depend on how many UODO criteria are matched. We map those three
+// statutory cases onto our criteria so a single one of them forces "required":
+//  - 35(3)(a): automated evaluation/decisions with legal or similar effect
+//  - 35(3)(b): large-scale processing of special (Art. 9) or criminal (Art. 10) data
+//  - 35(3)(c): large-scale systematic monitoring of a publicly accessible area
+// This fixes the old count-only logic, which could call a legally-mandatory DPIA
+// merely "recommended" (e.g. a single large-scale monitoring criterion → count 1).
+export function isArt353Mandatory(matchedIds) {
+  const ids = matchedIds ?? [];
+  const has = (x) => ids.includes(x);
+  if (has('automated_decisions')) return true;                    // Art. 35(3)(a)
+  if (has('systematic_monitoring')) return true;                  // Art. 35(3)(c)
+  if (has('special_categories') && has('large_scale')) return true; // Art. 35(3)(b)
+  if (has('biometric') && has('large_scale')) return true;        // Art. 9 biometrics at scale
+  return false;
+}
+
 /**
  * Screen an activity against the UODO list.
  * Returns a verdict the UI can show, with the honest legal wording.
- *  - 2+ criteria  → 'required'      (as a rule a DPIA is required)
- *  - 1 criterion  → 'recommended'  (one may suffice — assess and document)
- *  - 0 criteria   → 'not_indicated'
+ *  - Art. 35(3) case → 'required'  (statutory — mandatory regardless of count)
+ *  - 2+ criteria     → 'required'  (as a rule a DPIA is required)
+ *  - 1 criterion     → 'recommended' (one may suffice — assess and document)
+ *  - 0 criteria      → 'not_indicated'
  */
 export function evaluateDpia(matchedIds) {
   const count = matchedIds?.length ?? 0;
+  if (isArt353Mandatory(matchedIds)) {
+    return {
+      verdict: 'required', count, art353: true,
+      en: 'This processing falls under Art. 35(3) GDPR — a DPIA is mandatory before processing begins, regardless of how many UODO criteria are matched.',
+      pl: 'To przetwarzanie jest objęte art. 35(3) RODO — DPIA jest obowiązkowa przed rozpoczęciem przetwarzania, niezależnie od liczby spełnionych kryteriów z wykazu UODO.',
+    };
+  }
   if (count >= 2) {
     return {
       verdict: 'required', count,
@@ -134,18 +163,24 @@ export function suggestCriteria({ dataCategories = [], dataSubjects = [] }) {
   const suggested = new Set();
   const has = (id) => dataCategories.includes(id);
 
-  if (has('health') || has('genetic') || has('biometric_id') || has('trade_union') || has('criminal')) {
+  // Any Art. 9 special category, or Art. 10 criminal data, triggers the
+  // special-categories criterion. Derived from the single source of truth so it
+  // stays correct when new special categories are added to DATA_CATEGORIES.
+  if (SPECIAL_CATEGORY_IDS.some((id) => has(id)) || has('criminal')) {
     suggested.add('special_categories');
   }
   if (has('biometric_id')) suggested.add('biometric');
   if (has('genetic')) suggested.add('genetic');
   if (has('location')) suggested.add('location_tracking');
   if (has('image_cctv')) suggested.add('systematic_monitoring');
+  // Children are the paradigm vulnerable subject (WP248). Children's data is a
+  // data CATEGORY here (Art. 8), not a subject type — so check the categories too;
+  // the old code only checked a non-existent 'children' subject and missed them.
+  if (has('children')) suggested.add('vulnerable_subjects');
   // Candidates count too: WP248 treats anyone in a power-imbalance relation
   // with the controller (employees, applicants, patients) as vulnerable.
   if (dataSubjects.includes('employees') || dataSubjects.includes('candidates') ||
-      dataSubjects.includes('children') || dataSubjects.includes('patients') ||
-      dataSubjects.includes('whistleblowers')) {
+      dataSubjects.includes('patients') || dataSubjects.includes('whistleblowers')) {
     suggested.add('vulnerable_subjects');
   }
   return [...suggested];

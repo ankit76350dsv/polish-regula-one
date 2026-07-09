@@ -40,6 +40,7 @@ export function buildChecklist({ settings, activities, audienceId }) {
   const audience = byId(NOTICE_AUDIENCES, audienceId);
   const relevant = activitiesForAudience(activities, audienceId);
   const isArt14 = audience?.art === 14;
+  const isArt13 = audience?.art === 13;
 
   const results = [];
   const push = (id, ok, details = '') => {
@@ -84,10 +85,19 @@ export function buildChecklist({ settings, activities, audienceId }) {
 
   push('complaint', true, '');
 
-  const noProvision = relevant.filter((a) => !a.provisionStatement);
-  push('provision_requirement', noProvision.length === 0, noProvision.map((a) => a.name).join(', '));
+  // Art. 13(2)(e) — only mandatory for data collected from the subject (Art. 13).
+  if (isArt13) {
+    const noProvision = relevant.filter((a) => !a.provisionStatement);
+    push('provision_requirement', noProvision.length === 0, noProvision.map((a) => a.name).join(', '));
+  }
 
   if (isArt14) {
+    // Art. 14(1)(d) — categories of personal data must be stated when the data
+    // was not obtained from the subject. Expressible from register data.
+    const noCategories = relevant.filter((a) => !(a.dataCategories?.length));
+    push('data_categories', relevant.length > 0 && noCategories.length === 0,
+      noCategories.map((a) => a.name).join(', '));
+
     const noSource = relevant.filter((a) => !(a.dataSources?.length));
     push('source', noSource.length === 0, noSource.map((a) => a.name).join(', '));
   }
@@ -121,6 +131,7 @@ const L = {
     complaint: 'Skarga do organu nadzorczego',
     complaintText: 'Mają Państwo prawo wniesienia skargi do Prezesa Urzędu Ochrony Danych Osobowych, ul. Stawki 2, 00-193 Warszawa.',
     provision: 'Obowiązek podania danych',
+    categories: 'Kategorie przetwarzanych danych',
     source: 'Źródło danych',
     adm: 'Zautomatyzowane podejmowanie decyzji',
     noAdm: 'Dane nie podlegają zautomatyzowanemu podejmowaniu decyzji, w tym profilowaniu wywołującemu skutki prawne.',
@@ -144,6 +155,7 @@ const L = {
     complaint: 'Complaint to the supervisory authority',
     complaintText: 'You have the right to lodge a complaint with the President of the Personal Data Protection Office (UODO), ul. Stawki 2, 00-193 Warszawa, Poland.',
     provision: 'Whether providing data is required',
+    categories: 'Categories of personal data processed',
     source: 'Source of the data',
     adm: 'Automated decision-making',
     noAdm: 'Your data is not subject to automated decision-making, including profiling, producing legal effects.',
@@ -166,7 +178,8 @@ export function buildNoticeContent({ settings, activities, transfers, vendors, a
   lines.push(`${settings.company.name}, ${settings.company.address}, NIP ${settings.company.nip}.`);
   lines.push('');
   lines.push(`## ${s.dpo}`);
-  lines.push(`${settings.dpo.name} — ${settings.dpo.email}${settings.dpo.phone ? `, ${settings.dpo.phone}` : ''}.`);
+  // Guard the name so a blank DPO name never prints "undefined — <email>".
+  lines.push(`${settings.dpo.name ? `${settings.dpo.name} — ` : ''}${settings.dpo.email}${settings.dpo.phone ? `, ${settings.dpo.phone}` : ''}.`);
   lines.push('');
   lines.push(`## ${s.purposes}`);
   for (const a of relevant) {
@@ -219,13 +232,24 @@ export function buildNoticeContent({ settings, activities, transfers, vendors, a
   lines.push(`## ${s.complaint}`);
   lines.push(s.complaintText);
   lines.push('');
-  lines.push(`## ${s.provision}`);
-  for (const a of relevant) {
-    if (a.provisionStatement) lines.push(`- **${a.name}:** ${a.provisionStatement}`);
+  // Art. 13(2)(e) provision requirement — only for data collected from the subject.
+  if (audience.art === 13) {
+    lines.push(`## ${s.provision}`);
+    for (const a of relevant) {
+      if (a.provisionStatement) lines.push(`- **${a.name}:** ${a.provisionStatement}`);
+    }
+    lines.push('');
   }
-  lines.push('');
 
   if (audience.art === 14) {
+    // Art. 14(1)(d): categories of personal data (the subject did not supply it).
+    lines.push(`## ${s.categories}`);
+    for (const a of relevant) {
+      const cats = (a.dataCategories ?? []).map((c) => labelOf(DATA_CATEGORIES, c, lang));
+      if (cats.length) lines.push(`- **${a.name}:** ${cats.join(', ')}`);
+    }
+    lines.push('');
+
     lines.push(`## ${s.source}`);
     for (const a of relevant) {
       if (a.dataSources?.length) lines.push(`- **${a.name}:** ${a.dataSources.join('; ')}`);

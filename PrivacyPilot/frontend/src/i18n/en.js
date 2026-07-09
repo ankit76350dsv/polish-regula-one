@@ -21,6 +21,12 @@ export default {
   // Common
   'common.save': 'Save',
   'common.cancel': 'Cancel',
+  'common.add': 'Add',
+  'common.action': 'Action',
+  'common.region': 'Region',
+  'common.switchLanguage': 'Switch language',
+  'common.you': 'you',
+  'common.emailExists': 'This e-mail already exists',
   'common.delete': 'Delete',
   'common.edit': 'Edit',
   'common.back': 'Back',
@@ -57,6 +63,7 @@ export default {
   'status.completed': 'Completed',
   'status.in_progress': 'In progress',
   'status.pending': 'Pending',
+  'status.refused': 'Refused',
 
   // Auth
   'auth.title': 'Sign in to PrivacyPilot',
@@ -129,6 +136,7 @@ export default {
   'dpia.priorConsultation': 'Residual risk remains high — prior consultation with UODO required before processing (Art. 36(1)).',
   'dpia.sign': 'Approve DPIA',
   'dpia.empty': 'No DPIAs yet. Run the wizard — activities matching the UODO criteria will appear here.',
+  'dpia.approvalBlocked': 'This activity requires a DPIA (Art. 35(1)). Complete and approve it before approving the activity.',
 
   // Notices
   'notices.title': 'Privacy Notice Generator',
@@ -172,6 +180,12 @@ export default {
   'breach.riskRationale': 'Risk decision rationale',
   'breach.discovered': 'Discovered',
   'breach.expired': 'window elapsed',
+  'breach.dataCategories': 'Categories of data affected (Art. 33(3)(a))',
+  'breach.recordsCount': 'Records affected (approx.)',
+  'breach.markSubjectsNotified': 'Mark data subjects notified',
+  'breach.subjectsNotified': 'Data subjects notified (Art. 34)',
+  'breach.subjectsPending': 'Communication to the affected data subjects is still outstanding (Art. 34).',
+  'breach.addRemediation': 'Add remediation action',
 
   // DSAR
   'dsar.title': 'Data Subject Requests',
@@ -185,6 +199,11 @@ export default {
   'dsar.identity': 'Identity verification',
   'dsar.identityHint': 'Verify proportionately — request only what is needed to confirm identity. UODO has sanctioned excessive ID collection.',
   'dsar.complete': 'Mark completed',
+  'dsar.refuse': 'Refuse request',
+  'dsar.refuseHint': 'Document the legal ground for refusing (Art. 12(5)-(6) — manifestly unfounded/excessive — or e.g. a statutory retention duty barring erasure).',
+  'dsar.refused': 'Request refused',
+  'dsar.addTask': 'Add collection task',
+  'dsar.receivedAt': 'Received on',
 
   // Audit trail
   'audit.title': 'Audit Trail',

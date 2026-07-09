@@ -13,6 +13,7 @@ const STATUS_STYLES = {
   in_progress: 'border-(--status-info)/50 text-(--status-info)',
   completed: 'border-(--status-ok)/50 text-(--status-ok)',
   closed: 'border-(--status-ok)/50 text-(--status-ok)',
+  refused: 'border-(--status-risk)/50 text-(--status-risk)',
   pending: 'border-border text-muted-foreground',
 };
 

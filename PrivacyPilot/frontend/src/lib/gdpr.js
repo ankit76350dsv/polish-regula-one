@@ -47,10 +47,18 @@ export const DATA_CATEGORIES = [
   { id: 'location',           en: 'Location data',                             pl: 'Dane lokalizacyjne' },
   { id: 'online_identifiers', en: 'Online identifiers (IP, cookies)',          pl: 'Identyfikatory internetowe (IP, cookies)' },
   { id: 'children',           en: "Children's data (Art. 8)",                  pl: 'Dane dzieci (art. 8)' },
+  // Art. 9(1) special categories. All nine are selectable so any activity that
+  // processes them can be represented in the ROPA (previously only four existed,
+  // making e.g. religious or trade-related special data impossible to record).
   { id: 'health',             en: 'Health data (Art. 9)',                      pl: 'Dane o zdrowiu (art. 9)', special: true },
   { id: 'biometric_id',       en: 'Biometric data for identification (Art. 9)', pl: 'Dane biometryczne do identyfikacji (art. 9)', special: true },
   { id: 'genetic',            en: 'Genetic data (Art. 9)',                     pl: 'Dane genetyczne (art. 9)', special: true },
+  { id: 'racial_ethnic',      en: 'Racial or ethnic origin (Art. 9)',          pl: 'Pochodzenie rasowe lub etniczne (art. 9)', special: true },
+  { id: 'political',          en: 'Political opinions (Art. 9)',               pl: 'Poglądy polityczne (art. 9)', special: true },
+  { id: 'religious',          en: 'Religious or philosophical beliefs (Art. 9)', pl: 'Przekonania religijne lub światopoglądowe (art. 9)', special: true },
   { id: 'trade_union',        en: 'Trade union membership (Art. 9)',           pl: 'Przynależność związkowa (art. 9)', special: true },
+  { id: 'sex_life',           en: 'Data concerning sex life (Art. 9)',         pl: 'Dane dotyczące życia seksualnego (art. 9)', special: true },
+  { id: 'sexual_orientation', en: 'Sexual orientation (Art. 9)',               pl: 'Orientacja seksualna (art. 9)', special: true },
   { id: 'criminal',           en: 'Criminal convictions / offences (Art. 10)', pl: 'Dane o wyrokach i naruszeniach (art. 10)', art10: true },
 ];
 
@@ -141,6 +149,9 @@ export const NOTICE_REQUIRED_ITEMS = [
   { id: 'controller_identity', ref: 'Art. 13(1)(a) / 14(1)(a)', en: 'Controller identity and contact details', pl: 'Tożsamość i dane kontaktowe administratora' },
   { id: 'dpo_contact',         ref: 'Art. 13(1)(b) / 14(1)(b)', en: 'DPO contact details',                     pl: 'Dane kontaktowe IOD' },
   { id: 'purposes_basis',      ref: 'Art. 13(1)(c) / 14(1)(c)', en: 'Purposes and legal basis',                pl: 'Cele i podstawa prawna' },
+  // Art. 14(1)(d): where data is NOT obtained from the subject, the categories of
+  // personal data must be disclosed (the subject can't know what was collected).
+  { id: 'data_categories',     ref: 'Art. 14(1)(d)',            en: 'Categories of personal data (Art. 14 notices only)', pl: 'Kategorie danych osobowych (tylko notice z art. 14)', art14Only: true },
   { id: 'legitimate_interest', ref: 'Art. 13(1)(d)',            en: 'Legitimate interests (if Art. 6(1)(f))',  pl: 'Prawnie uzasadnione interesy (jeśli art. 6(1)(f))', conditional: true },
   { id: 'recipients',          ref: 'Art. 13(1)(e) / 14(1)(e)', en: 'Recipients or categories of recipients',  pl: 'Odbiorcy lub kategorie odbiorców' },
   { id: 'transfers',           ref: 'Art. 13(1)(f) / 14(1)(f)', en: 'Third-country transfers and safeguards',  pl: 'Przekazywanie do państw trzecich i zabezpieczenia', conditional: true },
@@ -148,7 +159,10 @@ export const NOTICE_REQUIRED_ITEMS = [
   { id: 'rights',              ref: 'Art. 13(2)(b) / 14(2)(c)', en: 'Data subject rights (Arts. 15–21)',       pl: 'Prawa osoby (art. 15–21)' },
   { id: 'withdraw_consent',    ref: 'Art. 13(2)(c) / 14(2)(d)', en: 'Right to withdraw consent (Art. 7(3))',   pl: 'Prawo cofnięcia zgody (art. 7(3))', conditional: true },
   { id: 'complaint',           ref: 'Art. 13(2)(d) / 14(2)(e)', en: 'Right to complain to UODO',               pl: 'Prawo skargi do Prezesa UODO' },
-  { id: 'provision_requirement', ref: 'Art. 13(2)(e)',          en: 'Whether provision is statutory/contractual + consequences', pl: 'Czy podanie danych jest wymogiem + konsekwencje' },
+  // Art. 13(2)(e) applies only to data collected FROM the subject — i.e. Art. 13
+  // notices. It is not a mandatory element of an Art. 14 notice, so it is gated
+  // to Art. 13 audiences instead of being required for everyone.
+  { id: 'provision_requirement', ref: 'Art. 13(2)(e)',          en: 'Whether provision is statutory/contractual + consequences', pl: 'Czy podanie danych jest wymogiem + konsekwencje', art13Only: true },
   { id: 'source',              ref: 'Art. 14(2)(f)',            en: 'Source of the data (Art. 14 notices only)', pl: 'Źródło danych (tylko notice z art. 14)', art14Only: true },
   { id: 'automated_decisions', ref: 'Art. 13(2)(f) / 14(2)(g)', en: 'Automated decision-making incl. profiling', pl: 'Zautomatyzowane decyzje, w tym profilowanie', conditional: true },
 ];

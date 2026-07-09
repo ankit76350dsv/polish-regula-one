@@ -35,7 +35,7 @@ export default function UsersPage() {
   const submit = async () => {
     const action = await dispatch(inviteUser(form));
     if (action.error) {
-      toast.error(action.error.message === 'EMAIL_EXISTS' ? 'E-mail exists' : t('common.notAuthorized'));
+      toast.error(action.error.message === 'EMAIL_EXISTS' ? t('common.emailExists') : t('common.notAuthorized'));
     } else {
       toast.success(t('common.save'));
       setOpen(false);
@@ -81,7 +81,7 @@ export default function UsersPage() {
             {items.map((u) => (
               <TableRow key={u.id} className={!u.active ? 'opacity-50' : ''}>
                 <TableCell className="font-medium text-foreground">
-                  {u.name} {u.id === me.id && <span className="text-xs text-primary">(you)</span>}
+                  {u.name} {u.id === me.id && <span className="text-xs text-primary">({t('common.you')})</span>}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{u.email}</TableCell>
                 <TableCell>
@@ -111,7 +111,7 @@ export default function UsersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-xs">Action</TableHead>
+                <TableHead className="text-xs">{t('common.action')}</TableHead>
                 {roleIds.map((r) => (
                   <TableHead key={r} className="text-center text-xs">{ROLE_LABELS[r][lang]}</TableHead>
                 ))}

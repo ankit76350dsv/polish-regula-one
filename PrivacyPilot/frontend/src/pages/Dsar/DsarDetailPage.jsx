@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
-import { CalendarPlus, CheckCircle2, Sparkles } from 'lucide-react';
+import { CalendarPlus, CheckCircle2, Sparkles, Plus, Ban } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +16,7 @@ import { LoadingState, ErrorState } from '../../components/common/States';
 import { StatusBadge, DeadlineBadge } from '../../components/common/StatusBadge';
 import { FormField, Input, Textarea } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
-import { fetchDsars, updateDsar, extendDsar, completeDsar } from '../../store/slices/dsarsSlice';
+import { fetchDsars, updateDsar, extendDsar, completeDsar, refuseDsar } from '../../store/slices/dsarsSlice';
 import { dsarDaysLeft } from '../../services/dsarService';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
@@ -33,6 +33,9 @@ export default function DsarDetailPage() {
   const [extendOpen, setExtendOpen] = useState(false);
   const [extendReason, setExtendReason] = useState('');
   const [identityMethod, setIdentityMethod] = useState('');
+  const [newTask, setNewTask] = useState('');
+  const [refuseOpen, setRefuseOpen] = useState(false);
+  const [refuseReason, setRefuseReason] = useState('');
   const aiEnabled = useAiEnabled();
   const [aiOpen, setAiOpen] = useState(false);
 
@@ -44,8 +47,10 @@ export default function DsarDetailPage() {
 
   const canManage = can(user.role, ACTIONS.MANAGE_DSAR);
   const days = dsarDaysLeft(dsar);
-  const open = dsar.status !== 'completed';
-  const allTasksDone = dsar.tasks.length > 0 && dsar.tasks.every((task) => task.done);
+  const open = dsar.status !== 'completed' && dsar.status !== 'refused';
+  // A request with no outstanding collection tasks is completable — a request
+  // created in-app (with no seeded tasks) must not be permanently un-closable.
+  const allTasksDone = dsar.tasks.every((task) => task.done);
 
   const patch = async (p) => {
     const action = await dispatch(updateDsar({ id: dsar.id, patch: p }));
@@ -55,8 +60,25 @@ export default function DsarDetailPage() {
   const toggleTask = (taskId) =>
     patch({ tasks: dsar.tasks.map((task) => task.id === taskId ? { ...task, done: !task.done } : task) });
 
+  const addTask = async () => {
+    if (!newTask.trim()) return;
+    await patch({
+      tasks: [
+        ...dsar.tasks,
+        { id: `task-${dsar.tasks.length}-${new Date(dsar.updatedAt).getTime()}-${newTask.length}`, text: newTask.trim(), done: false },
+      ],
+    });
+    setNewTask('');
+  };
+
   const verifyIdentity = () =>
     patch({ identityVerified: true, identityMethod });
+
+  const refuse = async () => {
+    const action = await dispatch(refuseDsar({ id: dsar.id, reason: refuseReason }));
+    if (action.error) toast.error(t('common.notAuthorized'));
+    else { toast.success(t('dsar.refused')); setRefuseOpen(false); }
+  };
 
   const extend = async () => {
     const action = await dispatch(extendDsar({ id: dsar.id, reason: extendReason }));
@@ -107,6 +129,10 @@ export default function DsarDetailPage() {
                     <CalendarPlus /> {t('dsar.extend')}
                   </Button>
                 )}
+                <Button variant="outline" className="border-(--status-risk)/40 text-(--status-risk)"
+                  onClick={() => setRefuseOpen(true)}>
+                  <Ban /> {t('dsar.refuse')}
+                </Button>
                 <Button onClick={complete} disabled={!dsar.identityVerified || !allTasksDone}>
                   <CheckCircle2 /> {t('dsar.complete')}
                 </Button>
@@ -114,6 +140,21 @@ export default function DsarDetailPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Refusal — recorded with its legal ground (Art. 12(5)-(6) etc.) */}
+        {dsar.status === 'refused' && (
+          <Card className="border-(--status-risk)/50">
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-(--status-risk)">{t('dsar.refused')}</CardTitle></CardHeader>
+            <CardContent className="grid gap-1 text-sm">
+              <p className="whitespace-pre-wrap text-foreground">{dsar.refusalReason}</p>
+              {dsar.refusedAt && (
+                <p className="text-xs text-muted-foreground">
+                  {new Date(dsar.refusedAt).toLocaleString(lang === 'pl' ? 'pl-PL' : 'en-GB')}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Identity verification — proportionate, never automatic */}
         <Card>
@@ -152,6 +193,16 @@ export default function DsarDetailPage() {
               </label>
             ))}
             {dsar.tasks.length === 0 && <p className="text-sm text-muted-foreground">—</p>}
+            {canManage && open && (
+              <div className="mt-1 flex gap-2">
+                <Input value={newTask} onChange={(e) => setNewTask(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') addTask(); }}
+                  placeholder={t('dsar.addTask')} aria-label={t('dsar.addTask')} />
+                <Button variant="outline" size="sm" onClick={addTask} disabled={!newTask.trim()}>
+                  <Plus /> {t('common.add')}
+                </Button>
+              </div>
+            )}
             {dsar.notes && <p className="mt-2 text-xs text-muted-foreground">{dsar.notes}</p>}
           </CardContent>
         </Card>
@@ -181,6 +232,25 @@ export default function DsarDetailPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setExtendOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={extend} disabled={!extendReason.trim()}>{t('common.save')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={refuseOpen} onOpenChange={setRefuseOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('dsar.refuse')}</DialogTitle>
+            <DialogDescription>{t('dsar.refuseHint')}</DialogDescription>
+          </DialogHeader>
+          <FormField label={lang === 'pl' ? 'Podstawa odmowy' : 'Legal ground for refusal'} required>
+            {(fid) => <Textarea id={fid} value={refuseReason} onChange={(e) => setRefuseReason(e.target.value)} />}
+          </FormField>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRefuseOpen(false)}>{t('common.cancel')}</Button>
+            <Button className="bg-(--status-risk) text-white hover:bg-(--status-risk)/90"
+              onClick={refuse} disabled={!refuseReason.trim()}>
+              {t('dsar.refuse')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

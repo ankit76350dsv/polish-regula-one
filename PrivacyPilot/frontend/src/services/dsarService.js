@@ -118,4 +118,29 @@ export const dsarService = {
         return dsar;
       },
     }),
+
+  /** Refuse a request with a mandatory documented reason. Covers Art. 12(5)-(6)
+   *  (manifestly unfounded/excessive) and lawful refusals such as an erasure
+   *  request barred by a statutory retention duty. Without this a validly
+   *  declined request had no way to be closed correctly. */
+  refuse: (actor, id, reason) =>
+    apiMutate({
+      actor,
+      action: ACTIONS.MANAGE_DSAR,
+      audit: (dsar) => ({
+        action: 'REFUSE', entityType: 'dsar', entityId: id,
+        entityLabel: `${dsar.type} — ${dsar.requesterName}`,
+        oldValue: { status: 'in_progress' }, newValue: { status: 'refused', reason },
+      }),
+      mutator: (db) => {
+        const dsar = db.dsars.find((r) => r.id === id);
+        if (!dsar) throw new Error('NOT_FOUND');
+        if (!reason?.trim()) throw new Error('REASON_REQUIRED');
+        dsar.status = 'refused';
+        dsar.refusalReason = reason;
+        dsar.refusedAt = new Date().toISOString();
+        dsar.updatedAt = dsar.refusedAt;
+        return dsar;
+      },
+    }),
 };
