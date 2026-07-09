@@ -107,6 +107,7 @@ public class GlobalExceptionHandler {
      * The malware scanner reported the uploaded file as infected. Answered as 422 with
      * errorCode "MALWARE_DETECTED". We deliberately do NOT echo the malware signature.
      */
+    @SuppressWarnings("deprecation")
     @ExceptionHandler(MalwareDetectedException.class)
     public ResponseEntity<Map<String, Object>> handleMalwareDetected(MalwareDetectedException ex) {
         log.warn("[handleMalwareDetected]: upload rejected by malware scanner");
