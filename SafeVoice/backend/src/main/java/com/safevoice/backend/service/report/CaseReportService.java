@@ -6,6 +6,7 @@ import com.safevoice.backend.dto.CaseSummaryResponse;
 import com.safevoice.backend.dto.PageResponse;
 import com.safevoice.backend.exception.CaseNotFoundException;
 import com.safevoice.backend.exception.CaseReferenceConflictException;
+import com.safevoice.backend.exception.ClientSideEncryptionRequiredException;
 import com.safevoice.backend.exception.TenantNotFoundException;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.document.Tenant;
@@ -72,6 +73,9 @@ public class CaseReportService {
     // strain the database or the browser. Requests above this are clamped down to it.
     private static final int MAX_PAGE_SIZE = 200;
     private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final String CLIENT_ENCRYPTION_PENDING_MESSAGE =
+            "Normal SafeVoice report narratives must be submitted as client-side encrypted payloads. "
+                    + "That payload format is not wired yet.";
 
     // How long a whistleblower case is kept before the retention job destroys it. This MUST be
     // set to the legally verified period for whistleblower data under the Polish Act — keep it
@@ -109,11 +113,11 @@ public class CaseReportService {
      * What happens here, in plain steps:
      *  1. Work out the category (from the label the form sent) and whether this is an
      *     HR grievance — HR grievances are routed to HR and get NO anonymous key.
-     *  2. For a normal report, make ONE 64-character access key, hash it, and use the
-     *     hash to derive a short, non-secret case reference (the case's id) for staff.
-     *  3. Save the case with its compliance deadlines, timeline, and evidence metadata.
+     *  2. Fail closed for normal whistleblower reports until client-side encrypted
+     *     payload support replaces the removed server-side field encryption.
+     *  3. Save accepted HR grievances with compliance deadlines, timeline, and evidence metadata.
      *  4. Write an immutable audit log entry (with no reporter-identifying data).
-     *  5. Return the plain access key to show the reporter ONCE (never stored).
+     *  5. Return no access key for HR grievances, per the labour-dispute rule.
      */
     public CaseSubmissionResponse submit(CaseSubmissionRequest request) {
         // The organisation the report is for. It is required and MUST already exist in
@@ -136,16 +140,15 @@ public class CaseReportService {
         ReportCategory category = ReportCategory.fromLabel(request.getCategory());
         boolean isHrOnly = category == ReportCategory.LABOUR_DISPUTE;
 
-        // Decide the credential.
-        // - Normal report: one secret access key, stored only as a SHA-256 hash (so the
-        //   stored data can never reveal the reporter's key).
-        // - HR grievance: no key at all; it is routed to HR instead.
+        // Transitional guard: without the old Mongo field-encryption listener, accepting
+        // normal report facts here would persist sensitive whistleblower narratives as plaintext.
+        if (!isHrOnly) {
+            throw new ClientSideEncryptionRequiredException(CLIENT_ENCRYPTION_PENDING_MESSAGE);
+        }
+
+        // HR grievance: no key at all; it is routed to HR instead.
         String accessKey = null;
         String keyHash = null;
-        if (!isHrOnly) {
-            accessKey = CaseReportUtils.generateAccessKey();
-            keyHash = CaseReportUtils.sha256Hex(accessKey);
-        }
 
         // Build the readable, non-secret case reference from WHEN the report arrived,
         // e.g. "SV/2026/0629/1408" (or "HR/..." for an HR grievance). Staff use this to
