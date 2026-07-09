@@ -81,14 +81,14 @@ public class RetentionService {
                 attachmentService.delete(a.getStorageVaultRef());
             }
         }
-        // 2. Delete the thread messages (they hold encrypted reporter/handler content).
+        // 2. Delete the thread messages (they hold sensitive reporter/handler content).
         if (!messages.isEmpty()) {
             caseMessageRepository.deleteAll(messages);
         }
 
         // 3. Strip personal data from the case shell.
-        report.setDescription(null);      // encrypted free-text narrative
-        report.setContactVaultRef(null);  // encrypted contact reference
+        report.setDescription(null);      // free-text narrative
+        report.setContactVaultRef(null);  // contact reference
         report.setDepartment(null);       // free-text location/area (can identify)
         report.getAttachments().clear();
         report.setKeyHash(null);          // credential fingerprint — case can no longer be tracked
