@@ -7,6 +7,7 @@ import com.safevoice.backend.dto.CaseTrackingResponse;
 import com.safevoice.backend.dto.ReporterAttachmentRequest;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
+import com.safevoice.backend.model.embedded.EncryptedPayload;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
 import com.safevoice.backend.model.enums.audit.AuditActionType;
 import com.safevoice.backend.model.enums.audit.AuditOutcome;
@@ -106,6 +107,13 @@ public class PublicCaseController {
             @PathVariable String caseId,
             @RequestParam("accessKey") String accessKey,
             @RequestParam(value = "text", required = false) String text,
+            // The three parts of a message the browser already locked (encrypted). For a normal
+            // case the reporter sends these INSTEAD of plain "text"; the server stores them and
+            // cannot read the words. Optional so a files-only message still works.
+            @RequestParam(value = "ciphertext", required = false) String ciphertext,
+            @RequestParam(value = "iv", required = false) String iv,
+            @RequestParam(value = "wrappedKey", required = false) String wrappedKey,
+            @RequestParam(value = "algorithm", required = false) String algorithm,
             @RequestParam(value = "files", required = false) List<MultipartFile> files) {
         // Authenticate the reporter: the access key must resolve to THIS case.
         CaseReport report = caseReportService.resolveOwnedCase(accessKey, caseId);
@@ -113,9 +121,13 @@ public class PublicCaseController {
         // Validate + store any attached files first (type/size/count checks live in the service).
         List<EvidenceAttachment> attachments = attachmentService.uploadAll(files);
 
+        // Build the locked-text payload from the form parts (null if the reporter sent none).
+        EncryptedPayload encryptedText = EncryptedPayload.fromParts(ciphertext, iv, wrappedKey, algorithm);
+
         CaseMessage message = caseMessageService.postMessage(
                 report.getId(),
                 text,
+                encryptedText,
                 "Anonymous Whistleblower", // fixed server-side — never client-controlled
                 report.getTenantId(),
                 "Public Portal",
