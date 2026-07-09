@@ -16,6 +16,7 @@ import com.safevoice.backend.service.report.CaseReportService;
 import com.safevoice.backend.websocket.CaseEventPublisher;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -39,6 +40,10 @@ public class CaseMessageService {
     private static final String CLIENT_ENCRYPTION_PENDING_MESSAGE =
             "Normal SafeVoice case messages must be submitted as client-side encrypted payloads. "
                     + "That payload format is not wired yet.";
+    // Temporary only for local testing while client-side encryption is being integrated.
+    // Keep false in production so normal whistleblower plaintext is never accepted by default.
+    @Value("${safevoice.allow-plaintext-intake-for-local-testing:false}")
+    private boolean allowPlaintextIntakeForLocalTesting;
 
     @Autowired
     public CaseMessageService(
@@ -89,7 +94,9 @@ public class CaseMessageService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "This case is closed, so no new messages or files can be added.");
         }
-        if (report.getCategory() != ReportCategory.LABOUR_DISPUTE && hasText) {
+        if (report.getCategory() != ReportCategory.LABOUR_DISPUTE
+                && hasText
+                && !allowPlaintextIntakeForLocalTesting) {
             throw new ClientSideEncryptionRequiredException(CLIENT_ENCRYPTION_PENDING_MESSAGE);
         }
 

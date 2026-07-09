@@ -87,6 +87,10 @@ public class CaseReportService {
     // auto-delete — surfaced to staff on the case page.
     @Value("${safevoice.retention.irrelevant-review-days:30}")
     private int irrelevantReviewDays;
+    // Temporary only for local testing while client-side encryption is being integrated.
+    // Keep false in production so normal whistleblower plaintext is never accepted by default.
+    @Value("${safevoice.allow-plaintext-intake-for-local-testing:false}")
+    private boolean allowPlaintextIntakeForLocalTesting;
 
     @Autowired
     public CaseReportService(CaseReportRepository caseReportRepository,
@@ -113,11 +117,11 @@ public class CaseReportService {
      * What happens here, in plain steps:
      *  1. Work out the category (from the label the form sent) and whether this is an
      *     HR grievance — HR grievances are routed to HR and get NO anonymous key.
-     *  2. Fail closed for normal whistleblower reports until client-side encrypted
-     *     payload support replaces the removed server-side field encryption.
-     *  3. Save accepted HR grievances with compliance deadlines, timeline, and evidence metadata.
+     *  2. Fail closed for normal whistleblower reports until client-side encryption is
+     *     wired, unless the local testing plaintext flag is explicitly enabled.
+     *  3. Save accepted cases with compliance deadlines, timeline, and evidence metadata.
      *  4. Write an immutable audit log entry (with no reporter-identifying data).
-     *  5. Return no access key for HR grievances, per the labour-dispute rule.
+     *  5. Return the one-time access key for normal test reports, or no key for HR grievances.
      */
     public CaseSubmissionResponse submit(CaseSubmissionRequest request) {
         // The organisation the report is for. It is required and MUST already exist in
@@ -140,15 +144,17 @@ public class CaseReportService {
         ReportCategory category = ReportCategory.fromLabel(request.getCategory());
         boolean isHrOnly = category == ReportCategory.LABOUR_DISPUTE;
 
-        // Transitional guard: without the old Mongo field-encryption listener, accepting
-        // normal report facts here would persist sensitive whistleblower narratives as plaintext.
-        if (!isHrOnly) {
+        // Temporary local-testing bypass: default is false, so production still fails closed.
+        if (!isHrOnly && !allowPlaintextIntakeForLocalTesting) {
             throw new ClientSideEncryptionRequiredException(CLIENT_ENCRYPTION_PENDING_MESSAGE);
         }
 
-        // HR grievance: no key at all; it is routed to HR instead.
         String accessKey = null;
         String keyHash = null;
+        if (!isHrOnly) {
+            accessKey = CaseReportUtils.generateAccessKey();
+            keyHash = CaseReportUtils.sha256Hex(accessKey);
+        }
 
         // Build the readable, non-secret case reference from WHEN the report arrived,
         // e.g. "SV/2026/0629/1408" (or "HR/..." for an HR grievance). Staff use this to
