@@ -4,6 +4,7 @@ import com.safevoice.backend.dto.CaseSummaryResponse;
 import com.safevoice.backend.dto.PageResponse;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
+import com.safevoice.backend.model.embedded.EncryptedPayload;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
 import com.safevoice.backend.model.enums.audit.AuditActionType;
 import com.safevoice.backend.model.enums.audit.AuditOutcome;
@@ -170,6 +171,13 @@ public class InternalCaseController {
     public ResponseEntity<CaseMessage> postMessage(
             @PathVariable String caseId,
             @RequestParam(value = "text", required = false) String text,
+            // The three parts of a reply the staff browser already locked (encrypted). For a normal
+            // case staff send these INSTEAD of plain "text", so the server stores words it cannot
+            // read. Optional so a files-only reply still works.
+            @RequestParam(value = "ciphertext", required = false) String ciphertext,
+            @RequestParam(value = "iv", required = false) String iv,
+            @RequestParam(value = "wrappedKey", required = false) String wrappedKey,
+            @RequestParam(value = "algorithm", required = false) String algorithm,
             @RequestParam(value = "files", required = false) List<MultipartFile> files,
             AuthenticatedUser caller) {
         caller.requireAnyPermission(
@@ -178,12 +186,15 @@ public class InternalCaseController {
                 SafeVoicePermission.SAFEVOICE_INVESTIGATOR);
         // Validate + store any attached files first (type/size/count checks live in the service).
         List<EvidenceAttachment> attachments = attachmentService.uploadAll(files);
+        // Build the locked-text payload from the form parts (null if staff sent none).
+        EncryptedPayload encryptedText = EncryptedPayload.fromParts(ciphertext, iv, wrappedKey, algorithm);
         // Sender label and audit actor both come from the verified session, not a header,
         // so a reporter can trust which staff role replied.
         String actorRole = caller.primarySafeVoiceRole(); // e.g. SAFEVOICE_COMPLIANCE_OFFICER
         CaseMessage message = caseMessageService.postMessage(
                 caseId,
                 text,
+                encryptedText,
                 actorRole,
                 caller.tenantId(),
                 actorRole,
