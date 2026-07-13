@@ -161,7 +161,6 @@ public class PublicCaseController {
         // access key proved ownership); we log the case + attachment id/checksum, never PII.
         auditLogService.log(
                 report.getTenantId(),
-                "Public Portal",
                 "Anonymous Whistleblower",
                 AuditActionType.EVIDENCE_EXPORTED,
                 report.getId(),

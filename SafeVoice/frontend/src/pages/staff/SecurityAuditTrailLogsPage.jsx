@@ -186,8 +186,7 @@ export default function SecurityAuditTrailLogsPage() {
               <tr key={log.id} className="hover:bg-slate-50 border-b border-slate-200 transition-colors">
                 <td className="px-4 py-3 text-xs font-mono text-slate-500 whitespace-nowrap">{log.timestamp}</td>
                 <td className="px-4 py-3 text-xs text-slate-800">
-                  <div className="font-bold">{log.actorRole}</div>
-                  <div className="text-[10px] text-slate-500 font-mono">{log.actorRef}</div>
+                  <div className="font-bold">{log.actorName}</div>
                 </td>
                 <td className="px-4 py-3 text-xs text-slate-700">{pretty(log.actionType)}</td>
                 <td className="px-4 py-3 text-xs font-mono text-slate-500 break-all">{log.subjectId}</td>

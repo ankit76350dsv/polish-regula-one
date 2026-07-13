@@ -289,7 +289,6 @@ public class CaseReportService {
         // Record compliance audit log (no reporter-identifying data is ever logged).
         auditLogService.log(
                 tenantId,
-                "Public Portal",
                 "Anonymous Whistleblower",
                 AuditActionType.REPORT_RECEIVED,
                 saved.getId(),
@@ -334,7 +333,6 @@ public class CaseReportService {
 
         auditLogService.log(
                 report.getTenantId(),
-                "Public Portal",
                 "Anonymous Whistleblower",
                 AuditActionType.ACCESS_REVIEW,
                 report.getId(),
@@ -610,8 +608,7 @@ public class CaseReportService {
 
         auditLogService.log(
                 tenantId,
-                actorRole,
-                actorId,
+                actorDisplayName(actorId, actorRole),
                 AuditActionType.CASE_STATUS_CHANGED,
                 caseId,
                 AuditOutcome.RECORDED,
@@ -647,8 +644,7 @@ public class CaseReportService {
 
         auditLogService.log(
                 tenantId,
-                actorRole,
-                actorId,
+                actorDisplayName(actorId, actorRole),
                 AuditActionType.SEVERITY_CHANGED,
                 caseId,
                 AuditOutcome.RECORDED,
@@ -693,8 +689,7 @@ public class CaseReportService {
 
         auditLogService.log(
                 tenantId,
-                actorRole,
-                actorId,
+                actorDisplayName(actorId, actorRole),
                 AuditActionType.INVESTIGATOR_ASSIGNED,
                 caseId,
                 AuditOutcome.RECORDED,
@@ -755,7 +750,6 @@ public class CaseReportService {
 
         auditLogService.log(
                 tenantId,
-                "Public Portal",
                 "Anonymous Whistleblower",
                 AuditActionType.EVIDENCE_ADDED,
                 caseId,

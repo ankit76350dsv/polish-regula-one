@@ -129,7 +129,7 @@ class CaseReportServiceTest {
         assertThat(saved.getDescription()).isNull();              // no plaintext stored
         assertThat(saved.getKeyHash()).isNotNull().matches("[0-9a-f]{64}"); // only the hash
         assertThat(saved.getCategory()).isEqualTo(ReportCategory.FRAUD);
-        verify(auditLogService).log(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(auditLogService).log(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -275,7 +275,7 @@ class CaseReportServiceTest {
         when(caseReportRepository.findByKeyHash(hash)).thenReturn(Optional.of(r));
 
         assertThat(service.retrieveByAccessKey(key)).isSameAs(r);
-        verify(auditLogService).log(eq("acme"), any(), any(), any(), eq("c1"), any(), any(), any(), any());
+        verify(auditLogService).log(eq("acme"), any(), any(), eq("c1"), any(), any(), any(), any());
     }
 
     @Test
@@ -378,7 +378,7 @@ class CaseReportServiceTest {
         assertThat(r.getStatus()).isEqualTo(CaseStatus.INVESTIGATING);
         assertThat(r.getTimeline()).isNotEmpty();
         verify(caseReportRepository).save(r);
-        verify(auditLogService).log(eq("acme"), any(), any(), any(), eq("c1"), any(),
+        verify(auditLogService).log(eq("acme"), any(), any(), eq("c1"), any(),
                 eq("RECEIVED"), eq("INVESTIGATING"), any());
     }
 
@@ -387,7 +387,7 @@ class CaseReportServiceTest {
         CaseReport r = existingCase(); // already RECEIVED
         service.updateStatus("c1", CaseStatus.RECEIVED, null, "acme", "SAFEVOICE_ADMIN", "u1");
         verify(caseReportRepository, never()).save(any());
-        verify(auditLogService, never()).log(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(auditLogService, never()).log(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -395,7 +395,7 @@ class CaseReportServiceTest {
         CaseReport r = existingCase();
         service.updateSeverity("c1", CaseSeverity.CRITICAL, "acme", "SAFEVOICE_ADMIN", "u1");
         assertThat(r.getSeverity()).isEqualTo(CaseSeverity.CRITICAL);
-        verify(auditLogService).log(eq("acme"), any(), any(), any(), eq("c1"), any(),
+        verify(auditLogService).log(eq("acme"), any(), any(), eq("c1"), any(),
                 eq("MEDIUM"), eq("CRITICAL"), any());
     }
 
@@ -405,7 +405,7 @@ class CaseReportServiceTest {
         service.assignInvestigator("c1", "Anna Kowalska", "acme", "SAFEVOICE_ADMIN", "u1");
         assertThat(r.getAssignedInvestigator()).isEqualTo("Anna Kowalska");
         verify(caseReportRepository).save(r);
-        verify(auditLogService).log(eq("acme"), any(), any(), any(), eq("c1"), any(), any(),
+        verify(auditLogService).log(eq("acme"), any(), any(), eq("c1"), any(), any(),
                 eq("Anna Kowalska"), any());
     }
 
@@ -419,7 +419,7 @@ class CaseReportServiceTest {
         service.addAttachment("c1", att, "acme");
         assertThat(r.getAttachments()).contains(att);
         verify(caseReportRepository).save(r);
-        verify(auditLogService).log(eq("acme"), any(), any(), any(), eq("c1"), any(), any(),
+        verify(auditLogService).log(eq("acme"), any(), any(), eq("c1"), any(), any(),
                 eq("att1"), any());
     }
 }

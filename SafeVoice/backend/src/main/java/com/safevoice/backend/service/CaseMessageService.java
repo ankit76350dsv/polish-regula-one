@@ -172,8 +172,7 @@ public class CaseMessageService {
         // Record compliance audit log
         auditLogService.log(
                 tenantId,
-                actorRole,
-                actorId,
+                sender,
                 AuditActionType.MESSAGE_POSTED,
                 caseId,
                 AuditOutcome.RECORDED,

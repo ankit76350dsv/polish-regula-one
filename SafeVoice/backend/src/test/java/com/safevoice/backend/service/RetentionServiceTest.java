@@ -98,7 +98,7 @@ class RetentionServiceTest {
         assertThat(report.getDeletedAt()).isNotNull();
         verify(caseReportRepository).save(report);
         // An immutable audit entry records the destruction.
-        verify(auditLogService).log(eq("acme"), eq("System"), eq("Retention Job"),
+        verify(auditLogService).log(eq("acme"), eq("System"),
                 eq(AuditActionType.RETENTION_UPDATED), eq("case-1"), any(), any(), any(), any());
     }
 }

@@ -287,8 +287,7 @@ public class InternalCaseController {
         // the file contents or the reporter's identity.
         auditLogService.log(
                 caller.tenantId(),
-                caller.primarySafeVoiceRole(),
-                caller.userId(),
+                resolveSenderName(caller),
                 AuditActionType.EVIDENCE_EXPORTED,
                 caseId,
                 AuditOutcome.RECORDED,
@@ -329,8 +328,7 @@ public class InternalCaseController {
         // Audit the export (see downloadAttachment above). Include the message id in the notice.
         auditLogService.log(
                 caller.tenantId(),
-                caller.primarySafeVoiceRole(),
-                caller.userId(),
+                resolveSenderName(caller),
                 AuditActionType.EVIDENCE_EXPORTED,
                 caseId,
                 AuditOutcome.RECORDED,

@@ -29,13 +29,16 @@ public class AuditLog {
     @Indexed
     private String tenantId;
 
-    private String actorRole; // e.g. AppRole value, "System", "Public Portal"
-
-    private String actorRef;
+    // WHO performed the action, as a single human-readable name: a staff member's name
+    // (resolved from the RegulaOne users collection), "Anonymous Whistleblower" for the reporter,
+    // or "System" for an automated job. Feeds the tamper-evident hashChain.
+    private String actorName;
 
     private AuditActionType actionType;
 
-    private String subjectId; // ! what is why we need this 
+    // The id of the entity the action was ABOUT — normally the case id. Records exactly WHAT was
+    // acted on and powers the per-subject audit-trail filter (e.g. all events for one case).
+    private String subjectId;
 
     @Builder.Default
     private Instant timestamp = Instant.now();

@@ -111,7 +111,6 @@ public class ComplianceDeadlineService {
         auditLogService.log(
                 report.getTenantId(),
                 "System",
-                "Compliance Job",
                 AuditActionType.CASE_STATUS_CHANGED,
                 report.getId(),
                 AuditOutcome.RECORDED,
@@ -164,7 +163,6 @@ public class ComplianceDeadlineService {
         auditLogService.log(
                 report.getTenantId(),
                 "System",
-                "Compliance Job",
                 AuditActionType.DEADLINE_ESCALATED,
                 report.getId(),
                 AuditOutcome.RECORDED,

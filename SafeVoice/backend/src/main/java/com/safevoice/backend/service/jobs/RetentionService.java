@@ -104,7 +104,6 @@ public class RetentionService {
         auditLogService.log(
                 report.getTenantId(),
                 "System",
-                "Retention Job",
                 AuditActionType.RETENTION_UPDATED,
                 report.getId(),
                 AuditOutcome.RECORDED,

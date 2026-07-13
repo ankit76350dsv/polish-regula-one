@@ -59,8 +59,7 @@ public class AuditLogService {
      */
     public synchronized AuditLog log(
             String tenantId,
-            String actorRole,
-            String actorRef,
+            String actorName,
             AuditActionType actionType,
             String subjectId,
             AuditOutcome outcome,
@@ -77,13 +76,12 @@ public class AuditLogService {
         String previousHash = (previousLog != null) ? previousLog.getHashChain() : GENESIS_HASH;
 
         // Link this entry to the previous one via a SHA-256 over its fields + the previous hash.
-        String hashChain = computeHash(tenantId, actorRole, actorRef, actionType, subjectId,
+        String hashChain = computeHash(tenantId, actorName, actionType, subjectId,
                 outcome, oldValue, newValue, timestamp, previousHash);
 
         AuditLog auditLog = AuditLog.builder()
                 .tenantId(tenantId)
-                .actorRole(actorRole)
-                .actorRef(actorRef)
+                .actorName(actorName)
                 .actionType(actionType)
                 .subjectId(subjectId)
                 .timestamp(timestamp)
@@ -160,8 +158,7 @@ public class AuditLogService {
         if (search != null && !search.isBlank()) {
             String literal = Pattern.quote(search.trim());
             conditions.add(new Criteria().orOperator(
-                    Criteria.where("actorRole").regex(literal, "i"),
-                    Criteria.where("actorRef").regex(literal, "i"),
+                    Criteria.where("actorName").regex(literal, "i"),
                     Criteria.where("actionType").regex(literal, "i"),
                     Criteria.where("subjectId").regex(literal, "i"),
                     Criteria.where("outcome").regex(literal, "i"),
@@ -237,13 +234,12 @@ public class AuditLogService {
 
     // The single source of truth for how a chain link is computed. Used by BOTH log() (at write)
     // and verifyChain() (at read), so the two can never drift out of sync.
-    private String computeHash(String tenantId, String actorRole, String actorRef,
+    private String computeHash(String tenantId, String actorName,
                                AuditActionType actionType, String subjectId, AuditOutcome outcome,
                                String oldValue, String newValue, Instant timestamp, String previousHash) {
-        String dataToHash = String.format("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s",
+        String dataToHash = String.format("%s|%s|%s|%s|%s|%s|%s|%s|%s",
                 tenantId,
-                actorRole,
-                actorRef,
+                actorName,
                 actionType.name(),
                 subjectId != null ? subjectId : "null",
                 outcome.name(),
@@ -279,7 +275,7 @@ public class AuditLogService {
         String previousHash = GENESIS_HASH;
         int checked = 0;
         for (AuditLog e : entries) {
-            String expected = computeHash(e.getTenantId(), e.getActorRole(), e.getActorRef(),
+            String expected = computeHash(e.getTenantId(), e.getActorName(),
                     e.getActionType(), e.getSubjectId(), e.getOutcome(), e.getOldValue(),
                     e.getNewValue(), e.getTimestamp(), previousHash);
             if (!expected.equals(e.getHashChain())) {
