@@ -64,11 +64,14 @@ const INTAKE_LABELS = {
   HR_GRIEVANCE_HANDOFF: "HR grievance handoff",
 };
 
+// Keys MUST match the backend RetentionState enum exactly
+// (ACTIVE, LEGAL_HOLD, DELETION_SCHEDULED, DESTROYED) — otherwise the value falls through
+// labelFrom() and the UI shows the raw enum word instead of a friendly label.
 const RETENTION_LABELS = {
   ACTIVE: "Active",
   LEGAL_HOLD: "Legal Hold",
-  SCHEDULED_DELETION: "Scheduled Deletion",
-  DELETED: "Deleted",
+  DELETION_SCHEDULED: "Scheduled Deletion",
+  DESTROYED: "Destroyed",
 };
 
 // Flip a {name: label} map into {label: name} for the write direction.
