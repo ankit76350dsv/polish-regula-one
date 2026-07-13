@@ -19,6 +19,10 @@ public class RegulaOneUser {
     @Id
     private String id;
 
+    // Display name from the shared RegulaOne "users" collection. Used to show WHO a case
+    // is assigned to in timeline/audit text (the case stores the user id, not the name).
+    private String name;
+
     private String email;
 
     private boolean enabled = true;

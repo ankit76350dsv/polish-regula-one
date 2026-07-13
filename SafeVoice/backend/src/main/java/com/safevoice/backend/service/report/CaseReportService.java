@@ -12,6 +12,7 @@ import com.safevoice.backend.exception.CaseReferenceConflictException;
 import com.safevoice.backend.exception.TenantNotFoundException;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
+import com.safevoice.backend.model.document.RegulaOneUser;
 import com.safevoice.backend.model.document.Tenant;
 import com.safevoice.backend.model.embedded.EncryptedPayload;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
@@ -28,6 +29,7 @@ import com.safevoice.backend.model.enums.case_report.ReportCategory;
 import com.safevoice.backend.model.enums.retention.RetentionState;
 import com.safevoice.backend.repository.CaseMessageRepository;
 import com.safevoice.backend.repository.CaseReportRepository;
+import com.safevoice.backend.repository.RegulaOneUserRepository;
 import com.safevoice.backend.repository.TenantRepository;
 import com.safevoice.backend.service.AttachmentService;
 import com.safevoice.backend.service.AuditLogService;
@@ -35,6 +37,7 @@ import com.safevoice.backend.service.notification.SafeVoiceEmailNotificationServ
 import com.safevoice.backend.service.report.utils.CaseReportUtils;
 import com.safevoice.backend.websocket.CaseEventPublisher;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,7 +63,7 @@ import java.util.regex.Pattern;
  * Service orchestrating operations on CaseReport documents.
  */
 @Slf4j
-@Service
+@RequiredArgsConstructor
 public class CaseReportService {
 
     private final CaseReportRepository caseReportRepository;
@@ -81,6 +84,10 @@ public class CaseReportService {
     // decrypt a case. We never decrypt the report text on the server — only the small keys.
     private final EnvelopeEncryptionService envelopeEncryptionService;
 
+    // Read-only lookup of RegulaOne users, used ONLY to turn an assigned investigator's
+    // id into a readable name for timeline/audit text. The case still stores the id.
+    private final RegulaOneUserRepository regulaOneUserRepository;
+
     // Hard ceiling on page size, so a caller can never ask for a giant page that would
     // strain the database or the browser. Requests above this are clamped down to it.
     private static final int MAX_PAGE_SIZE = 200;
@@ -100,27 +107,6 @@ public class CaseReportService {
     // Keep false in production so normal whistleblower plaintext is never accepted by default.
     @Value("${safevoice.allow-plaintext-intake-for-local-testing:false}")
     private boolean allowPlaintextIntakeForLocalTesting;
-
-    @Autowired
-    public CaseReportService(CaseReportRepository caseReportRepository,
-                             CaseMessageRepository caseMessageRepository,
-                             TenantRepository tenantRepository,
-                             AuditLogService auditLogService,
-                             MongoTemplate mongoTemplate,
-                             CaseEventPublisher caseEventPublisher,
-                             AttachmentService attachmentService,
-                             SafeVoiceEmailNotificationService emailNotificationService,
-                             EnvelopeEncryptionService envelopeEncryptionService) {
-        this.caseReportRepository = caseReportRepository;
-        this.caseMessageRepository = caseMessageRepository;
-        this.tenantRepository = tenantRepository;
-        this.auditLogService = auditLogService;
-        this.mongoTemplate = mongoTemplate;
-        this.caseEventPublisher = caseEventPublisher;
-        this.attachmentService = attachmentService;
-        this.emailNotificationService = emailNotificationService;
-        this.envelopeEncryptionService = envelopeEncryptionService;
-    }
 
     /**
      * Submit a new whistleblower report.
@@ -646,11 +632,14 @@ public class CaseReportService {
         CaseReport report = getById(caseId, tenantId);
         String oldInvestigator = report.getAssignedInvestigator();
 
+        // The FIELD stores the user's id (stable link). The human-readable timeline and
+        // audit text show the NAME, resolved from the shared users collection, so staff
+        // read "Case assigned to investigator: ANKIT KUMAR" instead of a raw id.
         report.setAssignedInvestigator(investigator);
         report.getTimeline().add(new TimelineEvent(
                 new org.bson.types.ObjectId().toHexString(),
                 "Investigator Assigned",
-                "Case assigned to investigator: " + investigator,
+                "Case assigned to investigator: " + investigatorDisplayName(investigator),
                 Instant.now(),
                 "system"
         ));
@@ -664,12 +653,26 @@ public class CaseReportService {
                 AuditActionType.INVESTIGATOR_ASSIGNED,
                 caseId,
                 AuditOutcome.RECORDED,
-                oldInvestigator,
-                investigator,
+                investigatorDisplayName(oldInvestigator),
+                investigatorDisplayName(investigator),
                 "Case investigator assignment updated."
         );
 
         return saved;
+    }
+
+    // Turn an assigned-investigator value into a readable name for timeline/audit text.
+    // The stored value is normally a user id; we look up that user's name. If it is blank,
+    // the "Unassigned" sentinel, or an id we cannot resolve (e.g. legacy name or removed
+    // user), we return it unchanged so the text is never empty or misleading.
+    private String investigatorDisplayName(String investigator) {
+        if (investigator == null || investigator.isBlank() || "Unassigned".equals(investigator)) {
+            return "Unassigned";
+        }
+        return regulaOneUserRepository.findById(investigator)
+                .map(RegulaOneUser::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .orElse(investigator);
     }
 
     /**
