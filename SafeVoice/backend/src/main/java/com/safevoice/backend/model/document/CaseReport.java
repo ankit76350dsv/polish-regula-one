@@ -36,14 +36,14 @@ import java.util.List;
 public class CaseReport extends BaseDocument {
 
     @Indexed(sparse = true)
-    private String trackingCode;
+    private String trackingCode; //! why do we need this 
 
     // Credential material — NEVER serialize to any API response. @JsonIgnore blocks Jackson
     // (HTTP) output only; Spring Data MongoDB uses its own converter, so these are still
     // persisted and read from the database normally. Exposing even the HASH lets anyone who
     // sees a case payload fingerprint/correlate a reporter's credential (anonymity breach).
     @JsonIgnore
-    private String hashedPin;
+    private String hashedPin; //!//! why do we need this 
 
     // SHA-256 fingerprint (64 hex chars) of the reporter's single 64-char access key.
     // We store ONLY this one-way hash — never the key itself — so even our own data
@@ -58,16 +58,16 @@ public class CaseReport extends BaseDocument {
     // "HR-..." for HR grievances). This is NOT the primary key — the real _id is a
     // MongoDB ObjectId, generated automatically. This field is just a readable handle.
     @Indexed(sparse = true)
-    private String caseReference;
+    private String caseReference; 
 
     @org.springframework.data.annotation.Version
-    private Long version;
+    private Long version; //! how the version chnage or defined here...
 
-    private ReportCategory category;
+    private ReportCategory category; 
 
     // Plain-text report narrative. Normally stays null — it is used ONLY under the dev-only
     // local-testing plaintext flag. In production every report (HR included) is encrypted.
-    private String description;
+    private String description; 
 
     // The report narrative, locked (AES-256-GCM) in the reporter's browser using a one-time data
     // key that AWS KMS wrapped. The server stores it but cannot read it. Set for every report,
@@ -82,7 +82,7 @@ public class CaseReport extends BaseDocument {
 
     private CaseStatus status;
 
-    private CaseSeverity severity;
+    private CaseSeverity severity; 
 
     private Instant submissionDate;
 
@@ -93,33 +93,33 @@ public class CaseReport extends BaseDocument {
     // When the case was last moved to CLOSED. Drives the reporter's post-close grace window
     // (they may still send a final message for a limited time after closure). Null while the
     // case is open; set each time it is closed; cleared when the case is reopened.
-    private Instant closedAt;
+    private Instant closedAt; 
 
     private String assignedInvestigator;
 
     private DisclosureMode disclosureMode;
 
-    private String contactVaultRef;
+    private String contactVaultRef; //! //! why do we need this and what is this
 
-    private IntakeChannel intakeChannel;
+    private IntakeChannel intakeChannel; 
 
-    private String lawfulBasis;
+    private String lawfulBasis; //! when this field take input and why do we need this
 
-    private String controller;
+    private String controller; //! why do we need this and where take the input
 
-    private String processor;
+    private String processor; //! why do we need this and where take the input
 
-    private int slaHoursRemaining;
+    private int slaHoursRemaining; //! what is this??
 
-    private TechnicalMetadataPolicy technicalMetadataPolicy = new TechnicalMetadataPolicy();
+    private TechnicalMetadataPolicy technicalMetadataPolicy = new TechnicalMetadataPolicy(); //! what is this??
 
-    private RetentionPolicy retention = new RetentionPolicy();
+    private RetentionPolicy retention = new RetentionPolicy(); //! when take these input?
 
-    private List<String> riskFlags = new ArrayList<>();
+    private List<String> riskFlags = new ArrayList<>(); //! why do we need this?
 
     private List<TimelineEvent> timeline = new ArrayList<>();
 
     // True once the case has been escalated for approaching/breaching its 3-month feedback
     // deadline, so the compliance job escalates each case only once.
-    private boolean feedbackEscalated = false;
+    private boolean feedbackEscalated = false; //! what is this and why we need this
 }
