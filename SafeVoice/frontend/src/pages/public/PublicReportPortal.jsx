@@ -39,6 +39,14 @@ export default function PublicReportPortal({ tenantId, navigate }) {
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
   const isHrCategory = HR_ONLY_CATEGORIES.includes(form.category);
 
+  // Today in local time as YYYY-MM-DD, used as the date picker's max so the
+  // calendar greys out future days (an incident cannot have happened tomorrow).
+  // Local, not UTC, so the boundary is correct for the reporter's own day.
+  const todayStr = (() => {
+    const now = new Date();
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  })();
+
   // Drop the empty (null) entries so an errors object only holds real problems.
   const prune = (obj) => {
     Object.keys(obj).forEach((k) => obj[k] == null && delete obj[k]);
@@ -195,6 +203,7 @@ export default function PublicReportPortal({ tenantId, navigate }) {
                     label={t("report.incidentDate")}
                     required
                     type="date"
+                    max={todayStr}
                     value={form.incidentDate}
                     onChange={(e) => set("incidentDate")(e.target.value)}
                     error={err("incidentDate")}
