@@ -317,6 +317,7 @@
     "noEvidence": "No evidence attached.",
     "timeline": "Timeline",
     "timelineSub": "Case activity",
+    "timelineBy": "by",
     "controls": "Case controls",
     "controlsSub": "Update status, severity and assignment",
     "controlStatus": "Status",

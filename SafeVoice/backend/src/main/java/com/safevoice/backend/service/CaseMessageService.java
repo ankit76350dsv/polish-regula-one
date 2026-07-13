@@ -164,7 +164,8 @@ public class CaseMessageService {
                 "New Message",
                 "Chat message posted by " + sender,
                 Instant.now(),
-                "message"
+                "message",
+                sender
         ));
         caseReportRepository.save(report);
 

@@ -279,7 +279,8 @@ public class CaseReportService {
                 "Case intake completed via " + caseReport.getIntakeChannel().getLabel()
                         + ". Intake accepted without IP, device, browser, or geolocation storage.",
                 now,
-                "system"
+                "system",
+                "Reporter"
         ));
         caseReport.setTimeline(timeline);
 
@@ -590,7 +591,8 @@ public class CaseReportService {
                         ? "Case reopened from CLOSED to " + newStatus + ". Reason: " + trimmedReason
                         : "Case status updated from " + oldStatus + " to " + newStatus,
                 Instant.now(),
-                "status"
+                "status",
+                actorDisplayName(actorId, actorRole)
         ));
 
         CaseReport saved = caseReportRepository.save(report);
@@ -637,7 +639,8 @@ public class CaseReportService {
                 "Severity Changed",
                 "Case severity updated from " + oldSeverity + " to " + newSeverity,
                 Instant.now(),
-                "system"
+                "status",
+                actorDisplayName(actorId, actorRole)
         ));
 
         CaseReport saved = caseReportRepository.save(report);
@@ -673,7 +676,8 @@ public class CaseReportService {
                 "Investigator Assigned",
                 "Case assigned to investigator: " + investigatorDisplayName(investigator),
                 Instant.now(),
-                "system"
+                "system",
+                actorDisplayName(actorId, actorRole)
         ));
 
         CaseReport saved = caseReportRepository.save(report);
@@ -702,6 +706,22 @@ public class CaseReportService {
         return saved;
     }
 
+    // The human-readable name of the STAFF member performing an action, for timeline attribution.
+    // Looked up from the shared RegulaOne users collection by the actor's id; falls back to the
+    // role code (and finally "System") so a timeline entry is never left without a "performed by".
+    private String actorDisplayName(String actorId, String actorRole) {
+        if (actorId != null && !actorId.isBlank()) {
+            String name = regulaOneUserRepository.findById(actorId)
+                    .map(RegulaOneUser::getName)
+                    .filter(n -> n != null && !n.isBlank())
+                    .orElse(null);
+            if (name != null) {
+                return name;
+            }
+        }
+        return actorRole != null && !actorRole.isBlank() ? actorRole : "System";
+    }
+
     // Turn an assigned-investigator value into a readable name for timeline/audit text.
     // The stored value is normally a user id; we look up that user's name. If it is blank,
     // the "Unassigned" sentinel, or an id we cannot resolve (e.g. legacy name or removed
@@ -727,7 +747,8 @@ public class CaseReportService {
                 "Evidence Attachment Uploaded",
                 "File " + attachment.getDisplayName() + " successfully attached.",
                 Instant.now(),
-                "attachment"
+                "attachment",
+                "Reporter"
         ));
 
         CaseReport saved = caseReportRepository.save(report);

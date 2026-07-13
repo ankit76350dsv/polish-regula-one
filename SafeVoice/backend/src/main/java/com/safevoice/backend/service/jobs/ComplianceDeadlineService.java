@@ -92,7 +92,8 @@ public class ComplianceDeadlineService {
                 "Acknowledged",
                 "Automatic acknowledgement sent to the reporter within the 7-day deadline.",
                 now,
-                "system"));
+                "system",
+                "System"));
         caseReportRepository.save(report);
 
         // Post the acknowledgement into the reporter's thread — they see it on the tracking page.
@@ -156,7 +157,8 @@ public class ComplianceDeadlineService {
                 "Feedback deadline",
                 "The 3-month feedback deadline is approaching or has passed; escalated to staff.",
                 Instant.now(),
-                "system"));
+                "system",
+                "System"));
         caseReportRepository.save(report);
 
         auditLogService.log(

@@ -47,6 +47,11 @@ export function TimelineWidget({ events }) {
                     <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                       {event.description}
                     </p>
+                    {event.performedBy && (
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {t("case.timelineBy")} <span className="font-medium text-slate-500">{event.performedBy}</span>
+                      </p>
+                    )}
                   </div>
                   <div className="text-right text-[10px] font-mono text-slate-500 whitespace-nowrap">
                     {event.timestamp}

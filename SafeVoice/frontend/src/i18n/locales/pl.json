@@ -319,6 +319,7 @@
     "noEvidence": "Brak załączonych dowodów.",
     "timeline": "Oś czasu",
     "timelineSub": "Aktywność sprawy",
+    "timelineBy": "przez",
     "controls": "Sterowanie sprawą",
     "controlsSub": "Zmień status, wagę i przypisanie",
     "controlStatus": "Status",

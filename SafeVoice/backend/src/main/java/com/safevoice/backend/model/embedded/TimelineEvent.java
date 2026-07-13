@@ -20,4 +20,8 @@ public class TimelineEvent {
     private String description;
     private Instant timestamp;
     private String type; // e.g., "system", "status", "comment", "message", "attachment", "retention"
+    // WHO performed the action, as a human-readable name: a staff member's name (resolved from the
+    // RegulaOne users collection), "Reporter" for the anonymous whistleblower, or "System" for an
+    // automated job. Shown in the timeline so every entry says who did it, not just what happened.
+    private String performedBy;
 }
