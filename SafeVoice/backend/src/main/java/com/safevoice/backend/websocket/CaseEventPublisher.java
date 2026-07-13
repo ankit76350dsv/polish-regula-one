@@ -2,6 +2,7 @@ package com.safevoice.backend.websocket;
 
 import com.safevoice.backend.dto.CaseActivityEvent;
 import com.safevoice.backend.dto.CaseSummaryResponse;
+import com.safevoice.backend.dto.CaseUpdateEvent;
 import com.safevoice.backend.model.document.CaseMessage;
 
 import lombok.RequiredArgsConstructor;
@@ -70,6 +71,25 @@ public class CaseEventPublisher {
             // Never break sending the message because the live broadcast could not be sent;
             // the message is already saved and will appear on the next load.
             log.warn("[CaseEventPublisher] failed to publish message to {}: {}",
+                    destination, e.getMessage());
+        }
+    }
+
+    /**
+     * Broadcast a case STATUS change to everyone viewing that one case (the reporter and any
+     * staff with it open), on the same "/topic/case.{caseId}" channel used for chat. The event
+     * carries a {@code type} of "CASE_UPDATE" so clients tell it apart from a message. Best-effort:
+     * the status is already saved, so a failed broadcast must never bubble up.
+     */
+    public void publishCaseUpdate(String caseId, CaseUpdateEvent event) {
+        if (caseId == null || caseId.isBlank()) {
+            return;
+        }
+        String destination = "/topic/case." + caseId;
+        try {
+            messagingTemplate.convertAndSend(destination, event);
+        } catch (Exception e) {
+            log.warn("[CaseEventPublisher] failed to publish case update to {}: {}",
                     destination, e.getMessage());
         }
     }

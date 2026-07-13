@@ -12,7 +12,7 @@ import {
   SecureCard,
   Spinner,
 } from "../../components/ui";
-import { fetchReports, selectReports, selectReportsStatus } from "../../slices/reportsSlice";
+import { fetchReports, selectReports, selectReportsStatus, caseStatusUpdated } from "../../slices/reportsSlice";
 import {
   clearSelectedThread,
   fetchMessages,
@@ -89,6 +89,12 @@ export default function CentralEncryptedInboxPage({ navigate }) {
     const unsubscribe = socketService.subscribe(`/topic/case.${activeId}`, (frame) => {
       try {
         const raw = JSON.parse(frame.body);
+        // A status change arrives as a CASE_UPDATE frame — apply it live so the open thread's
+        // status (and the closed composer lock) update instantly without a refresh.
+        if (raw?.type === "CASE_UPDATE") {
+          dispatch(caseStatusUpdated(raw));
+          return;
+        }
         // A live message arrives LOCKED. Unlock it in the browser (staff key path) before it
         // goes into the thread. Files-only/plain messages pass through unchanged.
         cryptoService

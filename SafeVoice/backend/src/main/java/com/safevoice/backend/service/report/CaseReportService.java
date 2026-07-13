@@ -4,6 +4,7 @@ import com.safevoice.backend.dto.CaseKeysResponse;
 import com.safevoice.backend.dto.CaseSubmissionRequest;
 import com.safevoice.backend.dto.CaseSubmissionResponse;
 import com.safevoice.backend.dto.CaseSummaryResponse;
+import com.safevoice.backend.dto.CaseUpdateEvent;
 import com.safevoice.backend.dto.DataKeyResponse;
 import com.safevoice.backend.dto.EncryptedPayloadDto;
 import com.safevoice.backend.dto.PageResponse;
@@ -593,6 +594,17 @@ public class CaseReportService {
         ));
 
         CaseReport saved = caseReportRepository.save(report);
+
+        // Push the new status live to everyone viewing this case (the reporter's tracking page
+        // and any staff with it open) so the status badge updates instantly, with no refresh.
+        // Best-effort — the change is already saved; a failed broadcast must not undo it.
+        caseEventPublisher.publishCaseUpdate(caseId, CaseUpdateEvent.builder()
+                .type("CASE_UPDATE")
+                .caseId(caseId)
+                .status(saved.getStatus().name())
+                .closedAt(saved.getClosedAt() != null ? saved.getClosedAt().toString() : null)
+                .at(Instant.now())
+                .build());
 
         auditLogService.log(
                 tenantId,

@@ -26,6 +26,7 @@ import {
   selectCurrentStatus,
   selectUpdating,
   updateReport,
+  caseStatusUpdated,
 } from "../../slices/reportsSlice";
 import { fetchMessages, messageReceived, selectMessagesFor, selectSending, selectThread, sendMessage } from "../../slices/messagesSlice";
 import { fetchUsers, selectUsers } from "../../slices/usersSlice";
@@ -79,6 +80,12 @@ export default function CaseDetailsPage({ caseId, navigate }) {
     const unsubscribe = socketService.subscribe(`/topic/case.${caseId}`, (frame) => {
       try {
         const raw = JSON.parse(frame.body);
+        // A status change arrives as a CASE_UPDATE frame — apply it live so the status badge and
+        // the closed/reopen-driven composer lock update instantly for staff viewing this case.
+        if (raw?.type === "CASE_UPDATE") {
+          dispatch(caseStatusUpdated(raw));
+          return;
+        }
         // A live message arrives LOCKED. Unlock it in the browser (staff key path) before it
         // goes into the thread. Files-only/plain messages pass through unchanged.
         cryptoService

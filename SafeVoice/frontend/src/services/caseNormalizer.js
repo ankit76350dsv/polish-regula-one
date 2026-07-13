@@ -124,6 +124,17 @@ export function severityToApi(displayValue) {
   return SEVERITY_NAMES[displayValue] ?? displayValue;
 }
 
+// backend enum name → UI display string (e.g. "CLOSED" → "Closed"). Passes an already-friendly
+// value straight through, so it is safe to call on either form. Used by the live WebSocket
+// handlers to keep status/severity labels in sync the same way normalizeReport does.
+export function statusLabel(rawValue) {
+  return labelFrom(STATUS_LABELS, rawValue);
+}
+
+export function severityLabel(rawValue) {
+  return labelFrom(SEVERITY_LABELS, rawValue);
+}
+
 /**
  * Convert one backend message into the shape the chat UI expects (friendly timestamp).
  */

@@ -10,6 +10,7 @@
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import reportService from "../services/reportService";
+import { statusLabel } from "../services/caseNormalizer";
 
 // ── Thunks ────────────────────────────────────────────────────────────────────
 export const fetchReports = createAsyncThunk("reports/fetchAll", () => reportService.listReports());
@@ -124,6 +125,24 @@ const reportsSlice = createSlice({
       if (!state.tracked.messages.some((m) => m.id === message.id)) {
         state.tracked.messages.push(message);
       }
+    },
+    // A case's STATUS changed live over WebSocket (a CASE_UPDATE frame). Apply it EVERYWHERE the
+    // case might be shown so every surface stays in sync with the backend without a refresh:
+    // the reporter's tracked case, the staff open case, and both staff lists (inbox + register).
+    // Status enum is mapped to its friendly label, exactly like normalizeReport does.
+    caseStatusUpdated(state, action) {
+      const { caseId, status, closedAt } = action.payload || {};
+      if (!caseId) return;
+      const label = status != null ? statusLabel(status) : undefined;
+      const apply = (r) => {
+        if (!r || r.id !== caseId) return;
+        if (label !== undefined) r.status = label;
+        if (closedAt !== undefined) r.closedAt = closedAt; // null clears it (case reopened)
+      };
+      apply(state.current);
+      if (state.tracked?.report) apply(state.tracked.report);
+      state.list.forEach(apply);
+      state.register.items.forEach(apply);
     },
     // A case had activity (a message) somewhere in the tenant. Move it to the TOP of both
     // lists (most-recent-activity first, like a chat app), and — when the reporter wrote and
@@ -252,6 +271,7 @@ export const {
   clearTracked,
   caseReceived,
   trackedMessageReceived,
+  caseStatusUpdated,
   caseActivity,
 } = reportsSlice.actions;
 

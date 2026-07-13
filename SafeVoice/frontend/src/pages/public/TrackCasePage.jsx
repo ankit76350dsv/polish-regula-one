@@ -18,6 +18,7 @@ import {
   selectTrackStatus,
   sendTrackedMessage,
   trackedMessageReceived,
+  caseStatusUpdated,
   trackReport,
 } from "../../slices/reportsSlice";
 import { addToast } from "../../slices/uiSlice";
@@ -54,6 +55,12 @@ export default function TrackCasePage() {
     const unsubscribe = socketService.subscribe(`/topic/case.${caseId}`, (frame) => {
       try {
         const raw = JSON.parse(frame.body);
+        // A status change arrives as a CASE_UPDATE frame (not a message) — apply it live so the
+        // status badge and the post-close reply window update instantly, no refresh needed.
+        if (raw?.type === "CASE_UPDATE") {
+          dispatch(caseStatusUpdated(raw));
+          return;
+        }
         // A live message arrives LOCKED. Unlock it in the browser (using our access key) before
         // it goes into the thread, so the reporter sees readable text. Files-only/plain messages
         // pass through unchanged.
