@@ -98,6 +98,14 @@ export default function CaseDetailsPage({ caseId, navigate }) {
     return <PageSpinner label={t("common.loading")} />;
   }
 
+  // Lock the reply composer until the case is genuinely being handled: it must be
+  // BOTH moved past "Received" AND assigned to an investigator before any reply
+  // goes to the reporter. So the box stays disabled if EITHER is still outstanding
+  // — the status is "Received" OR the investigator is unassigned. (Changing the
+  // status alone must not unlock replies while the case is nobody's responsibility.)
+  const investigatorUnassigned = !report.assignedInvestigator || report.assignedInvestigator === "Unassigned";
+  const composerLocked = report.status === "Received" || investigatorUnassigned;
+
   // A field change opens a confirm dialog first (important / audited action).
   const askChange = (field, value, toastKey) => {
     if (value === report[field]) return;
@@ -124,6 +132,8 @@ export default function CaseDetailsPage({ caseId, navigate }) {
 
   async function send(e) {
     e.preventDefault();
+    // Blocked while the case is unhandled (Received + unassigned).
+    if (composerLocked) return;
     // A message needs either text or at least one file.
     if (!draft.trim() && files.length === 0) return;
     try {
@@ -292,13 +302,21 @@ export default function CaseDetailsPage({ caseId, navigate }) {
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     placeholder={t("case.messagePlaceholder")}
-                    className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                    disabled={composerLocked || sending}
+                    aria-disabled={composerLocked}
+                    className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                   />
-                  <AppButton type="submit" variant="primary" disabled={sending || (!draft.trim() && files.length === 0)} icon={sending ? null : <Send className="w-4 h-4" />}>
+                  <AppButton type="submit" variant="primary" disabled={composerLocked || sending || (!draft.trim() && files.length === 0)} icon={sending ? null : <Send className="w-4 h-4" />}>
                     {sending ? <Spinner size={16} /> : t("common.send")}
                   </AppButton>
                 </div>
-                <MessageComposerAttachments files={files} onFilesChanged={setFiles} disabled={sending} />
+                {composerLocked ? (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    {t("case.composerLocked")}
+                  </p>
+                ) : (
+                  <MessageComposerAttachments files={files} onFilesChanged={setFiles} disabled={sending} />
+                )}
               </form>
             </div>
           </SecureCard>

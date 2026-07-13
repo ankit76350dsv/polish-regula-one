@@ -50,6 +50,13 @@ export default function CentralEncryptedInboxPage({ navigate }) {
   // header instead of the raw database id. Falls back to the id if not loaded yet.
   const activeThread = threads.find((r) => r.id === activeId);
   const activeRef = activeThread?.caseReference || activeId;
+  // Lock the reply composer until the open case is genuinely being handled: it must
+  // be BOTH past "Received" AND assigned to an investigator. So it stays disabled if
+  // EITHER is still outstanding — status "Received" OR the investigator unassigned.
+  // (Changing the status alone must not unlock replies while the case is unassigned.)
+  const investigatorUnassigned =
+    !activeThread?.assignedInvestigator || activeThread.assignedInvestigator === "Unassigned";
+  const composerLocked = activeThread?.status === "Received" || investigatorUnassigned;
   const messages = useSelector(selectMessagesFor(activeId));
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState([]); // raw File[] attached to the next message
@@ -104,6 +111,8 @@ export default function CentralEncryptedInboxPage({ navigate }) {
 
   async function send(e) {
     e.preventDefault();
+    // Blocked while the case is unhandled (Received + unassigned).
+    if (composerLocked) return;
     if ((!draft.trim() && files.length === 0) || !activeId) return;
     try {
       await dispatch(sendMessage({ caseId: activeId, text: draft, files })).unwrap();
@@ -219,13 +228,21 @@ export default function CentralEncryptedInboxPage({ navigate }) {
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     placeholder={t("inbox.messagePlaceholder")}
-                    className="min-w-0 rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                    disabled={composerLocked || sending}
+                    aria-disabled={composerLocked}
+                    className="min-w-0 rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                   />
-                  <AppButton type="submit" variant="primary" disabled={sending || (!draft.trim() && files.length === 0)} icon={sending ? null : <Send className="w-4 h-4" />}>
+                  <AppButton type="submit" variant="primary" disabled={composerLocked || sending || (!draft.trim() && files.length === 0)} icon={sending ? null : <Send className="w-4 h-4" />}>
                     {sending ? <Spinner size={16} /> : t("common.send")}
                   </AppButton>
                 </div>
-                <MessageComposerAttachments files={files} onFilesChanged={setFiles} disabled={sending} />
+                {composerLocked ? (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    {t("case.composerLocked")}
+                  </p>
+                ) : (
+                  <MessageComposerAttachments files={files} onFilesChanged={setFiles} disabled={sending} />
+                )}
               </form>
             </div>
           </SecureCard>

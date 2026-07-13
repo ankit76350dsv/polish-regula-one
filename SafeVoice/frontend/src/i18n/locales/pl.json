@@ -331,6 +331,7 @@
     "communication": "Komunikacja ze zgłaszającym",
     "communicationSub": "Wiadomości są w pełni poufne",
     "messagePlaceholder": "Poproś o dodatkowy szczegół, nie prosząc zgłaszającego o ujawnienie tożsamości.",
+    "composerLocked": "Przypisz osobę prowadzącą i zmień status sprawy z „Otrzymano”, zanim odpowiesz zgłaszającemu.",
     "loadError": "Nie udało się wczytać tej sprawy.",
     "confirmStatusTitle": "Zmienić status sprawy?",
     "confirmStatusBody": "Status sprawy zostanie zmieniony na „{{value}}” i zostanie zapisany niezmienny wpis audytu.",
