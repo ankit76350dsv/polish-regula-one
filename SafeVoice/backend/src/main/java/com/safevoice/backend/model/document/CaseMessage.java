@@ -29,7 +29,7 @@ public class CaseMessage extends BaseDocument {
     @Indexed
     private String caseId;
 
-    private String sender; //! in this store the user id not the permission stuff... e.g., Reporter, Compliance Officer, Investigator, HR Manager, System
+    private String sender; //! in this store the user name (if sended by the user) not the permission stuff... e.g., Reporter, Compliance Officer, Investigator, HR Manager, System
 
     // Plain-text message. Used ONLY for server-generated SYSTEM notices (fixed boilerplate) and
     // under the dev-only local-testing plaintext flag. For real user messages this stays null.

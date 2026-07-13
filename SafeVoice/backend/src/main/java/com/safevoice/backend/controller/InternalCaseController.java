@@ -4,12 +4,14 @@ import com.safevoice.backend.dto.CaseSummaryResponse;
 import com.safevoice.backend.dto.PageResponse;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
+import com.safevoice.backend.model.document.RegulaOneUser;
 import com.safevoice.backend.model.embedded.EncryptedPayload;
 import com.safevoice.backend.model.embedded.EvidenceAttachment;
 import com.safevoice.backend.model.enums.audit.AuditActionType;
 import com.safevoice.backend.model.enums.audit.AuditOutcome;
 import com.safevoice.backend.model.enums.case_report.CaseSeverity;
 import com.safevoice.backend.model.enums.case_report.CaseStatus;
+import com.safevoice.backend.repository.RegulaOneUserRepository;
 import com.safevoice.backend.security.AuthenticatedUser;
 import com.safevoice.backend.security.SafeVoicePermission;
 import com.safevoice.backend.service.AttachmentService;
@@ -46,6 +48,9 @@ public class InternalCaseController {
     private final CaseMessageService caseMessageService;
     private final AttachmentService attachmentService;
     private final AuditLogService auditLogService;
+    // Read-only lookup of RegulaOne users, so a staff reply is labelled with the person's NAME
+    // (from the shared users collection) rather than their role code.
+    private final RegulaOneUserRepository regulaOneUserRepository;
 
     /**
      * Lists whistleblower cases for the tenant as a PAGE of slim summaries — only the
@@ -193,20 +198,40 @@ public class InternalCaseController {
         List<EvidenceAttachment> attachments = attachmentService.uploadAll(files);
         // Build the locked-text payload from the form parts (null if staff sent none).
         EncryptedPayload encryptedText = EncryptedPayload.fromParts(ciphertext, iv, wrappedKey, algorithm);
-        // Sender label and audit actor both come from the verified session, not a header,
-        // so a reporter can trust which staff role replied.
+        // Both the audit actor and the thread sender label come from the verified session, never
+        // a header. The audit still records the ROLE (for traceability); the sender shown in the
+        // thread is the staff member's NAME so the reporter/staff see who replied, not a role code.
         String actorRole = caller.primarySafeVoiceRole(); // e.g. SAFEVOICE_COMPLIANCE_OFFICER
         CaseMessage message = caseMessageService.postMessage(
                 caseId,
                 text,
                 encryptedText,
-                actorRole,
+                resolveSenderName(caller),
                 caller.tenantId(),
                 actorRole,
                 caller.userId(),
                 attachments
         );
         return ResponseEntity.ok(message);
+    }
+
+    /**
+     * The display name to label a staff member's chat message with, looked up from the shared
+     * RegulaOne users collection by the caller's id. Falls back so the sender is never blank:
+     * the user's e-mail, then their role code.
+     */
+    private String resolveSenderName(AuthenticatedUser caller) {
+        String name = regulaOneUserRepository.findById(caller.userId())
+                .map(RegulaOneUser::getName)
+                .filter(n -> n != null && !n.isBlank())
+                .orElse(null);
+        if (name != null) {
+            return name;
+        }
+        if (caller.email() != null && !caller.email().isBlank()) {
+            return caller.email();
+        }
+        return caller.primarySafeVoiceRole();
     }
 
     /**
