@@ -53,6 +53,18 @@ public class SafeVoiceEmailNotificationService {
             <p>Sign in to RegulaOne SafeVoice to review and respond.</p>
             """;
 
+    // A staff member has been assigned as the investigator on a case.
+    private static final String INVESTIGATOR_ASSIGNED_SUBJECT = "You have been assigned a SafeVoice case";
+    private static final String INVESTIGATOR_ASSIGNED_TEXT = """
+            You have been assigned as the investigator on a SafeVoice case.
+
+            Sign in to RegulaOne SafeVoice to review it.
+            """;
+    private static final String INVESTIGATOR_ASSIGNED_HTML = """
+            <p>You have been assigned as the investigator on a SafeVoice case.</p>
+            <p>Sign in to RegulaOne SafeVoice to review it.</p>
+            """;
+
     // A reporter checked their case (via a valid access key) and is waiting for a response.
     private static final String REPORTER_WAITING_SUBJECT = "A SafeVoice reporter is waiting for your response";
     private static final String REPORTER_WAITING_TEXT = """
@@ -141,6 +153,42 @@ public class SafeVoiceEmailNotificationService {
                     .removeIf(entry -> now - entry.getValue() >= reporterWaitingCooldownMs);
         }
         return allow[0];
+    }
+
+    // Runs on the background email pool. Fired when a staff member is assigned as the investigator
+    // on a case — emails ONLY that one person (not the whole tenant). Content-free: it names no
+    // case detail, reporter, or reference, only that a case now awaits them. Best-effort.
+    @Async("emailNotificationExecutor")
+    public void notifyInvestigatorAssigned(String investigatorUserId) {
+        if (!notificationsEnabled) {
+            return;
+        }
+        if (investigatorUserId == null || investigatorUserId.isBlank()) {
+            return; // nothing to notify (e.g. "Unassigned")
+        }
+        if (serviceToken == null || serviceToken.isBlank()) {
+            log.error("[SafeVoiceEmail] regulaone.email.service-token is not configured; investigator-assigned email skipped");
+            return;
+        }
+
+        RegulaOneUser user = userRepository.findById(investigatorUserId).orElse(null);
+        if (user == null) {
+            log.info("[SafeVoiceEmail] investigator-assigned email skipped: user not found; userId={}", investigatorUserId);
+            return;
+        }
+        if (!user.emailNotificationsEnabled()) {
+            log.debug("[SafeVoiceEmail] investigator has email notifications off; userId={}", investigatorUserId);
+            return;
+        }
+        String email = user.getEmail();
+        if (email == null || email.isBlank()) {
+            log.info("[SafeVoiceEmail] investigator has no email on file; userId={}", investigatorUserId);
+            return;
+        }
+
+        boolean sent = sendToRecipient(email.trim(),
+                INVESTIGATOR_ASSIGNED_SUBJECT, INVESTIGATOR_ASSIGNED_TEXT, INVESTIGATOR_ASSIGNED_HTML);
+        log.info("[SafeVoiceEmail] investigator-assigned email {}; userId={}", sent ? "sent" : "failed", investigatorUserId);
     }
 
     // Runs on the background email pool. Fired by the compliance job when a case nears/passes its

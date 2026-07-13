@@ -646,6 +646,15 @@ public class CaseReportService {
 
         CaseReport saved = caseReportRepository.save(report);
 
+        // Tell the newly-assigned investigator by email (content-free, async, best-effort).
+        // Skip the "Unassigned"/blank sentinel and no-op re-assignments to the same person,
+        // so we only email on a real, changed assignment.
+        if (investigator != null && !investigator.isBlank()
+                && !"Unassigned".equals(investigator)
+                && !investigator.equals(oldInvestigator)) {
+            emailNotificationService.notifyInvestigatorAssigned(investigator);
+        }
+
         auditLogService.log(
                 tenantId,
                 actorRole,
