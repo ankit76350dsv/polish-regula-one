@@ -45,7 +45,7 @@ public class CaseReport extends BaseDocument {
     private String caseReference; 
 
     @org.springframework.data.annotation.Version
-    private Long version; //! how the version chnage or defined here...
+    private Long version; 
 
     private ReportCategory category; 
 
@@ -85,11 +85,10 @@ public class CaseReport extends BaseDocument {
 
     private IntakeChannel intakeChannel;
 
-    private String lawfulBasis; //! when this field take input and why do we need this
+    private String lawfulBasis; 
 
-    private String controller; //! why do we need this and where take the input
-
-    private String processor; //! why do we need this and where take the input
+    private String controller; 
+    private String processor; 
 
     private int slaHoursRemaining; //! what is this??
 

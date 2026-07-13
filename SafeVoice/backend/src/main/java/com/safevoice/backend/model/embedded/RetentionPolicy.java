@@ -16,8 +16,8 @@ import java.time.Instant;
 public class RetentionPolicy {
 
     private RetentionState state;
+    private String legalHoldReason;
     private int retentionYears;
     private Instant deleteAfter;
     private Instant irrelevantPersonalDataDeletionDue;
-    private String legalHoldReason;
 }
