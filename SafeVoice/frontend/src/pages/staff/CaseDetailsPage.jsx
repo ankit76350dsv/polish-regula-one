@@ -149,12 +149,25 @@ export default function CaseDetailsPage({ caseId, navigate }) {
     }
   }
 
+  // Turn a pending field change into the human-readable value shown in the confirm
+  // dialog: status → its translated label, investigator → the user's NAME (the value
+  // we store is the user's id, so resolve it), everything else → the value as-is.
+  const pendingDisplayValue = () => {
+    if (!pending?.field) return "";
+    if (pending.field === "status") return t(`status.${pending.value}`, pending.value);
+    if (pending.field === "assignedInvestigator") {
+      if (pending.value === "Unassigned") return t("cases.unassigned");
+      return users.find((u) => u.id === pending.value)?.name || pending.value;
+    }
+    return pending.value;
+  };
+
   // Build the confirm-dialog content from whatever is pending.
   const confirmProps = pending
     ? pending.field === "status"
-      ? { title: t("case.confirmStatusTitle"), message: t("case.confirmStatusBody", { value: t(`status.${pending.value}`, pending.value) }) }
+      ? { title: t("case.confirmStatusTitle"), message: t("case.confirmStatusBody", { value: pendingDisplayValue() }) }
       : pending.field
-        ? { title: t("case.controls"), message: t("case.confirmStatusBody", { value: pending.value }) }
+        ? { title: t("case.controls"), message: t("case.confirmStatusBody", { value: pendingDisplayValue() }) }
         : pending.action === "export"
           ? { title: t("case.confirmExportTitle"), message: t("case.confirmExportBody") }
           : { title: t("case.confirmReviewedTitle"), message: t("case.confirmReviewedBody") }
@@ -338,7 +351,10 @@ export default function CaseDetailsPage({ caseId, navigate }) {
               <SelectField label={t("case.controlInvestigator")} value={report.assignedInvestigator} onChange={(e) => askChange("assignedInvestigator", e.target.value, "toast.assigneeUpdated")} disabled={updating || !canUpdate}>
                 <option value="Unassigned">{t("cases.unassigned")}</option>
                 {users.map((u) => (
-                  <option key={u.id} value={u.name}>{u.name}</option>
+                  // value is the user's MongoDB id (what the backend stores); the
+                  // visible label stays the name. The /assign call therefore sends the
+                  // id, e.g. ?investigator=<userId>, not the display name.
+                  <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </SelectField>
             </div>

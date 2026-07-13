@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
 import { Search } from "lucide-react";
 import { AppButton, AppTable, EmptyState, ErrorState, PageSpinner, Pagination, SeverityBadge, StatusBadge } from "../../components/ui";
 import { fetchCasePage, selectRegister } from "../../slices/reportsSlice";
+import { fetchUsers, selectUsers } from "../../slices/usersSlice";
 
 const PAGE_SIZE = 8;
 const FILTERS = ["all", "critical", "unassigned", "feedbackDue"];
@@ -14,6 +15,13 @@ export default function CaseManagementPage({ navigate }) {
   // The register is now a SERVER-side page: the backend does the search, filter and
   // paging, and returns just this page of rows plus the totals for the pager.
   const register = useSelector(selectRegister);
+  // The register rows store the investigator as a user id; we resolve it to a name
+  // for display using the tenant's user list (which carries id + name).
+  const users = useSelector(selectUsers);
+  const userNameById = useMemo(
+    () => Object.fromEntries((users || []).map((u) => [u.id, u.name])),
+    [users],
+  );
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -31,6 +39,11 @@ export default function CaseManagementPage({ navigate }) {
   useEffect(() => {
     dispatch(fetchCasePage({ page, size: PAGE_SIZE, search: debouncedQuery, filter }));
   }, [dispatch, page, debouncedQuery, filter]);
+
+  // Load the tenant's users once so we can show investigator names, not raw ids.
+  useEffect(() => {
+    if (users.length === 0) dispatch(fetchUsers());
+  }, [users.length, dispatch]);
 
   // Changing the search or filter always restarts at page 1 (so we never land on a
   // page that no longer exists for the new, smaller result set).
@@ -133,7 +146,7 @@ export default function CaseManagementPage({ navigate }) {
                 <td className="px-4 py-3 text-xs text-slate-700 break-words">
                   {report.assignedInvestigator === "Unassigned" || !report.assignedInvestigator
                     ? t("cases.unassigned")
-                    : report.assignedInvestigator}
+                    : userNameById[report.assignedInvestigator] || report.assignedInvestigator}
                 </td>
                 <td className="px-4 py-3 text-xs font-mono text-slate-500 whitespace-nowrap">{report.feedbackDue}</td>
                 <td className="px-4 py-3 text-right">
