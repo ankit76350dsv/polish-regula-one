@@ -9,16 +9,13 @@ import lombok.EqualsAndHashCode;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import org.springframework.data.mongodb.core.index.CompoundIndex;
-import org.springframework.data.mongodb.core.index.CompoundIndexes;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Main MongoDB document mapping case reports.
- * Employs UUID primary key (inherited from BaseDocument) and indexing on trackingCode.
+ * Employs UUID primary key (inherited from BaseDocument).
  * Adheres to RODO/GDPR with automated retention policies.
  *
  * ENCRYPTION MODEL: ALL report text — HR grievances (LABOUR_DISPUTE) included — is locked
@@ -30,20 +27,7 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @Document(collection = "safevoice_case_reports")
-@CompoundIndexes({
-    @CompoundIndex(name = "tenant_tracking_idx", def = "{'tenantId': 1, 'trackingCode': 1}", unique = true, sparse = true)
-})
 public class CaseReport extends BaseDocument {
-
-    @Indexed(sparse = true)
-    private String trackingCode; //! why do we need this 
-
-    // Credential material — NEVER serialize to any API response. @JsonIgnore blocks Jackson
-    // (HTTP) output only; Spring Data MongoDB uses its own converter, so these are still
-    // persisted and read from the database normally. Exposing even the HASH lets anyone who
-    // sees a case payload fingerprint/correlate a reporter's credential (anonymity breach).
-    @JsonIgnore
-    private String hashedPin; //!//! why do we need this 
 
     // SHA-256 fingerprint (64 hex chars) of the reporter's single 64-char access key.
     // We store ONLY this one-way hash — never the key itself — so even our own data
@@ -99,9 +83,7 @@ public class CaseReport extends BaseDocument {
 
     private DisclosureMode disclosureMode;
 
-    private String contactVaultRef; //! //! why do we need this and what is this
-
-    private IntakeChannel intakeChannel; 
+    private IntakeChannel intakeChannel;
 
     private String lawfulBasis; //! when this field take input and why do we need this
 

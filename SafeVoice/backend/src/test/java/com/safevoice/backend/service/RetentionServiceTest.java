@@ -91,7 +91,6 @@ class RetentionServiceTest {
         // PII is stripped and the case is marked destroyed + soft-deleted.
         assertThat(report.getDescription()).isNull();
         assertThat(report.getKeyHash()).isNull();
-        assertThat(report.getContactVaultRef()).isNull();
         assertThat(report.getAttachments()).isEmpty();
         assertThat(report.getRetention().getState()).isEqualTo(RetentionState.DESTROYED);
         assertThat(report.isDeleted()).isTrue();

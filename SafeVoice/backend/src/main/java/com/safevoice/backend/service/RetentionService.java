@@ -88,11 +88,9 @@ public class RetentionService {
 
         // 3. Strip personal data from the case shell.
         report.setDescription(null);      // free-text narrative
-        report.setContactVaultRef(null);  // contact reference
         report.setDepartment(null);       // free-text location/area (can identify)
         report.getAttachments().clear();
         report.setKeyHash(null);          // credential fingerprint — case can no longer be tracked
-        report.setHashedPin(null);
 
         // 4. Mark destroyed + soft-delete.
         report.getRetention().setState(RetentionState.DESTROYED);

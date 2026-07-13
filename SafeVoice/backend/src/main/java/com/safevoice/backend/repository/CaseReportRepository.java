@@ -17,12 +17,6 @@ import java.util.Optional;
 public interface CaseReportRepository extends MongoRepository<CaseReport, String> {
 
     /**
-     * Finds a case report within a specific tenant context by its tracking code.
-     * Enforces tenant isolation.
-     */
-    Optional<CaseReport> findByTenantIdAndTrackingCode(String tenantId, String trackingCode);
-
-    /**
      * Finds a case report by the SHA-256 fingerprint of its access key.
      * This is how the anonymous reporter flow looks a case up: we hash the key the
      * reporter types and match it against this stored fingerprint. The key fingerprint
