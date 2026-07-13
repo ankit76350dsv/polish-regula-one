@@ -38,7 +38,7 @@ class AuditLogServiceTest {
     }
 
     private AuditLog log(AuditLogService svc, String newValue) {
-        return svc.log("acme", "SAFEVOICE_ADMIN", "u1", AuditActionType.REPORT_RECEIVED,
+        return svc.log("acme", "Ankit Kumar", AuditActionType.REPORT_RECEIVED,
                 "case-1", AuditOutcome.RECORDED, null, newValue, "notice");
     }
 
