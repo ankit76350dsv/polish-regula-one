@@ -87,10 +87,8 @@ public class CaseReport extends BaseDocument {
 
     private String lawfulBasis; 
 
-    private String controller; 
-    private String processor; 
-
-    private int slaHoursRemaining; //! what is this??
+    private String controller;
+    private String processor;
 
     private TechnicalMetadataPolicy technicalMetadataPolicy = new TechnicalMetadataPolicy(); //! what is this??
 

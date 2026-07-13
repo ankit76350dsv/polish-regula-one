@@ -7,6 +7,7 @@ import com.safevoice.backend.model.enums.audit.AuditActionType;
 import com.safevoice.backend.model.enums.retention.RetentionState;
 import com.safevoice.backend.repository.CaseMessageRepository;
 import com.safevoice.backend.repository.CaseReportRepository;
+import com.safevoice.backend.service.jobs.RetentionService;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

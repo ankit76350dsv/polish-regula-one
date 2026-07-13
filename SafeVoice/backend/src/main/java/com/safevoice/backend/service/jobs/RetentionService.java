@@ -1,4 +1,4 @@
-package com.safevoice.backend.service;
+package com.safevoice.backend.service.jobs;
 
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
@@ -8,6 +8,8 @@ import com.safevoice.backend.model.enums.audit.AuditOutcome;
 import com.safevoice.backend.model.enums.retention.RetentionState;
 import com.safevoice.backend.repository.CaseMessageRepository;
 import com.safevoice.backend.repository.CaseReportRepository;
+import com.safevoice.backend.service.AttachmentService;
+import com.safevoice.backend.service.AuditLogService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
