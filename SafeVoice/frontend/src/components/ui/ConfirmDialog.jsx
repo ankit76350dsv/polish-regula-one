@@ -17,6 +17,7 @@ export function ConfirmDialog({
   cancelLabel,
   tone = "primary", // "primary" | "danger" | "secure"
   loading = false,
+  confirmDisabled = false, // block confirm until the dialog's own input is valid
   onConfirm,
   onCancel,
   children, // optional extra content (e.g. an input) shown between the message and buttons
@@ -32,7 +33,7 @@ export function ConfirmDialog({
           <AppButton type="button" variant="secondary" onClick={onCancel} disabled={loading}>
             {cancelLabel || t("common.cancel")}
           </AppButton>
-          <AppButton type="button" variant={tone} onClick={onConfirm} disabled={loading}>
+          <AppButton type="button" variant={tone} onClick={onConfirm} disabled={loading || confirmDisabled}>
             {loading ? <Spinner size={16} /> : confirmLabel || t("common.confirm")}
           </AppButton>
         </div>

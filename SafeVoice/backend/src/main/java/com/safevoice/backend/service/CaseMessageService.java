@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,6 +41,10 @@ public class CaseMessageService {
     // normal whistleblower plaintext messages are never accepted by default.
     @Value("${safevoice.allow-plaintext-intake-for-local-testing:false}")
     private boolean allowPlaintextIntakeForLocalTesting;
+    // How long AFTER a case is closed the reporter may still post a final message. Staff are
+    // blocked immediately on close; the reporter keeps this grace window (default 48 hours).
+    @Value("${safevoice.reporter-post-close-window-hours:48}")
+    private int reporterPostCloseWindowHours;
 
     @Autowired
     public CaseMessageService(
@@ -87,12 +92,30 @@ public class CaseMessageService {
         // Verify parent case exists and belongs to the tenant
         CaseReport report = caseReportService.getById(caseId, tenantId);
 
-        // Do not allow new messages/files on a closed case. The two-way channel is only open
-        // while the case is being handled; once CLOSED the record is final (finality + a clean
-        // retention lifecycle). Callers get a 409 they can show to the user.
+        // Is the writer the reporter (not a staff handler)? The public app labels reporter
+        // messages "Anonymous Whistleblower"; internal tools use "Reporter". Needed both for the
+        // closed-case gate below and the read-flag bookkeeping later.
+        boolean fromReporter = sender != null
+                && (sender.equalsIgnoreCase("Reporter")
+                    || sender.toLowerCase().contains("whistleblower"));
+
+        // Closed-case rules:
+        //  - STAFF can no longer post the moment a case is CLOSED (they must reopen to reply).
+        //  - the REPORTER keeps a short grace window (default 48h from closure) to add a final
+        //    message, then the thread locks for everyone too.
+        //  - a CLOSED case with no recorded closedAt (legacy data) is treated as fully locked.
+        // Callers get a 409 with a message they can show the user.
         if (report.getStatus() == CaseStatus.CLOSED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "This case is closed, so no new messages or files can be added.");
+            boolean reporterWithinGrace = fromReporter
+                    && report.getClosedAt() != null
+                    && Instant.now().isBefore(
+                            report.getClosedAt().plus(reporterPostCloseWindowHours, ChronoUnit.HOURS));
+            if (!reporterWithinGrace) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        fromReporter
+                                ? "This case is closed and the reply window has ended, so no new messages can be added."
+                                : "This case is closed, so staff can no longer add messages. Reopen the case to reply.");
+            }
         }
 
         // Decide how the words are stored, for EVERY case (HR grievances included now):
@@ -124,12 +147,7 @@ public class CaseMessageService {
         message.setAttachments(attachments != null ? attachments : new ArrayList<>());
         message.setTimestamp(Instant.now());
 
-        // Work out whether the writer is the reporter or a staff member. The public web
-        // app labels reporter messages "Anonymous Whistleblower"; internal tools use
-        // "Reporter". Either way we mark the message as already read by its own author.
-        boolean fromReporter = sender != null
-                && (sender.equalsIgnoreCase("Reporter")
-                    || sender.toLowerCase().contains("whistleblower"));
+        // Mark the message as already read by its own author (reporter vs staff computed above).
         if (fromReporter) {
             message.setReadByReporter(true);
             message.setReadByAdmin(false);

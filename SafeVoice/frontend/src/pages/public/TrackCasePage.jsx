@@ -86,6 +86,7 @@ export default function TrackCasePage() {
 
   async function send(e) {
     e.preventDefault();
+    if (!replyWindowOpen) return; // closed and past the grace window
     if ((!draft.trim() && files.length === 0) || !tracked) return;
     try {
       // The reducer appends the saved message to the thread on success, so the
@@ -118,6 +119,18 @@ export default function TrackCasePage() {
 
   const report = tracked?.report;
   const thread = tracked?.messages || [];
+
+  // After a case is CLOSED the reporter may still send a final message for a limited
+  // grace window (48h, matching the backend default). Reading stays open forever; only
+  // sending is time-boxed. The backend enforces this too — this is the UX layer.
+  const REPORTER_GRACE_HOURS = 48;
+  const caseClosed = report?.status === "Closed";
+  const graceEndsMs = report?.closedAt
+    ? new Date(report.closedAt).getTime() + REPORTER_GRACE_HOURS * 60 * 60 * 1000
+    : null;
+  // Window is open while the case is active, or while still inside the post-close grace.
+  const replyWindowOpen = !caseClosed || (graceEndsMs != null && Date.now() < graceEndsMs);
+  const graceEndsLabel = graceEndsMs ? new Date(graceEndsMs).toLocaleString() : "";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start leading-relaxed">
@@ -208,6 +221,18 @@ export default function TrackCasePage() {
                 )}
               </div>
 
+              {caseClosed && (
+                <p className={`text-xs rounded-lg px-3 py-2 border ${
+                  replyWindowOpen
+                    ? "text-amber-800 bg-amber-50 border-amber-200"
+                    : "text-slate-600 bg-slate-50 border-slate-200"
+                }`}>
+                  {replyWindowOpen
+                    ? t("track.closedGraceInfo", { time: graceEndsLabel })
+                    : t("track.closedEnded")}
+                </p>
+              )}
+
               <form className="flex flex-col gap-2 border-t border-slate-200 pt-4" onSubmit={send}>
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
                   <label htmlFor="track-msg" className="sr-only">{t("track.messagePlaceholder")}</label>
@@ -216,13 +241,15 @@ export default function TrackCasePage() {
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     placeholder={t("track.messagePlaceholder")}
-                    className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                    disabled={sending || !replyWindowOpen}
+                    aria-disabled={!replyWindowOpen}
+                    className="rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                   />
-                  <AppButton type="submit" variant="primary" disabled={sending || (!draft.trim() && files.length === 0)} icon={sending ? null : <Send className="w-4 h-4" />}>
+                  <AppButton type="submit" variant="primary" disabled={sending || !replyWindowOpen || (!draft.trim() && files.length === 0)} icon={sending ? null : <Send className="w-4 h-4" />}>
                     {sending ? <Spinner size={16} /> : t("common.send")}
                   </AppButton>
                 </div>
-                <MessageComposerAttachments files={files} onFilesChanged={setFiles} disabled={sending} />
+                {replyWindowOpen && <MessageComposerAttachments files={files} onFilesChanged={setFiles} disabled={sending} />}
               </form>
             </div>
           )}

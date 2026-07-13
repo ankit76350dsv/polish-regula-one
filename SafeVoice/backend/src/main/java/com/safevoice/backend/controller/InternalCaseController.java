@@ -112,13 +112,16 @@ public class InternalCaseController {
     public ResponseEntity<CaseReport> updateStatus(
             @PathVariable String caseId,
             @RequestParam("status") CaseStatus status,
+            // Required only when reopening a CLOSED case; the service validates that. Optional here
+            // so normal forward transitions need no reason.
+            @RequestParam(value = "reason", required = false) String reason,
             AuthenticatedUser caller) {
         caller.requireAnyPermission(
                 SafeVoicePermission.SAFEVOICE_ADMIN,
                 SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
                 SafeVoicePermission.SAFEVOICE_INVESTIGATOR);
         CaseReport updated = caseReportService.updateStatus(
-                caseId, status, caller.tenantId(), caller.primarySafeVoiceRole(), caller.userId());
+                caseId, status, reason, caller.tenantId(), caller.primarySafeVoiceRole(), caller.userId());
         return ResponseEntity.ok(updated);
     }
 

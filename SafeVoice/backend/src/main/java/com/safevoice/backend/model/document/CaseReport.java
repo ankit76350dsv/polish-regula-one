@@ -90,6 +90,11 @@ public class CaseReport extends BaseDocument {
 
     private Instant feedbackDue;
 
+    // When the case was last moved to CLOSED. Drives the reporter's post-close grace window
+    // (they may still send a final message for a limited time after closure). Null while the
+    // case is open; set each time it is closed; cleared when the case is reopened.
+    private Instant closedAt;
+
     private String assignedInvestigator;
 
     private DisclosureMode disclosureMode;

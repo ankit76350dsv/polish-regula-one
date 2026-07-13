@@ -246,7 +246,9 @@
     "messagePlaceholder": "Write a message to the case handler…",
     "attach": "Attach evidence",
     "sendError": "Your message could not be sent. Please try again.",
-    "you": "You (reporter)"
+    "you": "You (reporter)",
+    "closedGraceInfo": "This case has been closed. You can still send one final message until {{time}}.",
+    "closedEnded": "This case is closed and the reply window has ended. You can still read the conversation."
   },
   "dashboard": {
     "title": "Case operations",
@@ -330,8 +332,15 @@
     "communicationSub": "Messages are end-to-end confidential",
     "messagePlaceholder": "Request a follow-up detail without asking the reporter to identify themselves.",
     "composerLocked": "Assign an investigator and move the case past “Received” before replying to the reporter.",
+    "composerClosedLocked": "This case is closed — staff can no longer message the reporter. Reopen the case to reply.",
     "statusMessageLabel": "Message to the reporter (optional)",
     "statusMessagePlaceholder": "Add a short update to send to the reporter with this status change…",
+    "closeNotice": "Closing locks the thread for staff. The reporter can still send a final message for 48 hours; after that the thread closes for everyone.",
+    "reopenTitle": "Reopen this case?",
+    "reopenBody": "You are reopening a closed case and changing its status to “{{value}}”. Please give a reason — it is recorded in the audit trail.",
+    "reopenReasonLabel": "Reason for reopening (required)",
+    "reopenReasonPlaceholder": "Explain why this closed case is being reopened…",
+    "reopenReasonRequired": "A reason is required to reopen a closed case.",
     "loadError": "Could not load this case.",
     "confirmStatusTitle": "Change case status?",
     "confirmStatusBody": "This will update the case status to “{{value}}” and record an immutable audit entry.",

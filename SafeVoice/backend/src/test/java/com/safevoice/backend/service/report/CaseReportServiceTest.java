@@ -374,7 +374,7 @@ class CaseReportServiceTest {
     @Test
     void updateStatus_changesStatusAndAudits() {
         CaseReport r = existingCase();
-        service.updateStatus("c1", CaseStatus.INVESTIGATING, "acme", "SAFEVOICE_ADMIN", "u1");
+        service.updateStatus("c1", CaseStatus.INVESTIGATING, null, "acme", "SAFEVOICE_ADMIN", "u1");
         assertThat(r.getStatus()).isEqualTo(CaseStatus.INVESTIGATING);
         assertThat(r.getTimeline()).isNotEmpty();
         verify(caseReportRepository).save(r);
@@ -385,7 +385,7 @@ class CaseReportServiceTest {
     @Test
     void updateStatus_noOpWhenUnchanged() {
         CaseReport r = existingCase(); // already RECEIVED
-        service.updateStatus("c1", CaseStatus.RECEIVED, "acme", "SAFEVOICE_ADMIN", "u1");
+        service.updateStatus("c1", CaseStatus.RECEIVED, null, "acme", "SAFEVOICE_ADMIN", "u1");
         verify(caseReportRepository, never()).save(any());
         verify(auditLogService, never()).log(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }

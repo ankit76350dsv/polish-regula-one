@@ -56,7 +56,9 @@ export default function CentralEncryptedInboxPage({ navigate }) {
   // (Changing the status alone must not unlock replies while the case is unassigned.)
   const investigatorUnassigned =
     !activeThread?.assignedInvestigator || activeThread.assignedInvestigator === "Unassigned";
-  const composerLocked = activeThread?.status === "Received" || investigatorUnassigned;
+  // Once CLOSED, staff can no longer message the reporter (reopen on the case page to reply).
+  const caseClosed = activeThread?.status === "Closed";
+  const composerLocked = caseClosed || activeThread?.status === "Received" || investigatorUnassigned;
   const messages = useSelector(selectMessagesFor(activeId));
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState([]); // raw File[] attached to the next message
@@ -238,7 +240,7 @@ export default function CentralEncryptedInboxPage({ navigate }) {
                 </div>
                 {composerLocked ? (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    {t("case.composerLocked")}
+                    {caseClosed ? t("case.composerClosedLocked") : t("case.composerLocked")}
                   </p>
                 ) : (
                   <MessageComposerAttachments files={files} onFilesChanged={setFiles} disabled={sending} />

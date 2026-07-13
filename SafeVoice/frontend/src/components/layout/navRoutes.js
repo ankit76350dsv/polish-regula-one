@@ -15,7 +15,7 @@ export const publicRoutes = [
 export const staffRoutes = [
   { labelKey: "nav.dashboard", path: "/dashboard", icon: Home, cap: "viewReports" },
   { labelKey: "nav.cases", path: "/cases", icon: AlertOctagon, cap: "viewReports" },
-  { labelKey: "nav.inbox", path: "/messages", icon: Inbox, count: 2, cap: "viewReports" },
+  { labelKey: "nav.inbox", path: "/messages", icon: Inbox,  cap: "viewReports" },
   { labelKey: "nav.audit", path: "/audits", icon: Terminal, cap: "accessAudits" },
   { labelKey: "nav.users", path: "/users", icon: UserCheck, cap: "manageUsers" },
   { labelKey: "nav.settings", path: "/settings", icon: Settings, cap: "manageSettings" },

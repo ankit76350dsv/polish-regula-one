@@ -169,7 +169,12 @@ export const reportService = {
 
     if ("status" in patch) {
       const value = encodeURIComponent(statusToApi(patch.status));
-      updated = await staffApi.patch(`${base}/status?status=${value}`);
+      // A reason is required by the backend only when reopening a CLOSED case; we pass it
+      // through when present so the reopen is justified and audited.
+      const reasonParam = patch.statusChangeReason
+        ? `&reason=${encodeURIComponent(patch.statusChangeReason)}`
+        : "";
+      updated = await staffApi.patch(`${base}/status?status=${value}${reasonParam}`);
     } else if ("severity" in patch) {
       const value = encodeURIComponent(severityToApi(patch.severity));
       updated = await staffApi.patch(`${base}/severity?severity=${value}`);

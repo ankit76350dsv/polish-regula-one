@@ -108,7 +108,18 @@ export default function CaseDetailsPage({ caseId, navigate }) {
   // — the status is "Received" OR the investigator is unassigned. (Changing the
   // status alone must not unlock replies while the case is nobody's responsibility.)
   const investigatorUnassigned = !report.assignedInvestigator || report.assignedInvestigator === "Unassigned";
-  const composerLocked = report.status === "Received" || investigatorUnassigned;
+  // Once CLOSED, staff can no longer message the reporter (they must reopen to reply).
+  const caseClosed = report.status === "Closed";
+  const composerLocked = caseClosed || report.status === "Received" || investigatorUnassigned;
+
+  // Is the pending change a REOPEN (moving away from Closed)? Reopening requires a reason.
+  const isStatusChange = pending?.field === "status";
+  const isReopening = isStatusChange && report.status === "Closed" && pending.value !== "Closed";
+  const isClosing = isStatusChange && pending.value === "Closed";
+  // The optional "message to the reporter" box only makes sense on a normal active transition —
+  // not when closing (staff can't message a closed case) and not when reopening (that box is the
+  // required reason instead).
+  const showReporterNote = isStatusChange && !isClosing && !isReopening;
 
   // A field change opens a confirm dialog first (important / audited action).
   const askChange = (field, value, toastKey) => {
@@ -118,13 +129,22 @@ export default function CaseDetailsPage({ caseId, navigate }) {
 
   async function confirmPending() {
     if (!pending) return;
+    const note = statusMessage.trim();
+    // Reopening a closed case REQUIRES a reason — never let it through empty.
+    if (isReopening && !note) {
+      dispatch(addToast({ type: "error", message: t("case.reopenReasonRequired") }));
+      return;
+    }
     try {
       if (pending.field) {
-        await dispatch(updateReport({ id: report.id, patch: { [pending.field]: pending.value } })).unwrap();
-        // On a STATUS change the handler may also send a short note to the reporter
-        // in the same step. It is optional — an empty box just changes the status.
-        const note = statusMessage.trim();
-        if (pending.field === "status" && note) {
+        const patch = { [pending.field]: pending.value };
+        // When reopening, the box holds the mandatory reason → send it to the backend (audited),
+        // NOT as a chat message to the reporter.
+        if (isReopening) patch.statusChangeReason = note;
+        await dispatch(updateReport({ id: report.id, patch })).unwrap();
+        // On a NORMAL active status change the handler may also send an optional note to the
+        // reporter in the same step. Not on close (staff can't message) and not on reopen.
+        if (showReporterNote && note) {
           await dispatch(sendMessage({ caseId: report.id, text: note, files: [] })).unwrap();
         }
         dispatch(addToast({ type: "success", message: t(pending.toastKey) }));
@@ -175,7 +195,9 @@ export default function CaseDetailsPage({ caseId, navigate }) {
 
   // Build the confirm-dialog content from whatever is pending.
   const confirmProps = pending
-    ? pending.field === "status"
+    ? isReopening
+      ? { title: t("case.reopenTitle"), message: t("case.reopenBody", { value: pendingDisplayValue() }) }
+      : pending.field === "status"
       ? { title: t("case.confirmStatusTitle"), message: t("case.confirmStatusBody", { value: pendingDisplayValue() }) }
       : pending.field
         ? { title: t("case.controls"), message: t("case.confirmStatusBody", { value: pendingDisplayValue() }) }
@@ -336,7 +358,7 @@ export default function CaseDetailsPage({ caseId, navigate }) {
                 </div>
                 {composerLocked ? (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    {t("case.composerLocked")}
+                    {caseClosed ? t("case.composerClosedLocked") : t("case.composerLocked")}
                   </p>
                 ) : (
                   <MessageComposerAttachments files={files} onFilesChanged={setFiles} disabled={sending} />
@@ -407,11 +429,37 @@ export default function CaseDetailsPage({ caseId, navigate }) {
         title={confirmProps.title}
         message={confirmProps.message}
         loading={updating || sending}
+        confirmDisabled={isReopening && !statusMessage.trim()}
         tone={pending?.action === "export" ? "primary" : "secure"}
         onConfirm={confirmPending}
         onCancel={() => { setPending(null); setStatusMessage(""); }}
       >
-        {pending?.field === "status" && (
+        {/* Reopening a closed case: a reason is REQUIRED (recorded in the audit trail). */}
+        {isReopening && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="reopen-reason" className="text-xs font-semibold text-slate-700">
+              {t("case.reopenReasonLabel")}
+            </label>
+            <textarea
+              id="reopen-reason"
+              rows={3}
+              value={statusMessage}
+              onChange={(e) => setStatusMessage(e.target.value)}
+              placeholder={t("case.reopenReasonPlaceholder")}
+              className="block w-full rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 placeholder-slate-400"
+            />
+          </div>
+        )}
+
+        {/* Closing a case: staff can no longer message the reporter afterwards — tell them. */}
+        {isClosing && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            {t("case.closeNotice")}
+          </p>
+        )}
+
+        {/* Normal active status change: an OPTIONAL note sent to the reporter with the change. */}
+        {showReporterNote && (
           <div className="flex flex-col gap-1.5">
             <label htmlFor="status-msg" className="text-xs font-semibold text-slate-700">
               {t("case.statusMessageLabel")}

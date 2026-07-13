@@ -556,18 +556,38 @@ public class CaseReportService {
     /**
      * Update Case status.
      */
-    public CaseReport updateStatus(String caseId, CaseStatus newStatus, String tenantId, String actorRole, String actorId) {
+    public CaseReport updateStatus(String caseId, CaseStatus newStatus, String reason,
+                                   String tenantId, String actorRole, String actorId) {
         CaseReport report = getById(caseId, tenantId);
         CaseStatus oldStatus = report.getStatus();
         if (oldStatus == newStatus) {
-            return report;
+            return report; // no-op change
+        }
+
+        boolean closing = newStatus == CaseStatus.CLOSED;
+        boolean reopening = oldStatus == CaseStatus.CLOSED; // any move away from CLOSED
+
+        // Reopening a closed case is a significant, audited action — it must be justified.
+        String trimmedReason = reason == null ? "" : reason.trim();
+        if (reopening && trimmedReason.isEmpty()) {
+            throw new IllegalArgumentException("A reason is required to reopen a closed case.");
         }
 
         report.setStatus(newStatus);
+        // Maintain closedAt: stamp it on close (starts the reporter's grace window), clear it on
+        // reopen (an active case has no grace window — the reporter can message normally again).
+        if (closing) {
+            report.setClosedAt(Instant.now());
+        } else if (reopening) {
+            report.setClosedAt(null);
+        }
+
         report.getTimeline().add(new TimelineEvent(
                 new org.bson.types.ObjectId().toHexString(),
-                "Status Changed",
-                "Case status updated from " + oldStatus + " to " + newStatus,
+                reopening ? "Case Reopened" : "Status Changed",
+                reopening
+                        ? "Case reopened from CLOSED to " + newStatus + ". Reason: " + trimmedReason
+                        : "Case status updated from " + oldStatus + " to " + newStatus,
                 Instant.now(),
                 "status"
         ));
@@ -583,7 +603,7 @@ public class CaseReportService {
                 AuditOutcome.RECORDED,
                 oldStatus.name(),
                 newStatus.name(),
-                "Status updated by investigator."
+                reopening ? ("Case reopened from CLOSED. Reason: " + trimmedReason) : "Case status updated."
         );
 
         return saved;
