@@ -53,6 +53,11 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5183,
+    // Use the PORT env var when the launcher (start.sh) provides one so the
+    // dev server matches the platform port map (PrivacyPilot frontend = 3006).
+    // We use 3006 (not 1004) because ports below 1024 are "privileged" on
+    // macOS/Linux and cannot be opened without root — trying 1004 fails with
+    // "EACCES: permission denied". 3006 is free and needs no special rights.
+    port: Number(process.env.PORT) || 3006,
   },
 });

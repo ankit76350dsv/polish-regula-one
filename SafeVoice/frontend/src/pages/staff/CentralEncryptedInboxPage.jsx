@@ -27,6 +27,7 @@ import { selectCurrentUser } from "../../slices/authSlice";
 import { can } from "../../utils/permissions";
 import { socketService } from "../../services/socketService";
 import { normalizeMessage } from "../../services/caseNormalizer";
+import { cryptoService } from "../../services/cryptoService";
 import { messageService } from "../../services/messageService";
 
 export default function CentralEncryptedInboxPage({ navigate }) {
@@ -78,8 +79,17 @@ export default function CentralEncryptedInboxPage({ navigate }) {
     dispatch(setActiveCase(activeId));
     const unsubscribe = socketService.subscribe(`/topic/case.${activeId}`, (frame) => {
       try {
-        const message = normalizeMessage(JSON.parse(frame.body));
-        dispatch(messageReceived({ caseId: activeId, message }));
+        const raw = JSON.parse(frame.body);
+        // A live message arrives LOCKED. Unlock it in the browser (staff key path) before it
+        // goes into the thread. Files-only/plain messages pass through unchanged.
+        cryptoService
+          .decryptIncomingStaffMessage(raw, activeId)
+          .then((decrypted) =>
+            dispatch(messageReceived({ caseId: activeId, message: normalizeMessage(decrypted) })),
+          )
+          .catch(() => {
+            /* ignore a message we cannot decrypt rather than break the thread */
+          });
       } catch {
         /* ignore malformed frame */
       }

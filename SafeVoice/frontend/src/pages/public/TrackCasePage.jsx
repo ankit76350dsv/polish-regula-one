@@ -24,6 +24,7 @@ import { addToast } from "../../slices/uiSlice";
 import { socketService } from "../../services/socketService";
 import { normalizeMessage } from "../../services/caseNormalizer";
 import { reportService } from "../../services/reportService";
+import { cryptoService } from "../../services/cryptoService";
 
 // Anonymous status lookup using ONLY the access key, then a secure two-way thread.
 export default function TrackCasePage() {
@@ -48,11 +49,20 @@ export default function TrackCasePage() {
   useEffect(() => {
     const caseId = tracked?.report?.id;
     if (!caseId || !accessKey.trim()) return undefined;
-    socketService.connectReporter(accessKey.trim());
+    const key = accessKey.trim();
+    socketService.connectReporter(key);
     const unsubscribe = socketService.subscribe(`/topic/case.${caseId}`, (frame) => {
       try {
-        const message = normalizeMessage(JSON.parse(frame.body));
-        dispatch(trackedMessageReceived(message));
+        const raw = JSON.parse(frame.body);
+        // A live message arrives LOCKED. Unlock it in the browser (using our access key) before
+        // it goes into the thread, so the reporter sees readable text. Files-only/plain messages
+        // pass through unchanged.
+        cryptoService
+          .decryptIncomingReporterMessage(raw, key)
+          .then((decrypted) => dispatch(trackedMessageReceived(normalizeMessage(decrypted))))
+          .catch(() => {
+            /* ignore a message we cannot decrypt rather than break the thread */
+          });
       } catch {
         /* ignore malformed frame */
       }
@@ -86,6 +96,7 @@ export default function TrackCasePage() {
           text: draft,
           files,
           accessKey: accessKey.trim(), // proves ownership of this case
+          tenantId: tracked.report.tenantId, // lets the browser fetch a key to lock the text
         }),
       ).unwrap();
       setDraft("");

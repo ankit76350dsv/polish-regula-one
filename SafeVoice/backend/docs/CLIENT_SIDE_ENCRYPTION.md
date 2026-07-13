@@ -1,7 +1,15 @@
 # SafeVoice — Client-Side Encryption (AWS KMS Envelope Encryption)
 
-**Status:** Backend implemented. Frontend integration pending.
+**Status:** Backend + frontend implemented.
 **Model chosen:** Backend-mediated envelope encryption (browser encrypts/decrypts; AWS credentials never reach the browser).
+
+## Frontend integration (React / Redux)
+
+- `src/services/cryptoService.js` — Web Crypto AES-256-GCM lock/unlock + calls to the `/crypto` endpoints. This is the only place the browser touches keys.
+- `reportService.createReport` locks `facts` → sends `encryptedContent`; `trackReport` / `getReport` unlock the narrative; `postPublicMessage` locks reporter messages.
+- `messageService.send` locks staff replies; `messageService.list` unlocks the thread.
+- Live WebSocket messages are unlocked at the subscription sites (`TrackCasePage`, `CaseDetailsPage`, `CentralEncryptedInboxPage`) before hitting Redux, so components keep reading plain `text` / `description`.
+- Dev without AWS KMS: set `VITE_SAFEVOICE_ALLOW_PLAINTEXT=true` to fall back to plaintext (mirrors the backend's `safevoice.allow-plaintext-intake-for-local-testing`). Off by default.
 
 ---
 
@@ -78,5 +86,4 @@ The IAM principal the backend runs as needs `kms:GenerateDataKey` and `kms:Decry
 
 - **Per-tenant CMKs:** CLAUDE.md §Key-Management prefers a separate key per tenant. Today we use one configured CMK + tenant-bound encryption context (cryptographic separation). To move to true per-tenant keys, store a `kmsKeyId` on the `Tenant` document and resolve it in `EnvelopeEncryptionService` — the encryption-context binding stays as defence in depth.
 - **This is encryption-at-rest with KMS-managed keys, not zero-knowledge E2E.** Staff must be able to read cases to investigate, so the server (with KMS access) is technically capable of decrypting. The guarantees above (no creds in browser, DB-breach-useless, tenant isolation, full CloudTrail audit) are the achievable, honest posture for a multi-party whistleblower system.
-- **Frontend TODO:** call `data-key` before submit/reply, do AES-256-GCM in WebCrypto, send `{ciphertext, iv, wrappedKey}`; call `case-keys` on read and unlock locally.
 - **Compliance:** verify the final key-management + residency setup against ISO 27001 / SOC2 controls before go-live (CLAUDE.md §2, §3, §19).

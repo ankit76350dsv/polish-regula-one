@@ -10,29 +10,46 @@
  * through the public endpoint, so the two worlds never cross.)
  */
 import { staffApi } from "./api";
+import { cryptoService } from "./cryptoService";
 import { normalizeMessage, normalizeMessages } from "./caseNormalizer";
 
 export const messageService = {
-  // Load the whole thread for one case (oldest first), with friendly timestamps.
+  // Load the whole thread for one case (oldest first). Encrypted messages are UNLOCKED in the
+  // browser (staff key path) before being normalised, so the chat shows the readable words.
   async list(caseId) {
     const messages = await staffApi.get(
       `/api/v1/internal/cases/${encodeURIComponent(caseId)}/messages`,
     );
-    return normalizeMessages(messages);
+    const decrypted = await cryptoService.decryptMessagesForStaff(caseId, messages);
+    return normalizeMessages(decrypted);
   },
 
-  // Post one staff message, optionally with evidence files. The internal endpoint is
-  // multipart: a "text" field plus zero or more "files" parts. The sender is labelled
-  // from the caller's verified session (not sent here).
+  // Post one staff message, optionally with evidence files. The text is LOCKED in the browser
+  // first and sent as the encrypted parts (ciphertext/iv/wrappedKey). The sender is labelled from
+  // the caller's verified session (not sent here).
   async send(caseId, { text, files = [] }) {
     const form = new FormData();
-    form.append("text", text ?? "");
+    let plaintextEcho = "";
+    if (text && text.trim()) {
+      const locked = await cryptoService.encryptForStaff(text);
+      if (locked.encrypted) {
+        form.append("ciphertext", locked.encrypted.ciphertext);
+        form.append("iv", locked.encrypted.iv);
+        form.append("wrappedKey", locked.encrypted.wrappedKey);
+        form.append("algorithm", locked.encrypted.algorithm);
+      } else {
+        form.append("text", locked.plaintext); // dev fallback only
+      }
+      plaintextEcho = text;
+    }
     files.forEach((file) => form.append("files", file));
     const message = await staffApi.postForm(
       `/api/v1/internal/cases/${encodeURIComponent(caseId)}/messages`,
       form,
     );
-    return normalizeMessage(message);
+    // The server stores it encrypted and returns text=null; show the sender what they typed.
+    const normalized = normalizeMessage(message);
+    return { ...normalized, text: plaintextEcho || normalized.text };
   },
 
   // Fetch the bytes of one file attached to a thread message (staff side; gated to the

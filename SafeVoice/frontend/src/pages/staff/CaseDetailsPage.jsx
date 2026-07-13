@@ -34,6 +34,7 @@ import { selectCurrentUser } from "../../slices/authSlice";
 import { can } from "../../utils/permissions";
 import { socketService } from "../../services/socketService";
 import { normalizeMessage } from "../../services/caseNormalizer";
+import { cryptoService } from "../../services/cryptoService";
 import { messageService } from "../../services/messageService";
 import { reportService } from "../../services/reportService";
 
@@ -73,8 +74,15 @@ export default function CaseDetailsPage({ caseId, navigate }) {
     dispatch(setActiveCase(caseId));
     const unsubscribe = socketService.subscribe(`/topic/case.${caseId}`, (frame) => {
       try {
-        const message = normalizeMessage(JSON.parse(frame.body));
-        dispatch(messageReceived({ caseId, message }));
+        const raw = JSON.parse(frame.body);
+        // A live message arrives LOCKED. Unlock it in the browser (staff key path) before it
+        // goes into the thread. Files-only/plain messages pass through unchanged.
+        cryptoService
+          .decryptIncomingStaffMessage(raw, caseId)
+          .then((decrypted) => dispatch(messageReceived({ caseId, message: normalizeMessage(decrypted) })))
+          .catch(() => {
+            /* ignore a message we cannot decrypt rather than break the thread */
+          });
       } catch {
         /* ignore malformed frame */
       }

@@ -12,6 +12,7 @@
  * receives friendly display values and short dates, never raw backend enum names.
  */
 import { publicApi, staffApi } from "./api";
+import { cryptoService } from "./cryptoService";
 import {
   normalizeMessage,
   normalizeReport,
@@ -20,41 +21,79 @@ import {
   severityToApi,
 } from "./caseNormalizer";
 
+// Attach browser-locked text to a FormData as either the encrypted parts (normal, secure path)
+// or a plain "text" field (dev fallback only). Shared by the reporter + staff message senders.
+function appendLockedText(form, locked) {
+  if (locked.encrypted) {
+    form.append("ciphertext", locked.encrypted.ciphertext);
+    form.append("iv", locked.encrypted.iv);
+    form.append("wrappedKey", locked.encrypted.wrappedKey);
+    form.append("algorithm", locked.encrypted.algorithm);
+  } else {
+    form.append("text", locked.plaintext);
+  }
+}
+
 export const reportService = {
   // ── PUBLIC (anonymous reporter) ──────────────────────────────────────────────
 
-  // Submit a new anonymous report. The organisation (tenantId) travels inside the
-  // payload — the page reads it from the /company/{tenantId}/report URL, not from any
-  // login, so a whistleblower never has to identify themselves. The response is the
-  // one-time access key, so it is returned as-is (nothing to normalise).
-  createReport(payload) {
-    return publicApi.post("/api/safevoice/reports", payload);
+  // Submit a new anonymous report. The organisation (tenantId) travels inside the payload — the
+  // page reads it from the /company/{tenantId}/report URL, not from any login. The narrative
+  // ("facts") is LOCKED in the browser first and sent as `encryptedContent`, so the server never
+  // sees the plain words. The response is the one-time access key, returned as-is.
+  async createReport(payload) {
+    const { facts, tenantId, ...rest } = payload;
+    const body = { tenantId, ...rest };
+    if (facts && facts.trim()) {
+      const locked = await cryptoService.encryptForTenant(facts, tenantId);
+      if (locked.encrypted) body.encryptedContent = locked.encrypted;
+      else body.facts = locked.plaintext; // dev fallback only
+    }
+    return publicApi.post("/api/safevoice/reports", body);
   },
 
-  // Look up a case using ONLY the access key. Returns { report, messages }; both are
+  // Look up a case using ONLY the access key. Returns { report, messages }. The report narrative
+  // and every message are UNLOCKED in the browser (using keys the backend unwraps via KMS), then
   // normalised so the tracking page shows friendly statuses and dates.
   async trackReport(accessKey) {
     const data = await publicApi.post("/api/safevoice/reports/track", { accessKey });
+    let report = data?.report;
+    let messages = Array.isArray(data?.messages) ? data.messages : [];
+
+    // Only ask the backend to unwrap keys if something is actually encrypted (saves a KMS call
+    // for plain-text/system-only cases).
+    const needsKeys = report?.encryptedContent || messages.some((m) => m?.encryptedText);
+    if (needsKeys) {
+      ({ report, messages } = await cryptoService.decryptCaseForReporter(accessKey, report, messages));
+    }
     return {
-      report: normalizeReport(data?.report),
-      messages: Array.isArray(data?.messages) ? data.messages.map(normalizeMessage) : [],
+      report: normalizeReport(report),
+      messages: messages.map(normalizeMessage),
     };
   },
 
-  // The reporter posts one message (optionally with evidence files) into their own case's
-  // chat thread. The endpoint is multipart and AUTHENTICATED: the reporter's access key must
-  // match the case id in the path (proves ownership). The sender label is fixed by the server,
-  // so we send only the access key, the text and the files.
-  async postPublicMessage(caseId, { text, files = [], accessKey }) {
+  // The reporter posts one message (optionally with evidence files) into their own case's chat
+  // thread. The text is LOCKED in the browser first (using the case's organisation id, taken from
+  // the tracked report). The endpoint is multipart and AUTHENTICATED: the access key must match
+  // the case id in the path. The sender label is fixed by the server.
+  async postPublicMessage(caseId, { text, files = [], accessKey, tenantId }) {
     const form = new FormData();
     form.append("accessKey", accessKey ?? "");
-    form.append("text", text ?? "");
+    let plaintextEcho = "";
+    if (text && text.trim()) {
+      const locked = await cryptoService.encryptForTenant(text, tenantId);
+      appendLockedText(form, locked);
+      plaintextEcho = text; // we typed it, so show it back without a decrypt round-trip
+    }
     files.forEach((file) => form.append("files", file));
     const message = await publicApi.postForm(
       `/api/safevoice/reports/${encodeURIComponent(caseId)}/messages`,
       form,
     );
-    return normalizeMessage(message);
+    // The server stores the message encrypted and returns it with text=null; show the sender the
+    // plain words they just typed.
+    const normalized = normalizeMessage(message);
+    return { ...normalized, text: plaintextEcho || normalized.text };
   },
 
   // The reporter fetches one file from their own case thread. They prove ownership with their
@@ -108,10 +147,13 @@ export const reportService = {
     );
   },
 
-  // Load one case by its id.
+  // Load one case by its id. The narrative is UNLOCKED in the browser (staff key path) before
+  // it is normalised, so the case page shows the readable text. Cases with no encrypted content
+  // (dev plaintext) are returned unchanged.
   async getReport(id) {
     const report = await staffApi.get(`/api/v1/internal/cases/${encodeURIComponent(id)}`);
-    return normalizeReport(report);
+    const decrypted = await cryptoService.decryptReportForStaff(id, report);
+    return normalizeReport(decrypted);
   },
 
   /**
