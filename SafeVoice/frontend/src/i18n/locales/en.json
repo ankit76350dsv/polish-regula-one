@@ -330,6 +330,8 @@
     "communicationSub": "Messages are end-to-end confidential",
     "messagePlaceholder": "Request a follow-up detail without asking the reporter to identify themselves.",
     "composerLocked": "Assign an investigator and move the case past “Received” before replying to the reporter.",
+    "statusMessageLabel": "Message to the reporter (optional)",
+    "statusMessagePlaceholder": "Add a short update to send to the reporter with this status change…",
     "loadError": "Could not load this case.",
     "confirmStatusTitle": "Change case status?",
     "confirmStatusBody": "This will update the case status to “{{value}}” and record an immutable audit entry.",

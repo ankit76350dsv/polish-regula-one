@@ -54,6 +54,7 @@ export default function CaseDetailsPage({ caseId, navigate }) {
   const canExport = can(currentUser, "exportData");
 
   const [pending, setPending] = useState(null); // { field, value, toastKey } | { action }
+  const [statusMessage, setStatusMessage] = useState(""); // optional note sent to the reporter on a status change
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState([]); // raw File[] attached to the next message
   const [preview, setPreview] = useState(null); // { messageId, attachment } being previewed
@@ -117,6 +118,12 @@ export default function CaseDetailsPage({ caseId, navigate }) {
     try {
       if (pending.field) {
         await dispatch(updateReport({ id: report.id, patch: { [pending.field]: pending.value } })).unwrap();
+        // On a STATUS change the handler may also send a short note to the reporter
+        // in the same step. It is optional — an empty box just changes the status.
+        const note = statusMessage.trim();
+        if (pending.field === "status" && note) {
+          await dispatch(sendMessage({ caseId: report.id, text: note, files: [] })).unwrap();
+        }
         dispatch(addToast({ type: "success", message: t(pending.toastKey) }));
       } else if (pending.action === "export") {
         dispatch(addToast({ type: "success", message: t("toast.exported") }));
@@ -127,6 +134,7 @@ export default function CaseDetailsPage({ caseId, navigate }) {
       dispatch(addToast({ type: "error", message: t("toast.genericError") }));
     } finally {
       setPending(null);
+      setStatusMessage("");
     }
   }
 
@@ -395,11 +403,27 @@ export default function CaseDetailsPage({ caseId, navigate }) {
         isOpen={Boolean(pending)}
         title={confirmProps.title}
         message={confirmProps.message}
-        loading={updating}
+        loading={updating || sending}
         tone={pending?.action === "export" ? "primary" : "secure"}
         onConfirm={confirmPending}
-        onCancel={() => setPending(null)}
-      />
+        onCancel={() => { setPending(null); setStatusMessage(""); }}
+      >
+        {pending?.field === "status" && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="status-msg" className="text-xs font-semibold text-slate-700">
+              {t("case.statusMessageLabel")}
+            </label>
+            <textarea
+              id="status-msg"
+              rows={3}
+              value={statusMessage}
+              onChange={(e) => setStatusMessage(e.target.value)}
+              placeholder={t("case.statusMessagePlaceholder")}
+              className="block w-full rounded-lg bg-white border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 placeholder-slate-400"
+            />
+          </div>
+        )}
+      </ConfirmDialog>
 
       <AttachmentPreviewModal
         open={Boolean(preview)}

@@ -19,6 +19,7 @@ export function ConfirmDialog({
   loading = false,
   onConfirm,
   onCancel,
+  children, // optional extra content (e.g. an input) shown between the message and buttons
 }) {
   const { t } = useTranslation();
 
@@ -26,6 +27,7 @@ export function ConfirmDialog({
     <AppModal isOpen={isOpen} onClose={loading ? () => {} : onCancel} title={title} maxWidth="max-w-md">
       <div className="space-y-5">
         <p className="text-sm text-slate-600 leading-relaxed">{message}</p>
+        {children}
         <div className="flex justify-end gap-2">
           <AppButton type="button" variant="secondary" onClick={onCancel} disabled={loading}>
             {cancelLabel || t("common.cancel")}
