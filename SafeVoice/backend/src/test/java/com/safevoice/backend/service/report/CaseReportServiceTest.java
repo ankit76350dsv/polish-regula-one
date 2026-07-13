@@ -19,6 +19,7 @@ import com.safevoice.backend.model.enums.case_report.DisclosureMode;
 import com.safevoice.backend.model.enums.case_report.ReportCategory;
 import com.safevoice.backend.repository.CaseMessageRepository;
 import com.safevoice.backend.repository.CaseReportRepository;
+import com.safevoice.backend.repository.RegulaOneUserRepository;
 import com.safevoice.backend.repository.TenantRepository;
 import com.safevoice.backend.service.AttachmentService;
 import com.safevoice.backend.service.AuditLogService;
@@ -68,6 +69,7 @@ class CaseReportServiceTest {
     @Mock private AttachmentService attachmentService;
     @Mock private SafeVoiceEmailNotificationService emailNotificationService;
     @Mock private EnvelopeEncryptionService envelopeEncryptionService;
+    @Mock private RegulaOneUserRepository regulaOneUserRepository;
 
     private CaseReportService service;
 
@@ -75,7 +77,7 @@ class CaseReportServiceTest {
     void setUp() {
         service = new CaseReportService(caseReportRepository, caseMessageRepository, tenantRepository,
                 auditLogService, mongoTemplate, caseEventPublisher, attachmentService,
-                emailNotificationService, envelopeEncryptionService);
+                emailNotificationService, envelopeEncryptionService, regulaOneUserRepository);
         ReflectionTestUtils.setField(service, "retentionYears", 5);
         ReflectionTestUtils.setField(service, "irrelevantReviewDays", 30);
         ReflectionTestUtils.setField(service, "allowPlaintextIntakeForLocalTesting", false);

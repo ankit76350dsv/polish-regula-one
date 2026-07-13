@@ -105,9 +105,9 @@ public class InternalCaseController {
     /**
      * Update case status.
      */
-    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER
-    // Why: moving a case through its lifecycle (e.g. to Closed) is a case-management decision.
-    // View-only roles (Investigator, HR Manager, Auditor) must not change case state.
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_INVESTIGATOR
+    // Why: moving a case through its lifecycle is case-management/progress work done by handlers
+    // and the assigned investigator. HR managers and auditors remain view-only for case state.
     @PatchMapping("/{caseId}/status")
     public ResponseEntity<CaseReport> updateStatus(
             @PathVariable String caseId,
@@ -115,7 +115,8 @@ public class InternalCaseController {
             AuthenticatedUser caller) {
         caller.requireAnyPermission(
                 SafeVoicePermission.SAFEVOICE_ADMIN,
-                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER);
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
+                SafeVoicePermission.SAFEVOICE_INVESTIGATOR);
         CaseReport updated = caseReportService.updateStatus(
                 caseId, status, caller.tenantId(), caller.primarySafeVoiceRole(), caller.userId());
         return ResponseEntity.ok(updated);
@@ -124,9 +125,9 @@ public class InternalCaseController {
     /**
      * Update case severity.
      */
-    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER
-    // Why: re-assessing severity/priority is a triage decision reserved for case managers;
-    // view-only roles should not be able to re-prioritise a case.
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_INVESTIGATOR
+    // Why: re-assessing severity/priority is triage/progress work done by handlers and the
+    // assigned investigator. HR managers and auditors remain view-only for case state.
     @PatchMapping("/{caseId}/severity")
     public ResponseEntity<CaseReport> updateSeverity(
             @PathVariable String caseId,
@@ -134,7 +135,8 @@ public class InternalCaseController {
             AuthenticatedUser caller) {
         caller.requireAnyPermission(
                 SafeVoicePermission.SAFEVOICE_ADMIN,
-                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER);
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
+                SafeVoicePermission.SAFEVOICE_INVESTIGATOR);
         CaseReport updated = caseReportService.updateSeverity(
                 caseId, severity, caller.tenantId(), caller.primarySafeVoiceRole(), caller.userId());
         return ResponseEntity.ok(updated);

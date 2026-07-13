@@ -28,6 +28,7 @@ import { firstError, email as emailRule, required } from "../../utils/validation
 
 const PERMISSION_KEYS = [
   "viewReports",
+  "updateCaseProgress",
   "assignCases",
   "closeCases",
   "exportData",

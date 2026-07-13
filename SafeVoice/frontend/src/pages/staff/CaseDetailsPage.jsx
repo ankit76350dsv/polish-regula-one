@@ -51,6 +51,9 @@ export default function CaseDetailsPage({ caseId, navigate }) {
 
   // Capability-driven controls (mirrors the user's SAFEVOICE_* permissions).
   const canUpdate = can(currentUser, "assignCases") || can(currentUser, "closeCases");
+  // Status & severity can also be changed by investigators (case progress), while
+  // assignment stays with admins/compliance officers (canUpdate).
+  const canUpdateProgress = canUpdate || can(currentUser, "updateCaseProgress");
   const canExport = can(currentUser, "exportData");
 
   const [pending, setPending] = useState(null); // { field, value, toastKey } | { action }
@@ -346,12 +349,12 @@ export default function CaseDetailsPage({ caseId, navigate }) {
         <div className="space-y-6">
           <SecureCard title={t("case.controls")} subtitle={t("case.controlsSub")}>
             <div className="space-y-4">
-              <SelectField label={t("case.controlStatus")} value={report.status} onChange={(e) => askChange("status", e.target.value, "toast.statusUpdated")} disabled={updating || !canUpdate}>
+              <SelectField label={t("case.controlStatus")} value={report.status} onChange={(e) => askChange("status", e.target.value, "toast.statusUpdated")} disabled={updating || !canUpdateProgress}>
                 {statusValues.map((s) => (
                   <option key={s} value={s}>{t(`status.${s}`, s)}</option>
                 ))}
               </SelectField>
-              <SelectField label={t("case.controlSeverity")} value={report.severity} onChange={(e) => askChange("severity", e.target.value, "toast.severityUpdated")} disabled={updating || !canUpdate}>
+              <SelectField label={t("case.controlSeverity")} value={report.severity} onChange={(e) => askChange("severity", e.target.value, "toast.severityUpdated")} disabled={updating || !canUpdateProgress}>
                 {severityValues.map((s) => (
                   <option key={s} value={s}>{t(`severity.${s}`, s)}</option>
                 ))}

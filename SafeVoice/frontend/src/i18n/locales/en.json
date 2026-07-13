@@ -392,6 +392,7 @@
     "permBlocked": "Blocked",
     "perm": {
       "viewReports": "View",
+      "updateCaseProgress": "Progress",
       "assignCases": "Assign",
       "closeCases": "Close",
       "exportData": "Export",

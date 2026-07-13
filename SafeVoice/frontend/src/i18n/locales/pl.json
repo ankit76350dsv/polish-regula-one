@@ -394,6 +394,7 @@
     "permBlocked": "Zablokowane",
     "perm": {
       "viewReports": "Podgląd",
+      "updateCaseProgress": "Postęp",
       "assignCases": "Przypisz",
       "closeCases": "Zamknij",
       "exportData": "Eksport",

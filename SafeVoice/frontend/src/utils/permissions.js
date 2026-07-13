@@ -22,6 +22,7 @@ export const SAFEVOICE_PREFIX = "SAFEVOICE_";
 // The capabilities the UI gates on.
 export const CAPABILITIES = [
   "viewReports",
+  "updateCaseProgress", // change a case's status & severity (NOT assignment)
   "assignCases",
   "closeCases",
   "exportData",
@@ -33,23 +34,25 @@ export const CAPABILITIES = [
 // What each SAFEVOICE_* role is allowed to do. Mirrors the RegulaOne role design.
 export const SAFEVOICE_ROLE_PERMISSIONS = {
   SAFEVOICE_ADMIN: {
-    viewReports: true, assignCases: true, closeCases: true, exportData: true,
+    viewReports: true, updateCaseProgress: true, assignCases: true, closeCases: true, exportData: true,
     accessAudits: true, manageUsers: true, manageRetention: true,
   },
   SAFEVOICE_COMPLIANCE_OFFICER: {
-    viewReports: true, assignCases: true, closeCases: true, exportData: false,
+    viewReports: true, updateCaseProgress: true, assignCases: true, closeCases: true, exportData: false,
     accessAudits: true, manageUsers: false, manageRetention: true,
   },
   SAFEVOICE_INVESTIGATOR: {
-    viewReports: true, assignCases: false, closeCases: false, exportData: false,
+    // Investigators may progress a case they work (status & severity) but may NOT
+    // route it (assignment) or close it — those stay with admins/compliance officers.
+    viewReports: true, updateCaseProgress: true, assignCases: false, closeCases: false, exportData: false,
     accessAudits: false, manageUsers: false, manageRetention: false,
   },
   SAFEVOICE_HR_MANAGER: {
-    viewReports: true, assignCases: false, closeCases: false, exportData: false,
+    viewReports: true, updateCaseProgress: false, assignCases: false, closeCases: false, exportData: false,
     accessAudits: false, manageUsers: false, manageRetention: false,
   },
   SAFEVOICE_AUDITOR: {
-    viewReports: true, assignCases: false, closeCases: false, exportData: true,
+    viewReports: true, updateCaseProgress: false, assignCases: false, closeCases: false, exportData: true,
     accessAudits: true, manageUsers: false, manageRetention: false,
   },
 };
