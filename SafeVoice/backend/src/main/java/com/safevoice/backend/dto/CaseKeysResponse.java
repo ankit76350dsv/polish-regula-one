@@ -22,12 +22,11 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CaseKeysResponse {
-
     // Plain data key for the main report text. Null when the report has no encrypted content
     // (for example an HR grievance, which is stored as plain text by law/policy).
-    private String contentKey;
+    private String contentKey; //! plaintext (unlocked) KEY
 
     // Plain data key for each encrypted thread message, keyed by the message id.
     @Builder.Default
-    private Map<String, String> messageKeys = new HashMap<>();
+    private Map<String, String> messageKeys = new HashMap<>(); 
 }

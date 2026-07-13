@@ -87,10 +87,19 @@ public class EnvelopeEncryptionService {
         }
         try {
             GenerateDataKeyRequest request = GenerateDataKeyRequest.builder()
-                    .keyId(masterKeyId)
+                    .keyId(masterKeyId) // "arn:aws:kms:eu-central-1:258963147938:key/key-id"
                     .keySpec(DataKeySpec.AES_256) // 256-bit key => AES-256 in the browser
                     .encryptionContext(contextFor(tenantId))
-                    .build();
+                    .build(); 
+            // request
+            //  {
+            //   "KeyId": "arn:aws:kms:eu-central-1:258963147938:key/key-id",
+            //   "KeySpec": "AES_256",
+            //   "EncryptionContext": {
+            //     "tenantId": "tenant-1234",
+            //     "purpose": "safevoice-report"
+            //   }
+            // }
 
             GenerateDataKeyResponse response = kmsClient.generateDataKey(request);
 

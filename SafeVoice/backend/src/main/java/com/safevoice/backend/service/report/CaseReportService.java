@@ -756,21 +756,19 @@ public class CaseReportService {
     private CaseKeysResponse decryptCaseKeys(CaseReport report) {
         String tenantId = report.getTenantId();
 
-        String contentKey = null;
-        if (report.getEncryptedContent() != null
-                && report.getEncryptedContent().getWrappedKey() != null) {
-            contentKey = envelopeEncryptionService.unwrapDataKey(
-                    tenantId, report.getEncryptedContent().getWrappedKey());
+        String contentKey = null; //! plaintext (unlocked) KEY (For report)
+        //! EncryptedPayload == report.getEncryptedContent()
+        // WrappedKey = report.getEncryptedContent().getWrappedKey() 
+        if (report.getEncryptedContent() != null && report.getEncryptedContent().getWrappedKey() != null) {
+            contentKey = envelopeEncryptionService.unwrapDataKey(tenantId, report.getEncryptedContent().getWrappedKey());
         }
 
-        Map<String, String> messageKeys = new HashMap<>();
-        List<CaseMessage> messages = caseMessageRepository
-                .findAllByTenantIdAndCaseIdOrderByTimestampAsc(tenantId, report.getId());
+        Map<String, String> messageKeys = new HashMap<>(); // keys for the message threads
+        List<CaseMessage> messages = caseMessageRepository.findAllByTenantIdAndCaseIdOrderByTimestampAsc(tenantId, report.getId());
         for (CaseMessage message : messages) {
             EncryptedPayload enc = message.getEncryptedText();
             if (enc != null && enc.getWrappedKey() != null) {
-                messageKeys.put(message.getId(),
-                        envelopeEncryptionService.unwrapDataKey(tenantId, enc.getWrappedKey()));
+                messageKeys.put(message.getId(), envelopeEncryptionService.unwrapDataKey(tenantId, enc.getWrappedKey()));
             }
         }
 
