@@ -35,7 +35,7 @@ public class AuditLog {
 
     private AuditActionType actionType;
 
-    private String subjectId;
+    private String subjectId; // ! what is why we need this 
 
     @Builder.Default
     private Instant timestamp = Instant.now();
