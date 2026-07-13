@@ -1,4 +1,4 @@
-package com.safevoice.backend.service;
+package com.safevoice.backend.service.jobs;
 
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.embedded.TimelineEvent;
@@ -6,6 +6,8 @@ import com.safevoice.backend.model.enums.audit.AuditActionType;
 import com.safevoice.backend.model.enums.audit.AuditOutcome;
 import com.safevoice.backend.model.enums.case_report.CaseStatus;
 import com.safevoice.backend.repository.CaseReportRepository;
+import com.safevoice.backend.service.AuditLogService;
+import com.safevoice.backend.service.CaseMessageService;
 import com.safevoice.backend.service.notification.SafeVoiceEmailNotificationService;
 
 import lombok.RequiredArgsConstructor;
