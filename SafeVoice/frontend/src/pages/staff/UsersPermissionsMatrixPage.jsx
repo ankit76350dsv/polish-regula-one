@@ -111,7 +111,7 @@ export default function UsersPermissionsMatrixPage() {
       </div>
 
       <SecureCard title={t("users.personnel")} className="min-w-0">
-        <AppTable className="min-w-0" headers={[t("users.colOfficer"), t("users.colRole"), t("users.colStatus"), t("users.colMfa"), t("users.colLastReview"), ""]}>
+        <AppTable className="min-w-0" headers={[t("users.colOfficer"), t("users.colRole"), t("users.colStatus"), ""]}>
           {users.map((user) => (
             <tr
               key={user.id}
@@ -148,12 +148,6 @@ export default function UsersPermissionsMatrixPage() {
                 </span>
               </td>
               <td className="px-4 py-3 text-slate-700">{user.status}</td>
-              <td className="px-4 py-3 font-semibold">
-                <span className={user.mfaRequired ? "text-emerald-700" : "text-rose-600"}>
-                  {user.mfaRequired ? t("users.mfaRequired") : t("users.mfaMissing")}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-slate-500 font-mono">{user.lastLoginReview}</td>
               <td className="px-4 py-3 text-right">
                 <button
                   type="button"
@@ -173,9 +167,9 @@ export default function UsersPermissionsMatrixPage() {
         <AppTable className="min-w-0" headers={[t("users.colRole"), ...PERMISSION_KEYS.map((k) => t(`users.perm.${k}`))]}>
           {rolePermissions.map((rule) => (
             <tr key={rule.role} className="hover:bg-slate-50 border-b border-slate-200">
-              <td className="px-4 py-3 font-mono text-xs font-bold text-cyan-700 uppercase whitespace-nowrap">{t(`roles.${rule.role}`, rule.role)}</td>
+              <td className="px-4 py-3 text-xs font-semibold text-cyan-700 whitespace-nowrap">{t(`roles.${rule.role}`, rule.role)}</td>
               {PERMISSION_KEYS.map((key) => (
-                <td key={key} className="px-4 py-3 text-center text-xs whitespace-nowrap">
+                <td key={key} className="px-4 py-3 text-left text-xs whitespace-nowrap">
                   <span className={rule[key] ? "text-emerald-700 font-semibold" : "text-slate-400"}>
                     {rule[key] ? t("users.permAllowed") : t("users.permBlocked")}
                   </span>
