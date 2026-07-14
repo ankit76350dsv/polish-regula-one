@@ -1,5 +1,5 @@
-// The top bar shown on every staff page: mobile menu button, live intake status,
-// compliance tags, public links, language + theme controls, and the signed-in user.
+// The top bar shown on every staff page: mobile menu button, the public report links,
+// the language control, and the signed-in user.
 import { LogOut, Menu, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { NavItem } from "./NavItem";
@@ -21,20 +21,6 @@ export function AppNavbar({ currentPath, navigate, mobileOpen, setMobileOpen, us
         >
           {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
         </button>
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-          </span>
-          <span className="text-xs font-semibold text-slate-700">{t("nav.intakeActive")}</span>
-        </div>
-        <div className="hidden md:flex items-center gap-1.5 text-[10px] font-mono bg-slate-50 px-2 py-1 rounded text-slate-600 border border-slate-200">
-          <span>GDPR</span>
-          <span className="w-px h-2.5 bg-slate-200" />
-          <span>EU 2019/1937</span>
-          <span className="w-px h-2.5 bg-slate-200" />
-          <span>PL 2024</span>
-        </div>
       </div>
 
       <div className="flex items-center gap-3 md:gap-4">
