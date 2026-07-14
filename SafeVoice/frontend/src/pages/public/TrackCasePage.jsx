@@ -163,7 +163,7 @@ export default function TrackCasePage() {
         </SecureCard>
 
         {report && (
-          <SecureCard title={t("track.statusTitle")} subtitle={report.id}>
+          <SecureCard title={t("track.statusTitle")}>
             <div className="space-y-3 text-xs text-slate-700">
               <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
                 <span>{t("common.status")}</span>
@@ -171,11 +171,11 @@ export default function TrackCasePage() {
               </div>
               <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
                 <span>{t("track.ackDue")}</span>
-                <span className="font-mono text-slate-600">{report.acknowledgementDue}</span>
+                <span className="font-medium text-slate-600">{report.acknowledgementDue || "—"}</span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
                 <span>{t("track.feedbackDue")}</span>
-                <span className="font-mono text-slate-600">{report.feedbackDue}</span>
+                <span className="font-medium text-slate-600">{report.feedbackDue || "—"}</span>
               </div>
             </div>
           </SecureCard>
@@ -218,7 +218,7 @@ export default function TrackCasePage() {
                         <FileText className="w-3.5 h-3.5 shrink-0 text-slate-400" aria-hidden="true" />
                         <span className="truncate">{file.displayName}</span>
                       </div>
-                      <div className="mt-0.5 text-[10px] font-mono text-slate-500">
+                      <div className="mt-0.5 text-[10px] text-slate-500">
                         {file.sizeLabel} · {t("track.metadataStripped")}
                       </div>
                     </div>
@@ -259,7 +259,7 @@ export default function TrackCasePage() {
             <div className="space-y-4">
               <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg p-3 text-xs flex items-start gap-2">
                 <Lock className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
-                {t("track.threadSubtitle")}
+                {t("track.threadSecure")}
               </div>
 
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 max-h-[32rem] overflow-y-auto">
