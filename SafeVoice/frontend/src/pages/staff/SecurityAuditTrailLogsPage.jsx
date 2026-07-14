@@ -112,7 +112,7 @@ export default function SecurityAuditTrailLogsPage() {
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 p-2 rounded shrink-0">
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" aria-hidden="true" />
-            <span className="font-mono text-[10px] text-slate-700">{t("audit.worm")}</span>
+            <span className="text-[11px] font-medium text-slate-700">{t("audit.worm")}</span>
           </div>
         </div>
 
@@ -181,27 +181,25 @@ export default function SecurityAuditTrailLogsPage() {
         <EmptyState title={t("audit.empty")} />
       ) : (
         <div className={`min-w-0 ${refreshing ? "opacity-60 transition-opacity pointer-events-none" : "transition-opacity"}`} aria-busy={refreshing}>
-          <AppTable className="min-w-0" headers={[t("audit.colTime"), t("audit.colActor"), t("audit.colAction"), t("audit.colSubject"), t("audit.colOutcome"), t("audit.colMetadata"), t("audit.colSeal")]}>
+          <AppTable className="min-w-0" headers={[t("audit.colTime"), t("audit.colActor"), t("audit.colAction"), t("audit.colOutcome"), t("audit.colMetadata")]}>
             {logs.map((log) => (
               <tr key={log.id} className="hover:bg-slate-50 border-b border-slate-200 transition-colors">
-                <td className="px-4 py-3 text-xs font-mono text-slate-500 whitespace-nowrap">{log.timestamp}</td>
+                <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{log.timestamp}</td>
                 <td className="px-4 py-3 text-xs text-slate-800">
                   <div className="font-bold">{log.actorName}</div>
                 </td>
                 <td className="px-4 py-3 text-xs text-slate-700">{pretty(log.actionType)}</td>
-                <td className="px-4 py-3 text-xs font-mono text-slate-500 break-all">{log.subjectId}</td>
-                <td className="px-4 py-3 text-xs text-emerald-700 font-semibold">{log.outcome}</td>
+                <td className="px-4 py-3 text-xs text-emerald-700 font-semibold">{pretty(log.outcome)}</td>
                 <td className="px-4 py-3 text-xs text-slate-500 max-w-sm break-words">
                   {log.metadataNotice}
                   {log.oldValue && log.newValue && (
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 font-mono">
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
                       <span className="break-all">{log.oldValue}</span>
                       <ChevronRight className="w-3 h-3" aria-hidden="true" />
                       <span className="text-cyan-700 break-all">{log.newValue}</span>
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 text-xs font-mono text-slate-400 break-all">{log.hashChain}</td>
               </tr>
             ))}
           </AppTable>
