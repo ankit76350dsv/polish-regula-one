@@ -539,7 +539,7 @@ public class CaseReportService {
      */
     private CaseSummaryResponse toSummary(CaseReport report) {
         long unread = caseMessageRepository
-                .countByTenantIdAndCaseIdAndReadByAdminFalse(report.getTenantId(), report.getId());
+                .countByTenantIdAndCaseIdAndReadByStaffFalse(report.getTenantId(), report.getId());
         return CaseSummaryResponse.builder()
                 .id(report.getId())
                 .caseReference(report.getCaseReference())

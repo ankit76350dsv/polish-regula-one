@@ -20,15 +20,15 @@ public interface CaseMessageRepository extends MongoRepository<CaseMessage, Stri
 
     /**
      * Counts the messages in a case that staff have NOT read yet. A message is
-     * "unread by staff" when readByAdmin is false — which is exactly how a reporter's
+     * "unread by staff" when readByStaff is false — which is exactly how a reporter's
      * messages start out. The case register uses this number to show an unread badge.
      * Scoped to the tenant so one organisation can never see another's counts.
      */
-    long countByTenantIdAndCaseIdAndReadByAdminFalse(String tenantId, String caseId);
+    long countByTenantIdAndCaseIdAndReadByStaffFalse(String tenantId, String caseId);
 
     /**
-     * Counts ALL messages across the tenant that staff have not read yet (readByAdmin
+     * Counts ALL messages across the tenant that staff have not read yet (readByStaff
      * false). Drives the dashboard's "unread replies" figure.
      */
-    long countByTenantIdAndReadByAdminFalse(String tenantId);
+    long countByTenantIdAndReadByStaffFalse(String tenantId);
 }

@@ -150,10 +150,10 @@ public class CaseMessageService {
         // Mark the message as already read by its own author (reporter vs staff computed above).
         if (fromReporter) {
             message.setReadByReporter(true);
-            message.setReadByAdmin(false);
+            message.setReadByStaff(false);
         } else {
             message.setReadByReporter(false);
-            message.setReadByAdmin(true);
+            message.setReadByStaff(true);
         }
 
         CaseMessage saved = caseMessageRepository.save(message);

@@ -43,7 +43,10 @@ public class CaseMessage extends BaseDocument {
 
     private List<EvidenceAttachment> attachments = new ArrayList<>();
 
+    // Read receipts, one per side of the two-way thread. A message starts unread for the OTHER
+    // side: a reporter's message is unread by staff (readByStaff=false); a staff reply is unread
+    // by the reporter (readByReporter=false). ("readByStaff" — any staff role, not just admins.)
     private boolean readByReporter;
 
-    private boolean readByAdmin;
+    private boolean readByStaff;
 }

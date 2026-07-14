@@ -107,7 +107,7 @@ class CaseReportServiceTest {
         when(tenantRepository.findById("acme")).thenReturn(Optional.of(activeTenant()));
         when(caseReportRepository.existsByTenantIdAndCaseReference(eq("acme"), anyString())).thenReturn(false);
         when(caseReportRepository.save(any(CaseReport.class))).thenAnswer(i -> i.getArgument(0));
-        when(caseMessageRepository.countByTenantIdAndCaseIdAndReadByAdminFalse(any(), any())).thenReturn(0L);
+        when(caseMessageRepository.countByTenantIdAndCaseIdAndReadByStaffFalse(any(), any())).thenReturn(0L);
     }
 
     // ── ENCRYPTION at submit ─────────────────────────────────────────────────────

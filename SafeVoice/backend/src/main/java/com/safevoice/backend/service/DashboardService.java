@@ -53,7 +53,7 @@ public class DashboardService {
                 : (int) Math.round(((double) (open - breached) / open) * 100);
 
         // "Unread replies": reporter messages staff have not opened yet.
-        long unread = caseMessageRepository.countByTenantIdAndReadByAdminFalse(tenantId);
+        long unread = caseMessageRepository.countByTenantIdAndReadByStaffFalse(tenantId);
 
         // "Audit entries sealed": total tamper-evident audit-trail rows for the tenant.
         long audit = auditLogRepository.countByTenantId(tenantId);
