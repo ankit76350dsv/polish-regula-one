@@ -150,6 +150,15 @@ export default function App() {
     // Standalone anonymous report deep link: /company/{tenantId}/report — the only
     // way to submit a report, because the report MUST be tied to one organisation.
     if (standaloneReportTenant) {
+      // A real tenant id is a 24-character hex MongoDB id (e.g. "6a34ca2d9d71d550dff0c3b6").
+      // If the link still has an unfilled placeholder like "{tenantid}" — or the org name is a
+      // leftover "{tenant name}" placeholder — it is not a genuine link, so show Not Found
+      // rather than a report form pointed at a company that does not exist.
+      const validTenant = /^[a-f0-9]{24}$/i.test(standaloneReportTenant);
+      const orgIsPlaceholder = standaloneReportOrg != null && /[{}]/.test(standaloneReportOrg);
+      if (!validTenant || orgIsPlaceholder) {
+        return { element: <NotFoundPage navigate={navigate} />, world: "public" };
+      }
       return { element: <PublicReportPortal tenantId={standaloneReportTenant} orgName={standaloneReportOrg} navigate={navigate} />, world: "public" };
     }
 
