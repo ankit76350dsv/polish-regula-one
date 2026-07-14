@@ -158,6 +158,12 @@ public class CaseMessageService {
 
         CaseMessage saved = caseMessageRepository.save(message);
 
+        // Posting a reply means the sender has SEEN the whole conversation — so mark every
+        // message in this case read for the sender's side and PERSIST it (staff reply → all
+        // readByStaff; reporter reply → all readByReporter). This clears the other side's
+        // messages from the sender's unread set durably, not just in the browser.
+        markRead(caseId, tenantId, null, !fromReporter);
+
         // Append message event to parent case report timeline
         report.getTimeline().add(new TimelineEvent(
                 new org.bson.types.ObjectId().toHexString(),

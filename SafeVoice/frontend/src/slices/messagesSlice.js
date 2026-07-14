@@ -4,6 +4,8 @@
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import messageService from "../services/messageService";
+// Read receipts also drop the case's "unread by staff" badge in the reports lists.
+import { caseUnreadCleared, caseUnreadDecremented } from "./reportsSlice";
 
 export const fetchMessages = createAsyncThunk("messages/fetch", async (caseId) => {
   const messages = await messageService.list(caseId);
@@ -23,6 +25,7 @@ export const markMessageReadPersist = createAsyncThunk(
   "messages/markReadOne",
   async ({ caseId, messageId }, { dispatch }) => {
     dispatch(markMessageRead({ caseId, messageId }));
+    dispatch(caseUnreadDecremented({ caseId })); // keep the list badge in sync
     await messageService.markRead(caseId, messageId);
   },
 );
@@ -32,6 +35,7 @@ export const markThreadReadPersist = createAsyncThunk(
   "messages/markReadAll",
   async ({ caseId }, { dispatch }) => {
     dispatch(markThreadRead({ caseId }));
+    dispatch(caseUnreadCleared({ caseId })); // badge → 0 across inbox + register
     await messageService.markRead(caseId);
   },
 );

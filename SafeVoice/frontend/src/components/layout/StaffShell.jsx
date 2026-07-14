@@ -117,9 +117,10 @@ export function StaffShell({ currentPath, navigate, children }) {
         dispatch(
           caseActivity({
             caseId: event.caseId,
-            // Only the reporter's messages add to the staff unread count, and not for the
-            // case you are actively reading.
-            incrementUnread: event.fromReporter && !isViewing,
+            // A reporter's message is unread until staff explicitly read it (click) or reply —
+            // merely having the chat open does NOT mark it read — so it always bumps the badge,
+            // even for the case currently on screen. (The toast is still suppressed when viewing.)
+            incrementUnread: event.fromReporter,
           }),
         );
         if (!isViewing) {

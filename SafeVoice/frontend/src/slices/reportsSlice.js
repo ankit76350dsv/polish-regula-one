@@ -154,6 +154,21 @@ const reportsSlice = createSlice({
     trackedThreadRead(state) {
       (state.tracked?.messages || []).forEach((m) => { m.readByReporter = true; });
     },
+    // Staff read the whole thread → the case's "unread by staff" badge drops to 0 in every list
+    // (inbox + register), so the badge matches the thread without waiting for a refetch.
+    caseUnreadCleared(state, action) {
+      const { caseId } = action.payload || {};
+      const clear = (r) => { if (r && r.id === caseId) r.unreadCount = 0; };
+      state.list.forEach(clear);
+      state.register.items.forEach(clear);
+    },
+    // Staff read ONE message → drop the badge by one (never below zero).
+    caseUnreadDecremented(state, action) {
+      const { caseId } = action.payload || {};
+      const dec = (r) => { if (r && r.id === caseId && r.unreadCount > 0) r.unreadCount -= 1; };
+      state.list.forEach(dec);
+      state.register.items.forEach(dec);
+    },
     // A case's STATUS changed live over WebSocket (a CASE_UPDATE frame). Apply it EVERYWHERE the
     // case might be shown so every surface stays in sync with the backend without a refresh:
     // the reporter's tracked case, the staff open case, and both staff lists (inbox + register).
@@ -301,6 +316,8 @@ export const {
   trackedMessageReceived,
   trackedMessageRead,
   trackedThreadRead,
+  caseUnreadCleared,
+  caseUnreadDecremented,
   caseStatusUpdated,
   caseActivity,
 } = reportsSlice.actions;
