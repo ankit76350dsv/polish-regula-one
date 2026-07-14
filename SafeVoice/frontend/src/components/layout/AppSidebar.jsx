@@ -110,17 +110,6 @@ export function AppSidebar({ currentPath, navigate, collapsed, setCollapsed, use
               <LogOut className="w-4 h-4" aria-hidden="true" />
             </button>
           ))}
-
-        {!collapsed ? (
-          <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex items-center gap-1.5 text-[10px] font-mono font-semibold text-slate-700 leading-none">
-            <Lock className="w-3 h-3 text-emerald-600" aria-hidden="true" />
-            {t("dashboard.posture.telemetryValue")}
-          </div>
-        ) : (
-          <div className="flex justify-center text-emerald-600">
-            <Lock className="w-4 h-4" aria-hidden="true" />
-          </div>
-        )}
       </div>
     </aside>
   );
