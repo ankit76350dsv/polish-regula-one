@@ -1,12 +1,15 @@
 // The drop-down menu shown on small screens when the menu button is tapped.
 // Lists every link (public + staff). Hidden entirely when closed.
 import { useTranslation } from "react-i18next";
+import { useSelector } from "react-redux";
 import { publicRoutes, staffRoutes } from "./navRoutes";
+import { selectMyOrg } from "../../slices/orgSlice";
 import { toBrowserPath, toPublicReportPath } from "../../utils/routing";
 import { can } from "../../utils/permissions";
 
 export function MobileNavigation({ currentPath, navigate, open, close, tenantId, user }) {
   const { t } = useTranslation();
+  const org = useSelector(selectMyOrg);
   if (!open) return null;
 
   // Hide staff links the user's permissions don't grant.
@@ -21,7 +24,7 @@ export function MobileNavigation({ currentPath, navigate, open, close, tenantId,
           return (
             <a
               key={item.path}
-              href={opensReportTab ? toPublicReportPath(tenantId) : toBrowserPath(item.path, tenantId)}
+              href={opensReportTab ? toPublicReportPath(tenantId, org?.name) : toBrowserPath(item.path, tenantId)}
               {...(opensReportTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
               onClick={(event) => {
                 if (opensReportTab) {

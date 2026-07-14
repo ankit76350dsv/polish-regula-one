@@ -13,7 +13,8 @@ import { firstError, maxLength, minLength, notFutureDate, required } from "../..
 //   Step 2 — the protection choices (how to communicate + the required consents),
 //            and ONLY here is the report actually submitted.
 // `tenantId` names the organisation, read from the /company/{tenantId}/report URL.
-export default function PublicReportPortal({ tenantId, navigate }) {
+// `orgName` is that organisation's readable name, carried in the link's ?org= (display only).
+export default function PublicReportPortal({ tenantId, orgName, navigate }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const submitStatus = useSelector(selectSubmitStatus);
@@ -161,8 +162,8 @@ export default function PublicReportPortal({ tenantId, navigate }) {
           </ol>
 
           {tenantId && (
-            <p className="mb-6 text-[11px] font-mono text-slate-500">
-              {t("report.reportingTo")}: <span className="font-bold text-slate-700">{tenantId}</span>
+            <p className="mb-6 text-xs text-slate-500">
+              {t("report.reportingTo")}: <span className="font-semibold text-slate-700">{orgName || tenantId}</span>
             </p>
           )}
 

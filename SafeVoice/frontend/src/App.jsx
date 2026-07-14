@@ -106,6 +106,11 @@ export default function App() {
 
   // ── Router state ──────────────────────────────────────────────────────────
   const standaloneReportTenant = getStandaloneReportTenant(window.location.pathname);
+  // The organisation's name, carried in the report link's ?org= for display only
+  // (so the anonymous page shows the company name instead of the raw tenant id).
+  const standaloneReportOrg = standaloneReportTenant
+    ? new URLSearchParams(window.location.search).get("org")
+    : null;
 
   const [currentPath, setCurrentPath] = useState(() =>
     normalizePath(toLogicalPath(window.location.pathname)),
@@ -145,7 +150,7 @@ export default function App() {
     // Standalone anonymous report deep link: /company/{tenantId}/report — the only
     // way to submit a report, because the report MUST be tied to one organisation.
     if (standaloneReportTenant) {
-      return { element: <PublicReportPortal tenantId={standaloneReportTenant} navigate={navigate} />, world: "public" };
+      return { element: <PublicReportPortal tenantId={standaloneReportTenant} orgName={standaloneReportOrg} navigate={navigate} />, world: "public" };
     }
 
     // Public, no-login pages.

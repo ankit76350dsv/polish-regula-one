@@ -71,8 +71,12 @@ export function isStaffSection(logicalPath) {
 // the reporter to sign in or reveal who they are.
 
 // Build the full address-bar URL for one company's public report page.
-export function toPublicReportPath(tenantId) {
-  return `/company/${tenantId}/report`;
+export function toPublicReportPath(tenantId, orgName) {
+  const base = `/company/${tenantId}/report`;
+  // Carry the organisation's name in the link so the anonymous report page can show
+  // "Reporting to <Company name>" instead of the raw id. Display-only; the report is
+  // still tied to the tenant id, never the name.
+  return orgName ? `${base}?org=${encodeURIComponent(orgName)}` : base;
 }
 
 // If the given browser path IS a standalone public report page, return the

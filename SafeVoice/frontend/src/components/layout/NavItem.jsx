@@ -1,4 +1,6 @@
 import { useTranslation } from "react-i18next";
+import { useSelector } from "react-redux";
+import { selectMyOrg } from "../../slices/orgSlice";
 import { toBrowserPath, toPublicReportPath } from "../../utils/routing";
 
 // A single clickable navigation link. Shows an icon + translated label and
@@ -6,6 +8,7 @@ import { toBrowserPath, toPublicReportPath } from "../../utils/routing";
 // URL so right-click / open-in-new-tab works correctly.
 export function NavItem({ item, currentPath, navigate, compact = false, tenantId }) {
   const { t } = useTranslation();
+  const org = useSelector(selectMyOrg);
   const Icon = item.icon;
   const label = t(item.labelKey);
 
@@ -20,7 +23,7 @@ export function NavItem({ item, currentPath, navigate, compact = false, tenantId
 
   return (
     <a
-      href={opensReportTab ? toPublicReportPath(tenantId) : toBrowserPath(item.path, tenantId)}
+      href={opensReportTab ? toPublicReportPath(tenantId, org?.name) : toBrowserPath(item.path, tenantId)}
       {...(opensReportTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
       onClick={(event) => {
         if (opensReportTab) return;

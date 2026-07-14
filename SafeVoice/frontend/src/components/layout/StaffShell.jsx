@@ -23,6 +23,7 @@ import {
   selectIsAuthenticated,
 } from "../../slices/authSlice";
 import { caseActivity, caseReceived } from "../../slices/reportsSlice";
+import { fetchMyOrg, selectMyOrgStatus } from "../../slices/orgSlice";
 import { addToast, selectActiveCaseId } from "../../slices/uiSlice";
 import { isStaffSection, toBrowserPath } from "../../utils/routing";
 
@@ -35,6 +36,7 @@ export function StaffShell({ currentPath, navigate, children }) {
   const user = useSelector(selectCurrentUser);
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const tenantId = user?.tenantId ?? "";
+  const orgStatus = useSelector(selectMyOrgStatus);
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -55,6 +57,12 @@ export function StaffShell({ currentPath, navigate, children }) {
   useEffect(() => {
     if (status === "idle") dispatch(initSession());
   }, [dispatch, status]);
+
+  // Load the signed-in user's own organisation once, so the navigation can label the
+  // "Submit report" link with the company name (passed to the anonymous report page).
+  useEffect(() => {
+    if (isAuthenticated && orgStatus === "idle") dispatch(fetchMyOrg());
+  }, [dispatch, isAuthenticated, orgStatus]);
 
   // Endless-redirect-loop guard from services/api.js.
   useEffect(() => {
