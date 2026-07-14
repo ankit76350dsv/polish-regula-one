@@ -126,6 +126,16 @@ const reportsSlice = createSlice({
         state.tracked.messages.push(message);
       }
     },
+    // Reporter marks ONE staff message read (readByReporter). State-only; clears the highlight.
+    trackedMessageRead(state, action) {
+      const msg = state.tracked?.messages?.find((m) => m.id === action.payload?.messageId);
+      if (msg) msg.readByReporter = true;
+    },
+    // Reporter marks the WHOLE thread read — used when they reply, so every previously-unread
+    // staff message loses its highlight at once.
+    trackedThreadRead(state) {
+      (state.tracked?.messages || []).forEach((m) => { m.readByReporter = true; });
+    },
     // A case's STATUS changed live over WebSocket (a CASE_UPDATE frame). Apply it EVERYWHERE the
     // case might be shown so every surface stays in sync with the backend without a refresh:
     // the reporter's tracked case, the staff open case, and both staff lists (inbox + register).
@@ -271,6 +281,8 @@ export const {
   clearTracked,
   caseReceived,
   trackedMessageReceived,
+  trackedMessageRead,
+  trackedThreadRead,
   caseStatusUpdated,
   caseActivity,
 } = reportsSlice.actions;

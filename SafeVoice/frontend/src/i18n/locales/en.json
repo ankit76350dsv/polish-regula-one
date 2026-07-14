@@ -345,6 +345,8 @@
     "messagePlaceholder": "Request a follow-up detail without asking the reporter to identify themselves.",
     "composerLocked": "Assign an investigator and move the case past “Received” before replying to the reporter.",
     "composerClosedLocked": "This case is closed — staff can no longer message the reporter. Reopen the case to reply.",
+    "unreadHint": "Unread — click to mark as read",
+    "unread": "Unread",
     "statusMessageLabel": "Message to the reporter (optional)",
     "statusMessagePlaceholder": "Add a short update to send to the reporter with this status change…",
     "closeNotice": "Closing locks the thread for staff. The reporter can still send a final message for 48 hours; after that the thread closes for everyone.",

@@ -21,6 +21,8 @@ import {
   selectSelectedThreadId,
   selectSending,
   sendMessage,
+  markMessageRead,
+  markThreadRead,
 } from "../../slices/messagesSlice";
 import { addToast, setActiveCase, clearActiveCase } from "../../slices/uiSlice";
 import { selectCurrentUser } from "../../slices/authSlice";
@@ -126,6 +128,8 @@ export default function CentralEncryptedInboxPage({ navigate }) {
       await dispatch(sendMessage({ caseId: activeId, text: draft, files })).unwrap();
       setDraft("");
       setFiles([]);
+      // Replying clears the whole thread's unread highlights (staff has now seen it).
+      dispatch(markThreadRead({ caseId: activeId }));
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
       // Refresh the thread list so this case jumps to the top (it now has the latest
       // activity), matching the WhatsApp-style ordering the backend returns.
@@ -204,11 +208,30 @@ export default function CentralEncryptedInboxPage({ navigate }) {
                 ) : (
                   messages.map((message) => {
                     const isReporter = message.sender === "Anonymous Whistleblower";
+                    // Unread (staff view) = a reporter message not yet read. Highlight blue and
+                    // let a click mark it read (state-only; syncs with the case page instantly).
+                    const unread = isReporter && !message.readByStaff;
                     return (
                       <div key={message.id} className={`flex min-w-0 ${isReporter ? "justify-start" : "justify-end"} mb-4`}>
-                        <div className={`max-w-[min(86%,44rem)] min-w-0 rounded-lg p-3 text-xs shadow-sm border ${isReporter ? "bg-white text-slate-800 border-slate-200" : "bg-cyan-600 text-white border-cyan-500"}`}>
+                        <div
+                          role={unread ? "button" : undefined}
+                          tabIndex={unread ? 0 : undefined}
+                          title={unread ? t("case.unreadHint") : undefined}
+                          onClick={unread ? () => dispatch(markMessageRead({ caseId: activeId, messageId: message.id })) : undefined}
+                          onKeyDown={unread ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dispatch(markMessageRead({ caseId: activeId, messageId: message.id })); } } : undefined}
+                          className={`max-w-[min(86%,44rem)] min-w-0 rounded-lg p-3 text-xs shadow-sm border ${
+                            unread
+                              ? "bg-blue-50 text-slate-800 border-blue-300 ring-1 ring-blue-200 cursor-pointer"
+                              : isReporter
+                                ? "bg-white text-slate-800 border-slate-200"
+                                : "bg-cyan-600 text-white border-cyan-500"
+                          }`}
+                        >
                           <div className="mb-1.5 flex min-w-0 flex-wrap items-center justify-between gap-x-5 gap-y-1 border-b border-white/20 pb-1">
-                            <span className="min-w-0 font-semibold break-words">{message.sender}</span>
+                            <span className="min-w-0 font-semibold break-words flex items-center gap-1.5">
+                              {unread && <span className="inline-block w-2 h-2 rounded-full bg-blue-500 shrink-0" aria-label={t("case.unread")} />}
+                              {message.sender}
+                            </span>
                             <span className="shrink-0 text-[9px] font-mono opacity-80">{message.timestamp}</span>
                           </div>
                           <p className="whitespace-pre-wrap break-words">{message.text}</p>

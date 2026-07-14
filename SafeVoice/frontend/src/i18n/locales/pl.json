@@ -347,6 +347,8 @@
     "messagePlaceholder": "Poproś o dodatkowy szczegół, nie prosząc zgłaszającego o ujawnienie tożsamości.",
     "composerLocked": "Przypisz osobę prowadzącą i zmień status sprawy z „Otrzymano”, zanim odpowiesz zgłaszającemu.",
     "composerClosedLocked": "Sprawa jest zamknięta — personel nie może już pisać do zgłaszającego. Aby odpowiedzieć, ponownie otwórz sprawę.",
+    "unreadHint": "Nieprzeczytana — kliknij, aby oznaczyć jako przeczytaną",
+    "unread": "Nieprzeczytana",
     "statusMessageLabel": "Wiadomość do zgłaszającego (opcjonalnie)",
     "statusMessagePlaceholder": "Dodaj krótką informację, którą wyślemy do zgłaszającego wraz ze zmianą statusu…",
     "closeNotice": "Zamknięcie blokuje wątek dla personelu. Zgłaszający może jeszcze wysłać ostatnią wiadomość przez 48 godzin; potem wątek zostaje zamknięty dla wszystkich.",

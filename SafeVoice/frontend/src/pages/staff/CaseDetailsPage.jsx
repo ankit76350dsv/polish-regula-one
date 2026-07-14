@@ -28,7 +28,7 @@ import {
   updateReport,
   caseStatusUpdated,
 } from "../../slices/reportsSlice";
-import { fetchMessages, messageReceived, selectMessagesFor, selectSending, selectThread, sendMessage } from "../../slices/messagesSlice";
+import { fetchMessages, messageReceived, selectMessagesFor, selectSending, selectThread, sendMessage, markMessageRead, markThreadRead } from "../../slices/messagesSlice";
 import { fetchUsers, selectUsers } from "../../slices/usersSlice";
 import { addToast, setActiveCase, clearActiveCase } from "../../slices/uiSlice";
 import { selectCurrentUser } from "../../slices/authSlice";
@@ -153,6 +153,7 @@ export default function CaseDetailsPage({ caseId, navigate }) {
         // reporter in the same step. Not on close (staff can't message) and not on reopen.
         if (showReporterNote && note) {
           await dispatch(sendMessage({ caseId: report.id, text: note, files: [] })).unwrap();
+          dispatch(markThreadRead({ caseId: report.id }));
         }
         dispatch(addToast({ type: "success", message: t(pending.toastKey) }));
       } else if (pending.action === "export") {
@@ -178,6 +179,8 @@ export default function CaseDetailsPage({ caseId, navigate }) {
       await dispatch(sendMessage({ caseId: report.id, text: draft, files })).unwrap();
       setDraft("");
       setFiles([]);
+      // Replying clears the whole thread's unread highlights (staff has now seen it).
+      dispatch(markThreadRead({ caseId: report.id }));
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
       // Refresh the shared case list so this case is at the top (latest activity) when
       // the user returns to the inbox or register.
@@ -320,11 +323,30 @@ export default function CaseDetailsPage({ caseId, navigate }) {
                 ) : (
                   messages.map((message) => {
                     const isReporter = message.sender === "Anonymous Whistleblower";
+                    // Unread (staff view) = a reporter message we have not read yet. Highlight it
+                    // blue and let a click mark it read (state-only — updates everywhere at once).
+                    const unread = isReporter && !message.readByStaff;
                     return (
                       <div key={message.id} className={`flex ${isReporter ? "justify-start" : "justify-end"} mb-3`}>
-                        <div className={`max-w-[82%] rounded-lg p-3 text-xs shadow-sm border ${isReporter ? "bg-white text-slate-800 border-slate-200" : "bg-cyan-600 text-white border-cyan-500"}`}>
+                        <div
+                          role={unread ? "button" : undefined}
+                          tabIndex={unread ? 0 : undefined}
+                          title={unread ? t("case.unreadHint") : undefined}
+                          onClick={unread ? () => dispatch(markMessageRead({ caseId, messageId: message.id })) : undefined}
+                          onKeyDown={unread ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dispatch(markMessageRead({ caseId, messageId: message.id })); } } : undefined}
+                          className={`max-w-[82%] rounded-lg p-3 text-xs shadow-sm border ${
+                            unread
+                              ? "bg-blue-50 text-slate-800 border-blue-300 ring-1 ring-blue-200 cursor-pointer"
+                              : isReporter
+                                ? "bg-white text-slate-800 border-slate-200"
+                                : "bg-cyan-600 text-white border-cyan-500"
+                          }`}
+                        >
                           <div className="flex items-center justify-between gap-4 border-b border-white/20 pb-1 mb-1">
-                            <span className="font-bold">{message.sender}</span>
+                            <span className="font-bold flex items-center gap-1.5">
+                              {unread && <span className="inline-block w-2 h-2 rounded-full bg-blue-500" aria-label={t("case.unread")} />}
+                              {message.sender}
+                            </span>
                             <span className="font-mono text-[10px] opacity-80">{message.timestamp}</span>
                           </div>
                           <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>

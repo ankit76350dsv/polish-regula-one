@@ -49,6 +49,19 @@ const messagesSlice = createSlice({
         thread.push(message);
       }
     },
+    // Mark ONE message read from the staff side (readByStaff). State-only — the highlight
+    // clears immediately and everywhere the slice is read (case page + inbox stay in sync).
+    markMessageRead(state, action) {
+      const { caseId, messageId } = action.payload;
+      const msg = state.byCase[caseId]?.find((m) => m.id === messageId);
+      if (msg) msg.readByStaff = true;
+    },
+    // Mark the WHOLE thread read from the staff side — used when staff reply so every
+    // previously-unread reporter message loses its highlight at once.
+    markThreadRead(state, action) {
+      const { caseId } = action.payload;
+      (state.byCase[caseId] || []).forEach((m) => { m.readByStaff = true; });
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -82,7 +95,7 @@ const messagesSlice = createSlice({
   },
 });
 
-export const { selectThread, clearSelectedThread, messageReceived } = messagesSlice.actions;
+export const { selectThread, clearSelectedThread, messageReceived, markMessageRead, markThreadRead } = messagesSlice.actions;
 
 export const selectMessagesFor = (caseId) => (s) => s.messages.byCase[caseId] || [];
 export const selectMessagesStatus = (s) => s.messages.status;

@@ -18,6 +18,8 @@ import {
   selectTrackStatus,
   sendTrackedMessage,
   trackedMessageReceived,
+  trackedMessageRead,
+  trackedThreadRead,
   caseStatusUpdated,
   trackReport,
 } from "../../slices/reportsSlice";
@@ -109,6 +111,8 @@ export default function TrackCasePage() {
       ).unwrap();
       setDraft("");
       setFiles([]);
+      // Replying clears the highlight on every staff message (the reporter has now seen them).
+      dispatch(trackedThreadRead());
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
     } catch {
       dispatch(addToast({ type: "error", message: t("track.sendError") }));
@@ -264,15 +268,30 @@ export default function TrackCasePage() {
                 ) : (
                   thread.map((message) => {
                     const isReporter = message.sender === "Anonymous Whistleblower";
+                    // Unread (reporter view) = a STAFF message the reporter has not read yet.
+                    // Highlight blue and let a click mark it read (state-only, clears instantly).
+                    const unread = !isReporter && !message.readByReporter;
                     return (
                       <div key={message.id} className={`flex ${isReporter ? "justify-end" : "justify-start"} mb-4`}>
                         <div
+                          role={unread ? "button" : undefined}
+                          tabIndex={unread ? 0 : undefined}
+                          title={unread ? t("case.unreadHint") : undefined}
+                          onClick={unread ? () => dispatch(trackedMessageRead({ messageId: message.id })) : undefined}
+                          onKeyDown={unread ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dispatch(trackedMessageRead({ messageId: message.id })); } } : undefined}
                           className={`max-w-[82%] rounded-lg p-3.5 text-xs shadow-sm border ${
-                            isReporter ? "bg-cyan-600 text-white border-cyan-500" : "bg-white text-slate-800 border-slate-200"
+                            unread
+                              ? "bg-blue-50 text-slate-800 border-blue-300 ring-1 ring-blue-200 cursor-pointer"
+                              : isReporter
+                                ? "bg-cyan-600 text-white border-cyan-500"
+                                : "bg-white text-slate-800 border-slate-200"
                           }`}
                         >
                           <div className="flex items-center justify-between gap-5 mb-1.5 border-b border-white/20 pb-1">
-                            <span className="font-semibold">{isReporter ? t("track.you") : message.sender}</span>
+                            <span className="font-semibold flex items-center gap-1.5">
+                              {unread && <span className="inline-block w-2 h-2 rounded-full bg-blue-500 shrink-0" aria-label={t("case.unread")} />}
+                              {isReporter ? t("track.you") : message.sender}
+                            </span>
                             <span className="text-[9px] font-mono opacity-80">{message.timestamp}</span>
                           </div>
                           <p className="leading-relaxed whitespace-pre-wrap">{message.text}</p>
