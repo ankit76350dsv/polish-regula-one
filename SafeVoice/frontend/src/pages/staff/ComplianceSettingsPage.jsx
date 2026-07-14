@@ -7,7 +7,6 @@ const TABS = [
   { key: "security", icon: Lock },
   { key: "retention", icon: Clock },
   { key: "legal", icon: Scale },
-  { key: "review", icon: FileText },
 ];
 
 const SECURITY_ITEMS = ["mfa", "session", "revocation", "rateLimit", "telemetry", "monitoring"];
@@ -15,7 +14,6 @@ const RETENTION_ITEMS = ["default", "irrelevant", "hold", "destruction"];
 
 export default function ComplianceSettingsPage() {
   const { t } = useTranslation();
-  const review = [];
   const [tab, setTab] = useState("security");
 
   return (
@@ -89,24 +87,6 @@ export default function ComplianceSettingsPage() {
                   <p className="text-slate-600">{t("settings.legal.respValue")}</p>
                 </div>
               </div>
-            </SecureCard>
-          )}
-
-          {tab === "review" && (
-            <SecureCard title={t("settings.reviewTitle")}>
-              <AppTable headers={[t("settings.review.colArea"), t("settings.review.colFeature"), t("settings.review.colDecision"), t("settings.review.colJustification"), t("settings.review.colRisk")]}>
-                {review.map((item) => (
-                  <tr key={`${item.area}-${item.decision}`} className="border-b border-slate-200 hover:bg-slate-50">
-                    <td className="px-4 py-3 text-xs font-bold text-slate-800">{item.area}</td>
-                    <td className="px-4 py-3 text-xs text-slate-600">{item.feature}</td>
-                    <td className="px-4 py-3 text-xs">
-                      <span className="bg-cyan-50 border border-cyan-200 rounded px-2 py-1 text-cyan-700 font-mono">{item.decision}</span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{item.justification}</td>
-                    <td className="px-4 py-3 text-xs text-amber-800 font-semibold">{item.risk}</td>
-                  </tr>
-                ))}
-              </AppTable>
             </SecureCard>
           )}
         </div>

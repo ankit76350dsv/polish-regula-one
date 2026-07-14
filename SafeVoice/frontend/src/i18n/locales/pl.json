@@ -413,47 +413,38 @@
     "tabSecurity": "Bezpieczeństwo",
     "tabRetention": "Retencja",
     "tabLegal": "Podstawa prawna",
-    "tabReview": "Dziennik przeglądów",
-    "securityTitle": "Bezpieczeństwo administracyjne",
-    "retentionTitle": "Polityka retencji",
+    "securityTitle": "Bezpieczeństwo konta",
+    "retentionTitle": "Jak długo przechowujemy informacje",
     "legalTitle": "Obowiązki prawne",
-    "reviewTitle": "Decyzje przeglądu zgodności",
     "security": {
-      "mfa": "MFA",
-      "mfaValue": "Wymagane dla wszystkich ról personelu; brak roli z obejściem.",
-      "session": "Wygaśnięcie sesji",
-      "sessionValue": "15-minutowy limit bezczynności; maksymalnie 8 godzin.",
-      "revocation": "Unieważnienie sesji",
-      "revocationValue": "Natychmiastowe unieważnienie przy zmianie roli lub podejrzeniu naruszenia.",
-      "rateLimit": "Ograniczanie żądań",
-      "rateLimitValue": "Publiczne punkty śledzenia i przyjmowania mają limity bez stosowania odcisków.",
-      "telemetry": "Brak telemetrii",
-      "telemetryValue": "Brak analityki, pikseli marketingowych i odcisków przeglądarki.",
+      "mfa": "Logowanie dwuetapowe",
+      "mfaValue": "Każdy pracownik musi potwierdzić swoją tożsamość drugim krokiem podczas logowania.",
+      "session": "Automatyczne wylogowanie",
+      "sessionValue": "Pracownicy są wylogowywani automatycznie po 15 minutach bezczynności, a najpóźniej po 8 godzinach.",
+      "revocation": "Natychmiastowe odebranie dostępu",
+      "revocationValue": "Dostęp jest odbierany od razu, gdy zmienia się rola danej osoby lub jej konto może być zagrożone.",
+      "rateLimit": "Ochrona przed nadużyciami",
+      "rateLimitValue": "Publiczne strony zgłaszania i śledzenia sprawy są chronione przed nadużyciami, bez ustalania Twojej tożsamości.",
+      "telemetry": "Brak śledzenia",
+      "telemetryValue": "Nie używamy analityki, narzędzi marketingowych ani żadnej metody identyfikacji Twojego urządzenia.",
       "monitoring": "Monitorowanie logowań",
-      "monitoringValue": "Tylko operacje bezpieczeństwa; niewidoczne dla osób prowadzących sprawy."
+      "monitoringValue": "Aktywność logowania jest sprawdzana wyłącznie przez zespół bezpieczeństwa i nigdy nie jest widoczna dla osób prowadzących sprawy."
     },
     "retention": {
-      "defaultTitle": "Domyślna retencja",
-      "defaultValue": "Trzy lata po zamknięciu sprawy, zgodnie z polską ustawą z 2024 r.",
-      "irrelevantTitle": "Nieistotne dane",
-      "irrelevantValue": "Dane osobowe nieistotne dla zgłoszenia są usuwane w ciągu 14 dni.",
+      "defaultTitle": "Jak długo przechowujemy sprawy",
+      "defaultValue": "Informacje o sprawie są przechowywane przez trzy lata po zamknięciu sprawy, zgodnie z polską ustawą o ochronie sygnalistów z 2024 r.",
+      "irrelevantTitle": "Dane osobowe niezwiązane ze zgłoszeniem",
+      "irrelevantValue": "Dane osobowe, które nie są potrzebne do obsługi zgłoszenia, są usuwane w ciągu 14 dni.",
       "holdTitle": "Wstrzymanie prawne",
-      "holdValue": "Zachowuje materiały sprawy, gdy obowiązuje wstrzymanie prawne.",
-      "destructionTitle": "Bezpieczne niszczenie",
-      "destructionValue": "Zaplanowane, rejestrowane usuwanie po upływie okresu retencji."
+      "holdValue": "Informacje o sprawie są przechowywane dłużej, gdy są potrzebne w postępowaniu prawnym.",
+      "destructionTitle": "Bezpieczne usuwanie",
+      "destructionValue": "Po upływie okresu przechowywania informacje są bezpiecznie usuwane, a usunięcie jest rejestrowane."
     },
     "legal": {
-      "basisTitle": "Podstawa przetwarzania",
-      "basisValue": "Obowiązek prawny, chronione działania następcze, ochrona przed odwetem i ograniczenie przechowywania zgodnie z RODO.",
-      "respTitle": "Obowiązki",
-      "respValue": "Upoważnieni urzędnicy obsługują sprawy; operacje bezpieczeństwa monitorują dostęp; HR obsługuje wydzielone spory."
-    },
-    "review": {
-      "colArea": "Obszar",
-      "colFeature": "Funkcja",
-      "colDecision": "Decyzja",
-      "colJustification": "Uzasadnienie",
-      "colRisk": "Ryzyko"
+      "basisTitle": "Dlaczego możemy obsługiwać zgłoszenia",
+      "basisValue": "Obsługujemy zgłoszenia, aby spełnić obowiązki prawne wynikające z przepisów o ochronie sygnalistów, bezpiecznie prowadzić działania następcze, chronić ludzi przed odwetem i przechowywać dane osobowe tylko tak długo, jak to konieczne.",
+      "respTitle": "Kto się czym zajmuje",
+      "respValue": "Upoważnieni urzędnicy obsługują sprawy, zespół bezpieczeństwa dba o dostęp do kont, a HR zajmuje się skargami pracowniczymi wykraczającymi poza sygnalizowanie nieprawidłowości."
     }
   },
   "compliance": {

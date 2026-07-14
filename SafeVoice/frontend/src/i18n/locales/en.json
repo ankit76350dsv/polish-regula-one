@@ -411,47 +411,38 @@
     "tabSecurity": "Security",
     "tabRetention": "Retention",
     "tabLegal": "Legal basis",
-    "tabReview": "Review log",
-    "securityTitle": "Administrative security",
-    "retentionTitle": "Retention policy",
+    "securityTitle": "Account security",
+    "retentionTitle": "How long we keep information",
     "legalTitle": "Legal responsibilities",
-    "reviewTitle": "Compliance review decisions",
     "security": {
-      "mfa": "MFA",
-      "mfaValue": "Required for all staff roles; no bypass role.",
-      "session": "Session expiry",
-      "sessionValue": "15-minute idle timeout; 8-hour absolute maximum.",
-      "revocation": "Session revocation",
-      "revocationValue": "Immediate revocation on role change or suspected compromise.",
-      "rateLimit": "Rate limiting",
-      "rateLimitValue": "Public tracking and intake endpoints are rate-limited without fingerprinting.",
-      "telemetry": "No telemetry",
-      "telemetryValue": "No analytics, marketing pixels, or browser fingerprinting.",
-      "monitoring": "Login monitoring",
-      "monitoringValue": "Security operations only; not exposed to case investigators."
+      "mfa": "Two-step sign-in",
+      "mfaValue": "Every staff member must confirm their identity with a second step when signing in.",
+      "session": "Automatic sign-out",
+      "sessionValue": "Staff are signed out automatically after 15 minutes of inactivity, and after 8 hours at most.",
+      "revocation": "Immediate access removal",
+      "revocationValue": "Access is removed straight away when a person's role changes or their account may be at risk.",
+      "rateLimit": "Abuse protection",
+      "rateLimitValue": "The public reporting and case-tracking pages are protected against misuse, without identifying who you are.",
+      "telemetry": "No tracking",
+      "telemetryValue": "We do not use analytics, marketing trackers, or any method to identify your device.",
+      "monitoring": "Sign-in monitoring",
+      "monitoringValue": "Sign-in activity is reviewed only by the security team and is never visible to case investigators."
     },
     "retention": {
-      "defaultTitle": "Default retention",
-      "defaultValue": "Three years after the case is closed, in line with the Polish 2024 Act.",
-      "irrelevantTitle": "Irrelevant data",
-      "irrelevantValue": "Personal data not relevant to a report is deleted within 14 days.",
+      "defaultTitle": "How long cases are kept",
+      "defaultValue": "Case information is kept for three years after a case is closed, in line with the Polish Whistleblower Protection Act of 2024.",
+      "irrelevantTitle": "Unrelated personal data",
+      "irrelevantValue": "Personal data that is not needed to handle a report is deleted within 14 days.",
       "holdTitle": "Legal hold",
-      "holdValue": "Preserves case materials when a legal hold applies.",
-      "destructionTitle": "Secure destruction",
-      "destructionValue": "Scheduled, logged deletion once retention ends."
+      "holdValue": "Case information is kept longer when it is needed for legal proceedings.",
+      "destructionTitle": "Secure deletion",
+      "destructionValue": "Once the retention period ends, information is deleted securely and the deletion is recorded."
     },
     "legal": {
-      "basisTitle": "Processing basis",
-      "basisValue": "Legal obligation, protected follow-up, anti-retaliation handling, and GDPR storage limitation.",
-      "respTitle": "Responsibilities",
-      "respValue": "Authorised officers handle cases; security operations handle access monitoring; HR handles separated grievances."
-    },
-    "review": {
-      "colArea": "Area",
-      "colFeature": "Feature",
-      "colDecision": "Decision",
-      "colJustification": "Justification",
-      "colRisk": "Risk"
+      "basisTitle": "Why we can handle reports",
+      "basisValue": "We handle reports to meet our legal obligations under whistleblower protection law, to follow up on reports safely, to protect people from retaliation, and to keep personal data only as long as needed.",
+      "respTitle": "Who does what",
+      "respValue": "Authorised officers handle the cases, the security team looks after account access, and HR handles workplace grievances that fall outside whistleblowing."
     }
   },
   "compliance": {
