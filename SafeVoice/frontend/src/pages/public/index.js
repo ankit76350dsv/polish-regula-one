@@ -7,3 +7,7 @@ export { default as PublicReportPortal } from "./PublicReportPortal.jsx";
 export { default as ReportSuccessPage } from "./ReportSuccessPage.jsx";
 export { default as TrackCasePage } from "./TrackCasePage.jsx";
 export { default as InvalidTenantPage } from "./InvalidTenantPage.jsx";
+
+// Shared chrome for the public pages (used by PublicLayout and the landing page).
+export { PublicHeader } from "./PublicHeader.jsx";
+export { PublicFooter } from "./PublicFooter.jsx";

@@ -15,7 +15,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { LanguageSwitcher } from "../../components/ui";
-import { SiteFooter } from "../../components/layout";
+import { PublicFooter } from "./PublicFooter";
 import {
   CENTRAL_SIGNUP_URL,
   redirectToLogin,
@@ -409,7 +409,7 @@ export default function LandingPage({ navigate }) {
         </section>
       </main>
 
-      <SiteFooter navigate={navigate} />
+      <PublicFooter navigate={navigate} />
     </div>
   );
 }

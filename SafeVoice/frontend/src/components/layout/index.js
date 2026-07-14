@@ -5,5 +5,4 @@ export { AppNavbar } from "./AppNavbar";
 export { MobileNavigation } from "./MobileNavigation";
 export { StaffShell } from "./StaffShell";
 export { PublicLayout } from "./PublicLayout";
-export { SiteFooter } from "./SiteFooter";
 export { publicRoutes, staffRoutes } from "./navRoutes";

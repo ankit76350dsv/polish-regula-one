@@ -1,12 +1,12 @@
 /**
- * Shared footer with the legally required links (privacy, terms, cookies,
- * accessibility) plus the "how reports are handled" and external-reporting pages.
- * Present on every public page so these notices are always one click away — a
- * core GDPR transparency and EU Whistleblower Directive expectation.
+ * PublicFooter — the shared footer for every public page. It holds the legally
+ * required links (privacy, terms, cookies, accessibility) plus the "how reports
+ * are handled" and external-reporting pages, so these notices are always one
+ * click away — a core GDPR transparency and EU Whistleblower Directive expectation.
  */
 import { useTranslation } from "react-i18next";
 
-export function SiteFooter({ navigate }) {
+export function PublicFooter({ navigate }) {
   const { t } = useTranslation();
   const year = new Date().getFullYear();
 
