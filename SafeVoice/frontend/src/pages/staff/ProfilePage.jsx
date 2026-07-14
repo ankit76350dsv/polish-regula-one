@@ -8,6 +8,19 @@ import { fetchMyOrg, selectMyOrg, selectMyOrgStatus } from "../../slices/orgSlic
 import { SAFEVOICE_PREFIX } from "../../utils/permissions";
 import { formatTimestamp } from "../../services/caseNormalizer";
 
+// Friendly product names for the RegulaOne module codes that arrive in /me.moduleIds
+// (the backend TenantModule enum, e.g. "SAFEVOICE"). Shown instead of the raw code so a
+// user sees "SafeVoice", not "SAFEVOICE". Unknown codes fall back to the code itself.
+const MODULE_LABELS = {
+  SAFEVOICE: "SafeVoice",
+  KSEF: "KSeFFlow",
+  WORKPULSE: "WorkPulse",
+  SAFEWORK: "SafeWork",
+  WASTESYNC: "WasteSync",
+  PRIVACYPILOT: "PrivacyPilot",
+};
+const moduleLabel = (code) => MODULE_LABELS[code] || code;
+
 // The signed-in staff member's own account + organisation. Account/role/permissions come
 // from the session (/me, already in Redux); the organisation details are fetched from
 // RegulaOne. Read-only.
@@ -56,7 +69,7 @@ export default function ProfilePage() {
           disabled={orgStatus === "loading"}
           onClick={() => dispatch(fetchMyOrg())}
         >
-          {t("common.retry")}
+          {t("profile.refresh")}
         </AppButton>
       </div>
 
@@ -67,7 +80,7 @@ export default function ProfilePage() {
         </div>
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-slate-800 truncate">{user.name || "—"}</h2>
-          <p className="text-sm text-slate-500 font-mono truncate">{user.email || "—"}</p>
+          <p className="text-sm text-slate-500 truncate">{user.email || "—"}</p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {user.safeVoiceRole && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-cyan-50 text-cyan-700 border-cyan-200 uppercase tracking-wide">
@@ -92,7 +105,7 @@ export default function ProfilePage() {
         <SecureCard title={t("profile.accountTitle")}>
           <div className="divide-y divide-slate-100">
             <Row label={t("profile.fullName")} value={user.name} />
-            <Row label={t("profile.email")} value={user.email} mono />
+            <Row label={t("profile.email")} value={user.email} />
             <Row label={t("profile.safevoiceRole")} value={user.safeVoiceRole ? t(`roles.${user.safeVoiceRole}`, user.safeVoiceRole) : null} />
             <Row label={t("profile.platformRole")} value={platformRole} />
             <Row label={t("common.status")} value={user.enabled === false ? t("profile.disabled") : t("profile.active")} />
@@ -106,7 +119,7 @@ export default function ProfilePage() {
               <Row label={t("profile.company")} value={org.name} />
               <Row label="NIP" value={org.nip} mono />
               <Row label="REGON" value={org.regon} mono />
-              <Row label={t("profile.email")} value={org.email} mono />
+              <Row label={t("profile.email")} value={org.email} />
               <Row label={t("profile.phone")} value={org.phone} />
               <Row label={t("profile.address")} value={org.address} />
               <Row label={t("profile.city")} value={[org.postalCode, org.city].filter(Boolean).join(" ")} />
@@ -150,7 +163,7 @@ export default function ProfilePage() {
               ) : (
                 modules.map((m) => (
                   <span key={m} className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                    {m}
+                    {moduleLabel(m)}
                   </span>
                 ))
               )}

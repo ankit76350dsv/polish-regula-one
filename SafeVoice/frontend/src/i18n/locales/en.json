@@ -43,7 +43,8 @@
   },
   "profile": {
     "title": "My profile",
-    "subtitle": "Your account, organisation and SafeVoice access. Read-only.",
+    "subtitle": "View your account, organisation, and SafeVoice access.",
+    "refresh": "Refresh",
     "active": "Active",
     "disabled": "Disabled",
     "accountTitle": "Account",

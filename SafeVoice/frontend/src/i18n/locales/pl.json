@@ -43,7 +43,8 @@
   },
   "profile": {
     "title": "Mój profil",
-    "subtitle": "Twoje konto, organizacja i dostęp do SafeVoice. Tylko do odczytu.",
+    "subtitle": "Zobacz swoje konto, organizację i dostęp do SafeVoice.",
+    "refresh": "Odśwież",
     "active": "Aktywny",
     "disabled": "Wyłączony",
     "accountTitle": "Konto",
