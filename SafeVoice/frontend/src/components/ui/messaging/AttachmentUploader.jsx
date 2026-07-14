@@ -7,7 +7,7 @@ import {
   allowedExtensionOf,
   formatSize,
   validateFile,
-} from "../../utils/attachmentPolicy";
+} from "../../../utils/attachmentPolicy";
 
 // Read a File into a base64 string (WITHOUT the "data:...;base64," prefix), so the
 // actual bytes can travel inside the JSON report payload. This is the step that was

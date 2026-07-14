@@ -1,6 +1,6 @@
 import { Globe } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { SUPPORTED_LANGUAGES } from "../../config";
+import { SUPPORTED_LANGUAGES } from "../../../config";
 
 // Lets the user switch between Polish and English. Changing the value re-renders
 // the whole app in the chosen language and updates <html lang> (handled in i18n).

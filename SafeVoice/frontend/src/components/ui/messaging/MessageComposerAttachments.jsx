@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Paperclip, X } from "lucide-react";
-import { ACCEPT_ATTR, MAX_FILES, formatSize, validateFile } from "../../utils/attachmentPolicy";
+import { ACCEPT_ATTR, MAX_FILES, formatSize, validateFile } from "../../../utils/attachmentPolicy";
 
 /**
  * Compact "attach files" control for a message composer (staff case thread + reporter

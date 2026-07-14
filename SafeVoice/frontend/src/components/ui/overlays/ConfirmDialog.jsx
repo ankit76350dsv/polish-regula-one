@@ -6,8 +6,8 @@
  */
 import { useTranslation } from "react-i18next";
 import { AppModal } from "./AppModal";
-import { AppButton } from "./AppButton";
-import { Spinner } from "./Spinner";
+import { AppButton } from "../controls/AppButton";
+import { Spinner } from "../feedback/Spinner";
 
 export function ConfirmDialog({
   isOpen,

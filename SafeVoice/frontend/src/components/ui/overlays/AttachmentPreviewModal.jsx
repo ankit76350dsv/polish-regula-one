@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Download } from "lucide-react";
 import { AppModal } from "./AppModal";
-import { AppButton } from "./AppButton";
-import { Spinner } from "./Spinner";
-import { saveBlob } from "../../utils/download";
+import { AppButton } from "../controls/AppButton";
+import { Spinner } from "../feedback/Spinner";
+import { saveBlob } from "../../../utils/download";
 
 // Map our allowed extensions to a real MIME type. The backend serves attachments as
 // application/octet-stream, which would make the browser download rather than render them.

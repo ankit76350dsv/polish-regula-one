@@ -1,28 +1,14 @@
-// Barrel file for SafeVoice shared UI building blocks.
-// These are small, reusable pieces (buttons, cards, badges, inputs, modal,
-// table, timeline, file uploader, chat bubble) used to build the full pages.
-// Importing from "../ui" keeps page files short and easy to read.
-export { AppButton } from "./AppButton";
-export { SecureCard } from "./SecureCard";
-export { CaseStatusBadge } from "./CaseStatusBadge";
-export { CaseSeverityBadge } from "./CaseSeverityBadge";
-export { SecureTextField } from "./SecureTextField";
-export { AppTable } from "./AppTable";
-export { AppModal } from "./AppModal";
-export { TimelineWidget } from "./TimelineWidget";
-export { AttachmentUploader } from "./AttachmentUploader";
-export { MessageComposerAttachments } from "./MessageComposerAttachments";
-export { MessageAttachmentList } from "./MessageAttachmentList";
-export { AttachmentPreviewModal } from "./AttachmentPreviewModal";
-export { ChatBubble } from "./ChatBubble";
-
-// Newer primitives that complete the production UX (loading/empty/error, toasts,
-// confirmation, pagination, theme + language controls, accessible form fields).
-export { Spinner, PageSpinner } from "./Spinner";
-export { EmptyState, ErrorState } from "./StateViews";
-export { ToastHost } from "./ToastHost";
-export { ConfirmDialog } from "./ConfirmDialog";
-export { Pagination } from "./Pagination";
-export { LanguageSwitcher } from "./LanguageSwitcher";
-export { TextInput, TextArea, SelectField, Checkbox } from "./FormField";
-export { StatusBadge, SeverityBadge } from "./StatusBadges";
+// Aggregate barrel for the SafeVoice shared UI building blocks.
+//
+// The components are grouped into use-case folders (controls, forms, feedback,
+// overlays, data-display, badges, messaging, surfaces). This file re-exports all
+// of them so callers can keep importing from "../ui" as before, while new code can
+// also import from a specific group (e.g. "../ui/forms") when that is clearer.
+export * from "./controls";
+export * from "./forms";
+export * from "./feedback";
+export * from "./overlays";
+export * from "./data-display";
+export * from "./badges";
+export * from "./messaging";
+export * from "./surfaces";

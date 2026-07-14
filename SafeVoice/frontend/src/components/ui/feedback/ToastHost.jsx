@@ -9,7 +9,7 @@ import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CheckCircle2, Info, X, XCircle } from "lucide-react";
-import { removeToast, selectToasts } from "../../slices/uiSlice";
+import { removeToast, selectToasts } from "../../../slices/uiSlice";
 
 const ICONS = { success: CheckCircle2, error: XCircle, info: Info };
 const TONES = {
