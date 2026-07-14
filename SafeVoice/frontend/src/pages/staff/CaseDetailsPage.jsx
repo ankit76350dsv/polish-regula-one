@@ -268,7 +268,6 @@ export default function CaseDetailsPage({ caseId, navigate }) {
                 [t("case.incidentDate"), report.incidentDate],
                 [t("case.department"), report.department],
                 [t("case.disclosureMode"), report.disclosureMode],
-                [t("case.lawfulBasis"), report.lawfulBasis],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <div className="font-semibold text-slate-500">{label}</div>
@@ -280,12 +279,11 @@ export default function CaseDetailsPage({ caseId, navigate }) {
 
           <SecureCard title={t("case.evidence")} subtitle={t("case.evidenceSub")}>
             {report.attachments.length > 0 ? (
-              <AppTable headers={[t("case.evidenceRef"), t("case.evidenceSize"), t("case.evidenceNote"), ""]}>
+              <AppTable headers={[t("case.evidenceRef"), t("case.evidenceSize"), ""]}>
                 {report.attachments.map((file) => (
                   <tr key={file.id} className="border-b border-slate-200">
                     <td className="px-4 py-3 text-xs font-semibold text-slate-800">{file.displayName}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-slate-500">{file.sizeLabel}</td>
-                    <td className="px-4 py-3 text-xs text-emerald-700">{t("case.metadataStripped")}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{file.sizeLabel}</td>
                     <td className="px-4 py-3 text-right">
                       {canExport && file.storageVaultRef && (
                         <button
@@ -419,23 +417,6 @@ export default function CaseDetailsPage({ caseId, navigate }) {
                   <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </SelectField>
-            </div>
-          </SecureCard>
-
-          <SecureCard title={t("case.retention")} subtitle={report.retention.state}>
-            <div className="space-y-3 text-xs text-slate-700">
-              <div className="flex justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
-                <span>{t("case.deleteAfter")}</span>
-                <span className="font-mono">{report.retention.deleteAfter}</span>
-              </div>
-              <div className="flex justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
-                <span>{t("case.irrelevantDue")}</span>
-                <span className="font-mono">{report.retention.irrelevantPersonalDataDeletionDue}</span>
-              </div>
-              <div className="flex justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
-                <span>{t("case.retentionYears")}</span>
-                <span className="font-mono">{t("case.years", { count: report.retention.retentionYears })}</span>
-              </div>
             </div>
           </SecureCard>
 
