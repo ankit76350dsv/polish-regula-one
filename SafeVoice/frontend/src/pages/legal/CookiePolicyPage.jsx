@@ -7,9 +7,10 @@ export default function CookiePolicyPage({ navigate }) {
   const p = (k) => t(`compliance.cookies.${k}`);
 
   // The complete list of storage SafeVoice uses — all strictly necessary.
+  // Purpose, type and retention come from i18n so the table translates too.
   const rows = [
-    { name: "idToken", purpose: p("necessaryBody"), type: "httpOnly cookie", retention: "Session" },
-    { name: "safevoice_lang", purpose: t("nav.language"), type: "localStorage", retention: "1 year" },
+    { name: "idToken", purpose: p("sessionPurpose"), type: p("typeEssential"), retention: p("retentionSession") },
+    { name: "safevoice_lang", purpose: p("langPurpose"), type: p("typeStorage"), retention: p("retentionYear") },
   ];
 
   return (

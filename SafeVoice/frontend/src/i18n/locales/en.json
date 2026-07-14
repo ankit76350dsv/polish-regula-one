@@ -485,7 +485,13 @@
       "tableName": "Name",
       "tablePurpose": "Purpose",
       "tableType": "Type",
-      "tableRetention": "Retention"
+      "tableRetention": "Kept for",
+      "sessionPurpose": "Keeps signed-in staff securely logged in.",
+      "langPurpose": "Remembers your language choice.",
+      "typeEssential": "Essential cookie",
+      "typeStorage": "Browser storage",
+      "retentionSession": "Until you sign out",
+      "retentionYear": "1 year"
     },
     "accessibility": {
       "title": "Accessibility statement",
@@ -510,7 +516,7 @@
       "step1Title": "1. You submit",
       "step1Body": "You send your report through this channel, by phone, or by requesting a meeting. You stay anonymous unless you choose otherwise.",
       "step2Title": "2. Acknowledgement (within 7 days)",
-      "step2Body": "We confirm we received your report within seven days, via your tracking code.",
+      "step2Body": "We confirm we received your report within seven days. You can see this on the tracking page using your access key.",
       "step3Title": "3. Follow-up",
       "step3Body": "An authorised officer reviews the report impartially and may ask follow-up questions through the secure thread.",
       "step4Title": "4. Feedback (within 3 months)",

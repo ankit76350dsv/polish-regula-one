@@ -487,7 +487,13 @@
       "tableName": "Nazwa",
       "tablePurpose": "Cel",
       "tableType": "Typ",
-      "tableRetention": "Retencja"
+      "tableRetention": "Przechowywane przez",
+      "sessionPurpose": "Utrzymuje bezpieczne zalogowanie personelu.",
+      "langPurpose": "Zapamiętuje wybór języka.",
+      "typeEssential": "Niezbędny plik cookie",
+      "typeStorage": "Pamięć przeglądarki",
+      "retentionSession": "Do momentu wylogowania",
+      "retentionYear": "1 rok"
     },
     "accessibility": {
       "title": "Deklaracja dostępności",
@@ -512,7 +518,7 @@
       "step1Title": "1. Wysyłasz zgłoszenie",
       "step1Body": "Przesyłasz zgłoszenie przez ten kanał, telefonicznie lub prosząc o spotkanie. Pozostajesz anonimowy(-a), chyba że zdecydujesz inaczej.",
       "step2Title": "2. Potwierdzenie (w ciągu 7 dni)",
-      "step2Body": "W ciągu siedmiu dni potwierdzamy otrzymanie zgłoszenia za pomocą Twojego kodu do śledzenia.",
+      "step2Body": "W ciągu siedmiu dni potwierdzamy otrzymanie Twojego zgłoszenia. Możesz to zobaczyć na stronie śledzenia, używając swojego klucza dostępu.",
       "step3Title": "3. Działania następcze",
       "step3Body": "Upoważniony urzędnik bezstronnie analizuje zgłoszenie i może zadawać pytania uzupełniające w bezpiecznym wątku.",
       "step4Title": "4. Informacja zwrotna (w ciągu 3 miesięcy)",

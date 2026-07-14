@@ -14,7 +14,7 @@ export default function HowItWorksPage({ navigate }) {
       <ol className="space-y-4 list-none">
         {steps.map((s, i) => (
           <li key={s} className="flex gap-4">
-            <span className="shrink-0 w-7 h-7 rounded-full bg-cyan-600 text-white flex items-center justify-center text-xs font-bold font-mono">
+            <span className="shrink-0 w-7 h-7 rounded-full bg-cyan-600 text-white flex items-center justify-center text-xs font-bold">
               {i + 1}
             </span>
             <div>

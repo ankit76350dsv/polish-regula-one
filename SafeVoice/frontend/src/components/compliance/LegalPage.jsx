@@ -21,13 +21,13 @@ export function LegalPage({ title, lastUpdated = "2026-06-26", navigate, childre
       <header className="border-b border-slate-200 pb-4 mb-6">
         <div className="flex items-center gap-2 text-cyan-600 mb-2">
           <ShieldCheck className="w-5 h-5" aria-hidden="true" />
-          <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
             {t("common.appName")} · RegulaOne
           </span>
         </div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight text-balance">{title}</h1>
         <p className="text-xs text-slate-500 mt-1">
-          {t("compliance.lastUpdated")}: <span className="font-mono">{lastUpdated}</span>
+          {t("compliance.lastUpdated")}: <span className="font-medium text-slate-600">{lastUpdated}</span>
         </p>
       </header>
 
