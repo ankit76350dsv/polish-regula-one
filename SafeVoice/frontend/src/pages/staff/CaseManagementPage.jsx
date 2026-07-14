@@ -138,7 +138,7 @@ export default function CaseManagementPage({ navigate }) {
                       </span>
                     )}
                   </div>
-                  <div className="text-[10px] text-slate-500 font-mono">{report.disclosureMode}</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">{report.disclosureMode}</div>
                 </td>
                 <td className="px-4 py-3 text-xs text-slate-700 break-words">{t(`categories.${report.category}`, report.category)}</td>
                 <td className="px-4 py-3 text-xs"><StatusBadge status={report.status} /></td>
@@ -148,7 +148,7 @@ export default function CaseManagementPage({ navigate }) {
                     ? t("cases.unassigned")
                     : userNameById[report.assignedInvestigator] || report.assignedInvestigator}
                 </td>
-                <td className="px-4 py-3 text-xs font-mono text-slate-500 whitespace-nowrap">{report.feedbackDue}</td>
+                <td className="px-4 py-3 text-xs text-slate-600 whitespace-nowrap">{report.feedbackDue}</td>
                 <td className="px-4 py-3 text-right">
                   <AppButton type="button" size="sm" variant="outline" onClick={() => navigate(`/cases/${report.id}`)}>
                     {t("common.open")}
