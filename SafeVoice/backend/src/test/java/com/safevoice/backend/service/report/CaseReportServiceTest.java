@@ -384,6 +384,7 @@ class CaseReportServiceTest {
 
     @Test
     void updateStatus_noOpWhenUnchanged() {
+        @SuppressWarnings("unused")
         CaseReport r = existingCase(); // already RECEIVED
         service.updateStatus("c1", CaseStatus.RECEIVED, null, "acme", "SAFEVOICE_ADMIN", "u1");
         verify(caseReportRepository, never()).save(any());
