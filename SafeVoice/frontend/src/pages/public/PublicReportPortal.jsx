@@ -151,12 +151,12 @@ export default function PublicReportPortal({ tenantId, orgName, navigate }) {
           {/* Progress indicator — reflects the current step. */}
           <ol className="flex flex-wrap items-center gap-3 mb-6 bg-slate-100 p-3 rounded-lg border border-slate-200 list-none">
             <li className="flex items-center gap-2.5">
-              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold ${circleCls(1)}`}>1</span>
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${circleCls(1)}`}>1</span>
               <span className={`text-xs font-semibold ${labelCls(1)}`}>{t("report.stepFacts")}</span>
             </li>
             <ChevronRight className="w-4 h-4 text-slate-400" aria-hidden="true" />
             <li className="flex items-center gap-2.5">
-              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold ${circleCls(2)}`}>2</span>
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${circleCls(2)}`}>2</span>
               <span className={`text-xs font-semibold ${labelCls(2)}`}>{t("report.stepProtection")}</span>
             </li>
           </ol>
@@ -231,7 +231,7 @@ export default function PublicReportPortal({ tenantId, orgName, navigate }) {
                 />
 
                 <div>
-                  <span className="text-xs font-bold text-slate-700 uppercase font-mono block mb-2">
+                  <span className="text-xs font-semibold text-slate-700 block mb-2">
                     {t("report.evidence")}
                   </span>
                   <AttachmentUploader files={files} onFilesChanged={setFiles} />
@@ -251,7 +251,7 @@ export default function PublicReportPortal({ tenantId, orgName, navigate }) {
               <>
                 {/* Reporting channel — written + oral, plus the right to a meeting (Art. 9(2)). */}
                 <fieldset className="border border-slate-200 rounded-lg p-4">
-                  <legend className="text-xs font-bold text-slate-700 uppercase font-mono px-1">
+                  <legend className="text-xs font-semibold text-slate-700 px-1">
                     {t("report.channelTitle")}
                   </legend>
                   <div className="space-y-2 mt-2">
@@ -294,7 +294,7 @@ export default function PublicReportPortal({ tenantId, orgName, navigate }) {
 
                 {/* Consent / acknowledgements (required before submit). */}
                 <fieldset className="space-y-3">
-                  <legend className="text-xs font-bold text-slate-700 uppercase font-mono mb-1">
+                  <legend className="text-xs font-semibold text-slate-700 mb-1">
                     {t("report.consentTitle")}
                   </legend>
                   <Checkbox
@@ -355,7 +355,7 @@ export default function PublicReportPortal({ tenantId, orgName, navigate }) {
             {["analytics", "marketing", "device", "browser", "geo", "ip"].map((k) => (
               <div key={k} className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
                 <span>{t(`report.minimization.${k}`)}</span>
-                <span className="text-emerald-700 font-mono text-[10px] uppercase">{t("report.notCollected")}</span>
+                <span className="text-emerald-700 font-semibold text-[10px] uppercase tracking-wide">{t("report.notCollected")}</span>
               </div>
             ))}
           </div>
