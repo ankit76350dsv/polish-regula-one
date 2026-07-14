@@ -290,7 +290,7 @@ export default function TrackCasePage() {
                           <div className="flex items-center justify-between gap-5 mb-1.5 border-b border-white/20 pb-1">
                             <span className="font-semibold flex items-center gap-1.5">
                               {unread && <span className="inline-block w-2 h-2 rounded-full bg-blue-500 shrink-0" aria-label={t("case.unread")} />}
-                              {isReporter ? t("track.you") : message.sender}
+                              {isReporter ? t("track.you") : t("track.caseHandler")}
                             </span>
                             <span className="text-[9px] font-mono opacity-80">{message.timestamp}</span>
                           </div>

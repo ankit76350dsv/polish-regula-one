@@ -256,6 +256,7 @@
     "messagePlaceholder": "Napisz wiadomość do osoby obsługującej sprawę…",
     "sendError": "Nie udało się wysłać wiadomości. Spróbuj ponownie.",
     "you": "Ty",
+    "caseHandler": "Osoba obsługująca sprawę",
     "closedGraceInfo": "Ta sprawa została zamknięta. Nadal możesz odpowiedzieć do {{time}}.",
     "closedEnded": "Sprawa jest zamknięta, a okno na odpowiedź minęło. Nadal możesz czytać rozmowę."
   },

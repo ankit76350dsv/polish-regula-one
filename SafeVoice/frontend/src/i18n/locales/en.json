@@ -254,6 +254,7 @@
     "messagePlaceholder": "Write a message to the case handler…",
     "sendError": "Your message could not be sent. Please try again.",
     "you": "You",
+    "caseHandler": "Case handler",
     "closedGraceInfo": "This case has been closed. You can still reply until {{time}}.",
     "closedEnded": "This case is closed and the reply window has ended. You can still read the conversation."
   },
