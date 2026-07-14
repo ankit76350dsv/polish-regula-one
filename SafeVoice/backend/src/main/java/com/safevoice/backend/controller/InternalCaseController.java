@@ -256,6 +256,30 @@ public class InternalCaseController {
     }
 
     /**
+     * Mark case messages as read BY STAFF (persists readByStaff). Pass a messageId to mark one
+     * message, or omit it to mark the whole thread (e.g. after replying). Clears the unread
+     * highlight/badge durably, not just in the browser.
+     */
+    // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_COMPLIANCE_OFFICER, SAFEVOICE_INVESTIGATOR,
+    //                       SAFEVOICE_HR_MANAGER, SAFEVOICE_AUDITOR
+    // Why: recording that staff have SEEN a message is part of viewing the case, which every
+    // SafeVoice role may do; it changes no case content.
+    @PatchMapping("/{caseId}/messages/read")
+    public ResponseEntity<Void> markMessagesRead(
+            @PathVariable String caseId,
+            @RequestParam(value = "messageId", required = false) String messageId,
+            AuthenticatedUser caller) {
+        caller.requireAnyPermission(
+                SafeVoicePermission.SAFEVOICE_ADMIN,
+                SafeVoicePermission.SAFEVOICE_COMPLIANCE_OFFICER,
+                SafeVoicePermission.SAFEVOICE_INVESTIGATOR,
+                SafeVoicePermission.SAFEVOICE_HR_MANAGER,
+                SafeVoicePermission.SAFEVOICE_AUDITOR);
+        caseMessageService.markRead(caseId, caller.tenantId(), messageId, true);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Download attachment file securely from vault.
      */
     // Allowed permissions: SAFEVOICE_ADMIN, SAFEVOICE_AUDITOR

@@ -200,6 +200,44 @@ public class CaseMessageService {
     }
 
     /**
+     * Mark messages read for ONE side of the thread and PERSIST it, so read/unread survives a
+     * refresh and stays consistent across devices.
+     *  - staffSide=true  → sets readByStaff  (a staff member opened the reporter's message)
+     *  - staffSide=false → sets readByReporter (the reporter opened a staff message)
+     * If messageId is given, only that one message is marked; otherwise the WHOLE thread is.
+     * Tenant + case scoped, and idempotent (already-read messages are left as-is).
+     */
+    public void markRead(String caseId, String tenantId, String messageId, boolean staffSide) {
+        // Tenant + case guard (throws if the case is not this tenant's).
+        caseReportService.getById(caseId, tenantId);
+
+        List<CaseMessage> messages;
+        if (messageId != null && !messageId.isBlank()) {
+            CaseMessage m = caseMessageRepository.findById(messageId).orElse(null);
+            if (m == null || !tenantId.equals(m.getTenantId()) || !caseId.equals(m.getCaseId())) {
+                throw new IllegalArgumentException("Message does not belong to this case");
+            }
+            messages = List.of(m);
+        } else {
+            messages = caseMessageRepository.findAllByTenantIdAndCaseIdOrderByTimestampAsc(tenantId, caseId);
+        }
+
+        List<CaseMessage> changed = new ArrayList<>();
+        for (CaseMessage m : messages) {
+            if (staffSide && !m.isReadByStaff()) {
+                m.setReadByStaff(true);
+                changed.add(m);
+            } else if (!staffSide && !m.isReadByReporter()) {
+                m.setReadByReporter(true);
+                changed.add(m);
+            }
+        }
+        if (!changed.isEmpty()) {
+            caseMessageRepository.saveAll(changed);
+        }
+    }
+
+    /**
      * Retrieves all chat messages for a case report.
      * Enforces tenant isolation.
      */

@@ -5,6 +5,7 @@ import com.safevoice.backend.dto.CaseSubmissionRequest;
 import com.safevoice.backend.dto.CaseSubmissionResponse;
 import com.safevoice.backend.dto.CaseTrackingResponse;
 import com.safevoice.backend.dto.ReporterAttachmentRequest;
+import com.safevoice.backend.dto.ReporterReadRequest;
 import com.safevoice.backend.model.document.CaseMessage;
 import com.safevoice.backend.model.document.CaseReport;
 import com.safevoice.backend.model.embedded.EncryptedPayload;
@@ -135,6 +136,21 @@ public class PublicCaseController {
                 attachments
         );
         return ResponseEntity.ok(message);
+    }
+
+    /**
+     * Mark message(s) in the reporter's own case as read BY THE REPORTER (persists
+     * readByReporter). Pass a messageId to mark one, or omit it to mark the whole thread (e.g.
+     * after the reporter replies). Ownership is proven by the access key.
+     */
+    // Allowed permissions: NONE — public, anonymous reporter endpoint (access key is the credential).
+    @PostMapping("/{caseId}/messages/read")
+    public ResponseEntity<Void> markMessagesRead(
+            @PathVariable String caseId,
+            @Valid @RequestBody ReporterReadRequest request) {
+        CaseReport report = caseReportService.resolveOwnedCase(request.getAccessKey(), caseId);
+        caseMessageService.markRead(report.getId(), report.getTenantId(), request.getMessageId(), false);
+        return ResponseEntity.noContent().build();
     }
 
     /**
