@@ -31,7 +31,6 @@ import { PublicLayout, StaffShell } from "./components/layout";
 import { ToastHost } from "./components/ui";
 import { CookieBanner } from "./components/compliance/CookieBanner";
 import { selectCurrentUser } from "./slices/authSlice";
-import { selectTheme } from "./slices/uiSlice";
 import { can, requiredCapabilityForPath } from "./utils/permissions";
 import {
   getStandaloneReportTenant,
@@ -102,16 +101,8 @@ const TITLE_KEYS = {
 export default function App() {
   const dispatch = useDispatch();
   const { t } = useTranslation();
-  const theme = useSelector(selectTheme);
   const user = useSelector(selectCurrentUser);
   const tenantId = user?.tenantId ?? "";
-
-  // Apply the chosen theme to <html> (drives all dark: styles + the dark remap).
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === "dark") root.classList.add("dark");
-    else root.classList.remove("dark");
-  }, [theme]);
 
   // ── Router state ──────────────────────────────────────────────────────────
   const standaloneReportTenant = getStandaloneReportTenant(window.location.pathname);

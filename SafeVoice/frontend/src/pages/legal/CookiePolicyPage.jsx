@@ -10,7 +10,6 @@ export default function CookiePolicyPage({ navigate }) {
   const rows = [
     { name: "idToken", purpose: p("necessaryBody"), type: "httpOnly cookie", retention: "Session" },
     { name: "safevoice_lang", purpose: t("nav.language"), type: "localStorage", retention: "1 year" },
-    { name: "safevoice_theme", purpose: t("nav.theme"), type: "localStorage", retention: "1 year" },
   ];
 
   return (

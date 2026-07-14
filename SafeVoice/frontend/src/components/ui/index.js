@@ -23,7 +23,6 @@ export { EmptyState, ErrorState } from "./StateViews";
 export { ToastHost } from "./ToastHost";
 export { ConfirmDialog } from "./ConfirmDialog";
 export { Pagination } from "./Pagination";
-export { ThemeToggle } from "./ThemeToggle";
 export { LanguageSwitcher } from "./LanguageSwitcher";
 export { TextInput, TextArea, SelectField, Checkbox } from "./FormField";
 export { StatusBadge, SeverityBadge } from "./StatusBadges";

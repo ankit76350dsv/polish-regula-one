@@ -8,7 +8,7 @@
  */
 import { Lock, Shield } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { LanguageSwitcher, ThemeToggle } from "../ui";
+import { LanguageSwitcher } from "../ui";
 import { SiteFooter } from "./SiteFooter";
 
 export function PublicLayout({ navigate, currentPath, children }) {
@@ -70,7 +70,6 @@ export function PublicLayout({ navigate, currentPath, children }) {
               })}
             </nav>
             <LanguageSwitcher />
-            <ThemeToggle />
           </div>
         </div>
       </header>

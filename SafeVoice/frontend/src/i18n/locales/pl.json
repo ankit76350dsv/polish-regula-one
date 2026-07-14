@@ -78,9 +78,6 @@
     "authorizedStaff": "Upoważniony personel",
     "publicPages": "Strony publiczne",
     "language": "Język",
-    "theme": "Motyw",
-    "lightMode": "Tryb jasny",
-    "darkMode": "Tryb ciemny",
     "intakeActive": "Przyjmowanie zgłoszeń aktywne",
     "collapse": "Zwiń panel boczny",
     "expand": "Rozwiń panel boczny",
@@ -522,7 +519,7 @@
       "title": "Polityka plików cookie",
       "intro": "SafeVoice używa minimum pamięci niezbędnej do działania. Nie używamy plików cookie do analityki, reklamy ani śledzenia.",
       "necessaryTitle": "Ściśle niezbędne pliki cookie",
-      "necessaryBody": "Bezpieczne ciasteczko sesji (httpOnly) utrzymuje zalogowanie personelu. Nie może być odczytane przez skrypty i nigdy nie służy do śledzenia. Niewielki wpis lokalny zapamiętuje wybór języka i motywu.",
+      "necessaryBody": "Bezpieczne ciasteczko sesji (httpOnly) utrzymuje zalogowanie personelu. Nie może być odczytane przez skrypty i nigdy nie służy do śledzenia. Niewielki wpis lokalny zapamiętuje wybór języka.",
       "consentTitle": "Zgoda",
       "consentBody": "Ponieważ używamy wyłącznie ściśle niezbędnej pamięci, zgoda nie jest wymagana zgodnie z dyrektywą o e-prywatności. Poprosimy o zgodę przed wprowadzeniem jakichkolwiek plików cookie innych niż niezbędne.",
       "tableName": "Nazwa",
@@ -577,7 +574,7 @@
     }
   },
   "cookieBanner": {
-    "message": "SafeVoice używa wyłącznie ściśle niezbędnej pamięci, aby utrzymać zalogowanie oraz zapamiętać język i motyw. Nie stosujemy analityki ani śledzenia.",
+    "message": "SafeVoice używa wyłącznie ściśle niezbędnej pamięci, aby utrzymać zalogowanie oraz zapamiętać język. Nie stosujemy analityki ani śledzenia.",
     "accept": "Rozumiem",
     "learnMore": "Polityka cookie"
   },

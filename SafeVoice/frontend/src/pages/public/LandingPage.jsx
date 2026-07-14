@@ -14,7 +14,7 @@ import {
   ShieldCheck,
   UserPlus,
 } from "lucide-react";
-import { LanguageSwitcher, ThemeToggle } from "../../components/ui";
+import { LanguageSwitcher } from "../../components/ui";
 import { SiteFooter } from "../../components/layout";
 import {
   CENTRAL_SIGNUP_URL,
@@ -47,7 +47,7 @@ function LogoMark() {
       </div>
       <div>
         <div className="flex items-baseline gap-2">
-          <p className="text-base font-black uppercase tracking-tight text-slate-900 dark:text-white">
+          <p className="text-base font-black uppercase tracking-tight text-slate-900">
             {t("common.appName")}
           </p>
           <span className="rounded bg-cyan-50 px-1.5 py-0.5 font-mono text-[11px] font-bold leading-none text-cyan-700">
@@ -312,7 +312,6 @@ export default function LandingPage({ navigate }) {
           <div className="flex items-center gap-2 md:gap-3">
             <div className="hidden sm:flex items-center gap-2">
               <LanguageSwitcher />
-              <ThemeToggle />
             </div>
             <HeaderActions status={status} onLogin={handleLogin} onAccess={handleAccess} />
           </div>

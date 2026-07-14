@@ -19,6 +19,5 @@ export const DEFAULT_LANGUAGE = "pl";
 // localStorage keys (only non-sensitive UI preferences are ever stored here).
 export const STORAGE_KEYS = {
   language: "safevoice_lang",
-  theme: "safevoice_theme",
   cookieConsent: "safevoice_cookie_consent",
 };

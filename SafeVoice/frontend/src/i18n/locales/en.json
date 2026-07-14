@@ -78,9 +78,6 @@
     "authorizedStaff": "Authorized staff",
     "publicPages": "Public pages",
     "language": "Language",
-    "theme": "Theme",
-    "lightMode": "Light mode",
-    "darkMode": "Dark mode",
     "intakeActive": "Intake active",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
@@ -520,7 +517,7 @@
       "title": "Cookie policy",
       "intro": "SafeVoice uses the minimum storage required to function. We do not use analytics, advertising, or tracking cookies.",
       "necessaryTitle": "Strictly necessary cookies",
-      "necessaryBody": "A secure session cookie (httpOnly) keeps staff signed in. It cannot be read by scripts and is never used for tracking. A small local entry remembers your language and theme choices.",
+      "necessaryBody": "A secure session cookie (httpOnly) keeps staff signed in. It cannot be read by scripts and is never used for tracking. A small local entry remembers your language choice.",
       "consentTitle": "Consent",
       "consentBody": "Because we only use strictly necessary storage, no consent is required under the ePrivacy Directive. We will ask for consent before introducing any non-essential cookies.",
       "tableName": "Name",
@@ -575,7 +572,7 @@
     }
   },
   "cookieBanner": {
-    "message": "SafeVoice uses only strictly necessary storage to keep you signed in and remember your language and theme. We use no analytics or tracking.",
+    "message": "SafeVoice uses only strictly necessary storage to keep you signed in and remember your language. We use no analytics or tracking.",
     "accept": "Got it",
     "learnMore": "Cookie policy"
   },

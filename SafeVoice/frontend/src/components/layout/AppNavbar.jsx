@@ -4,7 +4,7 @@ import { LogOut, Menu, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { NavItem } from "./NavItem";
 import { publicRoutes } from "./navRoutes";
-import { LanguageSwitcher, ThemeToggle } from "../ui";
+import { LanguageSwitcher } from "../ui";
 
 export function AppNavbar({ currentPath, navigate, mobileOpen, setMobileOpen, user, onLogout, tenantId }) {
   const { t } = useTranslation();
@@ -45,7 +45,6 @@ export function AppNavbar({ currentPath, navigate, mobileOpen, setMobileOpen, us
         </nav>
 
         <LanguageSwitcher />
-        <ThemeToggle />
 
         {user && (
           <div className="hidden md:flex items-center gap-2.5 border-l border-slate-200 pl-4">
