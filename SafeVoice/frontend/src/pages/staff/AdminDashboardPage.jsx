@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
-import { AlertOctagon, Clock, FileText, Inbox, ShieldCheck } from "lucide-react";
+import { AlertOctagon, Clock, FileText, Inbox } from "lucide-react";
 import { AppButton, EmptyState, ErrorState, PageSpinner, SecureCard, SeverityBadge, StatusBadge } from "../../components/ui";
 import {
   fetchAttention,
@@ -14,11 +14,8 @@ import {
 export default function AdminDashboardPage({ navigate }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
-  // Headline numbers come from the dedicated dashboard stats API (accurate across ALL
-  // of the tenant's data, not just the cases currently loaded into the list).
   const stats = useSelector(selectDashboardStats);
-  // The priority queue is the "cases needing attention" list (unassigned cases) — its
-  // own API so the dashboard never has to pull or filter the whole case list itself.
+  // The list of cases waiting to be picked up (unassigned) — the handler's to-do list.
   const attention = useSelector(selectAttention);
   const attentionStatus = useSelector(selectAttentionStatus);
 
@@ -30,15 +27,15 @@ export default function AdminDashboardPage({ navigate }) {
   if (attentionStatus === "loading" && attention.length === 0) return <PageSpinner label={t("common.loading")} />;
   if (attentionStatus === "failed") return <ErrorState message={t("cases.loadError")} onRetry={() => dispatch(fetchAttention())} />;
 
-  // Until the stats call returns, show an em dash rather than a misleading 0.
+  // Until the numbers load, show an em dash rather than a misleading 0.
   const stat = (value, suffix = "") => (stats ? `${value}${suffix}` : "—");
+  // Three at-a-glance numbers a handler acts on: how many cases are open, how many have a
+  // reply they have not read, and how many are still being answered on time.
   const cards = [
     { label: t("dashboard.openReports"), value: stat(stats?.openReports), icon: AlertOctagon, tone: "text-cyan-700 bg-cyan-50 border-cyan-200" },
     { label: t("dashboard.unreadReplies"), value: stat(stats?.unreadReplies), icon: Inbox, tone: "text-emerald-700 bg-emerald-50 border-emerald-200" },
     { label: t("dashboard.slaMonitored"), value: stat(stats?.slaCompliancePercent, "%"), icon: Clock, tone: "text-amber-700 bg-amber-50 border-amber-200" },
-    { label: t("dashboard.auditSealed"), value: stat(stats?.auditEntries), icon: ShieldCheck, tone: "text-violet-700 bg-violet-50 border-violet-200" },
   ];
-  const posture = ["intake", "telemetry", "evidence", "retention", "audit"];
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto leading-relaxed">
@@ -52,7 +49,7 @@ export default function AdminDashboardPage({ navigate }) {
         </AppButton>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
@@ -67,46 +64,33 @@ export default function AdminDashboardPage({ navigate }) {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        <SecureCard title={t("dashboard.priorityQueue")} subtitle={t("dashboard.priorityQueueSub")} className="lg:col-span-2">
-          {attention.length === 0 ? (
-            <EmptyState title={t("dashboard.emptyQueue")} />
-          ) : (
-            <div className="space-y-3">
-              {attention.map((report) => (
-                <button
-                  key={report.id}
-                  type="button"
-                  onClick={() => navigate(`/cases/${report.id}`)}
-                  className="w-full text-left rounded-lg border border-slate-200 bg-slate-50 hover:bg-white p-4 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-bold text-slate-900">{report.caseReference || report.id}</div>
-                      <div className="text-xs text-slate-500 mt-1">{t(`categories.${report.category}`, report.category)}</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <StatusBadge status={report.status} />
-                      <SeverityBadge severity={report.severity} />
-                    </div>
+      <SecureCard title={t("dashboard.priorityQueue")} subtitle={t("dashboard.priorityQueueSub")}>
+        {attention.length === 0 ? (
+          <EmptyState title={t("dashboard.emptyQueue")} />
+        ) : (
+          <div className="space-y-3">
+            {attention.map((report) => (
+              <button
+                key={report.id}
+                type="button"
+                onClick={() => navigate(`/cases/${report.id}`)}
+                className="w-full text-left rounded-lg border border-slate-200 bg-slate-50 hover:bg-white p-4 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              >
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">{report.caseReference || report.id}</div>
+                    <div className="text-xs text-slate-500 mt-1">{t(`categories.${report.category}`, report.category)}</div>
                   </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </SecureCard>
-
-        <SecureCard title={t("dashboard.postureTitle")} subtitle={t("dashboard.postureSub")}>
-          <div className="space-y-3 text-xs text-slate-700">
-            {posture.map((k) => (
-              <div key={k} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <span>{t(`dashboard.posture.${k}`)}</span>
-                <span className="font-semibold text-emerald-700">{t(`dashboard.posture.${k}Value`)}</span>
-              </div>
+                  <div className="flex flex-wrap gap-2">
+                    <StatusBadge status={report.status} />
+                    <SeverityBadge severity={report.severity} />
+                  </div>
+                </div>
+              </button>
             ))}
           </div>
-        </SecureCard>
-      </div>
+        )}
+      </SecureCard>
     </div>
   );
 }
