@@ -13,14 +13,14 @@ export default function InvalidTenantPage({ navigate }) {
   const { t } = useTranslation();
 
   return (
-    <div className="max-w-xl mx-auto py-16">
+    <div className="max-w-xl mx-auto py-12 md:py-16">
       <SecureCard title={t("access.invalidTenantTitle")}>
         <div className="space-y-4 text-sm text-slate-700">
-          <div className="flex items-center gap-3 text-amber-600">
-            <ShieldAlert className="w-6 h-6" aria-hidden="true" />
+          {/* Amber alert: explains why the form is not shown, with the icon beside the text. */}
+          <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3.5 text-amber-800">
+            <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
+            <p>{t("access.invalidTenantBody")}</p>
           </div>
-
-          <p>{t("access.invalidTenantBody")}</p>
 
           {/* What a valid intake link looks like, so it is obvious what is missing. */}
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
@@ -29,7 +29,7 @@ export default function InvalidTenantPage({ navigate }) {
               {t("access.invalidTenantExampleLabel")}
             </p>
             <p className="mt-1 break-all font-mono text-xs text-slate-700">
-              /company/<span className="text-cyan-700">{"{your-organisation-id}"}</span>/report
+              /company/<span className="text-cyan-700">{"{your-organisation-id}"}</span>/report?org=<span className="text-cyan-700">{"{your-organisation-name}"}</span>
             </p>
           </div>
 
