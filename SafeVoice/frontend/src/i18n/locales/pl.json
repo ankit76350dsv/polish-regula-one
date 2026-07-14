@@ -92,7 +92,8 @@
     "accessibility": "Deklaracja dostępności",
     "howItWorks": "Jak obsługujemy zgłoszenia",
     "externalReporting": "Zgłoszenia zewnętrzne",
-    "controllerLine": "Administrator danych: DSV Corporation Pty Ltd · przedstawiciel w UE w informacji o prywatności."
+    "legalLinks": "Informacje prawne i zgodność",
+    "controllerLine": "Administrator danych: DSV Corporation Pty Ltd. Dane naszego przedstawiciela w UE znajdują się w informacji o prywatności."
   },
   "auth": {
     "verifying": "Weryfikacja sesji…",

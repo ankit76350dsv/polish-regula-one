@@ -22,7 +22,7 @@ export function PublicFooter({ navigate }) {
   return (
     <footer className="border-t border-slate-200 bg-white mt-auto">
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 space-y-3">
-        <nav className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold" aria-label={t("footer.privacy")}>
+        <nav className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold" aria-label={t("footer.legalLinks")}>
           {links.map(([path, label]) => (
             <a
               key={path}

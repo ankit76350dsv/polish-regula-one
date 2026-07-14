@@ -92,7 +92,8 @@
     "accessibility": "Accessibility statement",
     "howItWorks": "How reports are handled",
     "externalReporting": "External reporting",
-    "controllerLine": "Data controller: DSV Corporation Pty Ltd · EU representative on the privacy notice."
+    "legalLinks": "Legal and compliance",
+    "controllerLine": "Data controller: DSV Corporation Pty Ltd. Our EU representative's details are in the privacy notice."
   },
   "auth": {
     "verifying": "Verifying your session…",
