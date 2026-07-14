@@ -28,7 +28,7 @@ import {
   updateReport,
   caseStatusUpdated,
 } from "../../slices/reportsSlice";
-import { fetchMessages, messageReceived, selectMessagesFor, selectSending, selectThread, sendMessage, markMessageRead, markThreadRead } from "../../slices/messagesSlice";
+import { fetchMessages, messageReceived, selectMessagesFor, selectSending, selectThread, sendMessage, markMessageReadPersist, markThreadReadPersist } from "../../slices/messagesSlice";
 import { fetchUsers, selectUsers } from "../../slices/usersSlice";
 import { addToast, setActiveCase, clearActiveCase } from "../../slices/uiSlice";
 import { selectCurrentUser } from "../../slices/authSlice";
@@ -153,7 +153,7 @@ export default function CaseDetailsPage({ caseId, navigate }) {
         // reporter in the same step. Not on close (staff can't message) and not on reopen.
         if (showReporterNote && note) {
           await dispatch(sendMessage({ caseId: report.id, text: note, files: [] })).unwrap();
-          dispatch(markThreadRead({ caseId: report.id }));
+          dispatch(markThreadReadPersist({ caseId: report.id }));
         }
         dispatch(addToast({ type: "success", message: t(pending.toastKey) }));
       } else if (pending.action === "export") {
@@ -180,7 +180,7 @@ export default function CaseDetailsPage({ caseId, navigate }) {
       setDraft("");
       setFiles([]);
       // Replying clears the whole thread's unread highlights (staff has now seen it).
-      dispatch(markThreadRead({ caseId: report.id }));
+      dispatch(markThreadReadPersist({ caseId: report.id }));
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
       // Refresh the shared case list so this case is at the top (latest activity) when
       // the user returns to the inbox or register.
@@ -332,8 +332,8 @@ export default function CaseDetailsPage({ caseId, navigate }) {
                           role={unread ? "button" : undefined}
                           tabIndex={unread ? 0 : undefined}
                           title={unread ? t("case.unreadHint") : undefined}
-                          onClick={unread ? () => dispatch(markMessageRead({ caseId, messageId: message.id })) : undefined}
-                          onKeyDown={unread ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dispatch(markMessageRead({ caseId, messageId: message.id })); } } : undefined}
+                          onClick={unread ? () => dispatch(markMessageReadPersist({ caseId, messageId: message.id })) : undefined}
+                          onKeyDown={unread ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dispatch(markMessageReadPersist({ caseId, messageId: message.id })); } } : undefined}
                           className={`max-w-[82%] rounded-lg p-3 text-xs shadow-sm border ${
                             unread
                               ? "bg-blue-50 text-slate-800 border-blue-300 ring-1 ring-blue-200 cursor-pointer"

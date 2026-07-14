@@ -54,6 +54,24 @@ export const sendTrackedMessage = createAsyncThunk(
     reportService.postPublicMessage(caseId, { text, files, accessKey, tenantId }),
 );
 
+// Reporter marks ONE staff message read — optimistic (flip state now) + persist to the backend.
+export const trackedMessageReadPersist = createAsyncThunk(
+  "reports/trackReadOne",
+  async ({ caseId, messageId, accessKey }, { dispatch }) => {
+    dispatch(trackedMessageRead({ messageId }));
+    await reportService.markPublicRead({ caseId, accessKey, messageId });
+  },
+);
+
+// Reporter marks the WHOLE thread read — optimistic + persist (used on reply).
+export const trackedThreadReadPersist = createAsyncThunk(
+  "reports/trackReadAll",
+  async ({ caseId, accessKey }, { dispatch }) => {
+    dispatch(trackedThreadRead());
+    await reportService.markPublicRead({ caseId, accessKey });
+  },
+);
+
 // ── Slice ───────────────────────────────────────────────────────────────────
 const initialState = {
   list: [],

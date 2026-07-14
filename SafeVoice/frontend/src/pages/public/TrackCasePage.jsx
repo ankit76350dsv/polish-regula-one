@@ -18,8 +18,8 @@ import {
   selectTrackStatus,
   sendTrackedMessage,
   trackedMessageReceived,
-  trackedMessageRead,
-  trackedThreadRead,
+  trackedMessageReadPersist,
+  trackedThreadReadPersist,
   caseStatusUpdated,
   trackReport,
 } from "../../slices/reportsSlice";
@@ -112,7 +112,7 @@ export default function TrackCasePage() {
       setDraft("");
       setFiles([]);
       // Replying clears the highlight on every staff message (the reporter has now seen them).
-      dispatch(trackedThreadRead());
+      dispatch(trackedThreadReadPersist({ caseId: tracked.report.id, accessKey: accessKey.trim() }));
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
     } catch {
       dispatch(addToast({ type: "error", message: t("track.sendError") }));
@@ -277,8 +277,8 @@ export default function TrackCasePage() {
                           role={unread ? "button" : undefined}
                           tabIndex={unread ? 0 : undefined}
                           title={unread ? t("case.unreadHint") : undefined}
-                          onClick={unread ? () => dispatch(trackedMessageRead({ messageId: message.id })) : undefined}
-                          onKeyDown={unread ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dispatch(trackedMessageRead({ messageId: message.id })); } } : undefined}
+                          onClick={unread ? () => dispatch(trackedMessageReadPersist({ caseId: report.id, messageId: message.id, accessKey: accessKey.trim() })) : undefined}
+                          onKeyDown={unread ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dispatch(trackedMessageReadPersist({ caseId: report.id, messageId: message.id, accessKey: accessKey.trim() })); } } : undefined}
                           className={`max-w-[82%] rounded-lg p-3.5 text-xs shadow-sm border ${
                             unread
                               ? "bg-blue-50 text-slate-800 border-blue-300 ring-1 ring-blue-200 cursor-pointer"

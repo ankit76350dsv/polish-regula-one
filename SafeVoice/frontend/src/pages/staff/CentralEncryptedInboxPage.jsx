@@ -21,8 +21,8 @@ import {
   selectSelectedThreadId,
   selectSending,
   sendMessage,
-  markMessageRead,
-  markThreadRead,
+  markMessageReadPersist,
+  markThreadReadPersist,
 } from "../../slices/messagesSlice";
 import { addToast, setActiveCase, clearActiveCase } from "../../slices/uiSlice";
 import { selectCurrentUser } from "../../slices/authSlice";
@@ -129,7 +129,7 @@ export default function CentralEncryptedInboxPage({ navigate }) {
       setDraft("");
       setFiles([]);
       // Replying clears the whole thread's unread highlights (staff has now seen it).
-      dispatch(markThreadRead({ caseId: activeId }));
+      dispatch(markThreadReadPersist({ caseId: activeId }));
       dispatch(addToast({ type: "success", message: t("toast.messageSent") }));
       // Refresh the thread list so this case jumps to the top (it now has the latest
       // activity), matching the WhatsApp-style ordering the backend returns.
@@ -217,8 +217,8 @@ export default function CentralEncryptedInboxPage({ navigate }) {
                           role={unread ? "button" : undefined}
                           tabIndex={unread ? 0 : undefined}
                           title={unread ? t("case.unreadHint") : undefined}
-                          onClick={unread ? () => dispatch(markMessageRead({ caseId: activeId, messageId: message.id })) : undefined}
-                          onKeyDown={unread ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dispatch(markMessageRead({ caseId: activeId, messageId: message.id })); } } : undefined}
+                          onClick={unread ? () => dispatch(markMessageReadPersist({ caseId: activeId, messageId: message.id })) : undefined}
+                          onKeyDown={unread ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dispatch(markMessageReadPersist({ caseId: activeId, messageId: message.id })); } } : undefined}
                           className={`max-w-[min(86%,44rem)] min-w-0 rounded-lg p-3 text-xs shadow-sm border ${
                             unread
                               ? "bg-blue-50 text-slate-800 border-blue-300 ring-1 ring-blue-200 cursor-pointer"

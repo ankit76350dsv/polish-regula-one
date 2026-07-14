@@ -18,6 +18,24 @@ export const sendMessage = createAsyncThunk("messages/send", async ({ caseId, te
   return { caseId, message };
 });
 
+// Mark ONE message read by staff — optimistic (flip state now) + persist to the backend.
+export const markMessageReadPersist = createAsyncThunk(
+  "messages/markReadOne",
+  async ({ caseId, messageId }, { dispatch }) => {
+    dispatch(markMessageRead({ caseId, messageId }));
+    await messageService.markRead(caseId, messageId);
+  },
+);
+
+// Mark the WHOLE thread read by staff — optimistic + persist (used on open/reply).
+export const markThreadReadPersist = createAsyncThunk(
+  "messages/markReadAll",
+  async ({ caseId }, { dispatch }) => {
+    dispatch(markThreadRead({ caseId }));
+    await messageService.markRead(caseId);
+  },
+);
+
 const messagesSlice = createSlice({
   name: "messages",
   initialState: {

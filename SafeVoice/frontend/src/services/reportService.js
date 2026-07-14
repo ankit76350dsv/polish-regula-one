@@ -107,6 +107,16 @@ export const reportService = {
     });
   },
 
+  // Persist "read by reporter" for a staff message (or the whole thread when messageId is
+  // omitted). Ownership is proven by the access key. State-only in the UI is not enough — this
+  // makes the read status durable across refresh/devices.
+  markPublicRead({ caseId, accessKey, messageId }) {
+    return publicApi.post(
+      `/api/safevoice/reports/${encodeURIComponent(caseId)}/messages/read`,
+      { accessKey, messageId },
+    );
+  },
+
   // The reporter re-downloads a file they submitted WITH the report itself (case-level evidence,
   // not a chat attachment). Same endpoint, no messageId — the server then looks on the report.
   fetchPublicCaseAttachment({ accessKey, attachmentId }) {

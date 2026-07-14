@@ -52,6 +52,15 @@ export const messageService = {
     return { ...normalized, text: plaintextEcho || normalized.text };
   },
 
+  // Persist "read by staff" for a message (or the whole thread when messageId is omitted).
+  // Clears the unread highlight/badge durably, so it survives a refresh and other devices.
+  markRead(caseId, messageId) {
+    const q = messageId ? `?messageId=${encodeURIComponent(messageId)}` : "";
+    return staffApi.patch(
+      `/api/v1/internal/cases/${encodeURIComponent(caseId)}/messages/read${q}`,
+    );
+  },
+
   // Fetch the bytes of one file attached to a thread message (staff side; gated to the
   // export roles server-side). Returns { blob, filename } for preview + download in the modal.
   fetchAttachment(caseId, messageId, attachmentId) {
