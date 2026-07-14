@@ -147,7 +147,7 @@ export default function CentralEncryptedInboxPage({ navigate }) {
       </div>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:grid-cols-[21rem_minmax(0,1fr)]">
-        <SecureCard title={t("inbox.threadsTitle")} subtitle={t("inbox.subtitle")} className="min-w-0 self-start">
+        <SecureCard title={t("inbox.threadsTitle")} className="min-w-0 self-start">
           {threads.length === 0 ? (
             <EmptyState title={t("inbox.empty")} />
           ) : (
@@ -189,7 +189,6 @@ export default function CentralEncryptedInboxPage({ navigate }) {
             isEncrypted
             className="min-w-0 self-start"
             title={t("inbox.thread", { id: activeRef })}
-            subtitle={t("inbox.twoWay")}
             headerAction={
               <AppButton type="button" size="sm" variant="outline" icon={<FileText className="w-4 h-4" />} onClick={() => navigate?.(`/cases/${activeId}`)}>
                 {t("inbox.openCase")}

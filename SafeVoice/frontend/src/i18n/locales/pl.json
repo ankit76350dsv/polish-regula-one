@@ -24,6 +24,7 @@
     "copy": "Kopiuj",
     "copied": "Skopiowano",
     "none": "Brak",
+    "confidential": "Poufne",
     "view": "Zobacz",
     "open": "Otwórz",
     "edit": "Edytuj",
@@ -342,13 +343,13 @@
   },
   "inbox": {
     "title": "Bezpieczna skrzynka",
-    "subtitle": "Wątki spraw",
-    "threadsTitle": "Szyfrowana skrzynka",
-    "selectThread": "Wybierz wątek sprawy, aby zobaczyć rozmowę.",
-    "thread": "Wątek {{id}}",
-    "twoWay": "Dwukierunkowa anonimowa komunikacja",
+    "subtitle": "Prywatne rozmowy ze zgłaszającymi",
+    "threadsTitle": "Rozmowy",
+    "selectThread": "Wybierz rozmowę, aby ją otworzyć.",
+    "thread": "Rozmowa — {{id}}",
+    "twoWay": "Wiadomości są prywatne, a zgłaszający pozostaje anonimowy.",
     "openCase": "Otwórz sprawę",
-    "empty": "Brak wątków wiadomości.",
+    "empty": "Brak rozmów.",
     "messagePlaceholder": "Napisz ostrożne pytanie uzupełniające…"
   },
   "audit": {

@@ -24,6 +24,7 @@
     "copy": "Copy",
     "copied": "Copied",
     "none": "None",
+    "confidential": "Confidential",
     "view": "View",
     "open": "Open",
     "edit": "Edit",
@@ -340,13 +341,13 @@
   },
   "inbox": {
     "title": "Secure inbox",
-    "subtitle": "Case threads",
-    "threadsTitle": "Encrypted inbox",
-    "selectThread": "Select a case thread to view the conversation.",
-    "thread": "Thread {{id}}",
-    "twoWay": "Two-way anonymous communication",
+    "subtitle": "Private conversations with reporters",
+    "threadsTitle": "Conversations",
+    "selectThread": "Select a conversation to open it.",
+    "thread": "Conversation — {{id}}",
+    "twoWay": "Messages are private and the reporter stays anonymous.",
     "openCase": "Open case",
-    "empty": "No message threads yet.",
+    "empty": "No conversations yet.",
     "messagePlaceholder": "Write a careful follow-up question…"
   },
   "audit": {

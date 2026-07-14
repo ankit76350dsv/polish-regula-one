@@ -1,4 +1,5 @@
 import { Lock } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export function SecureCard({
   children,
@@ -8,6 +9,7 @@ export function SecureCard({
   className = "",
   headerAction,
 }) {
+  const { t } = useTranslation();
   return (
     <section
       className={`bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs relative ${className}`}
@@ -22,8 +24,8 @@ export function SecureCard({
               <h3 className="text-sm font-semibold text-slate-900 tracking-tight flex items-center gap-2">
                 {title}
                 {isEncrypted && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 uppercase">
-                    <Lock className="w-3 h-3" /> encrypted
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                    <Lock className="w-3 h-3" /> {t("common.confidential")}
                   </span>
                 )}
               </h3>
