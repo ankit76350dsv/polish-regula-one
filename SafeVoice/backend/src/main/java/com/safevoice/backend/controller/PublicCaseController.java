@@ -151,9 +151,22 @@ public class PublicCaseController {
         // Resolve the case from the access key (throws if the key is wrong).
         CaseReport report = caseReportService.retrieveByAccessKey(request.getAccessKey());
 
-        // The service checks the message really belongs to this case before returning the file.
-        EvidenceAttachment attachment = caseMessageService.getMessageAttachment(
-                report.getId(), request.getMessageId(), request.getAttachmentId(), report.getTenantId());
+        // Two kinds of file the reporter may re-download from their OWN case:
+        //  - with a messageId → a file attached to a chat message in the thread, and
+        //  - without one      → a file they submitted WITH the report itself (case-level evidence).
+        // Either way ownership is already proven by the access key, and we only return a file that
+        // belongs to THIS case.
+        String messageId = request.getMessageId();
+        EvidenceAttachment attachment;
+        if (messageId != null && !messageId.isBlank()) {
+            attachment = caseMessageService.getMessageAttachment(
+                    report.getId(), messageId, request.getAttachmentId(), report.getTenantId());
+        } else {
+            attachment = report.getAttachments().stream()
+                    .filter(a -> a.getId().equals(request.getAttachmentId()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Attachment not found in this case"));
+        }
 
         byte[] fileBytes = attachmentService.getFile(attachment.getStorageVaultRef());
 

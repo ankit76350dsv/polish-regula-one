@@ -18,8 +18,8 @@ public class ReporterAttachmentRequest {
     @NotBlank(message = "Access key is required")
     private String accessKey;
 
-    // Which message in the thread the file is attached to.
-    @NotBlank(message = "Message id is required")
+    // Which message in the thread the file is attached to. OPTIONAL: leave blank to download a
+    // file the reporter submitted WITH the report itself (case-level evidence, not in a message).
     private String messageId;
 
     // Which file on that message to download.

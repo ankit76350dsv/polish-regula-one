@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
-import { Lock, Send, ShieldCheck } from "lucide-react";
+import { Eye, FileText, Lock, Send, ShieldCheck } from "lucide-react";
 import {
   AppButton,
   AttachmentPreviewModal,
@@ -115,15 +115,6 @@ export default function TrackCasePage() {
     }
   }
 
-  // Fetch a file from the reporter's own thread for the preview modal; the access key
-  // (baked into this closure) proves ownership.
-  const fetchPreview = () =>
-    reportService.fetchPublicAttachment({
-      accessKey: accessKey.trim(),
-      messageId: preview.messageId,
-      attachmentId: preview.attachment.id,
-    });
-
   const report = tracked?.report;
   const thread = tracked?.messages || [];
 
@@ -185,6 +176,75 @@ export default function TrackCasePage() {
             </div>
           </SecureCard>
         )}
+
+        {report && (
+          <SecureCard isEncrypted title={t("track.detailsTitle")} subtitle={t("track.detailsSub")}>
+            <div className="space-y-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{t("track.narrative")}</div>
+                <p className="mt-1 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">
+                  {report.description || "—"}
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-2 text-xs">
+                {[
+                  [t("track.category"), t(`categories.${report.category}`, report.category)],
+                  [t("track.incidentDate"), report.incidentDate],
+                  [t("track.department"), report.department],
+                  [t("track.disclosureMode"), report.disclosureMode],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                    <span className="text-slate-500">{label}</span>
+                    <span className="font-medium text-slate-800 text-right break-words">{value || "—"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </SecureCard>
+        )}
+
+        {report && (
+          <SecureCard title={t("track.evidenceTitle")} subtitle={t("track.evidenceSub")}>
+            {report.attachments && report.attachments.length > 0 ? (
+              <ul className="space-y-2">
+                {report.attachments.map((file) => (
+                  <li key={file.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+                        <FileText className="w-3.5 h-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                        <span className="truncate">{file.displayName}</span>
+                      </div>
+                      <div className="mt-0.5 text-[10px] font-mono text-slate-500">
+                        {file.sizeLabel} · {t("track.metadataStripped")}
+                      </div>
+                    </div>
+                    {file.storageVaultRef && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreview({
+                            attachment: file,
+                            fetch: () =>
+                              reportService.fetchPublicCaseAttachment({
+                                accessKey: accessKey.trim(),
+                                attachmentId: file.id,
+                              }),
+                          })
+                        }
+                        className="inline-flex shrink-0 items-center gap-1 rounded px-1 text-xs font-semibold text-cyan-700 hover:text-cyan-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      >
+                        <Eye className="w-3.5 h-3.5" aria-hidden="true" />
+                        {t("evidence.view")}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-slate-500">{t("track.noEvidence")}</p>
+            )}
+          </SecureCard>
+        )}
       </div>
 
       <div className="lg:col-span-2">
@@ -219,7 +279,17 @@ export default function TrackCasePage() {
                           <MessageAttachmentList
                             attachments={message.attachments}
                             dark={isReporter}
-                            onOpen={(a) => setPreview({ messageId: message.id, attachment: a })}
+                            onOpen={(a) =>
+                              setPreview({
+                                attachment: a,
+                                fetch: () =>
+                                  reportService.fetchPublicAttachment({
+                                    accessKey: accessKey.trim(),
+                                    messageId: message.id,
+                                    attachmentId: a.id,
+                                  }),
+                              })
+                            }
                           />
                         </div>
                       </div>
@@ -267,7 +337,7 @@ export default function TrackCasePage() {
         open={Boolean(preview)}
         attachment={preview?.attachment}
         onClose={() => setPreview(null)}
-        fetchBlob={preview ? fetchPreview : undefined}
+        fetchBlob={preview?.fetch}
       />
     </div>
   );

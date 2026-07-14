@@ -107,6 +107,15 @@ export const reportService = {
     });
   },
 
+  // The reporter re-downloads a file they submitted WITH the report itself (case-level evidence,
+  // not a chat attachment). Same endpoint, no messageId — the server then looks on the report.
+  fetchPublicCaseAttachment({ accessKey, attachmentId }) {
+    return publicApi.downloadFile("/api/safevoice/reports/attachments/download", {
+      accessKey,
+      attachmentId,
+    });
+  },
+
   // ── STAFF (internal compliance dashboard) ────────────────────────────────────
 
   // List cases for the signed-in tenant as a flat array (used by the dashboard and the
