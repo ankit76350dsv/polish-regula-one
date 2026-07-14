@@ -294,7 +294,6 @@
   "case": {
     "submittedVia": "{{category}} — złożono przez {{channel}}",
     "exportSummary": "Eksportuj podsumowanie",
-    "markReviewed": "Oznacz jako przejrzane",
     "openInbox": "Otwórz w skrzynce",
     "narrative": "Opis sprawy",
     "narrativeSub": "Fakty podane przez zgłaszającego",
@@ -314,6 +313,11 @@
     "controlStatus": "Status",
     "controlSeverity": "Waga",
     "controlInvestigator": "Przypisano do",
+    "retention": "Przechowywanie danych",
+    "deleteAfter": "Usuń po",
+    "irrelevantDue": "Przejrzyj dane osobowe do",
+    "retentionYears": "Okres przechowywania",
+    "years": "{{count}} lata",
     "riskFlags": "Flagi ryzyka",
     "communication": "Komunikacja ze zgłaszającym",
     "communicationSub": "Prywatne, poufne wiadomości",
@@ -334,9 +338,7 @@
     "confirmStatusTitle": "Zmienić status sprawy?",
     "confirmStatusBody": "Status sprawy zostanie zmieniony na „{{value}}” i zostanie zapisany niezmienny wpis audytu.",
     "confirmExportTitle": "Eksportować podsumowanie sprawy?",
-    "confirmExportBody": "Zostanie wygenerowane zredagowane podsumowanie. Tożsamość zgłaszającego nigdy nie jest zawarta. Ta czynność jest rejestrowana.",
-    "confirmReviewedTitle": "Oznaczyć sprawę jako przejrzaną?",
-    "confirmReviewedBody": "Zostanie zapisane, że sprawa została przez Ciebie przejrzana. Czynność jest rejestrowana w dzienniku audytu."
+    "confirmExportBody": "Zostanie wygenerowane zredagowane podsumowanie. Tożsamość zgłaszającego nigdy nie jest zawarta. Ta czynność jest rejestrowana."
   },
   "inbox": {
     "title": "Bezpieczna skrzynka",
@@ -570,7 +572,6 @@
     "assigneeUpdated": "Zmieniono prowadzącego.",
     "severityUpdated": "Zaktualizowano wagę.",
     "messageSent": "Wiadomość wysłana.",
-    "reviewed": "Sprawa oznaczona jako przejrzana.",
     "exported": "Rozpoczęto eksport — sprawdź pobrane pliki.",
     "inviteSent": "Zaproszenie wysłane.",
     "accessRemoved": "Dostęp odebrany.",

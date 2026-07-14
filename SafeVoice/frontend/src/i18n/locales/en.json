@@ -292,7 +292,6 @@
   "case": {
     "submittedVia": "{{category}} submitted via {{channel}}",
     "exportSummary": "Export summary",
-    "markReviewed": "Mark reviewed",
     "openInbox": "Open in inbox",
     "narrative": "Case narrative",
     "narrativeSub": "Reporter-provided facts",
@@ -312,6 +311,11 @@
     "controlStatus": "Status",
     "controlSeverity": "Severity",
     "controlInvestigator": "Assigned to",
+    "retention": "Data retention",
+    "deleteAfter": "Delete after",
+    "irrelevantDue": "Review personal data by",
+    "retentionYears": "Retention period",
+    "years": "{{count}} years",
     "riskFlags": "Risk flags",
     "communication": "Reporter communication",
     "communicationSub": "Private, confidential messages",
@@ -332,9 +336,7 @@
     "confirmStatusTitle": "Change case status?",
     "confirmStatusBody": "This will update the case status to “{{value}}” and record an immutable audit entry.",
     "confirmExportTitle": "Export case summary?",
-    "confirmExportBody": "A redacted summary will be generated. Reporter identity is never included. This action is logged.",
-    "confirmReviewedTitle": "Mark case as reviewed?",
-    "confirmReviewedBody": "This records that you have reviewed the case. The action is logged in the audit trail."
+    "confirmExportBody": "A redacted summary will be generated. Reporter identity is never included. This action is logged."
   },
   "inbox": {
     "title": "Secure inbox",
@@ -568,7 +570,6 @@
     "assigneeUpdated": "Investigator reassigned.",
     "severityUpdated": "Severity updated.",
     "messageSent": "Message sent.",
-    "reviewed": "Case marked as reviewed.",
     "exported": "Export started — check your downloads.",
     "inviteSent": "Invitation sent.",
     "accessRemoved": "Access removed.",

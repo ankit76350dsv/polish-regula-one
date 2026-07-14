@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
-import { Eye, FileText, Lock, MessageSquare, Send, ShieldCheck } from "lucide-react";
+import { Eye, FileText, Lock, MessageSquare, Send } from "lucide-react";
 import {
   AppButton,
   AppTable,
@@ -158,8 +158,6 @@ export default function CaseDetailsPage({ caseId, navigate }) {
         dispatch(addToast({ type: "success", message: t(pending.toastKey) }));
       } else if (pending.action === "export") {
         dispatch(addToast({ type: "success", message: t("toast.exported") }));
-      } else if (pending.action === "reviewed") {
-        dispatch(addToast({ type: "success", message: t("toast.reviewed") }));
       }
     } catch {
       dispatch(addToast({ type: "error", message: t("toast.genericError") }));
@@ -211,9 +209,7 @@ export default function CaseDetailsPage({ caseId, navigate }) {
       ? { title: t("case.confirmStatusTitle"), message: t("case.confirmStatusBody", { value: pendingDisplayValue() }) }
       : pending.field
         ? { title: t("case.controls"), message: t("case.confirmStatusBody", { value: pendingDisplayValue() }) }
-        : pending.action === "export"
-          ? { title: t("case.confirmExportTitle"), message: t("case.confirmExportBody") }
-          : { title: t("case.confirmReviewedTitle"), message: t("case.confirmReviewedBody") }
+        : { title: t("case.confirmExportTitle"), message: t("case.confirmExportBody") }
     : {};
 
   return (
@@ -249,11 +245,6 @@ export default function CaseDetailsPage({ caseId, navigate }) {
           {canExport && (
             <AppButton type="button" variant="outline" icon={<FileText className="w-4 h-4" />} onClick={() => setPending({ action: "export" })}>
               {t("case.exportSummary")}
-            </AppButton>
-          )}
-          {canUpdate && (
-            <AppButton type="button" variant="secure" icon={<ShieldCheck className="w-4 h-4" />} onClick={() => setPending({ action: "reviewed" })}>
-              {t("case.markReviewed")}
             </AppButton>
           )}
         </div>
@@ -431,6 +422,25 @@ export default function CaseDetailsPage({ caseId, navigate }) {
               </div>
             </SecureCard>
           )}
+
+          <SecureCard title={t("case.retention")} subtitle={report.retention.state}>
+            <div className="space-y-3 text-xs text-slate-700">
+              <div className="flex justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                <span>{t("case.deleteAfter")}</span>
+                <span className="font-medium text-slate-800">{report.retention.deleteAfter}</span>
+              </div>
+              <div className="flex justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                <span>{t("case.irrelevantDue")}</span>
+                <span className="font-medium text-slate-800">{report.retention.irrelevantPersonalDataDeletionDue}</span>
+              </div>
+              <div className="flex justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                <span>{t("case.retentionYears")}</span>
+                <span className="font-medium text-slate-800">{t("case.years", { count: report.retention.retentionYears })}</span>
+              </div>
+            </div>
+          </SecureCard>
+
+
         </div>
       </div>
 
