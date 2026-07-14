@@ -347,6 +347,7 @@
     "twoWay": "Messages are private and the reporter stays anonymous.",
     "openCase": "Open case",
     "empty": "No conversations yet.",
+    "emptyThread": "No messages in this conversation yet.",
     "messagePlaceholder": "Write a careful follow-up question…"
   },
   "audit": {

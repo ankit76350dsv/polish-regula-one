@@ -18,6 +18,7 @@ import {
   fetchMessages,
   messageReceived,
   selectMessagesFor,
+  selectMessagesStatus,
   selectSelectedThreadId,
   selectSending,
   sendMessage,
@@ -62,6 +63,11 @@ export default function CentralEncryptedInboxPage({ navigate }) {
   const caseClosed = activeThread?.status === "Closed";
   const composerLocked = caseClosed || activeThread?.status === "Received" || investigatorUnassigned;
   const messages = useSelector(selectMessagesFor(activeId));
+  const messagesStatus = useSelector(selectMessagesStatus);
+  // True while the open thread's messages are still being fetched AND we have nothing to
+  // show yet. Used to show a spinner instead of the "no messages" text, so opening a
+  // conversation never briefly flashes an empty-state message during the API call.
+  const threadLoading = messagesStatus === "loading" && messages.length === 0;
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState([]); // raw File[] attached to the next message
   const [preview, setPreview] = useState(null); // { messageId, attachment } being previewed
@@ -199,11 +205,16 @@ export default function CentralEncryptedInboxPage({ navigate }) {
               <div className="flex items-start gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
                 <Lock className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
                 {t("inbox.twoWay")}
+                
               </div>
 
               <div className="min-h-[24rem] max-h-[calc(100vh-18rem)] overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3 sm:p-4">
-                {messages.length === 0 ? (
-                  <p className="text-xs text-slate-500 text-center py-6">{t("inbox.empty")}</p>
+                {threadLoading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <Spinner size={20} label={t("common.loading")} />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <p className="text-xs text-slate-500 text-center py-6">{t("inbox.emptyThread")}</p>
                 ) : (
                   messages.map((message) => {
                     const isReporter = message.sender === "Anonymous Whistleblower";

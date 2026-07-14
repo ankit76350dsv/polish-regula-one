@@ -349,6 +349,7 @@
     "twoWay": "Wiadomości są prywatne, a zgłaszający pozostaje anonimowy.",
     "openCase": "Otwórz sprawę",
     "empty": "Brak rozmów.",
+    "emptyThread": "Brak wiadomości w tej rozmowie.",
     "messagePlaceholder": "Napisz ostrożne pytanie uzupełniające…"
   },
   "audit": {
