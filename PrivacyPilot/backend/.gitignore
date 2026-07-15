@@ -36,3 +36,4 @@ build/
 # Do not commit application.properties. It holds secrets like DB
 # credentials and AWS keys. Keeping it out of git protects those secrets.
 src/main/resources/application.properties
+src/main/resources/application-dev.properties
