@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.0.7</version>
+		<version>4.0.6</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.privacypilot</groupId>
@@ -30,9 +30,36 @@
 		<java.version>17</java.version>
 	</properties>
 	<dependencies>
+		<!-- Spring Data MongoDB: gives us the @Document/@Id/@Indexed annotations the
+		     model classes use, plus the BSON ObjectId type. Same database engine the
+		     other RegulaOne modules (SafeVoice, KSeFFlow, ...) use. -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter</artifactId>
+			<artifactId>spring-boot-starter-data-mongodb</artifactId>
+		</dependency>
+
+		<!-- Spring Web: the REST layer for later, and it brings in Jackson, which
+		     provides the @JsonValue/@JsonCreator annotations our enums use to send and
+		     receive their short lowercase codes (e.g. "consent", "high"). -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<!-- Bean Validation: used later for validating incoming request bodies (DTOs),
+		     which the project rules require on every endpoint. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+
+		<!-- Lombok: generates boilerplate (getters, setters, constructors) from the
+		     @Data / @NoArgsConstructor annotations, so the model classes stay short and
+		     readable. Marked optional so it never ships in the final build. -->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<optional>true</optional>
 		</dependency>
 
 		<dependency>
@@ -47,6 +74,15 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<!-- Lombok is a build-time helper only; leave it out of the packaged jar. -->
+					<excludes>
+						<exclude>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</exclude>
+					</excludes>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
