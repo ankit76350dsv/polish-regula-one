@@ -113,7 +113,7 @@ export default function BreachesPage() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{t('breach.report')}</DialogTitle>
             <DialogDescription>
@@ -122,50 +122,52 @@ export default function BreachesPage() {
                 : 'The 72h clock runs from when the breach was discovered (Art. 33(1)).'}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3">
+          {/* Two-column form: short fields pair up; wide fields (textareas, chips)
+              span both columns. Collapses to one column on small screens. */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField label={lang === 'pl' ? 'Tytuł naruszenia' : 'Breach title'} required>
               {(fid) => <Input id={fid} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />}
             </FormField>
-            <FormField label={lang === 'pl' ? 'Opis (charakter naruszenia — art. 33(3)(a))' : 'Description (nature of the breach — Art. 33(3)(a))'} required>
-              {(fid) => <Textarea id={fid} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />}
+            <FormField label={lang === 'pl' ? 'Poziom ryzyka' : 'Risk level'}>
+              {(fid) => (
+                <Select id={fid} value={form.riskLevel} onChange={(e) => setForm({ ...form, riskLevel: e.target.value })}>
+                  <option value="low">{lang === 'pl' ? 'Niskie' : 'Low'}</option>
+                  <option value="medium">{lang === 'pl' ? 'Średnie' : 'Medium'}</option>
+                  <option value="high">{lang === 'pl' ? 'Wysokie' : 'High'}</option>
+                </Select>
+              )}
             </FormField>
-            <div className="grid grid-cols-2 gap-3">
-              <FormField label={lang === 'pl' ? 'Liczba osób' : 'Subjects affected'}>
-                {(fid) => <Input id={fid} type="number" min="0" value={form.subjectsCount}
-                  onChange={(e) => setForm({ ...form, subjectsCount: e.target.value })} />}
-              </FormField>
-              <FormField label={t('breach.recordsCount')}>
-                {(fid) => <Input id={fid} type="number" min="0" value={form.recordsCount}
-                  onChange={(e) => setForm({ ...form, recordsCount: e.target.value })} />}
+            <div className="sm:col-span-2">
+              <FormField label={lang === 'pl' ? 'Opis (charakter naruszenia — art. 33(3)(a))' : 'Description (nature of the breach — Art. 33(3)(a))'} required>
+                {(fid) => <Textarea id={fid} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />}
               </FormField>
             </div>
-            <FormField label={t('breach.dataCategories')}>
-              <div className="flex flex-wrap gap-1.5">
-                {DATA_CATEGORIES.map((c) => {
-                  const active = form.dataCategories.includes(c.id);
-                  return (
-                    <button key={c.id} type="button" aria-pressed={active}
-                      onClick={() => setForm({ ...form, dataCategories: toggleId(form.dataCategories, c.id) })}
-                      className={cn(
-                        'rounded-full border px-3 py-1 text-xs transition-colors',
-                        active ? 'border-primary bg-primary/15 text-primary'
-                          : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                      )}>
-                      {c[lang]}
-                    </button>
-                  );
-                })}
-              </div>
+            <FormField label={lang === 'pl' ? 'Liczba osób' : 'Subjects affected'}>
+              {(fid) => <Input id={fid} type="number" min="0" value={form.subjectsCount}
+                onChange={(e) => setForm({ ...form, subjectsCount: e.target.value })} />}
             </FormField>
-            <div className="grid grid-cols-2 gap-3">
-              <FormField label={lang === 'pl' ? 'Poziom ryzyka' : 'Risk level'}>
-                {(fid) => (
-                  <Select id={fid} value={form.riskLevel} onChange={(e) => setForm({ ...form, riskLevel: e.target.value })}>
-                    <option value="low">{lang === 'pl' ? 'Niskie' : 'Low'}</option>
-                    <option value="medium">{lang === 'pl' ? 'Średnie' : 'Medium'}</option>
-                    <option value="high">{lang === 'pl' ? 'Wysokie' : 'High'}</option>
-                  </Select>
-                )}
+            <FormField label={t('breach.recordsCount')}>
+              {(fid) => <Input id={fid} type="number" min="0" value={form.recordsCount}
+                onChange={(e) => setForm({ ...form, recordsCount: e.target.value })} />}
+            </FormField>
+            <div className="sm:col-span-2">
+              <FormField label={t('breach.dataCategories')}>
+                <div className="flex flex-wrap gap-1.5">
+                  {DATA_CATEGORIES.map((c) => {
+                    const active = form.dataCategories.includes(c.id);
+                    return (
+                      <button key={c.id} type="button" aria-pressed={active}
+                        onClick={() => setForm({ ...form, dataCategories: toggleId(form.dataCategories, c.id) })}
+                        className={cn(
+                          'rounded-full border px-3 py-1 text-xs transition-colors',
+                          active ? 'border-primary bg-primary/15 text-primary'
+                            : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                        )}>
+                        {c[lang]}
+                      </button>
+                    );
+                  })}
+                </div>
               </FormField>
             </div>
             <label className="flex cursor-pointer items-center gap-2 text-sm">
@@ -178,12 +180,14 @@ export default function BreachesPage() {
                 onChange={(e) => setForm({ ...form, subjectsNotificationRequired: e.target.checked })} />
               {t('breach.notifySubjects')}
             </label>
-            <FormField label={t('breach.riskRationale')} required
-              hint={lang === 'pl'
-                ? 'Udokumentuj decyzję także gdy NIE zgłaszasz (art. 33(5)).'
-                : 'Document the decision even when NOT notifying (Art. 33(5)).'}>
-              {(fid) => <Textarea id={fid} value={form.riskRationale} onChange={(e) => setForm({ ...form, riskRationale: e.target.value })} />}
-            </FormField>
+            <div className="sm:col-span-2">
+              <FormField label={t('breach.riskRationale')} required
+                hint={lang === 'pl'
+                  ? 'Udokumentuj decyzję także gdy NIE zgłaszasz (art. 33(5)).'
+                  : 'Document the decision even when NOT notifying (Art. 33(5)).'}>
+                {(fid) => <Textarea id={fid} value={form.riskRationale} onChange={(e) => setForm({ ...form, riskRationale: e.target.value })} />}
+              </FormField>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
