@@ -1,0 +1,1513 @@
+import { useEffect, useRef, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import axios from "axios";
+import {
+  fetchEmployee,
+  clearSelected,
+  upsertProfile,
+  uploadDocument,
+  clearSubmitError,
+  clearUploadError,
+} from "../store/slices/employeeSlice";
+
+const API_BASE_URL = "http://localhost:8082/api";
+// We no longer read a token from localStorage or send an Authorization header.
+// The auth token travels in an HttpOnly cookie, which axios attaches
+// automatically when we set `withCredentials: true` on the request.
+
+// ─── Constants (mirrored from AddEmployee) ─────────────────────────────────────
+// List of company departments an employee can belong to.
+// These cover the common departments found in industrial, manufacturing,
+// warehouse and logistics companies (the industries this app serves).
+//
+// NOTE ON COMPLIANCE: Unlike job roles (KZiS) and contract types (Kodeks pracy),
+// company departments are NOT defined by any Polish government standard — a
+// company organises its own internal structure. So these are sensible industry
+// names, shown BILINGUALLY (Polish / English) to match the Polish-market UI.
+//
+// Each item has:
+//   value -> the text we SAVE (kept exactly as the original English name, so
+//            employees saved before this change still match — backward compatible)
+//   label -> the text we SHOW in the dropdown ("Polish / English")
+// MUST stay in sync with the DEPARTMENTS lists in AddEmployee.jsx and EmployeeList.jsx.
+const DEPARTMENTS = [
+  { value: "Warehouse",              label: "Magazyn / Warehouse" },
+  { value: "Operations",             label: "Operacje / Operations" },
+  { value: "Manufacturing",          label: "Wytwarzanie / Manufacturing" },
+  { value: "Production",             label: "Produkcja / Production" },
+  { value: "Logistics",              label: "Logistyka / Logistics" },
+  { value: "Supply Chain",           label: "Łańcuch dostaw / Supply Chain" },
+  { value: "Procurement",            label: "Zakupy / Procurement" },
+  { value: "Transport",              label: "Transport" },
+  { value: "Distribution",           label: "Dystrybucja / Distribution" },
+  { value: "Maintenance",            label: "Utrzymanie ruchu / Maintenance" },
+  { value: "Engineering",            label: "Inżynieria / Engineering" },
+  { value: "Quality Assurance",      label: "Zapewnienie jakości / Quality Assurance" },
+  { value: "Quality Control",        label: "Kontrola jakości / Quality Control" },
+  { value: "Research & Development", label: "Badania i rozwój / R&D" },
+  { value: "Health & Safety (BHP)",  label: "BHP / Health & Safety" },
+  { value: "Environmental",          label: "Ochrona środowiska / Environmental" },
+  { value: "Facilities",             label: "Obsługa obiektu / Facilities" },
+  { value: "Admin",                  label: "Administracja / Admin" },
+  { value: "HR",                     label: "Kadry / HR" },
+  { value: "IT",                     label: "Informatyka / IT" },
+  { value: "Finance",                label: "Finanse / Finance" },
+  { value: "Accounting",             label: "Księgowość / Accounting" },
+  { value: "Legal",                  label: "Dział prawny / Legal" },
+  { value: "Compliance",             label: "Zgodność / Compliance" },
+  { value: "Sales",                  label: "Sprzedaż / Sales" },
+  { value: "Marketing",              label: "Marketing" },
+  { value: "Customer Service",       label: "Obsługa klienta / Customer Service" },
+  { value: "Security",               label: "Ochrona / Security" },
+  { value: "Training & Development", label: "Szkolenia i rozwój / Training & Development" },
+  { value: "Project Management",     label: "Zarządzanie projektami / Project Management" },
+];
+// Job roles (positions) an employee can have.
+//
+// These are the OFFICIAL Polish job titles from KZiS — "Klasyfikacja Zawodów
+// i Specjalności na potrzeby rynku pracy" (Classification of Occupations and
+// Specialties), maintained by the Ministry of Family, Labour and Social
+// Policy. Each entry shows the official Polish name plus its 6-digit KZiS code,
+// e.g. "Magazynier — KZiS 432103". Using official codes makes the data ready
+// for government reporting (GUS, ZUS) and audits.
+//
+// The list is grouped by department (English comments) only to stay readable —
+// it is still ONE flat list because the position dropdown shows every role and
+// the user can just type to search by name or by code.
+//
+// This MUST stay in sync with the JOB_ROLES list in AddEmployee.jsx.
+// Legal source: KZiS, consolidated text Dz.U. 2018 poz. 227 with later
+// amendments (Dz.U. 2021 poz. 2285; 2022 poz. 853; 2024 poz. 1372).
+// Portal: https://psz.praca.gov.pl and https://klasyfikacje.stat.gov.pl/Kzis.
+const JOB_ROLES = [
+  // ── Management & Directors (KZiS major group 1) ──
+  "Dyrektor generalny — KZiS 112007",
+  "Dyrektor operacyjny — KZiS 112011",
+  "Dyrektor produkcji — KZiS 112012",
+  "Dyrektor finansowy — KZiS 112006",
+  "Dyrektor handlowy — KZiS 112008",
+  "Dyrektor marketingu — KZiS 112010",
+  "Dyrektor logistyki — KZiS 112009",
+  "Dyrektor do spraw informatyki / informacji — KZiS 112004",
+  "Dyrektor do spraw badawczo-rozwojowych — KZiS 112002",
+  "Dyrektor do spraw administracyjnych — KZiS 112001",
+  "Dyrektor departamentu — KZiS 121301",
+  // ── Department managers (Kierownicy) ──
+  "Kierownik produkcji w przemyśle — KZiS 132103",
+  "Kierownik do spraw kontroli jakości — KZiS 132102",
+  "Kierownik działu logistyki — KZiS 132401",
+  "Kierownik magazynu — KZiS 132404",
+  "Kierownik działu zakupów — KZiS 132403",
+  "Kierownik utrzymania ruchu — KZiS 132105",
+  "Główny księgowy — KZiS 121101",
+  "Kierownik działu finansowego — KZiS 121103",
+  "Kierownik działu kadr i płac — KZiS 121201",
+  "Kierownik działu zarządzania zasobami ludzkimi — KZiS 121203",
+  "Kierownik działu szkoleń — KZiS 121202",
+  "Kierownik działu informatyki — KZiS 133001",
+  "Kierownik do spraw sprzedaży — KZiS 122102",
+  "Kierownik do spraw marketingu — KZiS 122101",
+  "Kierownik do spraw rozwoju produktu — KZiS 122301",
+  "Kierownik działu badawczo-rozwojowego — KZiS 122302",
+  "Kierownik projektu — KZiS 121904",
+  "Kierownik działu administracyjno-gospodarczego — KZiS 121901",
+  "Kierownik agencji ochrony mienia i osób — KZiS 134903",
+  // ── Warehouse (Magazyn) ──
+  "Magazynier — KZiS 432103",
+  "Magazynier-logistyk — KZiS 432106",
+  "Robotnik magazynowy — KZiS 933304",
+  "Kierowca operator wózków jezdniowych (widłowych) — KZiS 834401",
+  "Wydawca materiałów — KZiS 932914",
+  // ── Logistics & Forwarding (Logistyka / Spedycja) ──
+  "Specjalista do spraw logistyki — KZiS 242108",
+  "Pracownik działu logistyki — KZiS 333104",
+  "Technik logistyk — KZiS 333107",
+  "Spedytor — KZiS 333105",
+  "Technik spedytor — KZiS 333108",
+  "Dyspozytor transportu samochodowego — KZiS 432302",
+  "Ekspedytor — KZiS 432303",
+  "Inżynier zaopatrzenia, transportu i magazynowania — KZiS 214104",
+  // ── Transport (Kierowcy) ──
+  "Kierowca samochodu ciężarowego — KZiS 833203",
+  "Kierowca ciągnika siodłowego — KZiS 833202",
+  "Kierowca samochodu dostawczego — KZiS 832202",
+  "Kierowca samochodu osobowego — KZiS 832203",
+  "Kierowca autobusu — KZiS 833101",
+  // ── Procurement (Zakupy / Zaopatrzenie) ──
+  "Specjalista do spraw zamówień publicznych — KZiS 242225",
+  "Agent do spraw zakupów — KZiS 332301",
+  "Zaopatrzeniowiec — KZiS 332302",
+  // ── Production & Manufacturing (Produkcja) ──
+  "Mistrz produkcji w przemyśle elektromaszynowym — KZiS 312203",
+  "Mistrz produkcji w przemyśle samochodowym — KZiS 312207",
+  "Operator zautomatyzowanej linii produkcyjnej — KZiS 313904",
+  "Operator robotów i manipulatorów przemysłowych — KZiS 313903",
+  "Monter maszyn i urządzeń przemysłowych — KZiS 821105",
+  "Monter maszyn elektrycznych — KZiS 821204",
+  "Monter wiązek elektrycznych — KZiS 821207",
+  "Pomocniczy robotnik przemysłowy — KZiS 932911",
+  "Pakowacz ręczny — KZiS 932101",
+  "Sortowacz — KZiS 932913",
+  // ── Maintenance & Trades (Utrzymanie ruchu / rzemiosło) ──
+  "Ślusarz — KZiS 722204",
+  "Ślusarz narzędziowy — KZiS 722206",
+  "Spawacz — KZiS 721204",
+  "Elektryk — KZiS 741103",
+  "Elektromonter instalacji elektrycznych — KZiS 741101",
+  "Elektromonter (elektryk) zakładowy — KZiS 741207",
+  "Technik utrzymania ruchu — KZiS 311514",
+  "Konserwator budynków i stanu technicznego pomieszczeń — KZiS 711101",
+  "Pomocnik mechanika — KZiS 932908",
+  // ── Engineering (Inżynierowie) ──
+  "Inżynier mechanik – maszyny i urządzenia przemysłowe — KZiS 214404",
+  "Inżynier mechanik – technologia mechaniczna — KZiS 214407",
+  "Inżynier elektryk — KZiS 215103",
+  "Inżynier utrzymania ruchu — KZiS 214103",
+  "Główny technolog — KZiS 214111",
+  "Technik mechanik maszyn i urządzeń — KZiS 311508",
+  "Technik elektryk — KZiS 311303",
+  // ── Quality (Kontrola jakości) ──
+  "Specjalista kontroli jakości — KZiS 214109",
+  "Kontroler jakości wyrobów przemysłowych — KZiS 311937",
+  "Kontroler jakości połączeń spawalniczych — KZiS 311517",
+  // ── Health & Safety (BHP) ──
+  "Specjalista bezpieczeństwa i higieny pracy — KZiS 229103",
+  "Inspektor bezpieczeństwa i higieny pracy — KZiS 325502",
+  "Technik bezpieczeństwa i higieny pracy — KZiS 325509",
+  "Inspektor ochrony przeciwpożarowej — KZiS 311214",
+  // ── Environmental (Ochrona środowiska) ──
+  "Specjalista ochrony środowiska — KZiS 213303",
+  "Inspektor ochrony środowiska — KZiS 325504",
+  "Operator maszyn i urządzeń w gospodarce odpadami — KZiS 313211",
+  "Operator spalarni odpadów komunalnych — KZiS 313206",
+  // ── HR & Payroll (Kadry i płace) ──
+  "Specjalista do spraw kadr — KZiS 242307",
+  "Specjalista do spraw rekrutacji pracowników — KZiS 242309",
+  "Specjalista do spraw wynagrodzeń — KZiS 242310",
+  "Pracownik obsługi płacowej — KZiS 431301",
+  // ── Training & Development (Szkolenia) ──
+  "Specjalista do spraw szkoleń — KZiS 242403",
+  // ── IT ──
+  "Informatyk — KZiS 251106",
+  "Programista aplikacji — KZiS 251401",
+  "Programista aplikacji mobilnych — KZiS 251402",
+  "Specjalista do spraw rozwoju oprogramowania — KZiS 251202",
+  "Specjalista do spraw jakości oprogramowania — KZiS 251404",
+  "Tester oprogramowania komputerowego — KZiS 251903",
+  "Administrator baz danych — KZiS 252101",
+  "Administrator systemów komputerowych — KZiS 252201",
+  "Inżynier systemów i sieci komputerowych — KZiS 252302",
+  "Specjalista bezpieczeństwa oprogramowania — KZiS 252901",
+  // ── Finance & Accounting (Finanse i księgowość) ──
+  "Specjalista do spraw rachunkowości — KZiS 241103",
+  "Specjalista do spraw rachunkowości podatkowej — KZiS 241105",
+  "Kontroler finansowy — KZiS 241107",
+  "Analityk finansowy — KZiS 241306",
+  "Ekonomista — KZiS 263102",
+  // ── Legal, Compliance & Data protection (RODO/GDPR) ──
+  "Inspektor ochrony danych — KZiS 242111",
+  "Inspektor ochrony danych osobowych — KZiS 242212",
+  "Specjalista ochrony informacji niejawnych — KZiS 242110",
+  "Sekretarka w kancelarii prawnej — KZiS 334201",
+  // ── Sales, Marketing & Customer Service ──
+  "Przedstawiciel handlowy — KZiS 332203",
+  "Sprzedawca — KZiS 522301",
+  "Specjalista do spraw marketingu i handlu — KZiS 243106",
+  "Pracownik centrum elektronicznej obsługi klienta — KZiS 332202",
+  "Pracownik obsługi klienta instytucji finansowej — KZiS 331203",
+  // ── Security (Ochrona osób i mienia) ──
+  "Pracownik ochrony fizycznej — KZiS 541307",
+  "Technik ochrony fizycznej osób i mienia — KZiS 541315",
+  "Portier — KZiS 541306",
+  "Dozorca — KZiS 962902",
+  // ── Administration & Office (Biuro / Administracja) ──
+  "Pracownik biurowy — KZiS 411003",
+  "Sekretarka — KZiS 412001",
+  "Recepcjonista — KZiS 422602",
+  // ── Facilities & Cleaning (Obsługa obiektu) ──
+  "Zarządca nieruchomości — KZiS 244003",
+  "Kierownik firmy sprzątającej — KZiS 143907",
+  "Robotnik gospodarczy — KZiS 515303",
+  "Pracownik utrzymania czystości (sprzątaczka) — KZiS 911207",
+  // ── Fallback for anything not on the official list ──
+  "Inne / Other (poza klasyfikacją KZiS)",
+];
+const SITES = [
+  "Warsaw Site", "Krakow Site", "Gdansk Site",
+  "Poznan Site", "Warsaw HQ", "Wroclaw Site",
+];
+// Contract types allowed under Polish law (Kodeks pracy + Civil Code).
+// The "value" MUST match the contractType enum in the backend
+// (models/Employee.js) and the list in AddEmployee.jsx. "UOP" is kept as a
+// general option so employees saved before we split it into subtypes still work.
+// Source: gov.pl — Ministry of Family, Labour and Social Policy.
+const CONTRACT_TYPES = [
+  { value: "UOP",            label: "UOP — Employment contract (general)" },
+  { value: "UOP_PROBATION",  label: "UOP — Trial period (na okres próbny)" },
+  { value: "UOP_FIXED",      label: "UOP — Fixed-term (na czas określony)" },
+  { value: "UOP_INDEFINITE", label: "UOP — Permanent (na czas nieokreślony)" },
+  { value: "UZ",             label: "UZ — Contract of mandate" },
+  { value: "UOD",            label: "UOD — Contract for specific work" },
+  { value: "B2B",            label: "B2B — Business to business" },
+  { value: "INTERNSHIP",     label: "Internship / Traineeship (praktyka / staż)" },
+  { value: "OTHER",          label: "Other" },
+];
+const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH"];
+const MEDICAL_EXAM_TYPES = ["Initial", "Periodic", "Control", "Specialized"];
+const BHP_FREQUENCIES = ["Annually", "Every 2 years", "Every 3 years", "Every 5 years"];
+const DOC_STATUSES = [
+  { value: "VALID",    label: "Valid" },
+  { value: "EXPIRING", label: "Expiring Soon" },
+  { value: "EXPIRED",  label: "Expired" },
+  { value: "MISSING",  label: "Missing" },
+];
+
+// ─── Status config ─────────────────────────────────────────────────────────────
+const statusConfig = {
+  valid:     { label: "Valid",          className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
+  compliant: { label: "Compliant",      className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
+  allowed:   { label: "Allowed",        className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
+  expiring:  { label: "Expiring Soon",  className: "bg-amber-50 text-amber-700 ring-amber-200",       dot: "bg-amber-500"   },
+  warning:   { label: "Non-Compliant",  className: "bg-amber-50 text-amber-700 ring-amber-200",       dot: "bg-amber-500"   },
+  expired:   { label: "Expired",        className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
+  missing:   { label: "Missing",        className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
+  blocked:   { label: "Blocked",        className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
+  inactive:  { label: "Inactive",       className: "bg-slate-100 text-slate-600 ring-slate-200",      dot: "bg-slate-400"   },
+};
+
+function StatusBadge({ status }) {
+  const cfg = statusConfig[status?.toLowerCase()] || statusConfig.missing;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${cfg.className}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+function formatDate(d) {
+  if (!d) return "Not set";
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(d));
+}
+
+// Mirrors the backend calculateDocumentStatus rule so the UI preview is always
+// consistent with what the server will persist.
+function computeDocumentStatus(expiryDate) {
+  if (!expiryDate) return null;
+  const days = Math.ceil((new Date(expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
+  if (days < 0)   return "EXPIRED";
+  if (days <= 30) return "EXPIRING";
+  return "VALID";
+}
+
+function toInputDate(d) {
+  if (!d) return "";
+  return new Date(d).toISOString().split("T")[0];
+}
+
+function daysUntil(d) {
+  if (!d) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const expiry = new Date(d); expiry.setHours(0, 0, 0, 0);
+  return Math.ceil((expiry - today) / 86400000);
+}
+
+function normalisedStatus(rawStatus) {
+  if (!rawStatus) return "missing";
+  const s = rawStatus.toUpperCase();
+  if (s === "COMPLIANT")    return "compliant";
+  if (s === "EXPIRING")     return "expiring";
+  if (s === "BLOCKED")      return "blocked";
+  if (s === "NON_COMPLIANT") return "warning";
+  if (s === "VALID")        return "valid";
+  if (s === "EXPIRED")      return "expired";
+  if (s === "MISSING")      return "missing";
+  return s.toLowerCase();
+}
+
+function riskColor(level) {
+  if (level === "HIGH")   return "text-red-400";
+  if (level === "MEDIUM") return "text-amber-400";
+  return "text-emerald-400";
+}
+
+// ─── Shared UI primitives ─────────────────────────────────────────────────────
+function InfoRow({ label, value }) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-800">{value || "—"}</p>
+    </div>
+  );
+}
+
+function FormField({ label, required, children }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-400">
+        {label}{required && <span className="ml-0.5 text-red-500">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function Input(props) {
+  return (
+    <input
+      {...props}
+      className={`w-full rounded-xl border px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition
+        ${props.disabled
+          ? "border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed"
+          : "border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50"}`}
+    />
+  );
+}
+
+function SelectInput({ value, onChange, children, disabled }) {
+  return (
+    <select
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50 disabled:bg-slate-50 disabled:text-slate-400"
+    >
+      {children}
+    </select>
+  );
+}
+
+// A dropdown you can TYPE in to search.
+// We use this for long lists (like Position and Department) so the user does
+// not have to scroll through 100+ items — they just type a few letters and
+// the list shrinks to matching options.
+//
+//   value       -> the currently stored value (what gets saved)
+//   onChange    -> called with the picked value (just the value, not an event)
+//   options     -> either an array of strings, OR an array of { value, label }
+//                  objects. Objects let us SAVE one thing (e.g. "Warehouse")
+//                  but SHOW another (e.g. "Magazyn / Warehouse").
+//   placeholder -> greyed-out hint shown when nothing is selected
+function SearchableSelect({ value, onChange, options, placeholder = "Select..." }) {
+  const [open, setOpen] = useState(false);   // is the dropdown list showing?
+  const [query, setQuery] = useState("");    // what the user has typed to search
+  const boxRef = useRef(null);               // the whole widget, used to detect outside clicks
+
+  // Turn every option into the same { value, label } shape so the rest of the
+  // code does not care whether we were given plain strings or objects.
+  const items = options.map((opt) =>
+    typeof opt === "string" ? { value: opt, label: opt } : opt
+  );
+
+  // Find the label to show for the value that is currently saved.
+  // If the saved value is not in the list (e.g. an old record), just show it.
+  const selectedLabel = items.find((it) => it.value === value)?.label || value;
+
+  // Close the list when the user clicks anywhere outside this widget.
+  useEffect(() => {
+    function handleOutside(e) {
+      if (boxRef.current && !boxRef.current.contains(e.target)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
+  // Keep only the options whose label contains the typed text (any case).
+  const filtered = items.filter((it) =>
+    it.label.toLowerCase().includes(query.trim().toLowerCase())
+  );
+
+  // The user clicked an option: save its value and close the list.
+  function choose(val) {
+    onChange(val);
+    setOpen(false);
+    setQuery("");
+  }
+
+  return (
+    <div ref={boxRef} className="relative">
+      <input
+        type="text"
+        // When open we show what the user is typing; when closed we show the label.
+        value={open ? query : selectedLabel}
+        // If something is already chosen, keep showing it as a faint hint while searching.
+        placeholder={selectedLabel || placeholder}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+      />
+      {open && (
+        <ul className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+          {filtered.length === 0 ? (
+            <li className="px-4 py-2 text-sm text-slate-400">No matches found</li>
+          ) : (
+            filtered.map((it) => (
+              <li
+                key={it.value}
+                // We use onMouseDown (not onClick) so the pick registers before
+                // the input's blur/outside-click handler can close the list.
+                onMouseDown={() => choose(it.value)}
+                className={`cursor-pointer px-4 py-2 text-sm hover:bg-blue-50 ${
+                  it.value === value ? "bg-blue-50 font-semibold text-blue-700" : "text-slate-700"
+                }`}
+              >
+                {it.label}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function Toggle({ label, hint, value, onChange }) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div>
+        <p className="text-sm font-semibold text-slate-800">{label}</p>
+        {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+        <button type="button" onClick={() => onChange(true)}
+          className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${value ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
+          Yes
+        </button>
+        <button type="button" onClick={() => onChange(false)}
+          className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${!value ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
+          No
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Card({ children, className = "" }) {
+  return (
+    <div className={`rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function SectionTitle({ title, subtitle }) {
+  return (
+    <div className="mb-5 border-b border-slate-100 pb-4">
+      <h3 className="text-base font-bold text-slate-900">{title}</h3>
+      {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+    </div>
+  );
+}
+
+// ─── Document Upload Modal ────────────────────────────────────────────────────
+function UploadModal({ docType, profileId, onClose, onSuccess }) {
+  const dispatch = useDispatch();
+  const { uploading, uploadError } = useSelector((s) => s.employees);
+  const fileRef = useRef(null);
+  // OLD: form included a manual "status" field
+  // NEW: status is auto-derived from expiryDate — no manual selection needed
+  const [form, setForm] = useState({ expiryDate: "", completedDate: "" });
+  const [localFile, setLocalFile] = useState(null);
+
+  function update(k, v) { setForm((p) => ({ ...p, [k]: v })); }
+
+  // Computed status preview — mirrors the server-side calculateDocumentStatus rule
+  const computedStatus = computeDocumentStatus(form.expiryDate);
+
+  async function handleSubmit() {
+    if (!localFile) return;
+    dispatch(clearUploadError());
+    const result = await dispatch(uploadDocument({
+      profileId,
+      docType,
+      file: localFile,
+      expiryDate:    form.expiryDate    || undefined,
+      completedDate: form.completedDate || undefined,
+      // status removed — backend calculates it from expiryDate
+    }));
+    if (uploadDocument.fulfilled.match(result)) onSuccess();
+  }
+
+  const ismedical = docType === "medical";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl">
+        <div className="border-b border-slate-100 px-6 py-5">
+          <h2 className="text-lg font-bold text-slate-900">
+            Upload {ismedical ? "Medical Certificate" : "BHP Training Certificate"}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            File is uploaded securely to S3. Only the reference is stored in the database.
+          </p>
+        </div>
+        <div className="space-y-4 px-6 py-5">
+          {uploadError && (
+            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {uploadError}
+            </div>
+          )}
+
+          {/* File picker */}
+          <FormField label="Select File" required>
+            <div
+              onClick={() => fileRef.current?.click()}
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center transition hover:border-blue-400 hover:bg-blue-50"
+            >
+              <svg className="h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              {localFile ? (
+                <p className="text-sm font-semibold text-blue-600">{localFile.name}</p>
+              ) : (
+                <p className="text-sm text-slate-500">Click to choose PDF, DOCX, or image</p>
+              )}
+              <input
+                ref={fileRef}
+                type="file"
+                className="hidden"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                onChange={(e) => setLocalFile(e.target.files[0] || null)}
+              />
+            </div>
+          </FormField>
+
+          {/* BHP only: completed date */}
+          {!ismedical && (
+            <FormField label="Training Completed Date">
+              <Input type="date" value={form.completedDate} onChange={(e) => update("completedDate", e.target.value)} />
+            </FormField>
+          )}
+
+          {/* Expiry date */}
+          <FormField label="Expiry Date" required>
+            <Input type="date" value={form.expiryDate} onChange={(e) => update("expiryDate", e.target.value)} />
+          </FormField>
+
+          {/* Calculated status — read-only, derived from expiry date */}
+          {computedStatus && (
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-600">Calculated Status</p>
+              <StatusBadge status={computedStatus} />
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
+          <button onClick={onClose} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!localFile || !form.expiryDate || uploading}
+            className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {uploading ? "Uploading…" : "Upload & Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Clock-in Eligibility Tab ──────────────────────────────────────────────────
+// Extracted into its own component so it can declare local derived variables
+// without polluting the main EmployeeProfile scope.
+function EligibilityTab({ employee }) {
+  const medRequired = employee.requiresMedicalCertificate;
+  const bhpRequired = employee.requiresBHPTraining;
+  const medStatus   = employee.medicalCertificate?.status ?? "MISSING";
+  const bhpStatus   = employee.bhpTraining?.status        ?? "MISSING";
+
+  // Block rule: EXPIRED or MISSING on a required document prevents check-in.
+  // EXPIRING (within 30 days) still allows check-in — document is still valid.
+  const BLOCKING    = ["EXPIRED", "MISSING"];
+  const medBlocked  = medRequired && BLOCKING.includes(medStatus);
+  const bhpBlocked  = bhpRequired && BLOCKING.includes(bhpStatus);
+  const isBlocked   = !employee.isActive || medBlocked || bhpBlocked;
+
+  const blockMessages = [];
+  if (!employee.isActive) blockMessages.push("Employee account is inactive — contact an administrator");
+  if (medBlocked) blockMessages.push(`Medical certificate is ${medStatus.toLowerCase()} — upload a valid document to restore access`);
+  if (bhpBlocked) blockMessages.push(`BHP training certificate is ${bhpStatus.toLowerCase()} — upload a valid certificate to restore access`);
+
+  const checks = [
+    {
+      label:  "Employee Active",
+      ok:     employee.isActive,
+      detail: employee.isActive ? "Active" : "Inactive — contact an administrator",
+      sub:    null,
+    },
+    {
+      label:  "Medical Certificate",
+      ok:     !medBlocked,
+      detail: !medRequired
+        ? "Not required for this role"
+        : medBlocked
+          ? `Certificate is ${medStatus.toLowerCase()} — upload a new document to unblock`
+          : medStatus,
+      sub: medRequired ? formatDate(employee.medicalCertificate?.expiryDate) : null,
+    },
+    {
+      label:  "BHP Training",
+      ok:     !bhpBlocked,
+      detail: !bhpRequired
+        ? "Not required for this role"
+        : bhpBlocked
+          ? `Training is ${bhpStatus.toLowerCase()} — upload a new certificate to unblock`
+          : bhpStatus,
+      sub: bhpRequired ? formatDate(employee.bhpTraining?.expiryDate) : null,
+    },
+  ];
+
+  return (
+    <Card className={isBlocked ? "border-red-100" : "border-emerald-100"}>
+      <SectionTitle
+        title="Clock-in Eligibility"
+        subtitle="Checks whether the employee can start a work shift"
+      />
+      <div className={`rounded-2xl p-5 ${isBlocked ? "bg-red-50" : "bg-emerald-50"}`}>
+        <div className="mb-5 flex items-center gap-4">
+          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-2xl ${isBlocked ? "bg-red-100" : "bg-emerald-100"}`}>
+            {isBlocked ? "✗" : "✓"}
+          </div>
+          <div>
+            <h3 className={`text-xl font-bold ${isBlocked ? "text-red-700" : "text-emerald-700"}`}>
+              {isBlocked ? "Clock-in Blocked" : "Clock-in Allowed"}
+            </h3>
+            {isBlocked && blockMessages.length > 0 && (
+              <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                {blockMessages.map((msg) => (
+                  <li key={msg} className="text-sm text-red-600">{msg}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {checks.map((check) => (
+            <div key={check.label} className="rounded-xl bg-white p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-slate-800">{check.label}</p>
+                <span className={`text-base font-bold ${check.ok ? "text-emerald-600" : "text-red-600"}`}>
+                  {check.ok ? "✓" : "✗"}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">{check.detail}</p>
+              {check.sub && <p className="mt-0.5 text-xs text-slate-400">Expires: {check.sub}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────────
+function EmployeeProfile() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+
+  const { selected: employee, selectedLoading, selectedError, submitting, submitError } =
+    useSelector((s) => s.employees);
+
+  const [activeTab, setActiveTab]   = useState("overview");
+  const [editMode, setEditMode]     = useState(false);
+  const [uploadModal, setUploadModal] = useState(null); // "medical" | "bhp" | null
+  const [editForm, setEditForm]     = useState(null);
+  // viewingDoc tracks which document type is currently being fetched (for loading state).
+  const [viewingDoc, setViewingDoc] = useState(null); // "medical" | "bhp" | null
+  const [viewDocError, setViewDocError] = useState(null);
+
+  useEffect(() => {
+    if (id) dispatch(fetchEmployee(id));
+    return () => { dispatch(clearSelected()); };
+  }, [id, dispatch]);
+
+  // Seed edit form whenever employee data loads or changes
+  useEffect(() => {
+    if (employee) {
+      setEditForm({
+        phone:       employee.phone       ?? "",
+        dateOfBirth: toInputDate(employee.dateOfBirth),
+        pesel:       employee.pesel       ?? "",
+        department:  employee.department  ?? "",
+        position:    employee.position    ?? "",
+        site:        employee.site        ?? "",
+        contractType: employee.contractType ?? "",
+        startDate:   toInputDate(employee.startDate),
+        isActive:    employee.isActive    ?? true,
+        riskLevel:   employee.riskLevel   ?? "MEDIUM",
+        // OLD: inferred from certificate presence — ambiguous because the schema
+        //      default creates the sub-object for every employee.
+        // NEW: read the explicit boolean field; fall back to the old inference
+        //      for existing records that pre-date this field.
+        requiresMedical: employee.requiresMedicalCertificate
+          ?? !!employee.medicalCertificate?.documentPath,
+        requiresBHP: employee.requiresBHPTraining
+          ?? !!employee.bhpTraining?.documentPath,
+        medicalExamType:      "Periodic",
+        periodicBHPFrequency: "Every 3 years",
+        initialBHPRequired:   true,
+        requiresSpecialTraining: false,
+      });
+    }
+  }, [employee]);
+
+  function updateEdit(k, v) { setEditForm((p) => ({ ...p, [k]: v })); }
+
+  async function handleEditSave() {
+    if (!editForm || !employee) return;
+    dispatch(clearSubmitError());
+
+    const profileData = {
+      phone:        editForm.phone       || undefined,
+      pesel:        editForm.pesel       || undefined,
+      dateOfBirth:  editForm.dateOfBirth || undefined,
+      department:   editForm.department  || undefined,
+      position:     editForm.position    || undefined,
+      site:         editForm.site        || undefined,
+      contractType: editForm.contractType || undefined,
+      startDate:    editForm.startDate   || undefined,
+      isActive:     editForm.isActive,
+      riskLevel:    editForm.riskLevel,
+      // Save the explicit requirement flags so the Documents tab can
+      // conditionally show upload sections without inferring from status.
+      requiresMedicalCertificate: editForm.requiresMedical,
+      requiresBHPTraining:        editForm.requiresBHP,
+      medicalCertificate: editForm.requiresMedical
+        ? (employee.medicalCertificate ?? { status: "MISSING" })
+        : undefined,
+      bhpTraining: editForm.requiresBHP
+        ? (employee.bhpTraining ?? { status: "MISSING" })
+        : undefined,
+    };
+
+    // PUT uses the RegulaOne user _id (stored as employeeId in SafeWork_Employee)
+    const result = await dispatch(upsertProfile({
+      employeeId: employee.userId,
+      profileData,
+    }));
+    if (upsertProfile.fulfilled.match(result)) {
+      setEditMode(false);
+      dispatch(fetchEmployee(id)); // refresh to get latest merged data
+    }
+  }
+
+  // Fetches a short-lived pre-signed S3 GET URL from the backend and opens
+  // the document in a new browser tab.  The URL expires in 15 minutes.
+  async function handleViewDocument(docType) {
+    setViewingDoc(docType);
+    setViewDocError(null);
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/admin/employees/${id}/document-url`,
+        {
+          params: { docType },
+          // Send the auth cookie with the request.
+          withCredentials: true,
+        }
+      );
+      const viewUrl = response.data?.data?.viewUrl ?? response.data?.viewUrl;
+      if (!viewUrl) throw new Error("No URL returned from server");
+      window.open(viewUrl, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setViewDocError(err.response?.data?.message || err.message || "Failed to open document");
+    } finally {
+      setViewingDoc(null);
+    }
+  }
+
+  // ─── Loading / Error states ─────────────────────────────────────────────────
+  if (selectedLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          <p className="text-sm text-slate-500">Loading employee profile…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedError || !employee) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 p-8">
+        <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+          <p className="mb-2 font-bold text-red-700">Failed to load employee</p>
+          <p className="text-sm text-red-600">{selectedError || "Employee not found"}</p>
+          <button onClick={() => navigate("/employees")}
+            className="mt-4 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white">
+            ← Back to List
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const initials = (employee.user?.name ?? "??").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  const medStatus = normalisedStatus(employee.medicalCertificate?.status);
+  const bhpStatus = normalisedStatus(employee.bhpTraining?.status);
+  const overallStatus = normalisedStatus(employee.complianceStatus);
+  const clockStatus = employee.isBlocked ? "blocked" : "allowed";
+  const medDays = daysUntil(employee.medicalCertificate?.expiryDate);
+  const bhpDays = daysUntil(employee.bhpTraining?.expiryDate);
+
+  const TABS = [
+    { key: "overview",     label: "Overview"          },
+    { key: "employment",   label: "Employment"        },
+    { key: "documents",    label: "Documents"         },
+    { key: "eligibility",  label: "Clock-in"          },
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-100 p-4 sm:p-6 lg:p-8">
+      {uploadModal && (
+        <UploadModal
+          docType={uploadModal}
+          profileId={id}
+          onClose={() => { setUploadModal(null); dispatch(clearUploadError()); }}
+          onSuccess={() => { setUploadModal(null); dispatch(fetchEmployee(id)); }}
+        />
+      )}
+
+      <div className="mx-auto max-w-7xl">
+
+        {/* ── Profile Header ─────────────────────────────────────────────────── */}
+        <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-xl">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+
+            <div className="flex items-start gap-4">
+              {/* Avatar */}
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-2xl font-bold ring-1 ring-white/20">
+                {initials}
+              </div>
+              <div>
+                <button
+                  onClick={() => navigate("/employees")}
+                  className="mb-2 text-xs text-slate-400 hover:text-white transition-colors"
+                >
+                  ← Back to list
+                </button>
+                <h1 className="text-3xl font-bold">{employee.user?.name ?? "—"}</h1>
+                <p className="mt-1 text-sm text-slate-300">
+                  {employee.user?.email}
+                  {employee.position ? ` • ${employee.position}` : ""}
+                  {employee.department ? ` • ${employee.department}` : ""}
+                  {employee.site ? ` • ${employee.site}` : ""}
+                </p>
+                <p className="mt-1 text-xs text-slate-400 capitalize">
+                  {employee.user?.role?.toLowerCase().replace(/_/g, " ")}
+                  {" • "}
+                  {employee.isActive ? "Active" : "Inactive"}
+                </p>
+              </div>
+            </div>
+
+            {/* Status cards */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 text-center">
+                <p className="mb-2 text-xs text-slate-300">Compliance</p>
+                <StatusBadge status={overallStatus} />
+              </div>
+              <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 text-center">
+                <p className="mb-2 text-xs text-slate-300">Clock-in</p>
+                <StatusBadge status={clockStatus} />
+              </div>
+              <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 text-center">
+                <p className="mb-1 text-xs text-slate-300">Risk</p>
+                <p className={`text-sm font-bold ${riskColor(employee.riskLevel)}`}>
+                  {employee.riskLevel ?? "—"}
+                </p>
+              </div>
+            </div>
+
+            {/* Edit button */}
+            <button
+              onClick={() => { setEditMode(true); setActiveTab("employment"); }}
+              className="self-start rounded-xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20 lg:self-auto"
+            >
+              Edit Profile
+            </button>
+          </div>
+        </div>
+
+        {/* ── Tabs ───────────────────────────────────────────────────────────── */}
+        <div className="mb-6 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => { setActiveTab(tab.key); if (tab.key !== "employment") setEditMode(false); }}
+              className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-bold transition ${
+                activeTab === tab.key ? "bg-slate-900 text-white shadow" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════════
+            TAB: Overview
+           ═══════════════════════════════════════════════════════════════════════ */}
+        {activeTab === "overview" && (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+
+            {/* Personal Info */}
+            <Card className="lg:col-span-2">
+              <SectionTitle title="Personal Information" subtitle="Identity and contact details" />
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <InfoRow label="Full Name"    value={employee.user?.name} />
+                <InfoRow label="Email"        value={employee.user?.email} />
+                <InfoRow label="Phone"        value={employee.phone} />
+                <InfoRow label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
+                <InfoRow label="PESEL"        value={employee.pesel} />
+                <InfoRow label="Status"       value={employee.isActive ? "Active" : "Inactive"} />
+              </div>
+
+              <div className="mt-6 border-t border-slate-100 pt-5">
+                <h4 className="mb-4 text-sm font-bold text-slate-700">Employment Details</h4>
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <InfoRow label="Department"   value={employee.department} />
+                  <InfoRow label="Position"     value={employee.position} />
+                  <InfoRow label="Work Site"    value={employee.site} />
+                  <InfoRow label="Contract Type" value={employee.contractType} />
+                  <InfoRow label="Start Date"   value={formatDate(employee.startDate)} />
+                  <InfoRow label="Risk Level"   value={employee.riskLevel} />
+                </div>
+              </div>
+            </Card>
+
+            {/* Compliance Summary */}
+            {/* We only show a document card when that document is REQUIRED for
+                this employee (requiresMedicalCertificate / requiresBHPTraining).
+                A document that is not required must NOT appear as "Missing" here
+                — that would wrongly suggest the employee is out of compliance.
+                This keeps the Overview tab consistent with the Documents tab,
+                which already hides upload cards for documents that are not
+                required. */}
+            <div className="space-y-4">
+              {/* When neither document is required, tell the user plainly so the
+                  column is not just empty. */}
+              {!employee.requiresMedicalCertificate && !employee.requiresBHPTraining && (
+                <Card>
+                  <div className="py-6 text-center">
+                    <p className="font-semibold text-slate-700">No compliance documents required</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      This employee's role does not require a medical certificate
+                      or BHP training.
+                    </p>
+                  </div>
+                </Card>
+              )}
+
+              {/* Medical — only shown when the role requires it */}
+              {employee.requiresMedicalCertificate && (
+              <Card>
+                <SectionTitle title="Medical Certificate" />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">Status</span>
+                    <StatusBadge status={medStatus} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">Expiry</span>
+                    <span className="text-sm font-semibold text-slate-800">
+                      {formatDate(employee.medicalCertificate?.expiryDate)}
+                    </span>
+                  </div>
+                  {medDays !== null && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600">Days Left</span>
+                      <span className={`text-sm font-bold ${medDays < 0 ? "text-red-600" : medDays < 30 ? "text-amber-600" : "text-emerald-600"}`}>
+                        {medDays < 0 ? `${Math.abs(medDays)} overdue` : `${medDays} days`}
+                      </span>
+                    </div>
+                  )}
+                  {employee.medicalCertificate?.documentPath && (
+                    <div className="mt-2 rounded-xl bg-slate-50 px-3 py-2">
+                      <p className="text-xs text-slate-400">Document stored</p>
+                      <p className="mt-0.5 truncate text-xs font-semibold text-blue-600">
+                        {employee.medicalCertificate.documentPath}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+              )}
+
+              {/* BHP — only shown when the role requires it */}
+              {employee.requiresBHPTraining && (
+              <Card>
+                <SectionTitle title="BHP Safety Training" />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">Status</span>
+                    <StatusBadge status={bhpStatus} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">Completed</span>
+                    <span className="text-sm font-semibold text-slate-800">
+                      {formatDate(employee.bhpTraining?.completedDate)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">Expiry</span>
+                    <span className="text-sm font-semibold text-slate-800">
+                      {formatDate(employee.bhpTraining?.expiryDate)}
+                    </span>
+                  </div>
+                  {bhpDays !== null && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600">Days Left</span>
+                      <span className={`text-sm font-bold ${bhpDays < 0 ? "text-red-600" : bhpDays < 30 ? "text-amber-600" : "text-emerald-600"}`}>
+                        {bhpDays < 0 ? `${Math.abs(bhpDays)} overdue` : `${bhpDays} days`}
+                      </span>
+                    </div>
+                  )}
+                  {employee.bhpTraining?.documentPath && (
+                    <div className="mt-2 rounded-xl bg-slate-50 px-3 py-2">
+                      <p className="text-xs text-slate-400">Document stored</p>
+                      <p className="mt-0.5 truncate text-xs font-semibold text-blue-600">
+                        {employee.bhpTraining.documentPath}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+              )}
+
+              {/* Block reason */}
+              {employee.isBlocked && (
+                <Card className="border-red-100 bg-red-50">
+                  <SectionTitle title="Block Reason" />
+                  <p className="text-sm font-semibold text-red-700">
+                    {employee.blockReason || "Compliance block is active"}
+                  </p>
+                </Card>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════════
+            TAB: Employment (Edit form)
+           ═══════════════════════════════════════════════════════════════════════ */}
+        {activeTab === "employment" && editForm && (
+          <div className="space-y-5">
+            {submitError && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {submitError}
+              </div>
+            )}
+
+            {!editMode ? (
+              /* ── Read-only employment view ───────────────────────────────── */
+              <Card>
+                <div className="mb-5 flex items-center justify-between border-b border-slate-100 pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Employment Details</h3>
+                    <p className="mt-1 text-sm text-slate-500">Role, contract, and workplace information</p>
+                  </div>
+                  <button
+                    onClick={() => setEditMode(true)}
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
+                  >
+                    Edit
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <InfoRow label="Department"    value={employee.department} />
+                  <InfoRow label="Position"      value={employee.position} />
+                  <InfoRow label="Work Site"     value={employee.site} />
+                  <InfoRow label="Contract Type" value={employee.contractType} />
+                  <InfoRow label="Start Date"    value={formatDate(employee.startDate)} />
+                  <InfoRow label="Status"        value={employee.isActive ? "Active" : "Inactive"} />
+                  <InfoRow label="Risk Level"    value={employee.riskLevel} />
+                </div>
+              </Card>
+            ) : (
+              /* ── Edit form ───────────────────────────────────────────────── */
+              <>
+                {/* Identity (read-only) */}
+                <Card>
+                  <SectionTitle title="Employee Identity" subtitle="Identity is managed by RegulaOne and cannot be changed here" />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FormField label="Full Name">
+                      <Input type="text" value={employee.user?.name ?? ""} disabled />
+                    </FormField>
+                    <FormField label="Email">
+                      <Input type="email" value={employee.user?.email ?? ""} disabled />
+                    </FormField>
+                    <FormField label="Phone">
+                      <Input type="tel" placeholder="+48 600 000 000" value={editForm.phone}
+                        onChange={(e) => updateEdit("phone", e.target.value)} />
+                    </FormField>
+                    <FormField label="Date of Birth">
+                      <Input type="date" value={editForm.dateOfBirth}
+                        onChange={(e) => updateEdit("dateOfBirth", e.target.value)} />
+                    </FormField>
+                    <FormField label="PESEL / National ID">
+                      <Input type="text" placeholder="Polish national identifier" value={editForm.pesel}
+                        onChange={(e) => updateEdit("pesel", e.target.value)} />
+                    </FormField>
+                  </div>
+                </Card>
+
+                {/* Role & workplace */}
+                <Card>
+                  <SectionTitle title="Role & Workplace" subtitle="Job role, department, and site assignment" />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <FormField label="Department" required>
+                      <SearchableSelect
+                        value={editForm.department}
+                        onChange={(v) => updateEdit("department", v)}
+                        options={DEPARTMENTS}
+                        placeholder="Search department..."
+                      />
+                    </FormField>
+                    <FormField label="Position" required>
+                      <SearchableSelect
+                        value={editForm.position}
+                        onChange={(v) => updateEdit("position", v)}
+                        options={JOB_ROLES}
+                        placeholder="Search position..."
+                      />
+                    </FormField>
+                    <FormField label="Work Site" required>
+                      <SelectInput value={editForm.site} onChange={(e) => updateEdit("site", e.target.value)}>
+                        <option value="">Select site</option>
+                        {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </SelectInput>
+                    </FormField>
+                    <FormField label="Contract Type" required>
+                      <SelectInput value={editForm.contractType} onChange={(e) => updateEdit("contractType", e.target.value)}>
+                        <option value="">Select contract type</option>
+                        {CONTRACT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </SelectInput>
+                    </FormField>
+                    <FormField label="Start Date">
+                      <Input type="date" value={editForm.startDate}
+                        onChange={(e) => updateEdit("startDate", e.target.value)} />
+                    </FormField>
+                  </div>
+
+                  {/* Active/Inactive toggle */}
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Employment Status</p>
+                    <div className="flex gap-3">
+                      {["Active", "Inactive"].map((s) => (
+                        <button key={s} type="button"
+                          onClick={() => updateEdit("isActive", s === "Active")}
+                          className={`flex-1 rounded-xl border px-4 py-3 text-sm font-bold transition sm:flex-none sm:px-10 ${
+                            editForm.isActive === (s === "Active")
+                              ? s === "Active" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"
+                              : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100"
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Risk classification */}
+                <Card>
+                  <SectionTitle title="Risk Classification" subtitle="Occupational risk level for this position" />
+                  <div className="grid grid-cols-3 gap-3">
+                    {RISK_LEVELS.map((level) => {
+                      const sel = editForm.riskLevel === level;
+                      const colorMap = {
+                        LOW:    sel ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-emerald-200 hover:bg-emerald-50/60",
+                        MEDIUM: sel ? "border-amber-300 bg-amber-50 text-amber-700"       : "border-slate-200 bg-slate-50 text-slate-500 hover:border-amber-200 hover:bg-amber-50/60",
+                        HIGH:   sel ? "border-red-300 bg-red-50 text-red-700"             : "border-slate-200 bg-slate-50 text-slate-500 hover:border-red-200 hover:bg-red-50/60",
+                      };
+                      const dotMap = { LOW: "bg-emerald-500", MEDIUM: "bg-amber-500", HIGH: "bg-red-500" };
+                      return (
+                        <button key={level} type="button" onClick={() => updateEdit("riskLevel", level)}
+                          className={`rounded-xl border px-4 py-5 text-sm font-bold transition ${colorMap[level]}`}>
+                          <span className={`mx-auto mb-2 block h-3 w-3 rounded-full ${dotMap[level]}`} />
+                          {level.charAt(0) + level.slice(1).toLowerCase()} Risk
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Card>
+
+                {/* Compliance requirements */}
+                <Card>
+                  <SectionTitle title="Medical Requirements" subtitle="Occupational health examination configuration" />
+                  <div className="space-y-3">
+                    <Toggle
+                      label="Requires Medical Certificate"
+                      hint="Badania medycyny pracy — occupational health examination required"
+                      value={editForm.requiresMedical}
+                      onChange={(v) => updateEdit("requiresMedical", v)}
+                    />
+                    {editForm.requiresMedical && (
+                      <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                        <FormField label="Medical Exam Type">
+                          <SelectInput value={editForm.medicalExamType} onChange={(e) => updateEdit("medicalExamType", e.target.value)}>
+                            {MEDICAL_EXAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                          </SelectInput>
+                        </FormField>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                <Card>
+                  <SectionTitle title="BHP Safety Training" subtitle="Bezpieczenstwo i Higiena Pracy — mandatory safety training" />
+                  <div className="space-y-3">
+                    <Toggle
+                      label="Requires BHP Training"
+                      hint="Mandatory safety training under Polish Labour Code"
+                      value={editForm.requiresBHP}
+                      onChange={(v) => updateEdit("requiresBHP", v)}
+                    />
+                    {editForm.requiresBHP && (
+                      <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                        <Toggle
+                          label="Initial BHP Required"
+                          hint="One-time onboarding safety training on employment start date"
+                          value={editForm.initialBHPRequired}
+                          onChange={(v) => updateEdit("initialBHPRequired", v)}
+                        />
+                        <FormField label="Periodic BHP Frequency">
+                          <SelectInput value={editForm.periodicBHPFrequency} onChange={(e) => updateEdit("periodicBHPFrequency", e.target.value)}>
+                            {BHP_FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
+                          </SelectInput>
+                        </FormField>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Action buttons */}
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => { setEditMode(false); }}
+                    className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleEditSave}
+                    disabled={submitting}
+                    className="rounded-xl bg-blue-600 px-8 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {submitting ? "Saving…" : "Save Changes"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════════
+            TAB: Documents
+           ═══════════════════════════════════════════════════════════════════════ */}
+        {activeTab === "documents" && (
+          <div className="space-y-4">
+            {/* Document view/fetch error */}
+            {viewDocError && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {viewDocError}
+              </div>
+            )}
+
+            {/* If neither document is required, show a single informational card */}
+            {!employee.requiresMedicalCertificate && !employee.requiresBHPTraining && (
+              <Card>
+                <div className="py-6 text-center">
+                  <p className="font-semibold text-slate-700">No compliance documents required</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Go to the <strong>Employment</strong> tab and set "Requires Medical Certificate"
+                    or "Requires BHP Training" to <strong>Yes</strong> to enable document uploads.
+                  </p>
+                </div>
+              </Card>
+            )}
+
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+              {/* Medical Certificate — only shown when the position requires it */}
+              {employee.requiresMedicalCertificate && (
+                <Card>
+                  <div className="mb-5 flex items-center justify-between border-b border-slate-100 pb-4">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">Medical Certificate</h3>
+                      <p className="mt-1 text-sm text-slate-500">Badania medycyny pracy</p>
+                    </div>
+                    <button
+                      onClick={() => setUploadModal("medical")}
+                      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                    >
+                      Upload
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">Status</span>
+                      <StatusBadge status={medStatus} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">Expiry Date</span>
+                      <span className="text-sm font-semibold text-slate-800">
+                        {formatDate(employee.medicalCertificate?.expiryDate)}
+                      </span>
+                    </div>
+                    {medDays !== null && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-500">Days Until Expiry</span>
+                        <span className={`text-sm font-bold ${medDays < 0 ? "text-red-600" : medDays < 30 ? "text-amber-600" : "text-emerald-600"}`}>
+                          {medDays < 0 ? `${Math.abs(medDays)} days overdue` : `${medDays} days remaining`}
+                        </span>
+                      </div>
+                    )}
+
+                    {employee.medicalCertificate?.documentPath ? (
+                      // Document is stored in S3 — request a short-lived pre-signed GET URL
+                      // from the backend and open it in a new tab.
+                      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">
+                          Stored Document
+                        </p>
+                        <p className="mb-3 break-all text-xs text-slate-500">
+                          {employee.medicalCertificate.documentPath.split("/").pop()}
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleViewDocument("medical")}
+                            disabled={viewingDoc === "medical"}
+                            className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {viewingDoc === "medical" ? "Opening…" : "View Document"}
+                          </button>
+                          <button
+                            onClick={() => setUploadModal("medical")}
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                          >
+                            Replace
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                        <p className="text-sm text-slate-400">No document uploaded yet</p>
+                        <button
+                          onClick={() => setUploadModal("medical")}
+                          className="mt-3 text-sm font-bold text-blue-600 hover:underline"
+                        >
+                          Upload Now →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+
+              {/* BHP Training — only shown when the position requires it */}
+              {employee.requiresBHPTraining && (
+                <Card>
+                  <div className="mb-5 flex items-center justify-between border-b border-slate-100 pb-4">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">BHP Safety Training</h3>
+                      <p className="mt-1 text-sm text-slate-500">Bezpieczenstwo i Higiena Pracy</p>
+                    </div>
+                    <button
+                      onClick={() => setUploadModal("bhp")}
+                      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                    >
+                      Upload
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">Status</span>
+                      <StatusBadge status={bhpStatus} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">Completed Date</span>
+                      <span className="text-sm font-semibold text-slate-800">
+                        {formatDate(employee.bhpTraining?.completedDate)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">Expiry Date</span>
+                      <span className="text-sm font-semibold text-slate-800">
+                        {formatDate(employee.bhpTraining?.expiryDate)}
+                      </span>
+                    </div>
+                    {bhpDays !== null && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-500">Days Until Expiry</span>
+                        <span className={`text-sm font-bold ${bhpDays < 0 ? "text-red-600" : bhpDays < 30 ? "text-amber-600" : "text-emerald-600"}`}>
+                          {bhpDays < 0 ? `${Math.abs(bhpDays)} days overdue` : `${bhpDays} days remaining`}
+                        </span>
+                      </div>
+                    )}
+
+                    {employee.bhpTraining?.documentPath ? (
+                      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">
+                          Stored Document
+                        </p>
+                        <p className="mb-3 break-all text-xs text-slate-500">
+                          {employee.bhpTraining.documentPath.split("/").pop()}
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleViewDocument("bhp")}
+                            disabled={viewingDoc === "bhp"}
+                            className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {viewingDoc === "bhp" ? "Opening…" : "View Document"}
+                          </button>
+                          <button
+                            onClick={() => setUploadModal("bhp")}
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                          >
+                            Replace
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                        <p className="text-sm text-slate-400">No document uploaded yet</p>
+                        <button
+                          onClick={() => setUploadModal("bhp")}
+                          className="mt-3 text-sm font-bold text-blue-600 hover:underline"
+                        >
+                          Upload Now →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════════
+            TAB: Clock-in Eligibility
+           ═══════════════════════════════════════════════════════════════════════ */}
+        {activeTab === "eligibility" && <EligibilityTab employee={employee} />}
+
+      </div>
+    </div>
+  );
+}
+
+export default EmployeeProfile;
