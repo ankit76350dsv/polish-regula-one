@@ -60,6 +60,9 @@ export const DATA_CATEGORIES = [
   { id: 'sex_life',           en: 'Data concerning sex life (Art. 9)',         pl: 'Dane dotyczące życia seksualnego (art. 9)', special: true },
   { id: 'sexual_orientation', en: 'Sexual orientation (Art. 9)',               pl: 'Orientacja seksualna (art. 9)', special: true },
   { id: 'criminal',           en: 'Criminal convictions / offences (Art. 10)', pl: 'Dane o wyrokach i naruszeniach (art. 10)', art10: true },
+  // Catch-all for ordinary data not covered above. GDPR does not fix the list of
+  // ordinary data types, so this keeps the register accurate. NOT an Art. 9/10 category.
+  { id: 'other',              en: 'Other (please specify)',                    pl: 'Inne (proszę określić)' },
 ];
 
 export const DATA_SUBJECT_CATEGORIES = [

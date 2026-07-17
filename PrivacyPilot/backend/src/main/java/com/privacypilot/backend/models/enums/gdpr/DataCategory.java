@@ -35,7 +35,12 @@ public enum DataCategory {
     SEX_LIFE("sex_life", "Data concerning sex life (Art. 9)", true, false),
     SEXUAL_ORIENTATION("sexual_orientation", "Sexual orientation (Art. 9)", true, false),
     // Article 10 criminal data.
-    CRIMINAL("criminal", "Criminal convictions / offences (Art. 10)", false, true);
+    CRIMINAL("criminal", "Criminal convictions / offences (Art. 10)", false, true),
+    // Catch-all for ordinary personal data not covered by a category above (GDPR
+    // does not fix the list of ordinary data types). NOT special and NOT criminal
+    // — never use this for Art. 9 / Art. 10 data, which have their own entries.
+    // Tip: pair this with a free-text note if you want to capture WHAT "other" is.
+    OTHER("other", "Other (please specify)", false, false);
 
     private final String code;
     private final String en;
