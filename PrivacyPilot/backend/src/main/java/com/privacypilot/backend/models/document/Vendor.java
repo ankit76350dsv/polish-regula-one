@@ -22,25 +22,41 @@ import java.util.List;
 @Document(collection = "privacypilot_vendors")
 public class Vendor extends BaseDocument {
 
-    // The supplier's name.
+    // WHAT: The supplier's name.
+    // WHY: So the company can identify which outside party handles its data.
+    // EXAMPLE: "Mailchimp" or "Comarch ERP".
     private String name;
 
-    // The country the supplier is based in.
+    // WHAT: The country the supplier is based in.
+    // WHY: Helps judge whether data may leave the EEA (see Transfers).
+    // EXAMPLE: "Poland", "Germany", "USA".
     private String country;
 
-    // A human-friendly note about WHERE the data actually sits (e.g. the data
-    // centre region), which matters for EEA data-residency checks.
+    // WHAT: A plain note about WHERE the data actually sits (e.g. the data-centre
+    //       region), which can differ from the head-office country.
+    // WHY: Data must stay in the EEA by default — the real storage region is what
+    //      matters for that residency check, not the company's address.
+    // EXAMPLE: "AWS eu-central-1 (Frankfurt)".
     private String region;
 
-    // Whether the DPA is signed, being negotiated, or missing.
+    // WHAT: Whether the Data Processing Agreement (Art. 28 contract) is in place.
+    // WHY: You may only use a processor under a signed DPA — a MISSING one is a real
+    //      compliance gap, shown in red on the page.
+    // EXAMPLE: SIGNED / IN_NEGOTIATION / MISSING.
     private DpaStatus dpaStatus;
 
-    // Any sub-processors this supplier uses (Art. 28(2)/(4)).
+    // WHAT: The other suppliers this vendor uses under the hood (Art. 28(2)/(4)).
+    // WHY: Sub-processors also touch your data, so they must be known and covered.
+    // EXAMPLE: ["Amazon Web Services", "SendGrid"].
     private List<String> subprocessors = new ArrayList<>();
 
-    // The overall risk rating for this supplier.
+    // WHAT: The overall risk rating for this supplier.
+    // WHY: Helps prioritise which vendors to review and watch most closely.
+    // EXAMPLE: LOW / MEDIUM / HIGH.
     private RiskLevel riskLevel;
 
-    // When the supplier was last reviewed. Null means "never reviewed yet".
+    // WHAT: When the supplier was last reviewed.
+    // WHY: Processors must be reviewed regularly; a blank value flags "never reviewed".
+    // EXAMPLE: 2026-01-15. Null means it has never been reviewed yet.
     private Instant lastReviewAt;
 }
