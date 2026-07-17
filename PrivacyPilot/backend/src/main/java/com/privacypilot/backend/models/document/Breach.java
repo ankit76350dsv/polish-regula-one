@@ -43,8 +43,16 @@ public class Breach extends BaseDocument {
     // Which kinds of personal data were affected.
     private List<DataCategory> dataCategories = new ArrayList<>();
 
-    // Roughly how many people are affected.
+    // WHAT: Roughly how many PEOPLE are affected (Art. 33(3)(a)).
+    // WHY: The UODO breach report asks for the approximate number of data subjects.
+    // EXAMPLE: 1200 employees.
     private int subjectsCount;
+
+    // WHAT: Roughly how many DATA RECORDS are affected (Art. 33(3)(a)).
+    // WHY: The UODO breach report asks for BOTH the number of people AND the number
+    //      of records — one person can have many records, so they are different.
+    // EXAMPLE: 3500 payroll rows for those 1200 people.
+    private int recordsCount;
 
     // The risk to people's rights and freedoms (low / medium / high).
     private RiskLevel riskLevel;
@@ -57,6 +65,11 @@ public class Breach extends BaseDocument {
 
     // True if the affected people must be told directly (Art. 34).
     private boolean subjectsNotificationRequired;
+
+    // WHAT: When the affected people were actually told directly (Art. 34).
+    // WHY: Proves the Art. 34 duty was met, and when. Mirrors uodoNotifiedAt.
+    // EXAMPLE: 2026-07-18. Null means "the people have not been told yet".
+    private Instant subjectsNotifiedAt;
 
     // The written reasoning for the risk decision and notification choices. This
     // is the accountability record an auditor will read.
