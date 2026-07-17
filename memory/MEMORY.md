@@ -14,3 +14,4 @@
 - [PrivacyPilot validation](privacypilot-validation-2026-07.md) — new PrivacyPilot/frontend built & GDPR-hardened (2026-07-09); production-shaped, RBAC+audit+all Module-6 features; remaining work is backend-shaped
 - [SafeVoice KMS encryption](safevoice-kms-encryption.md) — 2026-07-09; backend-mediated AWS KMS envelope encryption for report/message content; browser encrypts, no AWS creds in browser; doc in SafeVoice/backend/docs/
 - [SafeVoice RegulaOne username immutable](safevoice-regulaone-username-immutable.md) — RegulaOne user name is the actor identity everywhere (audit/timeline/sender); TODO: make that name non-editable for integrity
+- [PrivacyPilot "Other" category specify field](privacypilot-other-category-specify-field.md) — "Other" data category added but no free-text specify box yet; open decision + parallel RecipientCategory question; full note in repo docs/pending-decisions.md
