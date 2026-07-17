@@ -1,12 +1,16 @@
 package com.privacypilot.backend.model.document;
 
 import com.privacypilot.backend.model.base.BaseDocument;
+
 import com.privacypilot.backend.model.embedded.DpiaApproval;
 import com.privacypilot.backend.model.embedded.DpiaRisk;
+
 import com.privacypilot.backend.model.enums.dpia.DpiaCriterion;
 import com.privacypilot.backend.model.enums.dpia.DpiaStatus;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
