@@ -17,12 +17,19 @@ import java.time.Instant;
 @AllArgsConstructor
 public class DpiaApproval {
 
-    // Which role this sign-off is for (e.g. DPO or TENANT_ADMIN).
+    // WHAT: Which ROLE this sign-off is for (e.g. DPO or Company Admin).
+    // WHY: Only a person with this exact role may sign this line — a Company Admin
+    //      cannot sign the DPO's line and vice versa (separation of duties).
+    // EXAMPLE: DPO for the first line, TENANT_ADMIN for the second.
     private PrivacyRole role;
 
-    // The name of the person who signs (or is expected to sign).
+    // WHAT: The name of the person who signed (or who is expected to sign).
+    // WHY: Records WHO approved, for the audit trail. Empty until someone signs.
+    // EXAMPLE: "Karolina Wójcik" (taken from the signer's login at sign-time).
     private String name;
 
-    // When they signed. Null means "not signed yet".
+    // WHAT: The date/time this line was signed.
+    // WHY: Records WHEN it was approved. Null means "still pending / not signed yet".
+    // EXAMPLE: 2026-07-17. Null while the line still shows "Pending".
     private Instant approvedAt;
 }

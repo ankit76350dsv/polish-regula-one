@@ -18,24 +18,44 @@ import org.bson.types.ObjectId;
 @AllArgsConstructor
 public class DpiaRisk {
 
-    // A unique id for this risk line, so the UI can edit/delete a single one.
+    // WHAT: A unique id for this one risk line.
+    // WHY: So the screen can edit or delete a single risk without touching the others.
+    // EXAMPLE: an auto-generated value like "66f0a1c2...".
     private String id = new ObjectId().toHexString();
 
-    // Plain description of what could go wrong.
+    // WHAT: A plain description of what could go wrong.
+    // WHY: You must name the danger before you can measure or reduce it.
+    // EXAMPLE: "Power imbalance pressures employees to hand over data."
     private String description;
 
-    // How likely it is, from 1 (rare) to 5 (very likely) — before mitigation.
+    // WHAT: How LIKELY the danger is to happen, from 1 (rare) to 5 (very likely) —
+    //       BEFORE any safeguards.
+    // WHY: Half of the risk score. Bigger chance = bigger risk.
+    // EXAMPLE: 3 (it could happen sometimes).
     private int likelihood;
 
-    // How bad it would be, from 1 (minor) to 5 (severe) — before mitigation.
+    // WHAT: How BAD it would be if it happened, from 1 (minor) to 5 (severe) —
+    //       BEFORE any safeguards.
+    // WHY: The other half of the risk score. Worse harm = bigger risk.
+    // EXAMPLE: 4 (serious harm to the person).
     private int severity;
 
-    // What the company will do to reduce this risk.
+    // The risk score is likelihood × severity (1–25). E.g. 3 × 4 = 12.
+
+    // WHAT: What the company will do to reduce this risk (the safety step).
+    // WHY: Finding a danger is not enough — you must show how you make it safer.
+    // EXAMPLE: "Transparent policy, no covert processing, complaint channel."
     private String mitigation;
 
-    // How likely it is AFTER the mitigation (1–5).
+    // WHAT: How likely the danger is AFTER the safeguard is applied (1–5).
+    // WHY: Proves the safety step actually lowered the chance of harm.
+    // EXAMPLE: 2 (less likely now).
     private int residualLikelihood;
 
-    // How bad it would be AFTER the mitigation (1–5).
+    // WHAT: How bad it would be AFTER the safeguard is applied (1–5).
+    // WHY: Proves the safety step actually reduced the harm. The LEFTOVER score
+    //      (residualLikelihood × residualSeverity) is what the law cares about most —
+    //      if it stays high, prior consultation with UODO is needed (Art. 36).
+    // EXAMPLE: 3 → residual score 2 × 3 = 6 (down from 12).
     private int residualSeverity;
 }
