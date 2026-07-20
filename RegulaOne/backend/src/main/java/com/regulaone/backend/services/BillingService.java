@@ -33,10 +33,6 @@ public class BillingService {
     // monotonically increasing across all tenants (no per-tenant counter needed).
     public Invoice generateInvoice(Tenant tenant, AppPackage pkg, boolean isFree) {
 
-        long nextSeq = invoiceRepository.count() + 1;
-        int year = LocalDateTime.now().getYear();
-        String invoiceNumber = String.format("INV-%d-%04d", year, nextSeq);
-
         LocalDateTime now = LocalDateTime.now();
 
         // periodEnd is based on the package duration (in days) so the invoice
@@ -44,6 +40,20 @@ public class BillingService {
         LocalDateTime periodEnd = (pkg.getDuration() != null)
                 ? now.plusDays(pkg.getDuration())
                 : now.plusMonths(1);
+
+        return generateInvoice(tenant, pkg, isFree, now, periodEnd);
+    }
+
+    // Overload that lets the caller specify the exact billing period. Used by
+    // package renewal, where the new period may start when the OLD one ends
+    // (stacked renewal) rather than "now", so the invoice reflects the real
+    // service window being paid for.
+    public Invoice generateInvoice(Tenant tenant, AppPackage pkg, boolean isFree,
+                                   LocalDateTime periodStart, LocalDateTime periodEnd) {
+
+        long nextSeq = invoiceRepository.count() + 1;
+        int year = LocalDateTime.now().getYear();
+        String invoiceNumber = String.format("INV-%d-%04d", year, nextSeq);
 
         BigDecimal amount = isFree ? BigDecimal.ZERO : (pkg.getPrice() != null ? pkg.getPrice() : BigDecimal.ZERO);
         String currency   = pkg.getCurrency() != null ? pkg.getCurrency() : "EUR";
@@ -56,9 +66,9 @@ public class BillingService {
                 .amount(amount)
                 .currency(currency)
                 .status(isFree ? InvoiceStatus.FREE : InvoiceStatus.PAID)
-                .periodStart(now)
+                .periodStart(periodStart)
                 .periodEnd(periodEnd)
-                .createdAt(now)
+                .createdAt(LocalDateTime.now())
                 .build();
 
         return invoiceRepository.save(invoice);

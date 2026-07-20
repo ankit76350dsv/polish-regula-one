@@ -1,12 +1,16 @@
 package com.regulaone.backend.services;
 
 import com.regulaone.backend.dto.Package.PackagePageResponse;
+import com.regulaone.backend.dto.Package.PackageRenewalResponse;
 import com.regulaone.backend.dto.Package.PackageRequest;
 import com.regulaone.backend.dto.Package.PackageResponse;
 import com.regulaone.backend.dto.Package.PackageTierStatsResponse;
+import com.regulaone.backend.dto.Package.RenewPackageRequest;
 import com.regulaone.backend.dto.Package.TierChangeResponse;
 
 import com.regulaone.backend.models.AppPackage;
+import com.regulaone.backend.models.DurationType;
+import com.regulaone.backend.models.Invoice;
 import com.regulaone.backend.models.PackageStatus;
 import com.regulaone.backend.models.Tenant;
 import com.regulaone.backend.repository.PackageRepository;
@@ -30,6 +34,96 @@ public class PackageService {
 
     private final PackageRepository packageRepository;
     private final TenantRepository tenantRepository;
+    private final BillingService billingService;
+
+    // ── Package renewal ───────────────────────────────────────────────────────
+
+    /**
+     * Renews a tenant's CURRENT package for another billing period.
+     *
+     * What it does, in order:
+     *  1. Loads the tenant and checks it actually has an active package.
+     *  2. Blocks renewal for LIFETIME plans (they never expire) and for packages
+     *     whose catalogue entry is no longer ACTIVE.
+     *  3. Extends the validity window. If the plan is still valid, the new period
+     *     is STACKED on top of the current expiry (no time is lost); if it already
+     *     lapsed, a fresh period starts from now.
+     *  4. Archives the window that is ending into the tenant's packageHistory
+     *     (audit trail), with the supplied reason (or a default).
+     *  5. Generates an invoice for the renewal (FREE if the package is no-charge,
+     *     otherwise PAID) covering the exact new period.
+     *
+     * @Transactional so the tenant update and the invoice are consistent.
+     */
+    @Transactional
+    public PackageRenewalResponse renewTenantPackage(String tenantId, RenewPackageRequest request) {
+
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant not found: " + tenantId));
+
+        Tenant.PackageDetails current = tenant.getCurrentPackage();
+        if (current == null || current.getAppPackage() == null) {
+            throw new IllegalStateException("Tenant has no active package to renew");
+        }
+
+        AppPackage pkg = current.getAppPackage();
+
+        // A LIFETIME plan never expires, so there is nothing to renew.
+        if (pkg.getDurationType() == DurationType.LIFETIME || pkg.getDuration() == null) {
+            throw new IllegalStateException("LIFETIME packages do not require renewal");
+        }
+
+        // Do not renew onto a package that has been retired from the catalogue.
+        if (pkg.getStatus() != PackageStatus.ACTIVE) {
+            throw new IllegalStateException(
+                    "Cannot renew because the package '" + pkg.getName() + "' is not ACTIVE");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime oldStart = current.getPlanStarted() != null ? current.getPlanStarted() : now;
+        LocalDateTime oldExpiring = current.getPlanExpiring();
+
+        // Stack remaining time: extend from the current expiry if the plan is still
+        // valid, otherwise start a fresh window from now.
+        LocalDateTime baseDate = (oldExpiring != null && oldExpiring.isAfter(now)) ? oldExpiring : now;
+        LocalDateTime newExpiring = baseDate.plusDays(pkg.getDuration());
+
+        String reason = (request != null && request.getReason() != null && !request.getReason().isBlank())
+                ? request.getReason().trim()
+                : "Package renewal";
+
+        // 1. Archive the window that is ending into history (never removed — audit trail).
+        Tenant.PackageHistory history = Tenant.PackageHistory.builder()
+                .appPackage(pkg)
+                .planStarted(oldStart)
+                .planExpired(oldExpiring != null ? oldExpiring : now)
+                .usersCapacity(current.getUsersCapacity())
+                .reason(reason)
+                .build();
+        tenant.getPackageHistory().add(history);
+
+        // 2. Update the active window — same tier, extended expiry.
+        current.setPlanStarted(baseDate);
+        current.setPlanExpiring(newExpiring);
+        tenant.setUpdatedAt(now);
+        tenantRepository.save(tenant);
+
+        // 3. Bill the renewal. Free packages produce a FREE (zero-amount) invoice.
+        boolean isFree = pkg.getPrice() == null || pkg.getPrice().compareTo(BigDecimal.ZERO) == 0;
+        Invoice invoice = billingService.generateInvoice(tenant, pkg, isFree, baseDate, newExpiring);
+
+        return PackageRenewalResponse.builder()
+                .tenantId(tenant.getId())
+                .tenantName(tenant.getName())
+                .packageName(pkg.getName())
+                .planStarted(baseDate)
+                .planExpiring(newExpiring)
+                .invoiceNumber(invoice.getInvoiceNumber())
+                .amount(invoice.getAmount())
+                .currency(invoice.getCurrency())
+                .reason(reason)
+                .build();
+    }
 
     // ── Package CRUD ──────────────────────────────────────────────────────────
 
