@@ -42,7 +42,7 @@ export default function BreachDetailPage() {
   const breach = items.find((b) => b.id === id);
   if (!breach) return <ErrorState error="NOT_FOUND" />;
 
-  const canManage = can(user.role, ACTIONS.MANAGE_BREACHES);
+  const canManage = can(user, ACTIONS.MANAGE_BREACHES);
   const remaining = new Date(breach.discoveredAt).getTime() + UODO_WINDOW_MS - now;
 
   // A breach may only be CLOSED once every legal obligation is discharged: all

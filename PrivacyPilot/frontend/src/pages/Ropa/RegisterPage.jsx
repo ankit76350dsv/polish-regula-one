@@ -149,12 +149,12 @@ export default function RegisterPage() {
   return (
     <div>
       <PageHeader title={t('ropa.title')} subtitle="Rejestr Czynności Przetwarzania — Art. 30 RODO">
-        {can(user.role, ACTIONS.EXPORT_DATA) && (
+        {can(user, ACTIONS.EXPORT_DATA) && (
           <Button variant="outline" onClick={exportCsv} disabled={!settings.data}>
             <Download /> {t('ropa.exportCsv')}
           </Button>
         )}
-        {can(user.role, ACTIONS.CREATE_ACTIVITY) && (
+        {can(user, ACTIONS.CREATE_ACTIVITY) && (
           <Button onClick={() => navigate('/register/new')}>
             <Plus /> {t('ropa.newActivity')}
           </Button>
@@ -192,7 +192,7 @@ export default function RegisterPage() {
       ) : filtered.length === 0 ? (
         <EmptyState
           hint={t('ropa.empty')}
-          action={can(user.role, ACTIONS.CREATE_ACTIVITY) && (
+          action={can(user, ACTIONS.CREATE_ACTIVITY) && (
             <Button size="sm" onClick={() => navigate('/register/new')}>
               <Plus /> {t('ropa.newActivity')}
             </Button>

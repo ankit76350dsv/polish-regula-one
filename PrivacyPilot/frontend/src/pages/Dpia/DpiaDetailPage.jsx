@@ -20,7 +20,7 @@ import { useSliceData } from '../../hooks/useSliceData';
 import { fetchDpias, updateDpia, signDpia } from '../../store/slices/dpiasSlice';
 import { fetchActivities } from '../../store/slices/activitiesSlice';
 import { useT } from '../../i18n';
-import { can, ACTIONS, ROLE_LABELS } from '../../lib/permissions';
+import { can, hasRole, ROLES, ACTIONS, ROLE_LABELS } from '../../lib/permissions';
 import { DPIA_CRITERIA } from '../../lib/dpiaCriteria';
 import { labelOf } from '../../lib/gdpr';
 import { AiBadge, AiDisclaimer, useAiEnabled } from '../../components/common/AiAssist';
@@ -115,8 +115,9 @@ export default function DpiaDetailPage() {
   if (!dpia) return <ErrorState error="NOT_FOUND" />;
 
   const activity = activities.find((a) => a.id === dpia.activityId);
-  const canEdit = can(user.role, ACTIONS.MANAGE_DPIA) && dpia.status !== 'approved';
-  const isDpo = user.role === 'DPO';
+  const canEdit = can(user, ACTIONS.MANAGE_DPIA) && dpia.status !== 'approved';
+  // Only the DPO fills in the "DPO advice" — check the actual PrivacyPilot code.
+  const isDpo = hasRole(user, ROLES.PRIVACYPILOT_DPO);
 
   const save = async (patch) => {
     const action = await dispatch(updateDpia({ id: dpia.id, patch }));
@@ -311,7 +312,7 @@ export default function DpiaDetailPage() {
                   <span className="text-(--status-ok)">
                     ✓ {a.name} · {new Date(a.approvedAt).toLocaleDateString(lang === 'pl' ? 'pl-PL' : 'en-GB')}
                   </span>
-                ) : user.role === a.role && can(user.role, ACTIONS.SIGN_DPIA) ? (
+                ) : hasRole(user, a.role) && can(user, ACTIONS.SIGN_DPIA) ? (
                   <Button size="sm" onClick={sign}>{t('dpia.sign')}</Button>
                 ) : (
                   <span className="text-muted-foreground">{t('status.pending')}</span>

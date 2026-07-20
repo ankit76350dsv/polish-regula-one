@@ -37,7 +37,7 @@ export default function VendorsPage() {
   const { items, status, error, refetch } = useSliceData('vendors', fetchVendors);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const canManage = can(user.role, ACTIONS.MANAGE_VENDORS);
+  const canManage = can(user, ACTIONS.MANAGE_VENDORS);
 
   const submit = async () => {
     const action = await dispatch(createVendor({

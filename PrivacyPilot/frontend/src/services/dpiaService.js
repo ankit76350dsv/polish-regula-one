@@ -35,8 +35,8 @@ export const dpiaService = {
           dpoAdvice: '',
           priorConsultation: false,
           approvals: [
-            { role: 'DPO', name: '', approvedAt: null },
-            { role: 'TENANT_ADMIN', name: '', approvedAt: null },
+            { role: 'PRIVACYPILOT_DPO', name: '', approvedAt: null },
+            { role: 'PRIVACYPILOT_ADMIN', name: '', approvedAt: null },
           ],
           createdAt: nowIso,
           updatedAt: nowIso,

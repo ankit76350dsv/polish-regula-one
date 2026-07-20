@@ -42,11 +42,11 @@ export function buildSeed() {
     },
 
     users: [
-      { id: 'u-admin',    name: 'Karolina Wójcik',    email: 'karolina.wojcik@abclogistics.example.pl', role: 'TENANT_ADMIN',       active: true },
-      { id: 'u-co',       name: 'Marek Zieliński',    email: 'marek.zielinski@abclogistics.example.pl', role: 'COMPLIANCE_OFFICER', active: true },
-      { id: 'u-dpo',      name: 'Janusz Nowak',       email: 'iod@abclogistics.example.pl',             role: 'DPO',                active: true },
-      { id: 'u-auditor',  name: 'Ewa Kamińska',       email: 'ewa.kaminska@audytpartner.example.pl',    role: 'AUDITOR',            active: true },
-      { id: 'u-employee', name: 'Piotr Lewandowski',  email: 'piotr.lewandowski@abclogistics.example.pl', role: 'EMPLOYEE',         active: true },
+      { id: 'u-admin',    name: 'Karolina Wójcik',    email: 'karolina.wojcik@abclogistics.example.pl', role: 'PRIVACYPILOT_ADMIN',       active: true },
+      { id: 'u-co',       name: 'Marek Zieliński',    email: 'marek.zielinski@abclogistics.example.pl', role: 'PRIVACYPILOT_COMPLIANCE_OFFICER', active: true },
+      { id: 'u-dpo',      name: 'Janusz Nowak',       email: 'iod@abclogistics.example.pl',             role: 'PRIVACYPILOT_DPO',                active: true },
+      { id: 'u-auditor',  name: 'Ewa Kamińska',       email: 'ewa.kaminska@audytpartner.example.pl',    role: 'PRIVACYPILOT_AUDITOR',            active: true },
+      { id: 'u-employee', name: 'Piotr Lewandowski',  email: 'piotr.lewandowski@abclogistics.example.pl', role: 'PRIVACYPILOT_EMPLOYEE',         active: true },
     ],
 
     activities: [
@@ -280,8 +280,8 @@ export function buildSeed() {
         dpoAdvice: '',
         priorConsultation: false,
         approvals: [
-          { role: 'DPO', name: 'Janusz Nowak', approvedAt: null },
-          { role: 'TENANT_ADMIN', name: 'Karolina Wójcik', approvedAt: null },
+          { role: 'PRIVACYPILOT_DPO', name: 'Janusz Nowak', approvedAt: null },
+          { role: 'PRIVACYPILOT_ADMIN', name: 'Karolina Wójcik', approvedAt: null },
         ],
         createdAt: iso(now - days(30)),
         updatedAt: iso(now - days(7)),
@@ -302,8 +302,8 @@ export function buildSeed() {
         dpoAdvice: 'Assessment adequate. Residual risk acceptable given encryption and access controls; prior consultation with UODO not required because mitigations reduce the high risk (Art. 36(1) applies only where residual risk remains high).',
         priorConsultation: false,
         approvals: [
-          { role: 'DPO', name: 'Janusz Nowak', approvedAt: iso(now - days(45)) },
-          { role: 'TENANT_ADMIN', name: 'Karolina Wójcik', approvedAt: iso(now - days(44)) },
+          { role: 'PRIVACYPILOT_DPO', name: 'Janusz Nowak', approvedAt: iso(now - days(45)) },
+          { role: 'PRIVACYPILOT_ADMIN', name: 'Karolina Wójcik', approvedAt: iso(now - days(44)) },
         ],
         createdAt: iso(now - days(80)),
         updatedAt: iso(now - days(44)),
@@ -324,8 +324,8 @@ export function buildSeed() {
         dpoAdvice: 'Residual risk for off-duty tracking remains high until the cut-off is implemented. If it cannot be implemented before launch, prior consultation with UODO under Art. 36(1) is required.',
         priorConsultation: true,
         approvals: [
-          { role: 'DPO', name: 'Janusz Nowak', approvedAt: null },
-          { role: 'TENANT_ADMIN', name: 'Karolina Wójcik', approvedAt: null },
+          { role: 'PRIVACYPILOT_DPO', name: 'Janusz Nowak', approvedAt: null },
+          { role: 'PRIVACYPILOT_ADMIN', name: 'Karolina Wójcik', approvedAt: null },
         ],
         createdAt: iso(now - days(14)),
         updatedAt: iso(now - days(1)),
@@ -498,7 +498,7 @@ export function buildSeed() {
         id: 'aud-seed-1',
         at: iso(now - days(1)),
         actorName: 'Karolina Wójcik',
-        actorRole: 'TENANT_ADMIN',
+        actorRole: 'PRIVACYPILOT_ADMIN',
         action: 'UPDATE',
         entityType: 'activity',
         entityId: 'act-006',
@@ -511,7 +511,7 @@ export function buildSeed() {
         id: 'aud-seed-2',
         at: iso(now - days(2)),
         actorName: 'Marek Zieliński',
-        actorRole: 'COMPLIANCE_OFFICER',
+        actorRole: 'PRIVACYPILOT_COMPLIANCE_OFFICER',
         action: 'CREATE',
         entityType: 'breach',
         entityId: 'br-001',

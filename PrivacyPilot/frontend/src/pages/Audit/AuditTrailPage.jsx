@@ -65,7 +65,7 @@ export default function AuditTrailPage() {
   return (
     <div>
       <PageHeader title={t('audit.title')} subtitle={t('audit.subtitle')}>
-        {can(user.role, ACTIONS.EXPORT_DATA) && (
+        {can(user, ACTIONS.EXPORT_DATA) && (
           <Button variant="outline" onClick={exportJson}><Download /> {t('audit.exportJson')}</Button>
         )}
       </PageHeader>

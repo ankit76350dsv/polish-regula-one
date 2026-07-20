@@ -32,7 +32,7 @@ export default function TransfersPage() {
   const { items, status, error, refetch } = useSliceData('transfers', fetchTransfers);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const canManage = can(user.role, ACTIONS.MANAGE_TRANSFERS);
+  const canManage = can(user, ACTIONS.MANAGE_TRANSFERS);
 
   const submit = async () => {
     const action = await dispatch(createTransfer(form));

@@ -105,18 +105,18 @@ export default function ActivityDetailPage() {
   return (
     <div className="mx-auto max-w-4xl">
       <PageHeader title={activity.name} subtitle={`${labelOf(DEPARTMENTS, activity.department, lang)} · ${activity.ownerName}`}>
-        {can(user.role, ACTIONS.EDIT_ACTIVITY) && (
+        {can(user, ACTIONS.EDIT_ACTIVITY) && (
           <Button variant="outline" onClick={() => navigate(`/register/${activity.id}/edit`)}>
             <Pencil /> {t('common.edit')}
           </Button>
         )}
-        {can(user.role, ACTIONS.APPROVE_ACTIVITY) && activity.status === 'in_review' && (
+        {can(user, ACTIONS.APPROVE_ACTIVITY) && activity.status === 'in_review' && (
           <Button onClick={approve} disabled={dpiaBlocksApproval}
             title={dpiaBlocksApproval ? t('dpia.approvalBlocked') : undefined}>
             <CheckCircle2 /> {t('status.approved')}
           </Button>
         )}
-        {can(user.role, ACTIONS.DELETE_ACTIVITY) && activity.status !== 'archived' && (
+        {can(user, ACTIONS.DELETE_ACTIVITY) && activity.status !== 'archived' && (
           <Button variant="destructive" onClick={() => setConfirmArchive(true)}>
             <Archive /> {t('status.archived')}
           </Button>
@@ -234,7 +234,7 @@ export default function ActivityDetailPage() {
                 {t('nav.dpia')} →
               </Link>
             ) : (
-              activity.dpiaVerdict !== 'not_indicated' && can(user.role, ACTIONS.MANAGE_DPIA) && (
+              activity.dpiaVerdict !== 'not_indicated' && can(user, ACTIONS.MANAGE_DPIA) && (
                 <Button size="sm" variant="outline" onClick={startDpia}>
                   <ShieldAlert /> {t('dpia.newFromActivity')}
                 </Button>

@@ -82,7 +82,7 @@ export default function BreachesPage() {
   return (
     <div>
       <PageHeader title={t('breach.title')} subtitle={t('breach.subtitle')}>
-        {can(user.role, ACTIONS.MANAGE_BREACHES) && (
+        {can(user, ACTIONS.MANAGE_BREACHES) && (
           <Button onClick={() => setOpen(true)}><Plus /> {t('breach.report')}</Button>
         )}
       </PageHeader>

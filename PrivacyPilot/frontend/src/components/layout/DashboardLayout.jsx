@@ -21,7 +21,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { useT } from '../../i18n';
 import { setLanguage } from '../../store/slices/uiSlice';
 import { signOut } from '../../store/slices/authSlice';
-import { navForRole, ROLE_LABELS } from '../../lib/permissions';
+import { navFor, ROLE_LABELS } from '../../lib/permissions';
 
 const NAV_ICONS = {
   'nav.dashboard': LayoutDashboard,
@@ -42,7 +42,12 @@ export default function DashboardLayout() {
   const dispatch = useDispatch();
   const { pathname } = useLocation();
   const user = useSelector((s) => s.auth.user);
-  const items = navForRole(user.role);
+  const items = navFor(user);
+  // Show the user's PrivacyPilot capacity (e.g. "Company Admin"), falling back to
+  // the raw platform role for a super-admin who holds no PrivacyPilot code.
+  const roleLabel = user.primaryPermission
+    ? (ROLE_LABELS[user.primaryPermission]?.[lang] ?? user.primaryPermission)
+    : user.role;
 
   // A nav item is active on its own route and every sub-route
   // (e.g. /register stays highlighted on /register/:id and the wizard).
@@ -102,7 +107,7 @@ export default function DashboardLayout() {
             <div className="grid leading-tight group-data-[collapsible=icon]:hidden">
               <span className="truncate text-xs font-medium text-foreground">{user.name}</span>
               <span className="truncate text-[11px] text-muted-foreground">
-                {ROLE_LABELS[user.role]?.[lang] ?? user.role}
+                {roleLabel}
               </span>
             </div>
             <Button
@@ -134,7 +139,7 @@ export default function DashboardLayout() {
               {lang === 'pl' ? 'PL' : 'EN'}
             </Button>
             <Badge variant="outline" className="hidden sm:inline-flex border-primary/40 text-primary">
-              {ROLE_LABELS[user.role]?.[lang] ?? user.role}
+              {roleLabel}
             </Badge>
           </div>
         </header>

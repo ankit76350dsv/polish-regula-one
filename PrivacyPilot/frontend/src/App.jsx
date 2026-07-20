@@ -30,7 +30,7 @@ import NotFoundPage from './pages/NotFoundPage';
  */
 function RequireAction({ action, children }) {
   const user = useSelector((s) => s.auth.user);
-  if (!user || !can(user.role, action)) return <Navigate to="/dashboard" replace />;
+  if (!user || !can(user, action)) return <Navigate to="/dashboard" replace />;
   return children ?? <Outlet />;
 }
 

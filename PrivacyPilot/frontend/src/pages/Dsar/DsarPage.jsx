@@ -51,7 +51,7 @@ export default function DsarPage() {
   return (
     <div>
       <PageHeader title={t('dsar.title')} subtitle={t('dsar.subtitle')}>
-        {can(user.role, ACTIONS.MANAGE_DSAR) && (
+        {can(user, ACTIONS.MANAGE_DSAR) && (
           <Button onClick={() => setOpen(true)}><Plus /> {t('dsar.new')}</Button>
         )}
       </PageHeader>

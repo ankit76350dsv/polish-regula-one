@@ -65,7 +65,8 @@ export async function apiGet(selector) {
 
 /**
  * Mutation with mandatory RBAC + audit.
- *  actor    — { name, role } of the signed-in user
+ *  actor    — the signed-in user object (name, role, permissions[]) — RBAC uses
+ *             their PrivacyPilot permission codes, not the platform role.
  *  action   — permission from ACTIONS that authorizes this mutation
  *  audit    — audit entry fields { action, entityType, entityId, entityLabel,
  *             oldValue, newValue } OR a function (result) => fields, so the
@@ -74,7 +75,7 @@ export async function apiGet(selector) {
  */
 export async function apiMutate({ actor, action, audit, mutator }) {
   await delay();
-  if (!actor || !can(actor.role, action)) {
+  if (!actor || !can(actor, action)) {
     const err = new Error('FORBIDDEN');
     err.code = 'FORBIDDEN';
     throw err;
@@ -87,7 +88,9 @@ export async function apiMutate({ actor, action, audit, mutator }) {
       id: `aud-${Date.now()}-${d.audit.length}`,
       at: new Date().toISOString(),
       actorName: actor.name,
-      actorRole: actor.role,
+      // Record the capacity they acted under: their most-privileged PrivacyPilot
+      // code (e.g. PRIVACYPILOT_ADMIN), falling back to the platform role.
+      actorRole: actor.primaryPermission ?? actor.role,
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
       ...entry,
     });

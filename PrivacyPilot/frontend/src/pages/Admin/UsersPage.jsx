@@ -20,9 +20,9 @@ import { FormField, Input, Select } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchUsers, inviteUser, changeUserRole, setUserActive } from '../../store/slices/usersSlice';
 import { useT } from '../../i18n';
-import { ROLES, ROLE_LABELS, ACTIONS, can } from '../../lib/permissions';
+import { ROLES, ROLE_LABELS, ACTIONS, permissionCan } from '../../lib/permissions';
 
-const EMPTY_FORM = { name: '', email: '', role: 'EMPLOYEE' };
+const EMPTY_FORM = { name: '', email: '', role: ROLES.PRIVACYPILOT_EMPLOYEE };
 
 export default function UsersPage() {
   const { t, lang } = useT();
@@ -123,7 +123,7 @@ export default function UsersPage() {
                   <TableCell className="font-mono text-xs text-muted-foreground">{a}</TableCell>
                   {roleIds.map((r) => (
                     <TableCell key={r} className="text-center">
-                      {can(r, a)
+                      {permissionCan(r, a)
                         ? <Check className="mx-auto size-3.5 text-(--status-ok)" aria-label="allowed" />
                         : <Minus className="mx-auto size-3.5 text-border" aria-label="denied" />}
                     </TableCell>

@@ -45,7 +45,7 @@ export default function DsarDetailPage() {
   const dsar = items.find((r) => r.id === id);
   if (!dsar) return <ErrorState error="NOT_FOUND" />;
 
-  const canManage = can(user.role, ACTIONS.MANAGE_DSAR);
+  const canManage = can(user, ACTIONS.MANAGE_DSAR);
   const days = dsarDaysLeft(dsar);
   const open = dsar.status !== 'completed' && dsar.status !== 'refused';
   // A request with no outstanding collection tasks is completable — a request
