@@ -6,10 +6,11 @@ import com.privacypilot.backend.model.enums.audit.AuditEntityType;
 import com.privacypilot.backend.model.enums.user.PrivacyRole;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.Instant;
 import java.util.Map;
 
 /**
@@ -21,23 +22,34 @@ import java.util.Map;
  * are kept for 10 years to support audits and investigations. To keep them
  * tamper-resistant, the app should only ever INSERT audit entries — never update
  * them.
+ *
+ * WHO and WHEN are NOT stored twice: because an audit row is written once and
+ * never changed, the "who" and "when" of the action are exactly the record's
+ * own creation stamps, which {@link BaseDocument} already fills automatically:
+ *  - WHEN the action happened   → inherited {@code createdAt} (@CreatedDate)
+ *  - the id of WHO did it        → inherited {@code createdBy} (@CreatedBy)
+ * Spring Data auditing (@EnableMongoAuditing + an AuditorAware returning the
+ * current user id) MUST be switched on so these are always populated — they are
+ * the legal backbone of the trail, so they must never be left null.
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
 @Document(collection = "privacypilot_audit_log")
+// Lets us quickly pull "every action a given user took, newest first" — the
+// query the old standalone actorId index used to serve.
+@CompoundIndexes({
+    @CompoundIndex(name = "audit_actor_time_idx", def = "{'createdBy': 1, 'createdAt': -1}")
+})
 public class AuditEntry extends BaseDocument {
 
-    // When the action happened.
-    private Instant at;
-
-    // The id of the user who did it.
-    @Indexed
-    private String actorId;
-
-    // The name of the user who did it (kept for readable logs).
+    // The name the user had at the time of the action. This is a deliberate
+    // snapshot, NOT a duplicate of the user record: the log must still read
+    // correctly years later even if that user is renamed or erased.
     private String actorName;
 
-    // The role the user had at the time.
+    // The role the user held at the time of the action. Also a point-in-time
+    // snapshot — a person's role can change, but the log must show the role
+    // they actually acted under.
     private PrivacyRole actorRole;
 
     // What was done (create, update, approve, ...).
