@@ -46,6 +46,25 @@ to the DataCategory change above), or keep it closed?
 
 ---
 
+## 3. TenantSettings — DEFERRED ("cover this later")
+
+**Status:** parked — logged 2026-07-20.
+
+**What:** `TenantSettings.java` (one settings doc per tenant: `company`
+[`CompanyDetails`], `dpo` [`DpoDetails`], `ai` [`AiPreferences`], stored in the
+`privacypilot_settings` collection) has been moved into a
+`.../models/document/notdone/` folder to mark it as **not yet worked on**.
+
+**Note:** the file still declares package `com.privacypilot.backend.model.document`
+(only the folder changed, not the package), so it still compiles where it is.
+
+**Why it matters later:** notices and the ROPA are meant to read the "who is the
+controller" and "who is the DPO" details from here — so this needs to be finished
+before those outputs can be fully populated. Revisit when we pick the settings
+work back up.
+
+---
+
 ## Notes
 - The Art. 9 special categories and the Art. 10 criminal category in
   `DataCategory` are the **complete, closed legal set** — do not add/remove those.
