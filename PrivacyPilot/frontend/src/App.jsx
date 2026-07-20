@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { restoreSession } from './store/slices/authSlice';
+import { initSession, ssoLoopDetected } from './store/slices/authSlice';
 import { can } from './lib/permissions';
 
-import LoginPage from './pages/Auth/LoginPage';
+import AuthGate from './components/auth/AuthGate';
+import SsoCallback from './components/auth/SsoCallback';
 import DashboardPage from './pages/Dashboard/DashboardPage';
 import RegisterPage from './pages/Ropa/RegisterPage';
 import ActivityWizardPage from './pages/Ropa/ActivityWizardPage';
@@ -23,16 +24,6 @@ import UsersPage from './pages/Admin/UsersPage';
 import SettingsPage from './pages/Settings/SettingsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
-import DashboardLayout from './components/layout/DashboardLayout';
-
-/** Blocks unauthenticated access; sends the user to /login. */
-function RequireAuth() {
-  const { user, status } = useSelector((s) => s.auth);
-  if (status === 'restoring') return null;
-  if (!user) return <Navigate to="/login" replace />;
-  return <DashboardLayout />;
-}
-
 /**
  * Route-level RBAC guard. The same `can()` matrix is enforced again inside
  * the mock services, so bypassing this guard still cannot mutate anything.
@@ -45,28 +36,31 @@ function RequireAction({ action, children }) {
 
 export default function App() {
   const dispatch = useDispatch();
-  const { user, status } = useSelector((s) => s.auth);
 
-  // Restore the demo session (sessionStorage) once on mount.
+  // Verify the RegulaOne SSO session once on mount (RegulaOne is the single source
+  // of truth for who is signed in). AuthGate renders the right screen off the result.
   useEffect(() => {
-    dispatch(restoreSession());
+    dispatch(initSession());
   }, [dispatch]);
 
-  if (status === 'restoring') {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
-      </div>
-    );
-  }
+  // http.js fires this window event when it detects an endless login redirect loop;
+  // the slice then flips to the "explain the loop" screen instead of bouncing forever.
+  useEffect(() => {
+    const onLoop = () => dispatch(ssoLoopDetected());
+    window.addEventListener('privacypilot:sso-loop', onLoop);
+    return () => window.removeEventListener('privacypilot:sso-loop', onLoop);
+  }, [dispatch]);
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
-        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+        {/* Landing spot the central login returns to after a successful sign-in. */}
+        <Route path="/auth/sso-callback" element={<SsoCallback />} />
 
-        <Route element={<RequireAuth />}>
+        {/* Everything else runs behind the SSO gate. */}
+        <Route element={<AuthGate />}>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/login" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
 
           <Route path="/register" element={<RequireAction action="VIEW_REGISTER"><RegisterPage /></RequireAction>} />
@@ -90,9 +84,10 @@ export default function App() {
           <Route path="/audit-trail" element={<RequireAction action="VIEW_AUDIT_TRAIL"><AuditTrailPage /></RequireAction>} />
           <Route path="/users" element={<RequireAction action="MANAGE_USERS"><UsersPage /></RequireAction>} />
           <Route path="/settings" element={<RequireAction action="EDIT_SETTINGS"><SettingsPage /></RequireAction>} />
-        </Route>
 
-        <Route path="*" element={<NotFoundPage />} />
+          {/* Inside the gate so it renders within the app shell for signed-in users. */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );

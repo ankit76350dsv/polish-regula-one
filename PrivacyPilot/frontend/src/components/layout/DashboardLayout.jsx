@@ -1,7 +1,7 @@
 // App shell — gold-on-charcoal sidebar, topbar with language switch, and the
 // permanent "drafts require DPO review" disclaimer (an honest product promise,
 // not decoration).
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   LayoutDashboard, BookOpenCheck, ShieldAlert, FileText, Handshake, Globe,
@@ -20,7 +20,7 @@ import { Toaster } from '@/components/ui/sonner';
 
 import { useT } from '../../i18n';
 import { setLanguage } from '../../store/slices/uiSlice';
-import { logout } from '../../store/slices/authSlice';
+import { signOut } from '../../store/slices/authSlice';
 import { navForRole, ROLE_LABELS } from '../../lib/permissions';
 
 const NAV_ICONS = {
@@ -40,7 +40,6 @@ const NAV_ICONS = {
 export default function DashboardLayout() {
   const { t, lang } = useT();
   const dispatch = useDispatch();
-  const navigate = useNavigate();
   const { pathname } = useLocation();
   const user = useSelector((s) => s.auth.user);
   const items = navForRole(user.role);
@@ -49,9 +48,10 @@ export default function DashboardLayout() {
   // (e.g. /register stays highlighted on /register/:id and the wizard).
   const isActive = (to) => pathname === to || pathname.startsWith(`${to}/`);
 
-  const handleLogout = async () => {
-    await dispatch(logout());
-    navigate('/login');
+  // Ends the RegulaOne SSO session and sends the browser to the central logout
+  // page (which finishes sign-out and returns here to the login screen).
+  const handleLogout = () => {
+    dispatch(signOut());
   };
 
   return (

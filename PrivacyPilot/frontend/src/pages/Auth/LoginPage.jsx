@@ -1,32 +1,48 @@
-// Demo login — real form flow through the auth slice. No role self-selection:
-// the role comes from the account, exactly as it will with the SSO backend.
-import { useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { ShieldCheck } from 'lucide-react';
+// RegulaOne single sign-on screen. PrivacyPilot has NO password form of its own —
+// this sends the user to the central RegulaOne login, which signs them in and
+// returns them here. Rendered by AuthGate whenever there is no valid session.
+//
+// LOOP PROTECTION: if the session cookie is not valid for the current address the
+// login can bounce back forever ("page keeps reloading"). We never auto-redirect on
+// render — the redirect only starts on a deliberate button click, and after too many
+// bounces in a short window we show an explanation instead.
+import { useEffect, useState } from 'react';
+import { ShieldCheck, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { FormField, Input } from '../../components/common/Field';
-import { login } from '../../store/slices/authSlice';
+import {
+  buildLoginUrl,
+  registerSsoRedirect,
+  clearSsoRedirectGuard,
+  CENTRAL_LOGIN_URL,
+} from '../../services/http';
 import { useT } from '../../i18n';
-import { ROLE_LABELS } from '../../lib/permissions';
 
-const DEMO_ACCOUNTS = [
-  { email: 'karolina.wojcik@abclogistics.example.pl', role: 'TENANT_ADMIN' },
-  { email: 'marek.zielinski@abclogistics.example.pl', role: 'COMPLIANCE_OFFICER' },
-  { email: 'iod@abclogistics.example.pl', role: 'DPO' },
-  { email: 'ewa.kaminska@audytpartner.example.pl', role: 'AUDITOR' },
-];
+export default function LoginPage({ looped: detectedLoop = false, onResetLoop = () => {} }) {
+  const { t } = useT();
+  const [looped, setLooped] = useState(detectedLoop);
+  const [redirecting, setRedirecting] = useState(false);
 
-export default function LoginPage() {
-  const dispatch = useDispatch();
-  const { status, error } = useSelector((s) => s.auth);
-  const { t, lang } = useT();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  useEffect(() => {
+    if (detectedLoop) setLooped(true);
+  }, [detectedLoop]);
 
-  const submit = (e) => {
-    e.preventDefault();
-    dispatch(login({ email, password }));
+  const startSignIn = () => {
+    // registerSsoRedirect() returns false once we've redirected too many times in 30s.
+    if (!registerSsoRedirect()) {
+      setLooped(true);
+      return;
+    }
+    setRedirecting(true);
+    window.location.assign(buildLoginUrl());
+  };
+
+  // Let the user clear the guard and try the whole flow again.
+  const retry = () => {
+    clearSsoRedirectGuard();
+    onResetLoop();
+    setLooped(false);
+    setRedirecting(false);
   };
 
   return (
@@ -54,53 +70,49 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Form */}
+      {/* Sign-in card */}
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <h2 className="font-display text-xl font-semibold">{t('auth.title')}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t('auth.subtitle')}</p>
+          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <ShieldCheck className="size-6" />
+          </div>
+          <h2 className="font-display text-xl font-semibold">{t('auth.ssoTitle')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {looped ? t('auth.loopBody') : t('auth.ssoBody')}
+          </p>
 
-          <form onSubmit={submit} className="mt-6 grid gap-4">
-            <FormField label={t('auth.email')} required>
-              {(id) => (
-                <Input id={id} type="email" autoComplete="username" required
-                  value={email} onChange={(e) => setEmail(e.target.value)} />
-              )}
-            </FormField>
-            <FormField label={t('auth.password')} required
-              error={status === 'failed' ? t('auth.invalid') : null}>
-              {(id) => (
-                <Input id={id} type="password" autoComplete="current-password" required
-                  value={password} onChange={(e) => setPassword(e.target.value)} />
-              )}
-            </FormField>
-            <Button type="submit" disabled={status === 'loading'}>
-              {status === 'loading' ? t('common.loading') : t('auth.signIn')}
-            </Button>
-            {error && status === 'failed' && (
-              <p className="sr-only" role="alert">{t('auth.invalid')}</p>
-            )}
-          </form>
+          {looped ? (
+            <div className="mt-6 grid gap-3">
+              <ul className="grid list-disc gap-1 pl-4 text-xs text-muted-foreground">
+                <li>{t('auth.loopHint1')}</li>
+                <li>{t('auth.loopHint2')}</li>
+                <li>{t('auth.loopHint3')}</li>
+              </ul>
+              <div className="flex gap-2">
+                <Button className="flex-1" onClick={retry}>{t('auth.resetSignIn')}</Button>
+                <a
+                  href={CENTRAL_LOGIN_URL}
+                  className="flex-1 rounded-md border px-4 py-2 text-center text-sm font-medium hover:bg-accent"
+                >
+                  {t('auth.openLogin')}
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-3">
+              <Button onClick={startSignIn} disabled={redirecting}>
+                <LogIn className="size-4" />
+                {redirecting ? t('auth.openingLogin') : t('auth.continueToLogin')}
+              </Button>
+              <p className="text-center text-[11px] text-muted-foreground">
+                {t('auth.redirectingHint')}
+              </p>
+            </div>
+          )}
 
           <Card className="mt-6">
             <CardContent className="p-4">
-              <p className="text-xs font-medium text-muted-foreground">{t('auth.demoHint')}</p>
-              <ul className="mt-2 grid gap-1">
-                {DEMO_ACCOUNTS.map((acc) => (
-                  <li key={acc.email}>
-                    <button
-                      type="button"
-                      className="w-full rounded-md px-2 py-1 text-left text-xs hover:bg-accent"
-                      onClick={() => { setEmail(acc.email); setPassword('demo123'); }}
-                    >
-                      <span className="text-primary">{ROLE_LABELS[acc.role][lang]}</span>
-                      {' — '}
-                      <span className="text-muted-foreground">{acc.email}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-[11px] text-muted-foreground">password: demo123</p>
+              <p className="text-xs text-muted-foreground">{t('auth.subtitle')}</p>
             </CardContent>
           </Card>
         </div>
