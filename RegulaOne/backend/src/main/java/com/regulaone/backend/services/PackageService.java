@@ -421,6 +421,8 @@ public class PackageService {
                             .packageName(pkg.getName())
                             .price(pkg.getPrice())
                             .currency(pkg.getCurrency())
+                            .durationType(pkg.getDurationType())
+                            .duration(pkg.getDuration())
                             .tenantCount((int) count)
                             .tierMrr(tierMrr)
                             .usersCapacity(pkg.getUsersCapacity())

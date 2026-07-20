@@ -1,5 +1,6 @@
 package com.regulaone.backend.dto.Package;
 
+import com.regulaone.backend.models.DurationType;
 import com.regulaone.backend.models.TenantModule;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -60,6 +61,13 @@ public class PackageTierStatsResponse {
 
         // ISO 4217 currency code (EUR, PLN).
         private String currency;
+
+        // Billing cycle (MONTHLY / YEARLY / DAYS / LIFETIME) — the frontend uses
+        // this to show the correct "/ mo", "/ yr", etc. label instead of assuming.
+        private DurationType durationType;
+
+        // Duration length in days (null for LIFETIME).
+        private Integer duration;
 
         // How many tenants currently have this package as their active plan.
         private int tenantCount;
