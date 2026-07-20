@@ -1,6 +1,6 @@
 package com.privacypilot.backend.model.embedded;
 
-import com.privacypilot.backend.model.enums.user.PrivacyRole;
+import com.privacypilot.backend.security.PrivacyPilotPermission;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -17,11 +17,11 @@ import java.time.Instant;
 @AllArgsConstructor
 public class DpiaApproval {
 
-    // WHAT: Which ROLE this sign-off is for (e.g. DPO or Company Admin).
-    // WHY: Only a person with this exact role may sign this line — a Company Admin
-    //      cannot sign the DPO's line and vice versa (separation of duties).
-    // EXAMPLE: DPO for the first line, TENANT_ADMIN for the second.
-    private PrivacyRole role;
+    // WHAT: Which permission code this sign-off is for (e.g. DPO or Company Admin).
+    // WHY: Only a person holding this exact code may sign this line — a Company
+    //      Admin cannot sign the DPO's line and vice versa (separation of duties).
+    // EXAMPLE: PRIVACYPILOT_DPO for the first line, PRIVACYPILOT_ADMIN for the second.
+    private PrivacyPilotPermission role;
 
     // WHAT: The name of the person who signed (or who is expected to sign).
     // WHY: Records WHO approved, for the audit trail. Empty until someone signs.

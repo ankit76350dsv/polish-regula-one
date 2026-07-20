@@ -1,5 +1,9 @@
 package com.privacypilot.backend.security;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
 /**
  * The set of PrivacyPilot-module permission codes a user can hold.
  *
@@ -33,6 +37,13 @@ package com.privacypilot.backend.security;
  *                                     export for the 10-year retention requirement. Must never
  *                                     be able to change the records it audits.
  *   - PRIVACYPILOT_EMPLOYEE         → baseline member access; no privacy-management rights.
+ *
+ * IMPORTANT: a single user usually holds MANY permission codes at once — several
+ * PrivacyPilot ones AND codes from other apps (KSEF_*, SAFEVOICE_*, ...). They all
+ * sit together in one flat list on the RegulaOne user. So the codes are declared
+ * here MOST-PRIVILEGED FIRST: when we must show ONE code (e.g. the "acting as"
+ * role in an audit line), we pick the highest one the user holds — see
+ * {@link #primaryOf(Collection)}.
  */
 public enum PrivacyPilotPermission {
     PRIVACYPILOT_ADMIN,
@@ -52,6 +63,45 @@ public enum PrivacyPilotPermission {
         for (PrivacyPilotPermission p : values()) {
             if (p.name().equals(code)) {
                 return p;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Keeps ONLY the PrivacyPilot codes out of a mixed, cross-app list.
+     *
+     * A user's permission list can contain codes from every app. This walks the
+     * whole list and drops anything that is not a PrivacyPilot code (fromCode
+     * returns null for those), so the caller is left with just this module's
+     * permissions. Never throws; a null or empty input gives an empty list.
+     */
+    public static List<PrivacyPilotPermission> fromCodes(Collection<String> codes) {
+        List<PrivacyPilotPermission> result = new ArrayList<>();
+        if (codes != null) {
+            for (String code : codes) {
+                PrivacyPilotPermission p = fromCode(code);
+                if (p != null) {
+                    result.add(p);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Picks the ONE code to represent a user who may hold several — the most
+     * privileged PrivacyPilot code they have (codes are declared most-privileged
+     * first above, so the first match wins). Used for audit "acting as" labels.
+     * Returns null if the user holds no PrivacyPilot code at all.
+     */
+    public static PrivacyPilotPermission primaryOf(Collection<String> codes) {
+        if (codes != null) {
+            // values() is in declaration order = privilege order, highest first.
+            for (PrivacyPilotPermission p : values()) {
+                if (codes.contains(p.name())) {
+                    return p;
+                }
             }
         }
         return null;

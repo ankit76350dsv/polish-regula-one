@@ -3,7 +3,7 @@ package com.privacypilot.backend.model.document;
 import com.privacypilot.backend.model.base.BaseDocument;
 import com.privacypilot.backend.model.enums.audit.AuditAction;
 import com.privacypilot.backend.model.enums.audit.AuditEntityType;
-import com.privacypilot.backend.model.enums.user.PrivacyRole;
+import com.privacypilot.backend.security.PrivacyPilotPermission;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
@@ -47,10 +47,10 @@ public class AuditEntry extends BaseDocument {
     // correctly years later even if that user is renamed or erased.
     private String actorName;
 
-    // The role the user held at the time of the action. Also a point-in-time
-    // snapshot — a person's role can change, but the log must show the role
-    // they actually acted under.
-    private PrivacyRole actorRole;
+    // The permission code the user held at the time of the action. Also a
+    // point-in-time snapshot — a person's permissions can change, but the log
+    // must show the capacity they actually acted under.
+    private PrivacyPilotPermission actorRole;
 
     // What was done (create, update, approve, ...).
     private AuditAction action;
