@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { SSO_CALLBACK_URL, registerSsoRedirect, clearSsoRedirectGuard } from '../lib/api';
 import { useLanguage } from '../context/LanguageContext';
 
-const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
+import { CENTRAL_LOGIN } from '../lib/serviceHosts';
 
 // SIMPLE EXPLANATION:
 // KSeFFlow has no login form of its own. When there is no valid session, this screen sends the

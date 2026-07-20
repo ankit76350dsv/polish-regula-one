@@ -13,8 +13,11 @@
 //   3. If refresh also fails  → redirectToSSO() sends user to central login
 
 import { redirectToSSO } from '../services/ssoService';
+import { SSO_API_URL } from '../config/sso';
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+// Resolved from config/sso.js: an explicit VITE_API_URL if set, otherwise derived
+// from the current host so localhost and the LAN IP both work with one dev server.
+const BASE_URL = SSO_API_URL;
 
 // Tracks whether a refresh is already in flight so concurrent 401s only trigger one refresh call.
 let refreshInProgress = null;

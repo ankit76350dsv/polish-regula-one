@@ -16,8 +16,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
-const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
-const CENTRAL_SIGNUP = import.meta.env.VITE_CENTRAL_SIGNUP_URL ?? new URL('/auth/signup', CENTRAL_LOGIN).toString();
+import { CENTRAL_LOGIN, CENTRAL_SIGNUP } from '../lib/serviceHosts';
 
 function appPath(tenantId) {
   return `/company/${tenantId || 'platform'}/dashboard`;

@@ -16,6 +16,8 @@
  */
 
 import { apiFetch, ksefFetch } from '../lib/api';
+// Runtime-resolved host (localhost or LAN IP) — see lib/serviceHosts.js.
+import { REGULA_ONE_API_URL } from '../lib/serviceHosts';
 
 // ── Response mapper ────────────────────────────────────────────────────────────
 // Maps the backend KsefInvoice entity shape onto what this frontend expects.
@@ -311,7 +313,7 @@ export const getStats = async () => {
  * Download the raw FA(3) XML for an accepted invoice.
  */
 export const downloadInvoiceXml = async (invoiceId) => {
-  const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+  const API_URL = REGULA_ONE_API_URL;
   const res = await fetch(`${API_URL}/api/ksef/invoices/${invoiceId}/xml`, {
     credentials: 'include',
   });

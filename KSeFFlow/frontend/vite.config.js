@@ -21,8 +21,19 @@ export default defineConfig(() => {
       },
     },
     server: {
+      // Bind to all network interfaces (0.0.0.0) so the app is reachable BOTH on
+      // http://localhost:3001 AND http://<machine-ip>:3001 (other devices on the
+      // same Wi-Fi). RegulaOne achieves this via its Express server.ts; plain Vite
+      // needs host:true or it listens on localhost only.
+      host: true,
       // start.sh injects PORT=3001 via "PORT=3001 npm run dev".
       port: parseInt(process.env.PORT ?? '3001', 10),
+      // Allow the LAN IP host (Vite blocks unknown hosts by default). Literal IPs
+      // are generally allowed, but we list it explicitly so it never 403s.
+      allowedHosts: ['localhost', '192.168.20.63'],
+      // HMR: leave the websocket host UNSET so Vite infers it from the page's host
+      // (localhost → localhost ws, IP → IP ws). Hardcoding hmr.host was what caused
+      // the earlier reload loop — do not reintroduce it.
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : undefined,
     },

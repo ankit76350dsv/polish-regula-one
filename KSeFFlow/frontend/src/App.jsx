@@ -11,8 +11,8 @@ import LandingPage from './components/LandingPage';
 import NotFoundPage from './components/NotFoundPage';
 import Workspace from './components/Workspace';
 
-const API_URL       = import.meta.env.VITE_API_URL          ?? 'http://localhost:8080';
-const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
+// Host URLs resolved at runtime (localhost or LAN IP) — see lib/serviceHosts.js.
+import { REGULA_ONE_API_URL as API_URL, CENTRAL_LOGIN } from './lib/serviceHosts';
 
 // Map RegulaOne roles to KSeFFlow role names used by this app's RBAC
 const mapRole = (r) => {

@@ -23,9 +23,18 @@
  * All three have safe localhost defaults so local dev works without any .env file.
  */
 
-export const SSO_API_URL = import.meta.env.VITE_API_URL  ?? 'http://localhost:8080';
-export const SSO_APP_ID  = import.meta.env.VITE_APP_ID   ?? 'regulaone';
-export const SSO_APP_URL = import.meta.env.VITE_APP_URL  ?? 'http://localhost:3000';
+// LAN-friendly host resolution: when no explicit VITE_* URL is set, derive the
+// host from whatever address the page was opened on. This makes the SAME running
+// dev server work on http://localhost AND http://<machine-ip> at the same time
+// (localhost → localhost APIs, IP → IP APIs) with no rebuild. An explicit
+// VITE_API_URL / VITE_APP_URL still wins when provided (e.g. staging/prod).
+const _proto = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+const _host  = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const _at = (port) => `${_proto}//${_host}:${port}`;
+
+export const SSO_API_URL = import.meta.env.VITE_API_URL || _at(8080);
+export const SSO_APP_ID  = import.meta.env.VITE_APP_ID  || 'regulaone';
+export const SSO_APP_URL = import.meta.env.VITE_APP_URL || _at(3000);
 
 /** Full URL of the backend SSO login endpoint. */
 export const SSO_LOGIN_ENDPOINT   = `${SSO_API_URL}/api/sso/login`;

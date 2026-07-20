@@ -12,10 +12,8 @@
  * lands back here after authenticating on the main app.
  */
 
-const REGULA_ONE_API_URL        = import.meta.env.VITE_REGULA_ONE_API_URL          ?? 'http://localhost:8080';
-const KSEF_API_URL  = import.meta.env.VITE_KSEF_API_URL      ?? 'http://localhost:8081';
-const APP_URL       = import.meta.env.VITE_APP_URL           ?? 'http://localhost:3001';
-const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
+// Host URLs resolved at runtime (localhost or LAN IP) — see serviceHosts.js.
+import { REGULA_ONE_API_URL, KSEF_API_URL, APP_URL, CENTRAL_LOGIN } from './serviceHosts';
 
 export const SSO_CALLBACK_URL = `${APP_URL}/auth/sso-callback`;
 

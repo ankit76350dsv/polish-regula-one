@@ -2,6 +2,7 @@
 // No state, no side-effects — just fetch wrappers that can be composed in hooks.
 
 import { api } from '../lib/api';
+import { SSO_API_URL } from '../config/sso';
 
 export const authService = {
 
@@ -51,7 +52,7 @@ export const authService = {
   // expired) is returned as a normal error; the useLogout onError still clears state.
   // Unwraps the AppResponse envelope so callers get { logoutUrl } directly.
   ssoLogout: async () => {
-    const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+    const baseUrl = SSO_API_URL;
     const res = await fetch(`${baseUrl}/api/sso/logout`, {
       method:      'POST',
       credentials: 'include',
