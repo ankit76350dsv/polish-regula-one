@@ -20,6 +20,7 @@ import { DpiaVerdictBadge } from '../../components/common/StatusBadge';
 import { AiBadge, AiDisclaimer, useAiEnabled } from '../../components/common/AiAssist';
 import { aiDraftActivity } from '../../store/slices/aiSlice';
 import { useT } from '../../i18n';
+import { useOrgBase } from '../../lib/paths';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchActivities, createActivity, updateActivity } from '../../store/slices/activitiesSlice';
 import { fetchVendors } from '../../store/slices/vendorsSlice';
@@ -144,6 +145,7 @@ export default function ActivityWizardPage() {
   const { t, lang } = useT();
   const { id } = useParams(); // present in edit mode
   const navigate = useNavigate();
+  const base = useOrgBase();
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
   const { items: activities } = useSliceData('activities', fetchActivities);
@@ -226,7 +228,7 @@ export default function ActivityWizardPage() {
       const saved = action.payload;
       if (action.error) throw new Error(action.error.message);
       toast.success(t('common.save'));
-      navigate(`/register/${saved.id}`);
+      navigate(`${base}/register/${saved.id}`);
     } catch (err) {
       toast.error(err.message === 'FORBIDDEN' ? t('common.notAuthorized') : t('common.error'));
     } finally {

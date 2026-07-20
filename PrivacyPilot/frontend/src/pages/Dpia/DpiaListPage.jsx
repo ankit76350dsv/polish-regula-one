@@ -9,10 +9,12 @@ import { useSliceData } from '../../hooks/useSliceData';
 import { fetchDpias } from '../../store/slices/dpiasSlice';
 import { fetchActivities } from '../../store/slices/activitiesSlice';
 import { useT } from '../../i18n';
+import { useOrgBase } from '../../lib/paths';
 import { DPIA_CRITERIA } from '../../lib/dpiaCriteria';
 import { labelOf } from '../../lib/gdpr';
 
 export default function DpiaListPage() {
+  const base = useOrgBase();
   const { t, lang } = useT();
   const { items, status, error, refetch } = useSliceData('dpias', fetchDpias);
   const { items: activities } = useSliceData('activities', fetchActivities);
@@ -35,7 +37,7 @@ export default function DpiaListPage() {
               <Card key={d.id}>
                 <CardContent className="flex flex-wrap items-center gap-3 p-4">
                   <div className="min-w-0 flex-1">
-                    <Link to={`/dpia/${d.id}`} className="font-medium text-foreground hover:text-primary">
+                    <Link to={`${base}/dpia/${d.id}`} className="font-medium text-foreground hover:text-primary">
                       {d.title}
                     </Link>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">

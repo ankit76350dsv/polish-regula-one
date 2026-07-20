@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { initSession, ssoLoopDetected } from './store/slices/authSlice';
+import { initSession, ssoLoopDetected, selectAuthStatus } from './store/slices/authSlice';
 import { can } from './lib/permissions';
+import { orgPath } from './lib/paths';
 
 import AuthGate from './components/auth/AuthGate';
 import SsoCallback from './components/auth/SsoCallback';
@@ -31,8 +32,22 @@ import NotFoundPage from './pages/NotFoundPage';
  */
 function RequireAction({ action, children }) {
   const user = useSelector((s) => s.auth.user);
-  if (!user || !can(user, action)) return <Navigate to="/dashboard" replace />;
+  if (!user || !can(user, action)) return <Navigate to={orgPath(user?.tenantId, '/dashboard')} replace />;
   return children ?? <Outlet />;
+}
+
+/**
+ * Everything that is NOT under /company/{tenantId} (the bare "/", the old
+ * "/login", any stray URL). Once signed in we forward to the tenant dashboard;
+ * otherwise the gate shows the login/spinner at a stable URL.
+ */
+function RootRedirect() {
+  const status = useSelector(selectAuthStatus);
+  const tenantId = useSelector((s) => s.auth.user?.tenantId);
+  if (status === 'authenticated' && tenantId) {
+    return <Navigate to={orgPath(tenantId, '/dashboard')} replace />;
+  }
+  return <AuthGate />;
 }
 
 export default function App() {
@@ -58,39 +73,41 @@ export default function App() {
         {/* Landing spot the central login returns to after a successful sign-in. */}
         <Route path="/auth/sso-callback" element={<SsoCallback />} />
 
-        {/* Everything else runs behind the SSO gate. */}
-        <Route element={<AuthGate />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/login" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
+        {/* All app pages live under /company/{tenantId}/… and run behind the SSO gate. */}
+        <Route path="/company/:tenantId" element={<AuthGate />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
           {/* Own profile — available to any signed-in user, no extra permission. */}
-          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="profile" element={<ProfilePage />} />
 
-          <Route path="/register" element={<RequireAction action="VIEW_REGISTER"><RegisterPage /></RequireAction>} />
-          <Route path="/register/new" element={<RequireAction action="CREATE_ACTIVITY"><ActivityWizardPage /></RequireAction>} />
-          <Route path="/register/:id" element={<RequireAction action="VIEW_REGISTER"><ActivityDetailPage /></RequireAction>} />
-          <Route path="/register/:id/edit" element={<RequireAction action="EDIT_ACTIVITY"><ActivityWizardPage /></RequireAction>} />
+          <Route path="register" element={<RequireAction action="VIEW_REGISTER"><RegisterPage /></RequireAction>} />
+          <Route path="register/new" element={<RequireAction action="CREATE_ACTIVITY"><ActivityWizardPage /></RequireAction>} />
+          <Route path="register/:id" element={<RequireAction action="VIEW_REGISTER"><ActivityDetailPage /></RequireAction>} />
+          <Route path="register/:id/edit" element={<RequireAction action="EDIT_ACTIVITY"><ActivityWizardPage /></RequireAction>} />
 
-          <Route path="/dpia" element={<RequireAction action="VIEW_REGISTER"><DpiaListPage /></RequireAction>} />
-          <Route path="/dpia/:id" element={<RequireAction action="VIEW_REGISTER"><DpiaDetailPage /></RequireAction>} />
+          <Route path="dpia" element={<RequireAction action="VIEW_REGISTER"><DpiaListPage /></RequireAction>} />
+          <Route path="dpia/:id" element={<RequireAction action="VIEW_REGISTER"><DpiaDetailPage /></RequireAction>} />
 
-          <Route path="/notices" element={<RequireAction action="GENERATE_NOTICES"><NoticesPage /></RequireAction>} />
-          <Route path="/vendors" element={<RequireAction action="MANAGE_VENDORS"><VendorsPage /></RequireAction>} />
-          <Route path="/transfers" element={<RequireAction action="MANAGE_TRANSFERS"><TransfersPage /></RequireAction>} />
+          <Route path="notices" element={<RequireAction action="GENERATE_NOTICES"><NoticesPage /></RequireAction>} />
+          <Route path="vendors" element={<RequireAction action="MANAGE_VENDORS"><VendorsPage /></RequireAction>} />
+          <Route path="transfers" element={<RequireAction action="MANAGE_TRANSFERS"><TransfersPage /></RequireAction>} />
 
-          <Route path="/breaches" element={<RequireAction action="MANAGE_BREACHES"><BreachesPage /></RequireAction>} />
-          <Route path="/breaches/:id" element={<RequireAction action="MANAGE_BREACHES"><BreachDetailPage /></RequireAction>} />
+          <Route path="breaches" element={<RequireAction action="MANAGE_BREACHES"><BreachesPage /></RequireAction>} />
+          <Route path="breaches/:id" element={<RequireAction action="MANAGE_BREACHES"><BreachDetailPage /></RequireAction>} />
 
-          <Route path="/dsar" element={<RequireAction action="MANAGE_DSAR"><DsarPage /></RequireAction>} />
-          <Route path="/dsar/:id" element={<RequireAction action="MANAGE_DSAR"><DsarDetailPage /></RequireAction>} />
+          <Route path="dsar" element={<RequireAction action="MANAGE_DSAR"><DsarPage /></RequireAction>} />
+          <Route path="dsar/:id" element={<RequireAction action="MANAGE_DSAR"><DsarDetailPage /></RequireAction>} />
 
-          <Route path="/audit-trail" element={<RequireAction action="VIEW_AUDIT_TRAIL"><AuditTrailPage /></RequireAction>} />
-          <Route path="/users" element={<RequireAction action="MANAGE_USERS"><UsersPage /></RequireAction>} />
-          <Route path="/settings" element={<RequireAction action="EDIT_SETTINGS"><SettingsPage /></RequireAction>} />
+          <Route path="audit-trail" element={<RequireAction action="VIEW_AUDIT_TRAIL"><AuditTrailPage /></RequireAction>} />
+          <Route path="users" element={<RequireAction action="MANAGE_USERS"><UsersPage /></RequireAction>} />
+          <Route path="settings" element={<RequireAction action="EDIT_SETTINGS"><SettingsPage /></RequireAction>} />
 
-          {/* Inside the gate so it renders within the app shell for signed-in users. */}
+          {/* Unknown /company/{id}/… path — render NotFound inside the app shell. */}
           <Route path="*" element={<NotFoundPage />} />
         </Route>
+
+        {/* "/", "/login", old flat URLs, anything else → resolve to the tenant dashboard. */}
+        <Route path="*" element={<RootRedirect />} />
       </Routes>
     </BrowserRouter>
   );

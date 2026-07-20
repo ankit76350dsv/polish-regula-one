@@ -21,6 +21,7 @@ import { fetchVendors } from '../../store/slices/vendorsSlice';
 import { fetchTransfers } from '../../store/slices/transfersSlice';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
+import { useOrgBase } from '../../lib/paths';
 import { activityCompleteness } from '../../lib/completeness';
 import {
   ART6_BASES, ART9_CONDITIONS, DATA_CATEGORIES, DATA_SUBJECT_CATEGORIES,
@@ -50,6 +51,7 @@ export default function ActivityDetailPage() {
   const { id } = useParams();
   const { t, lang } = useT();
   const navigate = useNavigate();
+  const base = useOrgBase();
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
   const { items, status, error, refetch } = useSliceData('activities', fetchActivities);
@@ -82,7 +84,7 @@ export default function ActivityDetailPage() {
       return;
     }
     dispatch(fetchActivities());
-    navigate(`/dpia/${action.payload.id}`);
+    navigate(`${base}/dpia/${action.payload.id}`);
   };
 
   const approve = async () => {
@@ -99,14 +101,14 @@ export default function ActivityDetailPage() {
   const archive = async () => {
     const action = await dispatch(archiveActivity(activity.id));
     if (action.error) toast.error(t('common.notAuthorized'));
-    else navigate('/register');
+    else navigate(`${base}/register`);
   };
 
   return (
     <div className="mx-auto max-w-4xl">
       <PageHeader title={activity.name} subtitle={`${labelOf(DEPARTMENTS, activity.department, lang)} · ${activity.ownerName}`}>
         {can(user, ACTIONS.EDIT_ACTIVITY) && (
-          <Button variant="outline" onClick={() => navigate(`/register/${activity.id}/edit`)}>
+          <Button variant="outline" onClick={() => navigate(`${base}/register/${activity.id}/edit`)}>
             <Pencil /> {t('common.edit')}
           </Button>
         )}
@@ -199,7 +201,7 @@ export default function ActivityDetailPage() {
                 );
               })
             ) : (
-              <p className="text-(--status-warn)">{t('transfers.tiaMissing')} — <Link className="underline" to="/transfers">{t('nav.transfers')}</Link></p>
+              <p className="text-(--status-warn)">{t('transfers.tiaMissing')} — <Link className="underline" to={`${base}/transfers`}>{t('nav.transfers')}</Link></p>
             )
           ) : (
             <p className="text-muted-foreground">{t('common.no')} — EEA only</p>
@@ -230,7 +232,7 @@ export default function ActivityDetailPage() {
           <div className="mt-3 flex items-center gap-3">
             <DpiaVerdictBadge verdict={activity.dpiaVerdict} />
             {activity.dpiaId ? (
-              <Link to={`/dpia/${activity.dpiaId}`} className="text-sm text-primary underline-offset-2 hover:underline">
+              <Link to={`${base}/dpia/${activity.dpiaId}`} className="text-sm text-primary underline-offset-2 hover:underline">
                 {t('nav.dpia')} →
               </Link>
             ) : (

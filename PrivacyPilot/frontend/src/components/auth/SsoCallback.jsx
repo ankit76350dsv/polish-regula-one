@@ -6,27 +6,30 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { selectAuthStatus } from '../../store/slices/authSlice';
+import { orgPath } from '../../lib/paths';
 import { useT } from '../../i18n';
 
 export default function SsoCallback() {
   const { t } = useT();
   const status = useSelector(selectAuthStatus);
+  const tenantId = useSelector((s) => s.auth.user?.tenantId);
   const navigate = useNavigate();
 
   useEffect(() => {
+    const home = orgPath(tenantId, '/dashboard');
     if (status === 'authenticated') {
       const params = new URLSearchParams(window.location.search);
       const returnPath = params.get('returnPath');
       // Only allow an INTERNAL path (starts with a single "/") — blocks open-redirects.
-      const safe = returnPath && /^\/[^/]/.test(returnPath) ? returnPath : '/dashboard';
+      const safe = returnPath && /^\/[^/]/.test(returnPath) ? returnPath : home;
       navigate(safe, { replace: true });
     } else if (status === 'unauthenticated' || status === 'error') {
-      // Session did not stick / failed — hand back to the gate, which shows the
-      // login (or the retry screen) at a stable URL.
-      navigate('/dashboard', { replace: true });
+      // Session did not stick / failed — go to a stable URL; RootRedirect/the gate
+      // then shows the login (or the retry screen).
+      navigate('/', { replace: true });
     }
     // While 'idle' / 'loading' we wait — App.jsx's initSession() is resolving.
-  }, [status, navigate]);
+  }, [status, tenantId, navigate]);
 
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-background">

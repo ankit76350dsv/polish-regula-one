@@ -23,6 +23,7 @@ import { useDispatch } from 'react-redux';
 import { useEffect } from 'react';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
+import { useOrgBase } from '../../lib/paths';
 import { activityCompleteness } from '../../lib/completeness';
 import {
   ART6_BASES, DEPARTMENTS, DATA_CATEGORIES, DATA_SUBJECT_CATEGORIES,
@@ -112,6 +113,7 @@ function download(filename, content, mime = 'text/csv;charset=utf-8') {
 export default function RegisterPage() {
   const { t, lang } = useT();
   const navigate = useNavigate();
+  const base = useOrgBase();
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
   const { items, status, error, refetch } = useSliceData('activities', fetchActivities);
@@ -155,7 +157,7 @@ export default function RegisterPage() {
           </Button>
         )}
         {can(user, ACTIONS.CREATE_ACTIVITY) && (
-          <Button onClick={() => navigate('/register/new')}>
+          <Button onClick={() => navigate(`${base}/register/new`)}>
             <Plus /> {t('ropa.newActivity')}
           </Button>
         )}
@@ -193,7 +195,7 @@ export default function RegisterPage() {
         <EmptyState
           hint={t('ropa.empty')}
           action={can(user, ACTIONS.CREATE_ACTIVITY) && (
-            <Button size="sm" onClick={() => navigate('/register/new')}>
+            <Button size="sm" onClick={() => navigate(`${base}/register/new`)}>
               <Plus /> {t('ropa.newActivity')}
             </Button>
           )}
@@ -218,7 +220,7 @@ export default function RegisterPage() {
                 return (
                   <TableRow key={a.id}>
                     <TableCell>
-                      <Link to={`/register/${a.id}`} className="font-medium text-foreground hover:text-primary">
+                      <Link to={`${base}/register/${a.id}`} className="font-medium text-foreground hover:text-primary">
                         {a.name}
                       </Link>
                     </TableCell>

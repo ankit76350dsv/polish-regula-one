@@ -23,6 +23,7 @@ import { setLanguage } from '../../store/slices/uiSlice';
 import { signOut } from '../../store/slices/authSlice';
 import { navFor } from '../../lib/permissions';
 import { roleDisplay, platformRoleLabel } from '../../lib/sso';
+import { useOrgBase } from '../../lib/paths';
 
 const NAV_ICONS = {
   'nav.dashboard': LayoutDashboard,
@@ -43,6 +44,7 @@ export default function DashboardLayout() {
   const dispatch = useDispatch();
   const { pathname } = useLocation();
   const user = useSelector((s) => s.auth.user);
+  const base = useOrgBase(); // "/company/{tenantId}"
   const items = navFor(user);
   // Sidebar footer: the user's PrivacyPilot capacity (raw code, e.g. "PRIVACYPILOT ADMIN").
   const roleLabel = roleDisplay(user);
@@ -51,7 +53,11 @@ export default function DashboardLayout() {
 
   // A nav item is active on its own route and every sub-route
   // (e.g. /register stays highlighted on /register/:id and the wizard).
-  const isActive = (to) => pathname === to || pathname.startsWith(`${to}/`);
+  // Paths are tenant-scoped, so compare against the "/company/{id}" base.
+  const isActive = (to) => {
+    const full = `${base}${to}`;
+    return pathname === full || pathname.startsWith(`${full}/`);
+  };
 
   // Ends the RegulaOne SSO session and sends the browser to the central logout
   // page (which finishes sign-out and returns here to the login screen).
@@ -85,7 +91,7 @@ export default function DashboardLayout() {
                       <SidebarMenuButton
                         tooltip={t(item.key)}
                         isActive={isActive(item.to)}
-                        render={<NavLink to={item.to} />}
+                        render={<NavLink to={`${base}${item.to}`} />}
                         className="data-active:bg-primary/15 data-active:text-primary data-active:font-medium"
                       >
                         {Icon && <Icon />}
@@ -103,7 +109,7 @@ export default function DashboardLayout() {
           <div className="flex items-center gap-2 px-2 py-1.5 group-data-[collapsible=icon]:justify-center">
             {/* Clicking the user opens their profile. */}
             <NavLink
-              to="/profile"
+              to={`${base}/profile`}
               title={t('nav.profile')}
               className="flex min-w-0 items-center gap-2 rounded-md p-1 hover:bg-accent"
             >

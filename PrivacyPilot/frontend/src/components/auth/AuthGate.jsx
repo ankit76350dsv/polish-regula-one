@@ -5,12 +5,14 @@
 //   4. signed in, no access → an "access denied" card with Sign out
 //   5. allowed             → the real app (DashboardLayout, which renders <Outlet/>)
 import { useDispatch, useSelector } from 'react-redux';
+import { Navigate, useParams, useLocation } from 'react-router-dom';
 import { AlertTriangle, RefreshCw, ShieldX } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import LoginPage from '../../pages/Auth/LoginPage';
 import DashboardLayout from '../layout/DashboardLayout';
 import { evaluatePrivacyPilotAccess } from '../../lib/sso';
+import { orgPath } from '../../lib/paths';
 import { useT } from '../../i18n';
 import {
   initSession,
@@ -37,6 +39,8 @@ export default function AuthGate() {
   const error = useSelector(selectAuthError);
   const user = useSelector(selectCurrentUser);
   const ssoLoop = useSelector(selectSsoLoop);
+  const params = useParams();
+  const location = useLocation();
 
   // 1. Still checking the session.
   if (status === 'idle' || status === 'loading') {
@@ -94,6 +98,14 @@ export default function AuthGate() {
     );
   }
 
-  // 5. Allowed — render the real app shell (it contains the routed <Outlet/>).
+  // 5. Guard the URL's tenant: if it doesn't match the signed-in user's own tenant
+  //    (e.g. someone edited the id in the address bar), send them to their own,
+  //    keeping whatever sub-page they were trying to reach.
+  if (params.tenantId && params.tenantId !== user.tenantId) {
+    const rest = location.pathname.split('/').slice(3).join('/'); // after "/company/{id}/"
+    return <Navigate to={orgPath(user.tenantId, rest ? `/${rest}` : '/dashboard')} replace />;
+  }
+
+  // 6. Allowed — render the real app shell (it contains the routed <Outlet/>).
   return <DashboardLayout />;
 }

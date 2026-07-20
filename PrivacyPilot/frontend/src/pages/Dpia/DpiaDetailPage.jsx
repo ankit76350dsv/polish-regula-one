@@ -20,6 +20,7 @@ import { useSliceData } from '../../hooks/useSliceData';
 import { fetchDpias, updateDpia, signDpia } from '../../store/slices/dpiasSlice';
 import { fetchActivities } from '../../store/slices/activitiesSlice';
 import { useT } from '../../i18n';
+import { useOrgBase } from '../../lib/paths';
 import { can, hasRole, ROLES, ACTIONS, ROLE_LABELS } from '../../lib/permissions';
 import { DPIA_CRITERIA } from '../../lib/dpiaCriteria';
 import { labelOf } from '../../lib/gdpr';
@@ -98,6 +99,7 @@ const riskTone = (score) =>
   score >= 15 ? 'text-(--status-risk)' : score >= 8 ? 'text-(--status-warn)' : 'text-(--status-ok)';
 
 export default function DpiaDetailPage() {
+  const base = useOrgBase();
   const { id } = useParams();
   const { t, lang } = useT();
   const dispatch = useDispatch();
@@ -175,7 +177,7 @@ export default function DpiaDetailPage() {
       <PageHeader
         title={dpia.title}
         subtitle={activity && (
-          <Link to={`/register/${activity.id}`} className="text-primary underline-offset-2 hover:underline">
+          <Link to={`${base}/register/${activity.id}`} className="text-primary underline-offset-2 hover:underline">
             {activity.name}
           </Link>
         )}

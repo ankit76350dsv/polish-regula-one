@@ -20,6 +20,7 @@ import { useSliceData } from '../../hooks/useSliceData';
 import { useNow, formatCountdown } from '../../hooks/useNow';
 import { fetchBreaches, createBreach } from '../../store/slices/breachesSlice';
 import { useT } from '../../i18n';
+import { useOrgBase } from '../../lib/paths';
 import { can, ACTIONS } from '../../lib/permissions';
 import { UODO_WINDOW_MS } from '../../services/breachService';
 import { cn } from '@/lib/utils';
@@ -57,6 +58,7 @@ export function BreachClockBadge({ breach, now }) {
 }
 
 export default function BreachesPage() {
+  const base = useOrgBase();
   const { t, lang } = useT();
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
@@ -96,7 +98,7 @@ export default function BreachesPage() {
               <CardContent className="flex flex-wrap items-center gap-3 p-4">
                 <Siren className={b.status === 'open' ? 'size-4 shrink-0 text-(--status-risk)' : 'size-4 shrink-0 text-muted-foreground'} aria-hidden />
                 <div className="min-w-0 flex-1">
-                  <Link to={`/breaches/${b.id}`} className="font-medium text-foreground hover:text-primary">
+                  <Link to={`${base}/breaches/${b.id}`} className="font-medium text-foreground hover:text-primary">
                     {b.title}
                   </Link>
                   <p className="mt-0.5 text-xs text-muted-foreground">

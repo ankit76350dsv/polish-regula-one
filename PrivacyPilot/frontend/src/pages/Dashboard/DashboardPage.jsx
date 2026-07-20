@@ -19,6 +19,7 @@ import { fetchDsars } from '../../store/slices/dsarsSlice';
 import { fetchVendors } from '../../store/slices/vendorsSlice';
 import { fetchAudit } from '../../store/slices/auditSlice';
 import { useT } from '../../i18n';
+import { useOrgBase } from '../../lib/paths';
 import { activityCompleteness } from '../../lib/completeness';
 import { breachClock } from '../../services/breachService';
 import { dsarDaysLeft } from '../../services/dsarService';
@@ -41,6 +42,7 @@ function ChartTooltip({ active, payload, label }) {
 }
 
 export default function DashboardPage() {
+  const base = useOrgBase();
   const { t, lang } = useT();
   const activities = useSliceData('activities', fetchActivities);
   const dpias = useSliceData('dpias', fetchDpias);
@@ -182,7 +184,7 @@ export default function DashboardPage() {
               <ul className="grid gap-1.5">
                 {attention.map((item, i) => (
                   <li key={i}>
-                    <Link to={item.to}
+                    <Link to={`${base}${item.to}`}
                       className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent">
                       <span aria-hidden className={
                         item.tone === 'risk'

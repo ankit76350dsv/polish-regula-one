@@ -20,12 +20,14 @@ import { useSliceData } from '../../hooks/useSliceData';
 import { fetchDsars, createDsar } from '../../store/slices/dsarsSlice';
 import { dsarDaysLeft } from '../../services/dsarService';
 import { useT } from '../../i18n';
+import { useOrgBase } from '../../lib/paths';
 import { can, ACTIONS } from '../../lib/permissions';
 import { DSAR_TYPES, labelOf, byId } from '../../lib/gdpr';
 
 const EMPTY_FORM = { type: 'access', requesterName: '', requesterEmail: '', relation: '', notes: '', receivedAt: '' };
 
 export default function DsarPage() {
+  const base = useOrgBase();
   const { t, lang } = useT();
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
@@ -77,7 +79,7 @@ export default function DsarPage() {
                 return (
                   <TableRow key={r.id}>
                     <TableCell>
-                      <Link to={`/dsar/${r.id}`} className="font-medium text-foreground hover:text-primary">
+                      <Link to={`${base}/dsar/${r.id}`} className="font-medium text-foreground hover:text-primary">
                         {r.requesterName}
                       </Link>
                       <p className="text-xs text-muted-foreground">{r.relation}</p>
