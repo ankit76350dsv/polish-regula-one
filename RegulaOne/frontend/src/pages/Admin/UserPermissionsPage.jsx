@@ -92,6 +92,38 @@ const PERMISSION_GROUPS = [
       },
     ],
   },
+  {
+    app: 'PrivacyPilot',
+    description: 'GDPR/RODO privacy register (ROPA, DPIA, DSAR, breaches) permissions',
+    // Codes MUST match PrivacyPilotPermission on the PrivacyPilot backend.
+    permissions: [
+      {
+        code: 'PRIVACYPILOT_ADMIN',
+        label: 'PrivacyPilot Admin',
+        desc: 'Full control: manage the register, DPIAs, vendors, transfers, breaches and DSARs, generate notices, export, and manage users/settings.',
+      },
+      {
+        code: 'PRIVACYPILOT_COMPLIANCE_OFFICER',
+        label: 'Compliance Officer',
+        desc: 'Run the register day-to-day: manage activities, DPIAs, vendors, transfers, breaches, DSARs and notices; no user/settings admin.',
+      },
+      {
+        code: 'PRIVACYPILOT_DPO',
+        label: 'DPO (IOD)',
+        desc: 'Independent oversight: sign off DPIAs, approve activities, handle breaches and DSARs, and export.',
+      },
+      {
+        code: 'PRIVACYPILOT_AUDITOR',
+        label: 'Auditor',
+        desc: 'Read-only access to the register and audit trail, plus export.',
+      },
+      {
+        code: 'PRIVACYPILOT_EMPLOYEE',
+        label: 'Employee',
+        desc: 'Baseline member access; no privacy-management rights.',
+      },
+    ],
+  },
 ];
 
 // Derives avatar initials from a full name string (up to 2 characters).
