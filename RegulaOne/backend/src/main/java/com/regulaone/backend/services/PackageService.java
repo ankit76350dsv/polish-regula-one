@@ -82,7 +82,6 @@ public class PackageService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime oldStart = current.getPlanStarted() != null ? current.getPlanStarted() : now;
         LocalDateTime oldExpiring = current.getPlanExpiring();
 
         // Stack remaining time: extend from the current expiry if the plan is still
@@ -94,19 +93,24 @@ public class PackageService {
                 ? request.getReason().trim()
                 : "Package renewal";
 
-        // 1. Archive the window that is ending into history (never removed — audit trail).
-        Tenant.PackageHistory history = Tenant.PackageHistory.builder()
-                .appPackage(pkg)
-                .planStarted(oldStart)
-                .planExpired(oldExpiring != null ? oldExpiring : now)
-                .usersCapacity(current.getUsersCapacity())
-                .reason(reason)
-                .build();
-        tenant.getPackageHistory().add(history);
-
-        // 2. Update the active window — same tier, extended expiry.
+        // 1. Extend the active window — same tier, later expiry.
         current.setPlanStarted(baseDate);
         current.setPlanExpiring(newExpiring);
+
+        // 2. Record the renewed period in the package history (the billing ledger).
+        //    Every paid period that STARTS gets its own entry — the platform revenue
+        //    report (PlatformService) counts one entry per period via planStarted, so
+        //    a renewal must add a fresh entry rather than editing the previous one.
+        //    getTierChanges() skips the entry whose planStarted matches the current
+        //    plan, so this does not double-show the active assignment.
+        ensureHistory(tenant).add(Tenant.PackageHistory.builder()
+                .appPackage(pkg)
+                .planStarted(baseDate)
+                .planExpired(newExpiring)
+                .usersCapacity(current.getUsersCapacity())
+                .reason(reason)
+                .build());
+
         tenant.setUpdatedAt(now);
         tenantRepository.save(tenant);
 
@@ -178,16 +182,11 @@ public class PackageService {
                 ? request.getReason().trim()
                 : "Plan change to " + newPkg.getName();
 
-        // 1. Archive the outgoing plan (if any) into history — the old plan ends now.
+        // 1. Mark the outgoing plan's active period as ended in the history ledger
+        //    (audit only — its revenue was already counted at its start). No-op if
+        //    the matching entry is not found (e.g. legacy tenant with no ledger).
         if (current != null && current.getAppPackage() != null) {
-            Tenant.PackageHistory history = Tenant.PackageHistory.builder()
-                    .appPackage(current.getAppPackage())
-                    .planStarted(current.getPlanStarted() != null ? current.getPlanStarted() : now)
-                    .planExpired(now)
-                    .usersCapacity(current.getUsersCapacity())
-                    .reason(reason)
-                    .build();
-            tenant.getPackageHistory().add(history);
+            markCurrentPeriodEnded(tenant, current, now);
         }
 
         // 2. Start a fresh window for the NEW plan.
@@ -202,6 +201,17 @@ public class PackageService {
                         ? String.valueOf(newPkg.getUsersCapacity()) : null)
                 .build();
         tenant.setCurrentPackage(updated);
+
+        // 3. Record the NEW paid period in the history ledger (planStarted = now),
+        //    so revenue is counted and getTierChanges shows the change.
+        ensureHistory(tenant).add(Tenant.PackageHistory.builder()
+                .appPackage(newPkg)
+                .planStarted(now)
+                .planExpired(newExpiring)
+                .usersCapacity(updated.getUsersCapacity())
+                .reason(reason)
+                .build());
+
         tenant.setUpdatedAt(now);
         tenantRepository.save(tenant);
 
@@ -321,8 +331,16 @@ public class PackageService {
         List<Tenant> affectedTenants = tenantRepository.findByCurrentPackageAppPackageId(id);
         
         affectedTenants.forEach(tenant -> {
+            LocalDateTime now = LocalDateTime.now();
+            // Close the active period in the history ledger before removing the plan,
+            // so the audit trail keeps a record that this tenant HAD the plan and
+            // when it ended. History is never deleted — only currentPackage is cleared.
+            Tenant.PackageDetails current = tenant.getCurrentPackage();
+            if (current != null && current.getAppPackage() != null) {
+                markCurrentPeriodEnded(tenant, current, now);
+            }
             tenant.setCurrentPackage(null);
-            tenant.setUpdatedAt(LocalDateTime.now());
+            tenant.setUpdatedAt(now);
             tenantRepository.save(tenant);
         });
 
@@ -613,6 +631,37 @@ public class PackageService {
     }
 
     //TODO: ── Private Helpers ───────────────────────────────────────────────────────
+
+    // Returns the tenant's package-history list, creating it if a legacy document
+    // stored null. Guards every history append so we never hit a NullPointerException.
+    private List<Tenant.PackageHistory> ensureHistory(Tenant tenant) {
+        if (tenant.getPackageHistory() == null) {
+            tenant.setPackageHistory(new ArrayList<>());
+        }
+        return tenant.getPackageHistory();
+    }
+
+    // Marks the history entry that represents the tenant's CURRENT active period as
+    // ended (sets planExpired), matching by planStarted + package id. Used when a
+    // plan is replaced (upgrade) or removed (package deletion) so the ledger shows
+    // when the old period actually stopped. Safe no-op if no matching entry exists.
+    private void markCurrentPeriodEnded(Tenant tenant, Tenant.PackageDetails current, LocalDateTime endedAt) {
+        if (tenant.getPackageHistory() == null
+                || current == null
+                || current.getPlanStarted() == null
+                || current.getAppPackage() == null
+                || current.getAppPackage().getId() == null) {
+            return;
+        }
+        for (Tenant.PackageHistory h : tenant.getPackageHistory()) {
+            if (h.getAppPackage() != null
+                    && current.getPlanStarted().equals(h.getPlanStarted())
+                    && current.getAppPackage().getId().equals(h.getAppPackage().getId())) {
+                h.setPlanExpired(endedAt);
+                return;
+            }
+        }
+    }
 
     // OLD: syncTenantModules() removed — app access is now derived from Tenant.currentPackage.appIds
     // at query time, so there is no denormalized list to keep in sync.
