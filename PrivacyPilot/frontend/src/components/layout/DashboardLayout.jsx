@@ -21,7 +21,8 @@ import { Toaster } from '@/components/ui/sonner';
 import { useT } from '../../i18n';
 import { setLanguage } from '../../store/slices/uiSlice';
 import { signOut } from '../../store/slices/authSlice';
-import { navFor, ROLE_LABELS } from '../../lib/permissions';
+import { navFor } from '../../lib/permissions';
+import { roleDisplay } from '../../lib/sso';
 
 const NAV_ICONS = {
   'nav.dashboard': LayoutDashboard,
@@ -43,11 +44,9 @@ export default function DashboardLayout() {
   const { pathname } = useLocation();
   const user = useSelector((s) => s.auth.user);
   const items = navFor(user);
-  // Show the user's PrivacyPilot capacity (e.g. "Company Admin"), falling back to
-  // the raw platform role for a super-admin who holds no PrivacyPilot code.
-  const roleLabel = user.primaryPermission
-    ? (ROLE_LABELS[user.primaryPermission]?.[lang] ?? user.primaryPermission)
-    : user.role;
+  // Show the raw PrivacyPilot permission code (e.g. "PRIVACYPILOT ADMIN"), or the
+  // platform role for a super-admin who holds no PrivacyPilot code.
+  const roleLabel = roleDisplay(user);
 
   // A nav item is active on its own route and every sub-route
   // (e.g. /register stays highlighted on /register/:id and the wizard).
@@ -101,15 +100,22 @@ export default function DashboardLayout() {
 
         <SidebarFooter>
           <div className="flex items-center gap-2 px-2 py-1.5 group-data-[collapsible=icon]:justify-center">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
-              {user.name.split(' ').map((p) => p[0]).join('').slice(0, 2)}
-            </div>
-            <div className="grid leading-tight group-data-[collapsible=icon]:hidden">
-              <span className="truncate text-xs font-medium text-foreground">{user.name}</span>
-              <span className="truncate text-[11px] text-muted-foreground">
-                {roleLabel}
-              </span>
-            </div>
+            {/* Clicking the user opens their profile. */}
+            <NavLink
+              to="/profile"
+              title={t('nav.profile')}
+              className="flex min-w-0 items-center gap-2 rounded-md p-1 hover:bg-accent"
+            >
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
+                {user.name.split(' ').map((p) => p[0]).join('').slice(0, 2)}
+              </div>
+              <div className="grid leading-tight group-data-[collapsible=icon]:hidden">
+                <span className="truncate text-xs font-medium text-foreground">{user.name}</span>
+                <span className="truncate text-[11px] text-muted-foreground">
+                  {roleLabel}
+                </span>
+              </div>
+            </NavLink>
             <Button
               variant="ghost" size="icon-sm" onClick={handleLogout}
               aria-label={t('nav.logout')}

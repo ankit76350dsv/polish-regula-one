@@ -22,6 +22,7 @@ import DsarDetailPage from './pages/Dsar/DsarDetailPage';
 import AuditTrailPage from './pages/Audit/AuditTrailPage';
 import UsersPage from './pages/Admin/UsersPage';
 import SettingsPage from './pages/Settings/SettingsPage';
+import ProfilePage from './pages/Profile/ProfilePage';
 import NotFoundPage from './pages/NotFoundPage';
 
 /**
@@ -62,6 +63,8 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          {/* Own profile — available to any signed-in user, no extra permission. */}
+          <Route path="/profile" element={<ProfilePage />} />
 
           <Route path="/register" element={<RequireAction action="VIEW_REGISTER"><RegisterPage /></RequireAction>} />
           <Route path="/register/new" element={<RequireAction action="CREATE_ACTIVITY"><ActivityWizardPage /></RequireAction>} />

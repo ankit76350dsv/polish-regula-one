@@ -31,6 +31,34 @@ export function privacyPilotPermissions(user) {
   return (user?.permissions || []).filter((p) => p.startsWith(PRIVACYPILOT_PREFIX));
 }
 
+// ── Display helpers ────────────────────────────────────────────────────────────
+// Show a permission code with underscores as spaces (e.g. "PRIVACYPILOT_ADMIN" →
+// "PRIVACYPILOT ADMIN"). We show the REAL code, not a friendly business name.
+export function formatPermissionCode(code) {
+  return code ? code.replace(/_/g, ' ') : code;
+}
+
+// Friendly names for the platform role (the single ROLE_* value from /me).
+const PLATFORM_ROLE_LABELS = {
+  ROLE_SUPER_ADMIN: 'Super Admin',
+  ROLE_ADMIN: 'Admin',
+  ROLE_USER: 'User',
+};
+
+export function platformRoleLabel(role) {
+  if (!role) return '';
+  return PLATFORM_ROLE_LABELS[role] ?? role.replace(/^ROLE_/, '').replace(/_/g, ' ');
+}
+
+// The single line to show as a user's "role" in the UI: their most-privileged
+// PrivacyPilot code (as the raw code), or the platform role if they hold none.
+export function roleDisplay(user) {
+  if (!user) return '';
+  return user.primaryPermission
+    ? formatPermissionCode(user.primaryPermission)
+    : platformRoleLabel(user.role);
+}
+
 // The single most-privileged PrivacyPilot code a user holds, or null. For the
 // "acting as" label and audit attribution only — it is a real PRIVACYPILOT_* code.
 export function primaryPermission(permissions = []) {
@@ -55,6 +83,7 @@ export function normalizeUser(raw) {
     primaryPermission: primaryPermission(permissions), // most-privileged PRIVACYPILOT_* code, or null
     tenantId: raw.tenantId ?? '',
     tenantName: raw.tenantName ?? null,
+    tenantStatus: raw.tenantStatus ?? null,
     enabled: raw.enabled,
     moduleIds: Array.isArray(raw.moduleIds) ? raw.moduleIds : [],
     planExpired: Boolean(raw.planExpired),
