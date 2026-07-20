@@ -65,6 +65,14 @@ export default {
   'landing.terms': 'Terms of Service',
   'landing.contact': 'Contact',
 
+  // Not found
+  'notFound.title': 'Page not found',
+  'notFound.body': 'The route you opened does not exist in PrivacyPilot. Check the address or return to a safe page.',
+  'notFound.requestedPath': 'Requested path',
+  'notFound.home': 'Return to Home',
+  'notFound.dashboard': 'Return to Dashboard',
+  'notFound.back': 'Go back',
+
   // Navigation
   'nav.dashboard': 'Dashboard',
   'nav.register': 'ROPA Register',

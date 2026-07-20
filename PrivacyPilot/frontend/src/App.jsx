@@ -38,8 +38,8 @@ function RequireAction({ action, children }) {
 }
 
 /**
- * The explicit /login route and legacy/unknown URLs resolve here. Once signed in
- * we forward to the tenant dashboard; otherwise the gate shows the SSO screen.
+ * The explicit /login route resolves here. Once signed in we forward to the
+ * tenant dashboard; otherwise the gate shows the SSO screen.
  */
 function RootRedirect() {
   const status = useSelector(selectAuthStatus);
@@ -109,9 +109,9 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Route>
 
-        {/* Login and old flat URLs preserve the existing SSO-gate behaviour. */}
+        {/* Login preserves the existing SSO-gate behaviour; unknown public URLs are 404s. */}
         <Route path="/login" element={<RootRedirect />} />
-        <Route path="*" element={<RootRedirect />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   );

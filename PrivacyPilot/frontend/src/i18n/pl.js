@@ -65,6 +65,14 @@ export default {
   'landing.terms': 'Warunki korzystania',
   'landing.contact': 'Kontakt',
 
+  // Nie znaleziono strony
+  'notFound.title': 'Nie znaleziono strony',
+  'notFound.body': 'Otwarta ścieżka nie istnieje w PrivacyPilot. Sprawdź adres lub wróć do bezpiecznej strony.',
+  'notFound.requestedPath': 'Żądana ścieżka',
+  'notFound.home': 'Wróć na stronę główną',
+  'notFound.dashboard': 'Wróć do pulpitu',
+  'notFound.back': 'Wróć',
+
   // Nawigacja
   'nav.dashboard': 'Pulpit',
   'nav.register': 'Rejestr czynności',
