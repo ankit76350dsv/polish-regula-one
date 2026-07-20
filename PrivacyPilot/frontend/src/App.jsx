@@ -25,6 +25,7 @@ import UsersPage from './pages/Admin/UsersPage';
 import SettingsPage from './pages/Settings/SettingsPage';
 import ProfilePage from './pages/Profile/ProfilePage';
 import NotFoundPage from './pages/NotFoundPage';
+import LandingPage from './pages/Landing/LandingPage';
 
 /**
  * Route-level RBAC guard. The same `can()` matrix is enforced again inside
@@ -37,9 +38,8 @@ function RequireAction({ action, children }) {
 }
 
 /**
- * Everything that is NOT under /company/{tenantId} (the bare "/", the old
- * "/login", any stray URL). Once signed in we forward to the tenant dashboard;
- * otherwise the gate shows the login/spinner at a stable URL.
+ * The explicit /login route and legacy/unknown URLs resolve here. Once signed in
+ * we forward to the tenant dashboard; otherwise the gate shows the SSO screen.
  */
 function RootRedirect() {
   const status = useSelector(selectAuthStatus);
@@ -70,6 +70,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public product front door. It checks session state only to tailor CTAs. */}
+        <Route path="/" element={<LandingPage />} />
+
         {/* Landing spot the central login returns to after a successful sign-in. */}
         <Route path="/auth/sso-callback" element={<SsoCallback />} />
 
@@ -106,7 +109,8 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Route>
 
-        {/* "/", "/login", old flat URLs, anything else → resolve to the tenant dashboard. */}
+        {/* Login and old flat URLs preserve the existing SSO-gate behaviour. */}
+        <Route path="/login" element={<RootRedirect />} />
         <Route path="*" element={<RootRedirect />} />
       </Routes>
     </BrowserRouter>
