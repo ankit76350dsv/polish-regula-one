@@ -24,6 +24,7 @@ import NotificationPreferences from './pages/Notifications/NotificationPreferenc
 // Admin pages
 import TenantManagement from './pages/Admin/TenantManagement';
 import TenantDetailPage from './pages/Admin/TenantDetailPage';
+import TenantPackagePage from './pages/Admin/TenantPackagePage';
 import UserManagement   from './pages/Admin/UserManagement';
 import PackageTiers     from './pages/Admin/PackageTiers';
 import AdminTeam        from './pages/Admin/AdminTeam';
@@ -133,6 +134,7 @@ export default function App() {
             <>
               <Route path="/company/:tenantId/tenants"       element={<TenantManagement />} />
               <Route path="/company/:tenantId/tenants/:id"   element={<TenantDetailPage />} />
+              <Route path="/company/:tenantId/tenants/:id/package" element={<TenantPackagePage />} />
               <Route path="/company/:tenantId/users"         element={<UserManagement />} />
               <Route path="/company/:tenantId/users/:userId" element={<UserPermissionsPage />} />
               <Route path="/company/:tenantId/package-tiers" element={<PackageTiers />} />
