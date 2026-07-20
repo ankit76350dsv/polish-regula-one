@@ -1,0 +1,976 @@
+{
+  "info": {
+    "name": "KSeFFlow",
+    "description": "KSeFFlow (e-invoicing) API \u2014 one folder per controller. Base path /api/v1 on port 8081. Auth is the httpOnly idToken cookie set by the RegulaOne backend: log in via RegulaOne SSO first (Postman cookie jar carries it), or paste a token into {{token}} for the Bearer fallback header.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Invoices",
+      "item": [
+        {
+          "name": "Create Draft Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/draft",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "draft"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceNumber\": \"FV/2026/05/0001\",\n  \"issueDate\": \"2026-05-01\",\n  \"dueDate\": \"2026-05-15\",\n  \"sellerName\": \"Acme Sp. z o.o.\",\n  \"sellerNip\": \"1234567890\",\n  \"sellerAddress\": \"ul. Przykladowa 1\",\n  \"sellerPostalCode\": \"00-001\",\n  \"sellerCity\": \"Warszawa\",\n  \"buyerName\": \"Klient S.A.\",\n  \"buyerNip\": \"9876543210\",\n  \"buyerAddress\": \"ul. Klienta 2\",\n  \"buyerPostalCode\": \"31-000\",\n  \"buyerCity\": \"Krakow\",\n  \"currency\": \"PLN\",\n  \"totalNet\": 1000.0,\n  \"totalVat\": 230.0,\n  \"totalGross\": 1230.0,\n  \"paymentMethod\": \"TRANSFER\",\n  \"bankAccount\": \"PL61109010140000071219812874\",\n  \"notes\": \"Thank you for your business\",\n  \"items\": [\n    {\n      \"productName\": \"Consulting services\",\n      \"unit\": \"hour\",\n      \"quantity\": 10,\n      \"unitPrice\": 100.0,\n      \"vatRate\": \"VAT_23\",\n      \"netAmount\": 1000.0,\n      \"vatAmount\": 230.0,\n      \"grossAmount\": 1230.0,\n      \"pkwiuCode\": \"62.01\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Invoice To KSeF",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE/submit?nip=1234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE",
+                "submit"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Correct Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE/correct?reason=Wrong buyer address&correctionType=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE",
+                "correct"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Wrong buyer address"
+                },
+                {
+                  "key": "correctionType",
+                  "value": "1"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceNumber\": \"FV/2026/05/0001\",\n  \"issueDate\": \"2026-05-01\",\n  \"dueDate\": \"2026-05-15\",\n  \"sellerName\": \"Acme Sp. z o.o.\",\n  \"sellerNip\": \"1234567890\",\n  \"sellerAddress\": \"ul. Przykladowa 1\",\n  \"sellerPostalCode\": \"00-001\",\n  \"sellerCity\": \"Warszawa\",\n  \"buyerName\": \"Klient S.A.\",\n  \"buyerNip\": \"9876543210\",\n  \"buyerAddress\": \"ul. Klienta 2\",\n  \"buyerPostalCode\": \"31-000\",\n  \"buyerCity\": \"Krakow\",\n  \"currency\": \"PLN\",\n  \"totalNet\": 1000.0,\n  \"totalVat\": 230.0,\n  \"totalGross\": 1230.0,\n  \"paymentMethod\": \"TRANSFER\",\n  \"bankAccount\": \"PL61109010140000071219812874\",\n  \"notes\": \"Thank you for your business\",\n  \"items\": [\n    {\n      \"productName\": \"Consulting services\",\n      \"unit\": \"hour\",\n      \"quantity\": 10,\n      \"unitPrice\": 100.0,\n      \"vatRate\": \"VAT_23\",\n      \"netAmount\": 1000.0,\n      \"vatAmount\": 230.0,\n      \"grossAmount\": 1230.0,\n      \"pkwiuCode\": \"62.01\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Retry Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE/retry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE",
+                "retry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE",
+                "status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice XML",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE/xml",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE",
+                "xml"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Invoices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices?status=SENT&search=&page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "SENT"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Received Invoices",
+      "item": [
+        {
+          "name": "Sync Received Invoices",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/received-invoices/sync?nip=1234567890&from=2026-05-01T00:00:00&to=2026-05-31T23:59:59",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "received-invoices",
+                "sync"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-05-01T00:00:00"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-05-31T23:59:59"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Received Invoices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/received-invoices?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "received-invoices"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Received Invoice XML",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/received-invoices/KSEF_NUMBER_HERE/xml?nip=1234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "received-invoices",
+                "KSEF_NUMBER_HERE",
+                "xml"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Certificates",
+      "item": [
+        {
+          "name": "Enroll Certificate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/certificates/enroll?nip=1234567890&purpose=AUTHENTICATION&name=Primary auth cert",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "certificates",
+                "enroll"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                },
+                {
+                  "key": "purpose",
+                  "value": "AUTHENTICATION"
+                },
+                {
+                  "key": "name",
+                  "value": "Primary auth cert"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Certificate (.p12/.pfx)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/certificates/upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "certificates",
+                "upload"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "password",
+                  "value": "cert-password",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Certificates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/certificates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "certificates"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download Public Certificate (PEM)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/certificates/CERT_ID_HERE/public",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "certificates",
+                "CERT_ID_HERE",
+                "public"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Certificate",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/certificates/CERT_ID_HERE/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "certificates",
+                "CERT_ID_HERE",
+                "deactivate"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Permissions",
+      "item": [
+        {
+          "name": "Grant Person Permissions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions/persons/grants?nip=1234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions",
+                "persons",
+                "grants"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subjectType\": \"Nip\",\n  \"subjectValue\": \"9876543210\",\n  \"permissions\": [\n    \"InvoiceWrite\",\n    \"InvoiceRead\"\n  ],\n  \"description\": \"Grant invoicing rights\",\n  \"subjectDetailsType\": \"PersonByIdentifier\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Query Permissions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions/query?nip=1234567890&pageOffset=0&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions",
+                "query"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                },
+                {
+                  "key": "pageOffset",
+                  "value": "0"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"queryType\": \"PermissionsGrantedToOtherEntity\",\n  \"permissionTypes\": [\n    \"InvoiceRead\",\n    \"InvoiceWrite\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Permission",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions/PERMISSION_ID_HERE?nip=1234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions",
+                "PERMISSION_ID_HERE"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Permission Operation Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions/operations/REFERENCE_NUMBER_HERE?nip=1234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions",
+                "operations",
+                "REFERENCE_NUMBER_HERE"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Audit Logs",
+      "item": [
+        {
+          "name": "List Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit-logs?from=&to=&role=&search=&page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": ""
+                },
+                {
+                  "key": "to",
+                  "value": ""
+                },
+                {
+                  "key": "role",
+                  "value": ""
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Get Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/dashboard/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dashboard",
+                "summary"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "KSeF Status",
+      "item": [
+        {
+          "name": "Get KSeF Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ksef-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ksef-status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Connection Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ksef-status/connection",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ksef-status",
+                "connection"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Declare Emergency (tryb awaryjny)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ksef-status/emergency",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ksef-status",
+                "emergency"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Ministry-declared emergency mode\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Declare Unavailability",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ksef-status/unavailability",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ksef-status",
+                "unavailability"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"KSeF platform maintenance window\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Declare Online (clear status)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ksef-status/online",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ksef-status",
+                "online"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Service restored\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
