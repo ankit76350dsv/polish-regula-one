@@ -22,7 +22,7 @@ import { useT } from '../../i18n';
 import { setLanguage } from '../../store/slices/uiSlice';
 import { signOut } from '../../store/slices/authSlice';
 import { navFor } from '../../lib/permissions';
-import { roleDisplay } from '../../lib/sso';
+import { roleDisplay, platformRoleLabel } from '../../lib/sso';
 
 const NAV_ICONS = {
   'nav.dashboard': LayoutDashboard,
@@ -44,9 +44,10 @@ export default function DashboardLayout() {
   const { pathname } = useLocation();
   const user = useSelector((s) => s.auth.user);
   const items = navFor(user);
-  // Show the raw PrivacyPilot permission code (e.g. "PRIVACYPILOT ADMIN"), or the
-  // platform role for a super-admin who holds no PrivacyPilot code.
+  // Sidebar footer: the user's PrivacyPilot capacity (raw code, e.g. "PRIVACYPILOT ADMIN").
   const roleLabel = roleDisplay(user);
+  // Navbar header: the PLATFORM role (ROLE_ADMIN → "Admin", ROLE_SUPER_ADMIN → "Super Admin").
+  const platformLabel = platformRoleLabel(user.role);
 
   // A nav item is active on its own route and every sub-route
   // (e.g. /register stays highlighted on /register/:id and the wizard).
@@ -145,7 +146,7 @@ export default function DashboardLayout() {
               {lang === 'pl' ? 'PL' : 'EN'}
             </Button>
             <Badge variant="outline" className="hidden sm:inline-flex border-primary/40 text-primary">
-              {roleLabel}
+              {platformLabel}
             </Badge>
           </div>
         </header>
