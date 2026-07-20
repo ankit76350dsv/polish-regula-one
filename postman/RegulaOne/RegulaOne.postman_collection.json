@@ -1226,6 +1226,46 @@
           "response": []
         },
         {
+          "name": "Upgrade / Change Tenant Package",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/tenants/TENANT_ID_HERE/package/upgrade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "tenants",
+                "TENANT_ID_HERE",
+                "package",
+                "upgrade"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"packageId\": \"NEW_PACKAGE_ID_HERE\",\n  \"reason\": \"Upgrade to Premium\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Get Package Tier Stats",
           "request": {
             "method": "GET",

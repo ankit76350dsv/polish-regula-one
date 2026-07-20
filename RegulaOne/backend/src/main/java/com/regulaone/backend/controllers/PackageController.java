@@ -1,6 +1,7 @@
 package com.regulaone.backend.controllers;
 
 import com.regulaone.backend.dto.AppResponse;
+import com.regulaone.backend.dto.Package.PackageChangeResponse;
 import com.regulaone.backend.dto.Package.PackagePageResponse;
 import com.regulaone.backend.dto.Package.PackageRenewalResponse;
 import com.regulaone.backend.dto.Package.PackageRequest;
@@ -8,6 +9,7 @@ import com.regulaone.backend.dto.Package.PackageResponse;
 import com.regulaone.backend.dto.Package.PackageTierStatsResponse;
 import com.regulaone.backend.dto.Package.RenewPackageRequest;
 import com.regulaone.backend.dto.Package.TierChangeResponse;
+import com.regulaone.backend.dto.Package.UpgradePackageRequest;
 import com.regulaone.backend.models.PackageStatus;
 import com.regulaone.backend.services.PackageService;
 import jakarta.validation.Valid;
@@ -93,6 +95,18 @@ public class PackageController {
         return ResponseEntity.ok(AppResponse.success(
                 "Package renewed successfully",
                 packageService.renewTenantPackage(tenantId, request)));
+    }
+
+    // Upgrades/changes a tenant to a DIFFERENT package tier.
+    // Archives the current plan, starts a fresh window on the new package now,
+    // and generates an invoice. Body must supply the target packageId.
+    @PostMapping("/tenants/{tenantId}/package/upgrade")
+    public ResponseEntity<AppResponse<PackageChangeResponse>> upgradeTenantPackage(
+            @PathVariable String tenantId,
+            @Valid @RequestBody UpgradePackageRequest request) {
+        return ResponseEntity.ok(AppResponse.success(
+                "Package upgraded successfully",
+                packageService.upgradeTenantPackage(tenantId, request)));
     }
 
     // ── License Tiers dashboard ───────────────────────────────────────────────

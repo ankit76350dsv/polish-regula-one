@@ -1,5 +1,6 @@
 package com.regulaone.backend.services;
 
+import com.regulaone.backend.dto.Package.PackageChangeResponse;
 import com.regulaone.backend.dto.Package.PackagePageResponse;
 import com.regulaone.backend.dto.Package.PackageRenewalResponse;
 import com.regulaone.backend.dto.Package.PackageRequest;
@@ -7,6 +8,7 @@ import com.regulaone.backend.dto.Package.PackageResponse;
 import com.regulaone.backend.dto.Package.PackageTierStatsResponse;
 import com.regulaone.backend.dto.Package.RenewPackageRequest;
 import com.regulaone.backend.dto.Package.TierChangeResponse;
+import com.regulaone.backend.dto.Package.UpgradePackageRequest;
 
 import com.regulaone.backend.models.AppPackage;
 import com.regulaone.backend.models.DurationType;
@@ -117,6 +119,103 @@ public class PackageService {
                 .tenantName(tenant.getName())
                 .packageName(pkg.getName())
                 .planStarted(baseDate)
+                .planExpiring(newExpiring)
+                .invoiceNumber(invoice.getInvoiceNumber())
+                .amount(invoice.getAmount())
+                .currency(invoice.getCurrency())
+                .reason(reason)
+                .build();
+    }
+
+    // ── Package upgrade / change ──────────────────────────────────────────────
+
+    /**
+     * Moves a tenant to a DIFFERENT package tier (upgrade or downgrade).
+     *
+     * What it does, in order:
+     *  1. Loads the tenant and the target package; 404 if either is missing.
+     *  2. Blocks the change if the target package is not ACTIVE, or if it is the
+     *     same package the tenant already has (renew should be used instead).
+     *  3. Archives the outgoing plan into packageHistory (planExpired = now).
+     *  4. Sets a fresh validity window for the NEW plan starting now
+     *     (planExpiring = now + duration, or null for LIFETIME).
+     *  5. Generates an invoice for the new plan (FREE if no-charge, else PAID).
+     *
+     * Unlike renewal, this starts a brand-new period now — the old plan ends
+     * immediately, so no time is carried over.
+     *
+     * @Transactional so the tenant update and the invoice stay consistent.
+     */
+    @Transactional
+    public PackageChangeResponse upgradeTenantPackage(String tenantId, UpgradePackageRequest request) {
+
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant not found: " + tenantId));
+
+        AppPackage newPkg = packageRepository.findById(request.getPackageId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Package not found: " + request.getPackageId()));
+
+        if (newPkg.getStatus() != PackageStatus.ACTIVE) {
+            throw new IllegalStateException(
+                    "Cannot switch to package '" + newPkg.getName() + "' because it is not ACTIVE");
+        }
+
+        Tenant.PackageDetails current = tenant.getCurrentPackage();
+        String fromName = (current != null && current.getAppPackage() != null)
+                ? current.getAppPackage().getName() : null;
+
+        // Same tier → not an upgrade. Renewal is the correct operation for that.
+        if (current != null && current.getAppPackage() != null
+                && newPkg.getId().equals(current.getAppPackage().getId())) {
+            throw new IllegalStateException(
+                    "Tenant is already on package '" + newPkg.getName() + "'. Use renew to extend it.");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        String reason = (request.getReason() != null && !request.getReason().isBlank())
+                ? request.getReason().trim()
+                : "Plan change to " + newPkg.getName();
+
+        // 1. Archive the outgoing plan (if any) into history — the old plan ends now.
+        if (current != null && current.getAppPackage() != null) {
+            Tenant.PackageHistory history = Tenant.PackageHistory.builder()
+                    .appPackage(current.getAppPackage())
+                    .planStarted(current.getPlanStarted() != null ? current.getPlanStarted() : now)
+                    .planExpired(now)
+                    .usersCapacity(current.getUsersCapacity())
+                    .reason(reason)
+                    .build();
+            tenant.getPackageHistory().add(history);
+        }
+
+        // 2. Start a fresh window for the NEW plan.
+        boolean lifetime = newPkg.getDurationType() == DurationType.LIFETIME || newPkg.getDuration() == null;
+        LocalDateTime newExpiring = lifetime ? null : now.plusDays(newPkg.getDuration());
+
+        Tenant.PackageDetails updated = Tenant.PackageDetails.builder()
+                .appPackage(newPkg)
+                .planStarted(now)
+                .planExpiring(newExpiring)
+                .usersCapacity(newPkg.getUsersCapacity() != null
+                        ? String.valueOf(newPkg.getUsersCapacity()) : null)
+                .build();
+        tenant.setCurrentPackage(updated);
+        tenant.setUpdatedAt(now);
+        tenantRepository.save(tenant);
+
+        // 3. Bill the new plan. Free packages produce a FREE (zero-amount) invoice.
+        boolean isFree = newPkg.getPrice() == null || newPkg.getPrice().compareTo(BigDecimal.ZERO) == 0;
+        LocalDateTime periodEnd = (newExpiring != null) ? newExpiring : now.plusMonths(1);
+        Invoice invoice = billingService.generateInvoice(tenant, newPkg, isFree, now, periodEnd);
+
+        return PackageChangeResponse.builder()
+                .tenantId(tenant.getId())
+                .tenantName(tenant.getName())
+                .fromPackage(fromName)
+                .toPackage(newPkg.getName())
+                .planStarted(now)
                 .planExpiring(newExpiring)
                 .invoiceNumber(invoice.getInvoiceNumber())
                 .amount(invoice.getAmount())
