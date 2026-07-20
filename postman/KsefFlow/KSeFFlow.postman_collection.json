@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "KSeFFlow",
-    "description": "KSeFFlow (e-invoicing) API \u2014 one folder per controller. Base path /api/v1 on port 8081. Auth is the httpOnly idToken cookie set by the RegulaOne backend: log in via RegulaOne SSO first (Postman cookie jar carries it), or paste a token into {{token}} for the Bearer fallback header.",
+    "description": "KSeFFlow (e-invoicing) API \u2014 one folder per controller. Base path /api/v1 on port 8081. Auth is the httpOnly idToken cookie set by the RegulaOne backend: log in via RegulaOne SSO first (Postman cookie jar carries it), or paste a token into {{token}} for the Bearer fallback header.\n\nAlso includes the KSeF 2.0 government API (Ministry of Finance) calls the backend makes \u2014 base {{ksefGovUrl}} (sandbox https://api-test.ksef.mf.gov.pl/v2). Those use KSeF tokens ({{ksefAuthToken}} / {{ksefAccessToken}} / {{ksefRefreshToken}}), NOT the RegulaOne session \u2014 obtain them via the Auth flow (challenge \u2192 XAdES \u2192 redeem).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -11,6 +11,22 @@
     },
     {
       "key": "token",
+      "value": ""
+    },
+    {
+      "key": "ksefGovUrl",
+      "value": "https://api-test.ksef.mf.gov.pl/v2"
+    },
+    {
+      "key": "ksefAuthToken",
+      "value": ""
+    },
+    {
+      "key": "ksefAccessToken",
+      "value": ""
+    },
+    {
+      "key": "ksefRefreshToken",
       "value": ""
     }
   ],
@@ -969,6 +985,655 @@
             }
           },
           "response": []
+        }
+      ]
+    },
+    {
+      "name": "KSeF Government API (Ministry of Finance)",
+      "item": [
+        {
+          "name": "Auth",
+          "item": [
+            {
+              "name": "1. Get Auth Challenge",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/auth/challenge",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "challenge"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "2. Submit XAdES Signature",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/xml"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/auth/xades-signature",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "xades-signature"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "<!-- signed XAdES XML document goes here -->",
+                  "options": {
+                    "raw": {
+                      "language": "xml"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "3. Get Auth Status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAuthToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/auth/REFERENCE_NUMBER_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "REFERENCE_NUMBER_HERE"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "4. Redeem Tokens (access + refresh)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAuthToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/auth/token/redeem",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "token",
+                    "redeem"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "5. Refresh Access Token",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefRefreshToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/auth/token/refresh",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "token",
+                    "refresh"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Security",
+          "item": [
+            {
+              "name": "Get Public Key Certificates (MF keys)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/security/public-key-certificates",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "security",
+                    "public-key-certificates"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Sessions",
+          "item": [
+            {
+              "name": "Open Online Session",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/sessions/online",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "online"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"formCode\": {\n    \"systemCode\": \"FA (2)\",\n    \"schemaVersion\": \"1-0E\",\n    \"value\": \"FA\"\n  },\n  \"encryption\": {\n    \"encryptedSymmetricKey\": \"BASE64_RSA_ENCRYPTED_AES_KEY\",\n    \"initializationVector\": \"BASE64_IV\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Send Invoice",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/sessions/online/SESSION_REF_HERE/invoices",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "online",
+                    "SESSION_REF_HERE",
+                    "invoices"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"invoiceHash\": \"BASE64_SHA256_OF_PLAINTEXT_XML\",\n  \"invoiceSize\": 3456,\n  \"encryptedInvoiceHash\": \"BASE64_SHA256_OF_ENCRYPTED_XML\",\n  \"encryptedInvoiceSize\": 3472,\n  \"encryptedInvoiceContent\": \"BASE64_AES_ENCRYPTED_INVOICE_XML\",\n  \"offlineMode\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Session Invoice Status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/sessions/SESSION_REF_HERE/invoices/INVOICE_REF_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "SESSION_REF_HERE",
+                    "invoices",
+                    "INVOICE_REF_HERE"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Invoice UPO (XML)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/sessions/SESSION_REF_HERE/invoices/INVOICE_REF_HERE/upo",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "SESSION_REF_HERE",
+                    "invoices",
+                    "INVOICE_REF_HERE",
+                    "upo"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Close Online Session",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/sessions/online/SESSION_REF_HERE/close",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "online",
+                    "SESSION_REF_HERE",
+                    "close"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Invoices",
+          "item": [
+            {
+              "name": "Query Invoice Metadata",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/invoices/query/metadata?pageOffset=0&pageSize=20",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "invoices",
+                    "query",
+                    "metadata"
+                  ],
+                  "query": [
+                    {
+                      "key": "pageOffset",
+                      "value": "0"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"subjectType\": \"Subject1\",\n  \"dateRange\": {\n    \"from\": \"2026-05-01T00:00:00Z\",\n    \"to\": \"2026-05-31T23:59:59Z\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Invoice By KSeF Number (XML)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/invoices/ksef/KSEF_NUMBER_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "invoices",
+                    "ksef",
+                    "KSEF_NUMBER_HERE"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Certificates",
+          "item": [
+            {
+              "name": "Get Certificate Enrollment Data",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/certificates/enrollments/data",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "certificates",
+                    "enrollments",
+                    "data"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Enroll Certificate",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/certificates/enrollments",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "certificates",
+                    "enrollments"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"certificateName\": \"Primary authentication certificate\",\n  \"certificateType\": \"Authentication\",\n  \"csr\": \"BASE64_DER_CSR\",\n  \"validFrom\": \"2026-05-01T00:00:00Z\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Certificate Enrollment Status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/certificates/enrollments/REFERENCE_NUMBER_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "certificates",
+                    "enrollments",
+                    "REFERENCE_NUMBER_HERE"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Retrieve Certificates",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/certificates/retrieve",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "certificates",
+                    "retrieve"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"certificateSerialNumbers\": [\n    \"SERIAL_NUMBER_HERE\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Permissions",
+          "item": [
+            {
+              "name": "Grant Person Permissions",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/permissions/persons/grants",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "permissions",
+                    "persons",
+                    "grants"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"subjectIdentifier\": {\n    \"type\": \"Nip\",\n    \"value\": \"9876543210\"\n  },\n  \"permissions\": [\n    \"InvoiceWrite\",\n    \"InvoiceRead\"\n  ],\n  \"description\": \"Grant invoicing rights\",\n  \"subjectDetails\": {\n    \"subjectType\": \"PersonByIdentifier\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Query Person Permissions",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/permissions/query/persons/grants?pageOffset=0&pageSize=20",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "permissions",
+                    "query",
+                    "persons",
+                    "grants"
+                  ],
+                  "query": [
+                    {
+                      "key": "pageOffset",
+                      "value": "0"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"queryType\": \"PermissionsGrantedToOtherEntity\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Revoke Permission",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/permissions/common/grants/PERMISSION_ID_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "permissions",
+                    "common",
+                    "grants",
+                    "PERMISSION_ID_HERE"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Permissions Operation Status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/permissions/operations/REFERENCE_NUMBER_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "permissions",
+                    "operations",
+                    "REFERENCE_NUMBER_HERE"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     }
