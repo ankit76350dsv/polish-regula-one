@@ -222,13 +222,13 @@ export default function TenantPackagePage() {
             return (
               <Card
                 key={pkg.id}
-                className={`relative rounded-xl border shadow-sm transition-colors ${
+                className={`rounded-xl border shadow-sm transition-colors ${
                   isCurrent ? 'border-red-300 ring-1 ring-red-200 bg-red-50/30' : 'border-slate-200 bg-white'
                 }`}
               >
                 <CardContent className="p-5 space-y-4">
                   {isCurrent && (
-                    <Badge className="absolute -top-2 left-4 bg-red-600 text-white text-[10px] font-bold shadow">
+                    <Badge className="bg-red-600 text-white text-[10px] font-bold shadow-sm">
                       <CheckCircle2 className="h-3 w-3 mr-1" /> Your current plan
                     </Badge>
                   )}

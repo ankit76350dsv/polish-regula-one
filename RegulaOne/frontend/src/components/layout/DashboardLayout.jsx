@@ -182,7 +182,7 @@ export default function DashboardLayout() {
           </SidebarFooter>
         </Sidebar>
 
-        <SidebarInset className="flex flex-col bg-slate-50">
+        <SidebarInset className="flex flex-col bg-slate-50 min-w-0">
           <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20">
             <div className="flex items-center gap-6 flex-1">
               <SidebarTrigger className="text-slate-400 hover:text-slate-600" />
