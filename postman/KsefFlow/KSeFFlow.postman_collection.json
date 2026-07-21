@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "KSeFFlow",
-    "description": "KSeFFlow (e-invoicing) API \u2014 one folder per controller. Base path /api/v1 on port 8081. Auth is the httpOnly idToken cookie set by the RegulaOne backend: log in via RegulaOne SSO first (Postman cookie jar carries it), or paste a token into {{token}} for the Bearer fallback header.\n\nAlso includes the KSeF 2.0 government API (Ministry of Finance) calls the backend makes \u2014 base {{ksefGovUrl}} (sandbox https://api-test.ksef.mf.gov.pl/v2). Those use KSeF tokens ({{ksefAuthToken}} / {{ksefAccessToken}} / {{ksefRefreshToken}}), NOT the RegulaOne session \u2014 obtain them via the Auth flow (challenge \u2192 XAdES \u2192 redeem).",
+    "description": "KSeFFlow (e-invoicing) API \u2014 one folder per controller. Base path /api/v1 on port 8081. Auth is the httpOnly idToken cookie set by the RegulaOne backend: log in via RegulaOne SSO first (Postman cookie jar carries it), or paste a token into {{token}} for the Bearer fallback header.\n\nAlso includes the KSeF 2.0 government API (Ministry of Finance) calls the backend makes \u2014 base {{ksefGovUrl}} (sandbox https://api-test.ksef.mf.gov.pl/v2). Those use KSeF tokens ({{ksefAuthToken}} / {{ksefAccessToken}} / {{ksefRefreshToken}}), NOT the RegulaOne session \u2014 obtain them via the Auth flow (challenge \u2192 XAdES \u2192 redeem).\n\nAlso includes the internal Notification Hub call KSeFFlow makes server-to-server \u2014 base {{hubUrl}} (RegulaOne backend, http://localhost:8080). KSeFFlow does NOT store notifications itself; it publishes business events to the Hub, which resolves recipients and delivery. That call is NOT user-authenticated \u2014 it is gated by the shared {{serviceToken}} in the X-Service-Token header (must match RegulaOne's NOTIFICATION_INTERNAL_TOKEN).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -28,6 +28,14 @@
     {
       "key": "ksefRefreshToken",
       "value": ""
+    },
+    {
+      "key": "hubUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "serviceToken",
+      "value": "e111d59e3c4e3ad852f0db4ae8251864ed625f52547c47bf655ffe834d548a8c"
     }
   ],
   "item": [
@@ -1634,6 +1642,88 @@
               "response": []
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Notification Hub (RegulaOne — internal)",
+      "description": "Server-to-server events KSeFFlow publishes to the centralized RegulaOne Notification Hub (POST /api/internal/notifications/events on {{hubUrl}}). NOT user-authenticated — gated by the shared X-Service-Token ({{serviceToken}}). Best-effort: a failed publish never breaks the invoice/retry flow. The Hub resolves WHO receives each event (explicit recipientUserIds, else tenant users holding any audiencePermissions, else the event type's default audience) and applies category/severity defaults for null fields. dedupeKey makes re-publishing idempotent.",
+      "item": [
+        {
+          "name": "Publish Invoice Event (audience-resolved)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/internal/notifications/events",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "internal",
+                "notifications",
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"INVOICE_SENT_TO_KSEF\",\n  \"tenantId\": \"TENANT_ID_HERE\",\n  \"sourceModule\": \"KSEFFLOW\",\n  \"title\": \"Invoice accepted by KSeF\",\n  \"body\": \"Invoice FV/2026/05/0001 received KSeF number and UPO.\",\n  \"relatedEntityType\": \"INVOICE\",\n  \"relatedEntityId\": \"INVOICE_ID_HERE\",\n  \"dedupeKey\": \"INVOICE_SENT_TO_KSEF:INVOICE_ID_HERE\",\n  \"occurredAt\": \"2026-05-01T10:15:30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Publish Failure Event (person-targeted)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/internal/notifications/events",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "internal",
+                "notifications",
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"INVOICE_RETRY_FAILED\",\n  \"tenantId\": \"TENANT_ID_HERE\",\n  \"sourceModule\": \"KSEFFLOW\",\n  \"title\": \"Invoice submission keeps failing\",\n  \"body\": \"Automatic retries for invoice FV/2026/05/0001 have been exhausted. Manual review needed.\",\n  \"severity\": \"HIGH\",\n  \"relatedEntityType\": \"INVOICE\",\n  \"relatedEntityId\": \"INVOICE_ID_HERE\",\n  \"recipientUserIds\": [\n    \"USER_ID_HERE\"\n  ],\n  \"audiencePermissions\": [\n    \"InvoiceWrite\"\n  ],\n  \"dedupeKey\": \"INVOICE_RETRY_FAILED:INVOICE_ID_HERE\",\n  \"occurredAt\": \"2026-05-01T11:00:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
         }
       ]
     }
