@@ -1,0 +1,7 @@
+{
+  "// note": "This is a monorepo with several independent Maven backends (PrivacyPilot, RegulaOne, SafeVoice, KSeFFlow, WasteSync). These settings help the Java extension import ALL of them so files are not flagged as 'non-project'.",
+  "java.import.maven.enabled": true,
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.configuration.maven.userSettings": null,
+  "java.maven.downloadSources": true
+}

@@ -11,8 +11,8 @@
 	<groupId>com.privacypilot</groupId>
 	<artifactId>backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
+	<name>privacypilot-backend</name>
+	<description>PrivacyPilot (GDPR/RODO) module backend</description>
 	<url/>
 	<licenses>
 		<license/>
