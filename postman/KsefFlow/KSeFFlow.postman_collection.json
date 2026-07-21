@@ -1726,6 +1726,320 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Notifications (read — RegulaOne, module=KSEFFLOW)",
+      "description": "How the KSeFFlow UI GETS its notifications. These are the USER-facing endpoints served by RegulaOne (base {{hubUrl}}, http://localhost:8080), NOT KSeFFlow's own backend — KSeFFlow has no notification store. Auth is the RegulaOne idToken cookie (log in via SSO so the cookie jar carries it) or the {{token}} Bearer fallback; every endpoint is forced server-side to the caller's own tenant + user. The 'module' query param is MANDATORY and scopes results to this app — always module=KSEFFLOW here, so KSeFFlow never sees another app's notifications. A missing/unknown module returns 400. (Preferences are account-wide and take no module.)",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications?module=KSEFFLOW&status=&page=0&size=20",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                },
+                {
+                  "key": "status",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Unread Count",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/unread-count?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "unread-count"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Notification",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/NOTIFICATION_ID_HERE?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "NOTIFICATION_ID_HERE"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/NOTIFICATION_ID_HERE/read?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "NOTIFICATION_ID_HERE",
+                "read"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/read-all?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read-all"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Notification",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/NOTIFICATION_ID_HERE/archive?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "NOTIFICATION_ID_HERE",
+                "archive"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/NOTIFICATION_ID_HERE?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "NOTIFICATION_ID_HERE"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Preferences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/preferences",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "preferences"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/preferences",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "preferences"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channelDefaults\": {\n    \"IN_APP\": true,\n    \"EMAIL\": true,\n    \"PUSH\": false\n  },\n  \"perCategory\": {\n    \"INVOICE\": {\n      \"EMAIL\": true,\n      \"IN_APP\": true\n    }\n  },\n  \"quietHoursEnabled\": true,\n  \"quietHoursFromHour\": 22,\n  \"quietHoursToHour\": 7,\n  \"timezone\": \"Europe/Warsaw\",\n  \"digestFrequency\": \"IMMEDIATE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Self-Test Notifications (dev/QA only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/test",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "test"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }
