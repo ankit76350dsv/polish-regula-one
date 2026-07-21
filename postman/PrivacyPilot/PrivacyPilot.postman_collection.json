@@ -1,0 +1,128 @@
+{
+  "info": {
+    "name": "PrivacyPilot",
+    "description": "PrivacyPilot (GDPR/RODO) API — one folder per controller. Base port 9004.\n\nAUTH: every /api/privacypilot/** endpoint requires the RegulaOne session. Sign in through the RegulaOne SSO login first, then copy the value of the httpOnly `idToken` cookie into the collection variable {{idToken}} (DevTools → Application → Cookies, or the login response). The backend forwards that cookie to RegulaOne GET /api/auth/me to resolve the caller; the tenant is taken from that verified session (never from the client).\n\nRESPONSES: the standard envelope { success, message, data, errorCode, status }. Errors: 401 (no/invalid session), 403 (role not permitted), 404 (not found / other tenant), 400 (validation).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:9004" },
+    { "key": "idToken", "value": "", "description": "RegulaOne session cookie value (see collection description)." },
+    { "key": "activityId", "value": "", "description": "Id of a processing activity, for the by-id requests." }
+  ],
+  "item": [
+    {
+      "name": "Processing Activities (ROPA)",
+      "description": "Record of Processing Activities — Art. 30 GDPR. Controller (Art. 30(1)) and processor (Art. 30(2)) entries. The DPIA verdict is computed server-side from the screening criteria.",
+      "item": [
+        {
+          "name": "List activities",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/activities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "activities"]
+            },
+            "description": "All live (non-archived) activities for the caller's tenant, newest change first. Roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Get activity by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/activities/{{activityId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "activities", "{{activityId}}"]
+            },
+            "description": "One activity, only if it belongs to the caller's tenant (else 404). Roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Create activity",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/activities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "activities"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"HR & payroll\",\n  \"department\": \"hr\",\n  \"role\": \"controller\",\n  \"purpose\": \"Maintaining personnel files and running payroll.\",\n  \"lawfulBasis\": \"legal_obligation\",\n  \"provisionStatement\": \"Required by the Labour Code; without this data we cannot run employment.\",\n  \"dataSubjects\": [\"employees\"],\n  \"dataCategories\": [\"identity\", \"contact\", \"financial\", \"employment\"],\n  \"art9Condition\": \"b\",\n  \"art10\": false,\n  \"dataSources\": [\"Directly from employees\", \"Social insurance (ZUS)\"],\n  \"recipients\": [\"public_authorities\", \"banks\", \"payroll_bureau\"],\n  \"vendorIds\": [],\n  \"transfer\": false,\n  \"transferIds\": [],\n  \"retentionPeriod\": \"10 years after employment ends\",\n  \"retentionBasis\": \"Art. 94(9b) of the Labour Code\",\n  \"toms\": [\"tom_encryption_rest\", \"tom_access_control\", \"tom_mfa\", \"tom_backups\"],\n  \"dpiaCriteria\": [\"special_categories\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Create a new activity (starts as DRAFT). Server sets tenant, owner and status; the DPIA verdict is derived from dpiaCriteria (>=2 -> required, 1 -> recommended, 0 -> not_indicated). Roles: Admin, Compliance Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "Update activity",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/activities/{{activityId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "activities", "{{activityId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"HR & payroll\",\n  \"department\": \"hr\",\n  \"role\": \"controller\",\n  \"purpose\": \"Maintaining personnel files and running payroll.\",\n  \"lawfulBasis\": \"legal_obligation\",\n  \"provisionStatement\": \"Required by the Labour Code.\",\n  \"dataSubjects\": [\"employees\"],\n  \"dataCategories\": [\"identity\", \"contact\", \"financial\", \"employment\"],\n  \"art9Condition\": \"b\",\n  \"art10\": false,\n  \"dataSources\": [\"Directly from employees\"],\n  \"recipients\": [\"public_authorities\", \"banks\", \"payroll_bureau\"],\n  \"vendorIds\": [],\n  \"transfer\": false,\n  \"transferIds\": [],\n  \"retentionPeriod\": \"50 years (employee records created before 2019)\",\n  \"retentionBasis\": \"Art. 94(9b) of the Labour Code\",\n  \"toms\": [\"tom_encryption_rest\", \"tom_access_control\", \"tom_mfa\", \"tom_backups\"],\n  \"dpiaCriteria\": [\"special_categories\", \"large_scale\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Replace the editable fields of an existing activity. Only the fields that changed are recorded in the audit trail. Here dpiaCriteria has 2 entries, so the verdict recomputes to 'required'. Roles: Admin, Compliance Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "Approve activity",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/activities/{{activityId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "activities", "{{activityId}}", "approve"]
+            },
+            "description": "Sign off an activity (status -> approved). Roles: Admin, DPO."
+          },
+          "response": []
+        },
+        {
+          "name": "Archive activity",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/activities/{{activityId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "activities", "{{activityId}}"]
+            },
+            "description": "Soft-delete (archive) an activity: hidden from the register but kept on disk for the 10-year retention rule, with an audit entry. Roles: Admin."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
