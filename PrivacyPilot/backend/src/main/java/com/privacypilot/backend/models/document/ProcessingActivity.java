@@ -99,6 +99,7 @@ public class ProcessingActivity extends BaseDocument {
     // WHAT: If the basis is "legitimate interest", a sentence explaining that interest.
     // WHY: The law (Art. 13(1)(d)) requires you to say WHAT the interest is.
     // EXAMPLE: "Protecting company property and staff safety using CCTV."
+    //! NOTE:???
     private String legitimateInterestDetail;
 
     // WHAT: Text saying whether giving the data is required by law/contract and what
