@@ -1,6 +1,7 @@
 package com.privacypilot.backend.service;
 
 import com.privacypilot.backend.model.document.RegulaOneUser;
+import com.privacypilot.backend.security.AuthenticatedUser;
 import com.privacypilot.backend.security.PrivacyPilotPermission;
 
 /**
@@ -46,5 +47,23 @@ public record AuditContext(
         PrivacyPilotPermission primary = user.primaryPrivacyPilotRole();
         String actorRole = (primary != null) ? primary.name() : platformRole;
         return new AuditContext(tenantId, user.getName(), actorRole, ipAddress, userAgent);
+    }
+
+    /**
+     * Builds the context from the request-scoped {@link AuthenticatedUser} (resolved
+     * from the RegulaOne session). This is the one controllers use: the tenant, actor
+     * name and "acting as" role all come from the verified session, never the client.
+     *
+     * @param caller    the signed-in caller resolved from /api/auth/me
+     * @param ipAddress the request IP address (may be null)
+     * @param userAgent the request user-agent (may be null)
+     */
+    public static AuditContext forCaller(AuthenticatedUser caller, String ipAddress, String userAgent) {
+        return new AuditContext(
+                caller.tenantId(),
+                caller.name(),
+                caller.primaryPrivacyPilotRole(),
+                ipAddress,
+                userAgent);
     }
 }
