@@ -1,5 +1,6 @@
 package com.privacypilot.backend.dto.activity;
 
+import com.privacypilot.backend.model.enums.activity.ActivityStatus;
 import com.privacypilot.backend.model.enums.activity.Art9Condition;
 import com.privacypilot.backend.model.enums.activity.Department;
 import com.privacypilot.backend.model.enums.activity.LawfulBasis;
@@ -31,6 +32,14 @@ public class ActivityRequest {
     // STEP 1 — basics
     @NotBlank(message = "name is required")
     private String name;
+
+    // The workflow status the user picked on the review step: DRAFT or IN_REVIEW.
+    // APPROVED is NEVER accepted here — sign-off goes through the /approve endpoint,
+    // which enforces the DPO/Admin permission and the Art. 35(1) DPIA guard. The
+    // service ignores anything other than DRAFT/IN_REVIEW, so a client can never
+    // "self-approve" by sending status=approved. Null on update = "leave it as it is".
+    private ActivityStatus status;
+
     private Department department;
     @NotNull(message = "role is required")
     private ProcessingRole role;

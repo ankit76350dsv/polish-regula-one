@@ -62,6 +62,17 @@
 			<optional>true</optional>
 		</dependency>
 
+		<!-- Spring Boot DevTools: auto-restarts the running app whenever the compiled
+		     classes change, so a code edit takes effect without manually stopping and
+		     starting the backend. It is DEVELOPMENT ONLY (optional + developmentOnly),
+		     so it is never included in the production jar. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-devtools</artifactId>
+			<scope>runtime</scope>
+			<optional>true</optional>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>

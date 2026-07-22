@@ -30,6 +30,11 @@ function toRequest(form) {
   return {
     // Step 1 — basics
     name: form.name,
+    // Workflow status the user chose on the review step. Only draft/in_review may be
+    // set through create/update; approval is a separate action (the approve button →
+    // /approve endpoint). Send null for anything else so the backend keeps the current
+    // status instead of rejecting it.
+    status: (form.status === 'draft' || form.status === 'in_review') ? form.status : null,
     department: enumOrNull(form.department),
     role: form.role, // required by the backend; the wizard always sets a valid value
     controllersServed: form.controllersServed ?? '',

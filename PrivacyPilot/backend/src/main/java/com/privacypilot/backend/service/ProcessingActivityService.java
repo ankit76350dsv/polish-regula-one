@@ -56,7 +56,9 @@ public class ProcessingActivityService {
         // Server-owned fields — set from the verified session, never the client.
         a.setTenantId(caller.tenantId());
         a.setOwnerName(caller.name());
-        a.setStatus(ActivityStatus.DRAFT);
+        // Start as DRAFT, unless the user explicitly chose IN_REVIEW on the review step.
+        // (APPROVED can never be set this way — see sanitizeStatus.)
+        a.setStatus(sanitizeStatus(req.getStatus(), ActivityStatus.DRAFT));
         applyRequest(a, req);
         a.setDpiaVerdict(verdictFor(a.getDpiaCriteria()));
 
@@ -74,6 +76,12 @@ public class ProcessingActivityService {
         ProcessingActivity a = get(caller, id); // 404 if not this tenant's
         Map<String, Object> before = snapshot(a);
         applyRequest(a, req);
+        // Allow the user to move the record between DRAFT and IN_REVIEW here. APPROVED
+        // is never set via update (sign-off is the /approve endpoint); a null status
+        // means "keep the current status" so an ordinary edit does not reset it.
+        if (req.getStatus() == ActivityStatus.DRAFT || req.getStatus() == ActivityStatus.IN_REVIEW) {
+            a.setStatus(req.getStatus());
+        }
         a.setDpiaVerdict(verdictFor(a.getDpiaCriteria()));
         ProcessingActivity saved = repository.save(a);
 
@@ -160,6 +168,14 @@ public class ProcessingActivityService {
      * Art. 35): two or more criteria → a DPIA is REQUIRED; exactly one → RECOMMENDED;
      * none → NOT_INDICATED. This mirrors the EDPB "two-criteria" rule of thumb.
      */
+    // The only statuses a create/update is allowed to set: DRAFT or IN_REVIEW.
+    // Anything else — null, or a client trying to sneak in APPROVED — falls back to
+    // the given default, so approval can happen ONLY through the guarded /approve path.
+    private static ActivityStatus sanitizeStatus(ActivityStatus requested, ActivityStatus fallback) {
+        return (requested == ActivityStatus.DRAFT || requested == ActivityStatus.IN_REVIEW)
+                ? requested : fallback;
+    }
+
     private static DpiaVerdict verdictFor(List<DpiaCriterion> criteria) {
         int matched = (criteria == null) ? 0 : criteria.size();
         if (matched >= 2) {

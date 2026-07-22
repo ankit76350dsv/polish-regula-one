@@ -54,6 +54,30 @@ const EMPTY = {
   provisionStatement: '',
 };
 
+// DEV-ONLY test prefill. So a new activity can be created without typing every field
+// by hand, the create form starts filled with this realistic, VALID sample (a Polish
+// HR & payroll activity that passes every step's validation, incl. the Art. 9(2)
+// picker). It is applied ONLY in `npm run dev` (import.meta.env.DEV) and ONLY when
+// creating — never in a production build and never when editing an existing record.
+const DEV_PREFILL = {
+  name: 'Kadry i płace (HR & payroll)',
+  role: 'controller',
+  department: 'hr',
+  purpose: 'Employment contract performance, payroll, social security (ZUS) and tax settlements for employees.',
+  lawfulBasis: 'legal_obligation',
+  provisionStatement: 'Providing data is a statutory requirement (Labour Code); without it employment cannot be established.',
+  dataSubjects: ['employees'],
+  dataCategories: ['identity', 'contact', 'financial', 'employment', 'health'],
+  art9Condition: 'b', // occupational-medicine certificates in personnel files
+  dataSources: ['Directly from employees', 'ZUS / medical providers'],
+  recipients: ['public_authorities', 'banks', 'medical_providers'],
+  transfer: false,
+  retentionPeriod: '10 years after employment ends',
+  retentionBasis: 'Art. 94 pkt 9b Kodeksu pracy (personnel files, employment from 2019)',
+  toms: ['tom_encryption_rest', 'tom_access_control', 'tom_backups', 'tom_dpa_contracts', 'tom_training'],
+  dpiaCriteria: ['special_categories', 'vulnerable_subjects'],
+};
+
 /** Toggle helper for chip/checkbox arrays. */
 const toggle = (list, id) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
@@ -153,7 +177,13 @@ export default function ActivityWizardPage() {
   const { items: transfers } = useSliceData('transfers', fetchTransfers);
 
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({ ...EMPTY, ownerName: user.name });
+  // Start from EMPTY (plus the owner's name). In dev + create mode only, seed the
+  // form with DEV_PREFILL so the flow can be tested without filling everything.
+  const [form, setForm] = useState(() => ({
+    ...EMPTY,
+    ...(!id && import.meta.env.DEV ? DEV_PREFILL : {}),
+    ownerName: user.name,
+  }));
   const [errors, setErrors] = useState({});
   const [maxVisited, setMaxVisited] = useState(0);
   const [saving, setSaving] = useState(false);
