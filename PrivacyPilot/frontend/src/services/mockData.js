@@ -287,33 +287,12 @@ export function buildSeed() {
       },
     ],
 
-    audit: [
-      {
-        id: 'aud-seed-1',
-        at: iso(now - days(1)),
-        actorName: 'Karolina Wójcik',
-        actorRole: 'PRIVACYPILOT_ADMIN',
-        action: 'UPDATE',
-        entityType: 'activity',
-        entityId: 'act-006',
-        entityLabel: 'Lokalizacja GPS floty (fleet tracking)',
-        oldValue: { retentionPeriod: '24 months' },
-        newValue: { retentionPeriod: '12 months' },
-        userAgent: 'seed',
-      },
-      {
-        id: 'aud-seed-2',
-        at: iso(now - days(2)),
-        actorName: 'Marek Zieliński',
-        actorRole: 'PRIVACYPILOT_COMPLIANCE_OFFICER',
-        action: 'CREATE',
-        entityType: 'breach',
-        entityId: 'br-001',
-        entityLabel: 'Lost laptop with HR spreadsheets',
-        oldValue: null,
-        newValue: { status: 'open' },
-        userAgent: 'seed',
-      },
-    ],
+    // The audit trail is NO LONGER mocked — it comes from the real PrivacyPilot
+    // backend (AuditController), through auditService.js + client.js. This array is
+    // kept only so the modules still on the mock (which append an entry via
+    // apiMutate) do not crash when they write; it starts empty and those writes are
+    // never displayed (the audit screen reads the real backend). Remove it once every
+    // module is wired to the real backend.
+    audit: [],
   };
 }
