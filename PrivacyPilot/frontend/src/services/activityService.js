@@ -1,103 +1,90 @@
 // ROPA activities — Art. 30 register records.
-import { apiGet, apiMutate, newId } from './api';
-import { ACTIONS } from '../lib/permissions';
-import { evaluateDpia } from '../lib/dpiaCriteria';
+//
+// This service now talks to the REAL PrivacyPilot backend
+// (ProcessingActivityController.java): GET/POST/PUT/DELETE on
+// /api/privacypilot/activities. It replaced the in-browser mock entirely.
+//
+// What the SERVER owns now (so the client can never spoof it):
+//   - the tenant (from the verified session), the owner name, the status,
+//   - the DPIA verdict (recomputed from the screening criteria),
+//   - the audit trail (an immutable entry per create/update/approve/archive),
+//   - RBAC (the caller's role must permit the action, else 403 FORBIDDEN).
+// The browser only sends the fields a user actually fills in.
+import { get, post, put, del } from './client';
+
+const BASE = '/api/privacypilot/activities';
+
+/**
+ * Turn the wizard's form object into the exact ActivityRequest the backend expects.
+ *
+ * WHY this mapping exists:
+ *  1) The form carries extra, server-owned fields (id, status, dpiaVerdict, owner,
+ *     timestamps…) that must NOT be sent — we send only the editable fields.
+ *  2) Enum fields use lowercase string CODES on both sides (e.g. "controller",
+ *     "consent"), but an EMPTY string is not a valid code — the backend would reject
+ *     it. So we convert every empty enum value to null (meaning "not chosen").
+ */
+function toRequest(form) {
+  // Empty string → null for the fields that are enums on the backend.
+  const enumOrNull = (v) => (v ? v : null);
+  return {
+    // Step 1 — basics
+    name: form.name,
+    department: enumOrNull(form.department),
+    role: form.role, // required by the backend; the wizard always sets a valid value
+    controllersServed: form.controllersServed ?? '',
+    // Step 2 — purpose & lawful basis
+    purpose: form.purpose ?? '',
+    lawfulBasis: enumOrNull(form.lawfulBasis),
+    legitimateInterestDetail: form.legitimateInterestDetail ?? '',
+    provisionStatement: form.provisionStatement ?? '',
+    // Step 3 — data & subjects
+    dataSubjects: form.dataSubjects ?? [],
+    dataCategories: form.dataCategories ?? [],
+    art9Condition: enumOrNull(form.art9Condition),
+    // Criminal-offence data (Art. 10) is derived from the ticked categories, not a
+    // separate checkbox — compute it here so the flag is always correct.
+    art10: (form.dataCategories ?? []).includes('criminal') || !!form.art10,
+    dataSources: form.dataSources ?? [],
+    // Step 4 — recipients & processors
+    recipients: form.recipients ?? [],
+    vendorIds: form.vendorIds ?? [],
+    // Step 5 — third-country transfers
+    transfer: !!form.transfer,
+    transferIds: form.transferIds ?? [],
+    // Step 6 — retention
+    retentionPeriod: form.retentionPeriod ?? '',
+    retentionBasis: form.retentionBasis ?? '',
+    // Step 7 — security measures
+    toms: form.toms ?? [],
+    // Step 8 — DPIA screening (the backend turns these into the verdict)
+    dpiaCriteria: form.dpiaCriteria ?? [],
+  };
+}
 
 export const activityService = {
-  list: () => apiGet((db) => db.activities),
+  /** All live (non-archived) activities for the caller's tenant, newest first. */
+  list: () => get(BASE),
 
-  get: (id) => apiGet((db) => db.activities.find((a) => a.id === id) ?? null),
+  /** One activity by id (404 if it is not this tenant's). */
+  get: (id) => get(`${BASE}/${id}`),
 
-  create: (actor, data) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.CREATE_ACTIVITY,
-      audit: (activity) => ({
-        action: 'CREATE', entityType: 'activity', entityId: activity.id,
-        entityLabel: activity.name, oldValue: null, newValue: { status: activity.status },
-      }),
-      mutator: (db) => {
-        const nowIso = new Date().toISOString();
-        const activity = {
-          id: newId('act'),
-          status: 'draft',
-          dpiaId: null,
-          ...data,
-          dpiaVerdict: evaluateDpia(data.dpiaCriteria ?? []).verdict,
-          createdAt: nowIso,
-          updatedAt: nowIso,
-        };
-        db.activities.unshift(activity);
-        return activity;
-      },
-    }),
+  /** Create a new activity (server sets tenant/owner/status and starts it as DRAFT). */
+  create: (data) => post(BASE, toRequest(data)),
 
-  update: (actor, id, patch) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.EDIT_ACTIVITY,
-      // Diff computed in the mutator so the audit trail shows exactly what changed.
-      audit: ({ updated, oldValue, newValue }) => ({
-        action: 'UPDATE', entityType: 'activity', entityId: id,
-        entityLabel: updated.name, oldValue, newValue,
-      }),
-      mutator: (db) => {
-        const idx = db.activities.findIndex((a) => a.id === id);
-        if (idx === -1) throw new Error('NOT_FOUND');
-        const before = db.activities[idx];
-        const oldValue = {};
-        const newValue = {};
-        for (const key of Object.keys(patch)) {
-          if (JSON.stringify(before[key]) !== JSON.stringify(patch[key])) {
-            oldValue[key] = before[key];
-            newValue[key] = patch[key];
-          }
-        }
-        const updated = {
-          ...before,
-          ...patch,
-          dpiaVerdict: evaluateDpia(patch.dpiaCriteria ?? before.dpiaCriteria ?? []).verdict,
-          updatedAt: new Date().toISOString(),
-        };
-        db.activities[idx] = updated;
-        return { updated, oldValue, newValue };
-      },
-    }).then((r) => r.updated),
+  /** Replace the editable fields of an existing activity. */
+  update: (id, patch) => put(`${BASE}/${id}`, toRequest(patch)),
 
-  /** Archive, never hard-delete — a compliance register must keep history. */
-  archive: (actor, id) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.DELETE_ACTIVITY,
-      audit: (activity) => ({
-        action: 'ARCHIVE', entityType: 'activity', entityId: id,
-        entityLabel: activity.name, oldValue: { status: activity._prevStatus }, newValue: { status: 'archived' },
-      }),
-      mutator: (db) => {
-        const activity = db.activities.find((a) => a.id === id);
-        if (!activity) throw new Error('NOT_FOUND');
-        activity._prevStatus = activity.status;
-        activity.status = 'archived';
-        activity.updatedAt = new Date().toISOString();
-        return activity;
-      },
-    }),
+  /**
+   * Archive (soft-delete) an activity — kept on disk for the 10-year retention rule
+   * but hidden from the register. The backend returns no body, so we resolve to the
+   * id and let the slice drop it from the list.
+   */
+  archive: async (id) => {
+    await del(`${BASE}/${id}`);
+    return id;
+  },
 
-  approve: (actor, id) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.APPROVE_ACTIVITY,
-      audit: (activity) => ({
-        action: 'APPROVE', entityType: 'activity', entityId: id,
-        entityLabel: activity.name, oldValue: { status: activity._prevStatus }, newValue: { status: 'approved' },
-      }),
-      mutator: (db) => {
-        const activity = db.activities.find((a) => a.id === id);
-        if (!activity) throw new Error('NOT_FOUND');
-        activity._prevStatus = activity.status;
-        activity.status = 'approved';
-        activity.updatedAt = new Date().toISOString();
-        return activity;
-      },
-    }),
+  /** Approve (sign off) an activity → status becomes "approved". Returns the record. */
+  approve: (id) => post(`${BASE}/${id}/approve`),
 };

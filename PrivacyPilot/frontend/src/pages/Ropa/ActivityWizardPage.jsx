@@ -159,10 +159,18 @@ export default function ActivityWizardPage() {
   const [saving, setSaving] = useState(false);
 
   // Edit mode: hydrate the form once the activity is loaded.
+  // The backend sends null for enum fields that were never chosen (lawfulBasis,
+  // art9Condition, department…), but the form's <Select> controls need a string.
+  // So replace any null/undefined with the EMPTY default to keep the inputs controlled.
   useEffect(() => {
     if (!id) return;
     const existing = activities.find((a) => a.id === id);
-    if (existing) setForm({ ...EMPTY, ...existing });
+    if (!existing) return;
+    const hydrated = { ...EMPTY, ...existing };
+    for (const key of Object.keys(EMPTY)) {
+      if (hydrated[key] == null) hydrated[key] = EMPTY[key];
+    }
+    setForm(hydrated);
   }, [id, activities]);
 
   const isController = form.role !== 'processor';
@@ -295,8 +303,10 @@ export default function ActivityWizardPage() {
                 >
                   {(fid) => (
                     <Select id={fid} value={form.role} onChange={(e) => set({ role: e.target.value })}>
+                      {/* Only the two roles the backend register supports (Art. 30(1)/(2)).
+                          "Joint controller" was removed: the ProcessingRole enum has no such
+                          value, so saving it would fail, and the register has no tab for it. */}
                       <option value="controller">{lang === 'pl' ? 'Administrator (ADO)' : 'Controller'}</option>
-                      <option value="joint_controller">{lang === 'pl' ? 'Współadministrator' : 'Joint controller'}</option>
                       <option value="processor">{lang === 'pl' ? 'Podmiot przetwarzający' : 'Processor'}</option>
                     </Select>
                   )}

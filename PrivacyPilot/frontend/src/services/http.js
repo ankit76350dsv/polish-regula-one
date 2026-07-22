@@ -16,6 +16,11 @@
 // localhost and in the EEA production environment. Defaults match local dev:
 // RegulaOne backend on :8080, central login on :3000, this app on :3006.
 const REGULAONE_API_URL = import.meta.env.VITE_REGULAONE_API_URL ?? 'http://localhost:8080';
+// PrivacyPilot's OWN backend (the ROPA / GDPR feature API). It runs on a separate
+// port from the RegulaOne auth backend (:9004 in local dev) so the two never clash.
+// The shared-domain idToken cookie is sent to it with every request, and it forwards
+// that cookie to RegulaOne /api/auth/me to resolve the caller and tenant.
+const PRIVACYPILOT_API_URL = import.meta.env.VITE_PRIVACYPILOT_API_URL ?? 'http://localhost:9004';
 const APP_URL = import.meta.env.VITE_APP_URL ?? 'http://localhost:3006';
 const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
 const CENTRAL_SIGNUP = import.meta.env.VITE_CENTRAL_SIGNUP_URL ?? 'http://localhost:3000/signup';
@@ -127,5 +132,8 @@ export async function tryRefreshSession() {
 
 // Exposed for the auth service (who-am-I / logout) and the login screen.
 export const REGULAONE_API_BASE = REGULAONE_API_URL;
+// Exposed for the feature-data HTTP client (client.js) — the base of every
+// /api/privacypilot/** call.
+export const PRIVACYPILOT_API_BASE = PRIVACYPILOT_API_URL;
 export const CENTRAL_LOGIN_URL = CENTRAL_LOGIN;
 export const CENTRAL_SIGNUP_URL = CENTRAL_SIGNUP;

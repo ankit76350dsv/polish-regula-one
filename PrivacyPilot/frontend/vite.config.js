@@ -34,13 +34,18 @@ function buildCsp(env) {
   ].filter(Boolean);
   const uniqueOrigins = [...new Set(ssoOrigins)].join(' ');
 
+  // The PrivacyPilot feature API (ROPA/GDPR) lives on its own backend origin, so
+  // connect-src must allow it too or the fetch() calls are blocked by the CSP.
+  const apiOrigin = originOf(env.VITE_PRIVACYPILOT_API_URL ?? 'http://localhost:9004');
+  const connectOrigins = [...new Set([...ssoOrigins, apiOrigin].filter(Boolean))].join(' ');
+
   return [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",
-    `connect-src 'self' ${uniqueOrigins}`.trim(),
+    `connect-src 'self' ${connectOrigins}`.trim(),
     "object-src 'none'",
     "base-uri 'self'",
     `form-action 'self' ${uniqueOrigins}`.trim(),
