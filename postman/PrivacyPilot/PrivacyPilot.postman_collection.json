@@ -7,7 +7,8 @@
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:9004" },
     { "key": "idToken", "value": "", "description": "RegulaOne session cookie value (see collection description)." },
-    { "key": "activityId", "value": "", "description": "Id of a processing activity, for the by-id requests." }
+    { "key": "activityId", "value": "", "description": "Id of a processing activity, for the by-id requests." },
+    { "key": "auditId", "value": "", "description": "Id of an audit entry, for the by-id request." }
   ],
   "item": [
     {
@@ -119,6 +120,69 @@
               "path": ["api", "privacypilot", "activities", "{{activityId}}"]
             },
             "description": "Soft-delete (archive) an activity: hidden from the register but kept on disk for the 10-year retention rule, with an audit entry. Roles: Admin."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Audit Trail",
+      "description": "Immutable audit trail — WHO did WHAT, to WHICH record, WHEN, from WHERE, with the BEFORE/AFTER values. READ-ONLY: entries are written only inside the server (by AuditService) when a real change happens; there is no create/update/delete. Kept 10 years. Roles: Admin, Compliance Officer, DPO, Auditor.",
+      "item": [
+        {
+          "name": "List audit entries",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/audit",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "audit"]
+            },
+            "description": "The whole trail for the caller's tenant, newest first (capped server-side). Roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "List audit entries (filtered)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/audit?entityType=activity&action=UPDATE&q=payroll&from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z&limit=100",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "audit"],
+              "query": [
+                { "key": "entityType", "value": "activity", "description": "Only this kind of record (activity, dpia, vendor, transfer, breach, dsar, notice, user, settings)." },
+                { "key": "entityId", "value": "", "description": "The full history of ONE record id. Overrides entityType.", "disabled": true },
+                { "key": "action", "value": "UPDATE", "description": "Only this action (CREATE, UPDATE, DELETE, APPROVE, SIGN, GENERATE, EXPORT, ...)." },
+                { "key": "q", "value": "payroll", "description": "Free-text over actor name / record label / action." },
+                { "key": "from", "value": "2026-01-01T00:00:00Z", "description": "ISO-8601 lower bound (inclusive)." },
+                { "key": "to", "value": "2026-12-31T23:59:59Z", "description": "ISO-8601 upper bound (inclusive)." },
+                { "key": "limit", "value": "100", "description": "Max rows (capped at 1000)." }
+              ]
+            },
+            "description": "Same list, narrowed by any combination of the OPTIONAL filters. Every param may be omitted. An unknown enum code or a malformed date returns 400."
+          },
+          "response": []
+        },
+        {
+          "name": "Get audit entry by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/audit/{{auditId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "audit", "{{auditId}}"]
+            },
+            "description": "One audit entry, only if it belongs to the caller's tenant (else 404). Roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
         }
