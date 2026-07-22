@@ -12,7 +12,6 @@ import PageHeader from '../../components/common/PageHeader';
 import StatCard from '../../components/common/StatCard';
 import { LoadingState } from '../../components/common/States';
 import { useSliceData } from '../../hooks/useSliceData';
-import { fetchActivities } from '../../store/slices/activitiesSlice';
 import { fetchDpias } from '../../store/slices/dpiasSlice';
 import { fetchBreaches } from '../../store/slices/breachesSlice';
 import { fetchDsars } from '../../store/slices/dsarsSlice';
@@ -31,6 +30,13 @@ const GOLD = '#c5a059';
 const GRID = '#2a2a2c';
 const LABEL = '#9a9aa0';
 
+// The dashboard's activity-derived metrics are TEMPORARILY decoupled from the live
+// register. They will be served by a dedicated dashboard/stats API (to be built),
+// so the dashboard is deliberately NOT re-wired to the real activities slice here.
+// Until that API exists, every activity-derived number renders empty/zero.
+// See docs/dashboard-api-pending.md. A stable empty array keeps useMemo deps calm.
+const NO_ACTIVITIES = [];
+
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
@@ -44,14 +50,15 @@ function ChartTooltip({ active, payload, label }) {
 export default function DashboardPage() {
   const base = useOrgBase();
   const { t, lang } = useT();
-  const activities = useSliceData('activities', fetchActivities);
+  // Activities are intentionally NOT fetched here — see NO_ACTIVITIES above.
+  const activities = { items: NO_ACTIVITIES };
   const dpias = useSliceData('dpias', fetchDpias);
   const breaches = useSliceData('breaches', fetchBreaches);
   const dsars = useSliceData('dsars', fetchDsars);
   const vendors = useSliceData('vendors', fetchVendors);
   const audit = useSliceData('audit', fetchAudit);
 
-  const loading = [activities, dpias, breaches, dsars].some((s) => s.status === 'loading' || s.status === 'idle');
+  const loading = [dpias, breaches, dsars].some((s) => s.status === 'loading' || s.status === 'idle');
 
   const stats = useMemo(() => {
     const active = activities.items.filter((a) => a.status !== 'archived');
@@ -127,8 +134,10 @@ export default function DashboardPage() {
       <PageHeader title={t('dash.title')} />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={BookOpenCheck} label={t('dash.ropaCount')} value={stats.active.length}
-          hint={`${t('dash.ropaComplete')}: ${stats.avgCompleteness}%`} tone="gold" />
+        {/* ROPA metrics are decoupled until the dashboard API exists — show a
+            placeholder instead of a misleading real "0". */}
+        <StatCard icon={BookOpenCheck} label={t('dash.ropaCount')} value="—"
+          hint={t('dash.pendingApi')} tone="neutral" />
         <StatCard icon={ShieldAlert} label={t('dash.dpiaOpen')} value={stats.dpiaInProgress}
           hint={`${t('dash.dpiaRequired')}: ${stats.dpiaRequired}`}
           tone={stats.dpiaRequired > 0 ? 'warn' : 'neutral'} />

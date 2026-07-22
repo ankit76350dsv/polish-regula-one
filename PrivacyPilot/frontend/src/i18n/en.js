@@ -189,6 +189,7 @@ export default {
   'dash.title': 'Compliance Dashboard',
   'dash.ropaCount': 'Processing activities',
   'dash.ropaComplete': 'Register completeness',
+  'dash.pendingApi': 'Awaiting dashboard API',
   'dash.dpiaOpen': 'DPIAs in progress',
   'dash.dpiaRequired': 'Activities needing DPIA',
   'dash.breachOpen': 'Open breaches',
