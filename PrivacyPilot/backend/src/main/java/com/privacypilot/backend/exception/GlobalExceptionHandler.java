@@ -29,6 +29,7 @@ public class GlobalExceptionHandler {
             case 401 -> "UNAUTHENTICATED";
             case 403 -> "FORBIDDEN";
             case 404 -> "NOT_FOUND";
+            case 409 -> "CONFLICT";
             case 503 -> "SERVICE_UNAVAILABLE";
             default -> "REQUEST_FAILED";
         };

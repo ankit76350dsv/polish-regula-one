@@ -57,74 +57,11 @@ export function buildSeed() {
     // those modules are wired to the real backend too.
     activities: [],
 
-    dpias: [
-      {
-        id: 'dpia-001',
-        activityId: 'act-003',
-        title: 'DPIA — Monitoring wizyjny (CCTV)',
-        status: 'in_progress',
-        criteriaMatched: ['systematic_monitoring', 'vulnerable_subjects'],
-        description: 'CCTV covering entrances, warehouse and parking. 24 cameras, continuous recording, 3-month retention, access limited to security staff.',
-        necessity: 'Monitoring is limited to safety-relevant zones; social rooms and sanitary facilities are excluded (Art. 22(2) par. 2 Labour Code). Less intrusive measures (patrols) were assessed as insufficient at night.',
-        risks: [
-          { id: 'r1', description: 'Unauthorised access to footage', likelihood: 2, severity: 4, mitigation: 'Role-based access, access logging, encrypted storage', residualLikelihood: 1, residualSeverity: 3 },
-          { id: 'r2', description: 'Retention beyond 3 months', likelihood: 2, severity: 3, mitigation: 'Automatic deletion job after 90 days', residualLikelihood: 1, residualSeverity: 2 },
-        ],
-        measures: ['Signage at all entrances', 'Automatic 90-day deletion', 'Access restricted to 3 security staff'],
-        dpoAdvice: '',
-        priorConsultation: false,
-        approvals: [
-          { role: 'PRIVACYPILOT_DPO', name: 'Janusz Nowak', approvedAt: null },
-          { role: 'PRIVACYPILOT_ADMIN', name: 'Karolina Wójcik', approvedAt: null },
-        ],
-        createdAt: iso(now - days(30)),
-        updatedAt: iso(now - days(7)),
-      },
-      {
-        id: 'dpia-002',
-        activityId: 'act-004',
-        title: 'DPIA — System sygnalistów (whistleblowing)',
-        status: 'approved',
-        criteriaMatched: ['vulnerable_subjects', 'special_categories'],
-        description: 'Internal reporting channel (SafeVoice). Reports may contain data of reporters, accused persons and witnesses, including criminal-offence data (Art. 10).',
-        necessity: 'Channel is required by the Whistleblower Protection Act. Data minimisation: categories limited to report content; anonymous reporting supported; identity encrypted separately.',
-        risks: [
-          { id: 'r1', description: 'Identification of an anonymous reporter', likelihood: 2, severity: 5, mitigation: 'Identity data encrypted separately (AES-256-GCM); metadata stripped; access forbidden for admins', residualLikelihood: 1, residualSeverity: 5 },
-          { id: 'r2', description: 'Retaliation risk from data leak', likelihood: 1, severity: 5, mitigation: 'Strict RBAC, audit logging, breach procedure', residualLikelihood: 1, residualSeverity: 4 },
-        ],
-        measures: ['Separate encryption of identity data', 'Access limited to whistleblower reviewers', 'No IP/metadata retention for anonymous channel'],
-        dpoAdvice: 'Assessment adequate. Residual risk acceptable given encryption and access controls; prior consultation with UODO not required because mitigations reduce the high risk (Art. 36(1) applies only where residual risk remains high).',
-        priorConsultation: false,
-        approvals: [
-          { role: 'PRIVACYPILOT_DPO', name: 'Janusz Nowak', approvedAt: iso(now - days(45)) },
-          { role: 'PRIVACYPILOT_ADMIN', name: 'Karolina Wójcik', approvedAt: iso(now - days(44)) },
-        ],
-        createdAt: iso(now - days(80)),
-        updatedAt: iso(now - days(44)),
-      },
-      {
-        id: 'dpia-003',
-        activityId: 'act-006',
-        title: 'DPIA — Lokalizacja GPS floty',
-        status: 'in_progress',
-        criteriaMatched: ['location_tracking', 'vulnerable_subjects', 'systematic_monitoring'],
-        description: 'Continuous GPS tracking of 45 delivery vehicles during working hours, linked to driver identity for route verification.',
-        necessity: 'Draft — proportionality of continuous (vs. sampled) tracking still to be justified; off-duty tracking must be excluded.',
-        risks: [
-          { id: 'r1', description: 'Tracking outside working hours (private use of vehicles)', likelihood: 4, severity: 4, mitigation: 'Proposed: automatic tracking cut-off outside shifts', residualLikelihood: 2, residualSeverity: 4 },
-          { id: 'r2', description: 'Use of location data for undisclosed performance evaluation', likelihood: 3, severity: 4, mitigation: 'Purpose limitation policy; access restricted to dispatch team', residualLikelihood: 2, residualSeverity: 3 },
-        ],
-        measures: ['Shift-based tracking cut-off (proposed)', 'Purpose-limitation policy (draft)'],
-        dpoAdvice: 'Residual risk for off-duty tracking remains high until the cut-off is implemented. If it cannot be implemented before launch, prior consultation with UODO under Art. 36(1) is required.',
-        priorConsultation: true,
-        approvals: [
-          { role: 'PRIVACYPILOT_DPO', name: 'Janusz Nowak', approvedAt: null },
-          { role: 'PRIVACYPILOT_ADMIN', name: 'Karolina Wójcik', approvedAt: null },
-        ],
-        createdAt: iso(now - days(14)),
-        updatedAt: iso(now - days(1)),
-      },
-    ],
+    // DPIAs (Art. 35 risk assessments) are NO LONGER mocked. They come from the real
+    // PrivacyPilot backend (DpiaController), through dpiaService.js + client.js. Kept
+    // as an empty array only so any remaining mock code that reads db.dpias does not
+    // crash; the DPIA screens read the real backend, not this.
+    dpias: [],
 
     vendors: [
       { id: 'ven-comarch',    name: 'Comarch S.A. (Optima ERP)',      country: 'Poland',  region: 'EU (Krakow, PL)',        dpaStatus: 'signed',        subprocessors: ['Comarch Data Center PL'], riskLevel: 'low',    lastReviewAt: iso(now - days(90)) },

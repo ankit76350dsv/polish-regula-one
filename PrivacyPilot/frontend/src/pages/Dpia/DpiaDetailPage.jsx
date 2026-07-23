@@ -162,9 +162,15 @@ export default function DpiaDetailPage() {
   const sign = async () => {
     const action = await dispatch(signDpia(dpia.id));
     if (action.error) {
+      // The backend answers 409 (CONFLICT) when there is no pending line for your
+      // role or the DPIA is already approved; 403 (FORBIDDEN) when your role may not
+      // sign at all. Show a helpful message for each.
+      const code = action.error.message;
       toast.error(
-        action.error.message === 'NO_APPROVAL_SLOT'
-          ? (lang === 'pl' ? 'Brak slotu podpisu dla Twojej roli.' : 'No approval slot for your role.')
+        code === 'CONFLICT'
+          ? (lang === 'pl'
+              ? 'Nie można podpisać — brak linii do podpisu dla Twojej roli lub ocena jest już zatwierdzona.'
+              : 'Could not sign — there is no line waiting for your role, or the DPIA is already approved.')
           : t('common.notAuthorized'),
       );
     } else {
