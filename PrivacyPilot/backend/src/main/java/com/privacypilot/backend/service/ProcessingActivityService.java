@@ -1,12 +1,15 @@
 package com.privacypilot.backend.service;
 
 import com.privacypilot.backend.dto.activity.ActivityRequest;
+import com.privacypilot.backend.model.document.Dpia;
 import com.privacypilot.backend.model.document.ProcessingActivity;
 import com.privacypilot.backend.model.enums.activity.ActivityStatus;
 import com.privacypilot.backend.model.enums.dpia.DpiaCriterion;
+import com.privacypilot.backend.model.enums.dpia.DpiaStatus;
 import com.privacypilot.backend.model.enums.dpia.DpiaVerdict;
 import com.privacypilot.backend.model.enums.audit.AuditAction;
 import com.privacypilot.backend.model.enums.audit.AuditEntityType;
+import com.privacypilot.backend.repository.DpiaRepository;
 import com.privacypilot.backend.repository.ProcessingActivityRepository;
 import com.privacypilot.backend.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +36,9 @@ import java.util.Objects;
 public class ProcessingActivityService {
 
     private final ProcessingActivityRepository repository;
+    // Used only to READ the linked DPIA when approving (Art. 35(1) guard). Depending on
+    // the repository — not DpiaService — keeps the two services free of a circular link.
+    private final DpiaRepository dpiaRepository;
     private final AuditService auditService;
 
     // ── Reads ───────────────────────────────────────────────────────────────────
@@ -102,8 +108,22 @@ public class ProcessingActivityService {
     /** Approve (sign off) an activity. */
     public ProcessingActivity approve(AuthenticatedUser caller, String id, AuditContext ctx) {
         ProcessingActivity a = get(caller, id);
-        // NOTE: once the DPIA module exists, block approval of a "DPIA required" activity
-        // whose linked DPIA is not yet approved (Art. 35(1)). Left as a follow-up.
+        // Art. 35(1): where a DPIA is REQUIRED, it must be carried out (and approved)
+        // BEFORE the processing can go ahead. So an activity screened "required" cannot
+        // be approved until its linked DPIA exists and is itself approved.
+        if (a.getDpiaVerdict() == DpiaVerdict.REQUIRED) {
+            if (a.getDpiaId() == null || a.getDpiaId().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "A DPIA is required before this activity can be approved (Art. 35(1))");
+            }
+            Dpia linked = dpiaRepository
+                    .findByIdAndTenantIdAndDeletedFalse(a.getDpiaId(), caller.tenantId())
+                    .orElse(null);
+            if (linked == null || linked.getStatus() != DpiaStatus.APPROVED) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "The linked DPIA must be approved first (Art. 35(1))");
+            }
+        }
         String oldStatus = enumName(a.getStatus());
         a.setStatus(ActivityStatus.APPROVED);
         ProcessingActivity saved = repository.save(a);

@@ -1,33 +1,38 @@
 {
   "info": {
+    "_postman_id": "ab002f21-351c-448d-9644-8d85d0f5c1fc",
     "name": "PrivacyPilot",
-    "description": "PrivacyPilot (GDPR/RODO) API — one folder per controller. Base port 9004.\n\nAUTH: every /api/privacypilot/** endpoint requires the RegulaOne session. Sign in through the RegulaOne SSO login first, then copy the value of the httpOnly `idToken` cookie into the collection variable {{idToken}} (DevTools → Application → Cookies, or the login response). The backend forwards that cookie to RegulaOne GET /api/auth/me to resolve the caller; the tenant is taken from that verified session (never from the client).\n\nRESPONSES: the standard envelope { success, message, data, errorCode, status }. Errors: 401 (no/invalid session), 403 (role not permitted), 404 (not found / other tenant), 400 (validation).",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    "description": "PrivacyPilot is the privacy / GDPR part of RegulaOne. This collection has all of its APIs, with one folder per feature. The backend runs on port 9004.\n\nHOW TO SIGN IN (do this first):\n1. Sign in on the normal RegulaOne login page in your browser.\n2. That login saves a cookie called `idToken` in the browser.\n3. Copy that cookie's value (browser DevTools -> Application -> Cookies) and paste it into the collection variable {{idToken}}.\nEvery request below sends that cookie. The server uses it to know WHO you are and WHICH company you belong to. You never type the company id yourself — the server reads it from your login, so one company can never see another company's data.\n\nWHAT EVERY ANSWER LOOKS LIKE:\nEach response has the same shape: { success, message, data, errorCode, status }. The thing you asked for is inside `data`.\nIf something goes wrong:\n- 401 = you are not signed in (fix the {{idToken}} cookie).\n- 403 = you are signed in, but your role is not allowed to do this.\n- 404 = not found (or it belongs to another company).\n- 400 = something you sent was wrong (bad value, bad date, etc.).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "47336508",
+    "_collection_link": "https://go.postman.co/collection/47336508-ab002f21-351c-448d-9644-8d85d0f5c1fc?source=collection_link"
   },
-  "variable": [
-    { "key": "baseUrl", "value": "http://localhost:9004" },
-    { "key": "idToken", "value": "", "description": "RegulaOne session cookie value (see collection description)." },
-    { "key": "activityId", "value": "", "description": "Id of a processing activity, for the by-id requests." },
-    { "key": "auditId", "value": "", "description": "Id of an audit entry, for the by-id request." }
-  ],
   "item": [
     {
       "name": "Processing Activities (ROPA)",
-      "description": "Record of Processing Activities — Art. 30 GDPR. Controller (Art. 30(1)) and processor (Art. 30(2)) entries. The DPIA verdict is computed server-side from the screening criteria.",
       "item": [
         {
           "name": "List activities",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/activities",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "activities"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "activities"
+              ]
             },
-            "description": "All live (non-archived) activities for the caller's tenant, newest change first. Roles: Admin, Compliance Officer, DPO, Auditor."
+            "description": "Get the full list of activities for your company. The most recently changed ones come first. Deleted (archived) ones are not shown.\n\nAllowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
         },
@@ -36,14 +41,24 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/activities/{{activityId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "activities", "{{activityId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "activities",
+                "{{activityId}}"
+              ]
             },
-            "description": "One activity, only if it belongs to the caller's tenant (else 404). Roles: Admin, Compliance Officer, DPO, Auditor."
+            "description": "Get one activity by its id. You only get it back if it belongs to your company; if not, you get 404.\n\nBefore running: set the {{activityId}} variable.\nAllowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
         },
@@ -52,20 +67,36 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/privacypilot/activities",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "activities"]
-            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"HR & payroll\",\n  \"department\": \"hr\",\n  \"role\": \"controller\",\n  \"purpose\": \"Maintaining personnel files and running payroll.\",\n  \"lawfulBasis\": \"legal_obligation\",\n  \"provisionStatement\": \"Required by the Labour Code; without this data we cannot run employment.\",\n  \"dataSubjects\": [\"employees\"],\n  \"dataCategories\": [\"identity\", \"contact\", \"financial\", \"employment\"],\n  \"art9Condition\": \"b\",\n  \"art10\": false,\n  \"dataSources\": [\"Directly from employees\", \"Social insurance (ZUS)\"],\n  \"recipients\": [\"public_authorities\", \"banks\", \"payroll_bureau\"],\n  \"vendorIds\": [],\n  \"transfer\": false,\n  \"transferIds\": [],\n  \"retentionPeriod\": \"10 years after employment ends\",\n  \"retentionBasis\": \"Art. 94(9b) of the Labour Code\",\n  \"toms\": [\"tom_encryption_rest\", \"tom_access_control\", \"tom_mfa\", \"tom_backups\"],\n  \"dpiaCriteria\": [\"special_categories\"]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "description": "Create a new activity (starts as DRAFT). Server sets tenant, owner and status; the DPIA verdict is derived from dpiaCriteria (>=2 -> required, 1 -> recommended, 0 -> not_indicated). Roles: Admin, Compliance Officer."
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/activities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "activities"
+              ]
+            },
+            "description": "Add a new activity. It always starts as a DRAFT.\n\nYou only send the details you fill in. The server fills in the rest by itself: your company, the owner (you), the status, and whether a DPIA is needed. It decides the DPIA answer from the number of risk boxes in `dpiaCriteria`: 2 or more = required, exactly 1 = recommended, 0 = not needed.\n\nAllowed roles: Admin, Compliance Officer."
           },
           "response": []
         },
@@ -74,20 +105,37 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/api/privacypilot/activities/{{activityId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "activities", "{{activityId}}"]
-            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"HR & payroll\",\n  \"department\": \"hr\",\n  \"role\": \"controller\",\n  \"purpose\": \"Maintaining personnel files and running payroll.\",\n  \"lawfulBasis\": \"legal_obligation\",\n  \"provisionStatement\": \"Required by the Labour Code.\",\n  \"dataSubjects\": [\"employees\"],\n  \"dataCategories\": [\"identity\", \"contact\", \"financial\", \"employment\"],\n  \"art9Condition\": \"b\",\n  \"art10\": false,\n  \"dataSources\": [\"Directly from employees\"],\n  \"recipients\": [\"public_authorities\", \"banks\", \"payroll_bureau\"],\n  \"vendorIds\": [],\n  \"transfer\": false,\n  \"transferIds\": [],\n  \"retentionPeriod\": \"50 years (employee records created before 2019)\",\n  \"retentionBasis\": \"Art. 94(9b) of the Labour Code\",\n  \"toms\": [\"tom_encryption_rest\", \"tom_access_control\", \"tom_mfa\", \"tom_backups\"],\n  \"dpiaCriteria\": [\"special_categories\", \"large_scale\"]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "description": "Replace the editable fields of an existing activity. Only the fields that changed are recorded in the audit trail. Here dpiaCriteria has 2 entries, so the verdict recomputes to 'required'. Roles: Admin, Compliance Officer."
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/activities/{{activityId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "activities",
+                "{{activityId}}"
+              ]
+            },
+            "description": "Change an existing activity. Only the fields that really changed are written into the history (audit log).\n\nIn this example there are 2 risk boxes in `dpiaCriteria`, so the server re-decides and marks a DPIA as 'required'.\n\nBefore running: set the {{activityId}} variable.\nAllowed roles: Admin, Compliance Officer."
           },
           "response": []
         },
@@ -96,14 +144,25 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/activities/{{activityId}}/approve",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "activities", "{{activityId}}", "approve"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "activities",
+                "{{activityId}}",
+                "approve"
+              ]
             },
-            "description": "Sign off an activity (status -> approved). Roles: Admin, DPO."
+            "description": "Sign off an activity so it counts as final. Its status becomes 'approved'.\n\nImportant: if this activity needs a DPIA, you cannot approve it until that DPIA is finished and itself approved. In that case you get a 409.\n\nBefore running: set the {{activityId}} variable.\nAllowed roles: Admin, DPO."
           },
           "response": []
         },
@@ -112,36 +171,55 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/activities/{{activityId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "activities", "{{activityId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "activities",
+                "{{activityId}}"
+              ]
             },
-            "description": "Soft-delete (archive) an activity: hidden from the register but kept on disk for the 10-year retention rule, with an audit entry. Roles: Admin."
+            "description": "Hide an activity (a 'soft delete'). It disappears from the list, but the record is kept on disk for the 10-year legal rule, and the deletion is written into the history. Nothing is really erased.\n\nBefore running: set the {{activityId}} variable.\nAllowed roles: Admin."
           },
           "response": []
         }
-      ]
+      ],
+      "description": "This is the company's master list of everything it does with people's personal data. The law (GDPR, Article 30) calls it the 'Record of Processing Activities', or ROPA. Each entry says what data is used, why it is used, who it is shared with, and how long it is kept.\n\nEach entry is one of two kinds:\n- 'controller' = your company decides how and why the data is used.\n- 'processor'  = your company only handles the data for another company.\n\nDuring setup you tick some risk boxes. The server looks at those boxes and decides whether a deeper risk study (a 'DPIA') is needed — you do not set that yourself."
     },
     {
       "name": "Audit Trail",
-      "description": "Immutable audit trail — WHO did WHAT, to WHICH record, WHEN, from WHERE, with the BEFORE/AFTER values. READ-ONLY: entries are written only inside the server (by AuditService) when a real change happens; there is no create/update/delete. Kept 10 years. Roles: Admin, Compliance Officer, DPO, Auditor.",
       "item": [
         {
           "name": "List audit entries",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/audit",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "audit"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "audit"
+              ]
             },
-            "description": "The whole trail for the caller's tenant, newest first (capped server-side). Roles: Admin, Compliance Officer, DPO, Auditor."
+            "description": "Get the whole history for your company, newest first. The server sends back only a limited number at a time so the answer never gets too big.\n\nAllowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
         },
@@ -150,23 +228,61 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/audit?entityType=activity&action=UPDATE&q=payroll&from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z&limit=100",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "audit"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "audit"
+              ],
               "query": [
-                { "key": "entityType", "value": "activity", "description": "Only this kind of record (activity, dpia, vendor, transfer, breach, dsar, notice, user, settings)." },
-                { "key": "entityId", "value": "", "description": "The full history of ONE record id. Overrides entityType.", "disabled": true },
-                { "key": "action", "value": "UPDATE", "description": "Only this action (CREATE, UPDATE, DELETE, APPROVE, SIGN, GENERATE, EXPORT, ...)." },
-                { "key": "q", "value": "payroll", "description": "Free-text over actor name / record label / action." },
-                { "key": "from", "value": "2026-01-01T00:00:00Z", "description": "ISO-8601 lower bound (inclusive)." },
-                { "key": "to", "value": "2026-12-31T23:59:59Z", "description": "ISO-8601 upper bound (inclusive)." },
-                { "key": "limit", "value": "100", "description": "Max rows (capped at 1000)." }
+                {
+                  "key": "entityType",
+                  "value": "activity",
+                  "description": "Show only one kind of record: activity, dpia, vendor, transfer, breach, dsar, notice, user, or settings."
+                },
+                {
+                  "key": "entityId",
+                  "value": "",
+                  "description": "Show the whole history of ONE record, by its id. If you set this, it wins over entityType.",
+                  "disabled": true
+                },
+                {
+                  "key": "action",
+                  "value": "UPDATE",
+                  "description": "Show only one kind of action: CREATE, UPDATE, DELETE, APPROVE, SIGN, GENERATE, EXPORT, and so on."
+                },
+                {
+                  "key": "q",
+                  "value": "payroll",
+                  "description": "Search words. Matches the person's name, the record's label, or the action."
+                },
+                {
+                  "key": "from",
+                  "value": "2026-01-01T00:00:00Z",
+                  "description": "Only show entries on or after this date/time. Use the format 2026-01-01T00:00:00Z."
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31T23:59:59Z",
+                  "description": "Only show entries on or before this date/time. Same format as 'from'."
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "How many rows to return at most (the server allows up to 1000)."
+                }
               ]
             },
-            "description": "Same list, narrowed by any combination of the OPTIONAL filters. Every param may be omitted. An unknown enum code or a malformed date returns 400."
+            "description": "The same history list, but you can narrow it down. Every filter below is optional — leave one out and it is simply ignored.\n\nIf you type a value the server does not understand (a wrong type name or a badly-written date), you get a 400.\n\nAllowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
         },
@@ -175,18 +291,260 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/audit/{{auditId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "audit", "{{auditId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "audit",
+                "{{auditId}}"
+              ]
             },
-            "description": "One audit entry, only if it belongs to the caller's tenant (else 404). Roles: Admin, Compliance Officer, DPO, Auditor."
+            "description": "Get one history entry by its id. You only get it if it belongs to your company; if not, you get 404.\n\nBefore running: set the {{auditId}} variable.\nAllowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
         }
-      ]
+      ],
+      "description": "A permanent history of everything important that happened: WHO did it, WHAT they did, to WHICH record, WHEN, from WHERE, and the values BEFORE and AFTER the change.\n\nYou can only READ this history. Nobody can add, change, or delete entries by hand — the server writes them automatically whenever something really changes. It is kept for 10 years.\n\nAllowed roles to read it: Admin, Compliance Officer, DPO, Auditor."
+    },
+    {
+      "name": "DPIA (Art. 35)",
+      "item": [
+        {
+          "name": "List DPIAs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dpias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dpias"
+              ]
+            },
+            "description": "Get all DPIAs for your company, the most recently changed first.\n\nAllowed roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Get DPIA by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dpias/6a61b6c55c8a409a4c277960",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dpias",
+                "6a61b6c55c8a409a4c277960"
+              ]
+            },
+            "description": "Get one DPIA by its id. You only get it if it belongs to your company; if not, you get 404.\n\nBefore running: set the {{dpiaId}} variable.\nAllowed roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Create DPIA (from activity)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activityId\": \"6a5f464d5bacc955f613c23c\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dpias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dpias"
+              ]
+            },
+            "description": "Start a DPIA for an activity. You only send the activity's id — nothing else.\n\nThe server fills in the rest from that activity: the title, the reason it is needed (copied from the activity's risk boxes), a starting description, and two empty sign-off lines (one for the DPO, one for the Admin).\n\nYou can only have one DPIA per activity: if that activity already has one, you simply get the same one back instead of a second copy. The server also links the new DPIA back to the activity.\n\nBefore running: set the {{activityId}} variable.\nAllowed roles: Admin, Compliance Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "Update DPIA",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Employment contract performance, payroll, ZUS and tax settlements.\",\n  \"necessity\": \"Name, bank account and PESEL are required by law to run payroll and report to ZUS; nothing extra is collected.\",\n  \"risks\": [\n    {\n      \"description\": \"Power imbalance pressures employees to hand over data.\",\n      \"likelihood\": 3,\n      \"severity\": 4,\n      \"mitigation\": \"Transparent policy, no covert processing, complaint channel.\",\n      \"residualLikelihood\": 2,\n      \"residualSeverity\": 3\n    }\n  ],\n  \"measures\": [\"Encryption at rest\", \"Need-to-know access\", \"Access logging\"],\n  \"dpoAdvice\": \"Risks are acceptable after the listed safeguards; no objection.\",\n  \"priorConsultation\": false,\n  \"status\": \"in_progress\"\n}\n// what about this field when this going to fill....\n//  private List<DpiaApproval> approvals = new ArrayList<>();",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dpias/6a61b6c55c8a409a4c277960",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dpias",
+                "6a61b6c55c8a409a4c277960"
+              ]
+            },
+            "description": "Fill in or change the DPIA's details: what the processing is, why it is necessary, the list of risks, the safety measures, the DPO's advice, and whether the regulator must be asked first.\n\nRules:\n- Each risk score (likelihood, severity, and the two 'residual' scores) must be a number from 1 to 5. Anything else gives a 400.\n- You may set the status to draft, in_progress, or rejected — but NOT approved. 'Approved' only happens by signing (see the sign request).\n- You cannot edit a DPIA that is already approved — you get a 409.\n\nBefore running: set the {{dpiaId}} variable.\nAllowed roles: Admin, Compliance Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "Sign DPIA (my line)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "// this api for this:   private List<DpiaApproval> approvals = new ArrayList<>();\n// this is do not change the status '    private DpiaStatus status;' status still in the in_progeress",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dpias/6a61b6c55c8a409a4c277960/sign",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dpias",
+                "6a61b6c55c8a409a4c277960",
+                "sign"
+              ]
+            },
+            "description": "Sign your own approval line. A DPO can sign only the DPO line; an Admin can sign only the Admin line. When both lines are signed, the DPIA turns 'approved' by itself.\n\nYou get a 409 if there is no line waiting for your role, or if the DPIA is already approved.\n\nBefore running: set the {{dpiaId}} variable.\nAllowed roles: Admin, DPO."
+          },
+          "response": []
+        },
+        {
+          "name": "Archive DPIA",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "// this is dlete soft not hard",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dpias/6a61b6c55c8a409a4c277960",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dpias",
+                "6a61b6c55c8a409a4c277960"
+              ]
+            },
+            "description": "Hide a DPIA (a 'soft delete'). It is kept on disk for the 10-year rule, and the link on its activity is removed so a new DPIA can be started for that activity later.\n\nBefore running: set the {{dpiaId}} variable.\nAllowed roles: Admin."
+          },
+          "response": []
+        }
+      ],
+      "description": "A DPIA is a deeper risk study you must do when an activity is high-risk (this is required by GDPR, Article 35).\n\nKey points, in plain words:\n- Every DPIA belongs to exactly ONE activity.\n- You start a DPIA from an activity, then fill in the details (what it does, why it is needed, the risks, and how you make them safer).\n- It must be signed off by TWO different people: the DPO signs one line and the Admin signs another. This way no single person can approve a risky thing alone.\n- Once BOTH lines are signed, the DPIA becomes 'approved'.\n- An activity that needs a DPIA cannot be approved until its DPIA is approved."
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:9004"
+    },
+    {
+      "key": "idToken",
+      "value": "",
+      "description": "Your login cookie value. See the collection description for how to get it."
+    },
+    {
+      "key": "activityId",
+      "value": "",
+      "description": "The id of one processing activity. Fill this in before running the requests that work on a single activity."
+    },
+    {
+      "key": "auditId",
+      "value": "",
+      "description": "The id of one audit-log entry. Fill this in before the 'get one audit entry' request."
+    },
+    {
+      "key": "dpiaId",
+      "value": "",
+      "description": "The id of one DPIA. Fill this in before the get-one, sign, and archive DPIA requests."
     }
   ]
 }
