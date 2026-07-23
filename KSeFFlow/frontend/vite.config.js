@@ -30,7 +30,7 @@ export default defineConfig(() => {
       port: parseInt(process.env.PORT ?? '3001', 10),
       // Allow the LAN IP host (Vite blocks unknown hosts by default). Literal IPs
       // are generally allowed, but we list it explicitly so it never 403s.
-      allowedHosts: ['localhost', '192.168.20.2'],
+      allowedHosts: ['localhost', '192.168.20.6'],
       // HMR: leave the websocket host UNSET so Vite infers it from the page's host
       // (localhost → localhost ws, IP → IP ws). Hardcoding hmr.host was what caused
       // the earlier reload loop — do not reintroduce it.
