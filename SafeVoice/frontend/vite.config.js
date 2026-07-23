@@ -87,6 +87,12 @@ export default defineConfig(({ command, mode, isPreview }) => {
     },
     // Dev server sends the CSP as a real header too, so local dev matches production intent.
     server: {
+      // Bind to all network interfaces (0.0.0.0) so the app is reachable BOTH on
+      // http://localhost AND http://<machine-ip> (other devices on the same Wi-Fi).
+      // Without this Vite listens on localhost only, so the LAN IP cannot reach it.
+      // HMR host is left UNSET on purpose so Vite infers the websocket host from the
+      // page (localhost→localhost, IP→IP) — hardcoding it causes reload loops.
+      host: true,
       headers: {
         "Content-Security-Policy": headerCsp,
       },

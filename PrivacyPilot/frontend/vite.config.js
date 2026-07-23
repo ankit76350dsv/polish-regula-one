@@ -81,6 +81,12 @@ export default defineConfig(({ mode }) => {
     },
   },
   server: {
+    // Bind to all network interfaces (0.0.0.0) so the app is reachable BOTH on
+    // http://localhost:3006 AND http://<machine-ip>:3006 (other devices on the
+    // same Wi-Fi). Without this Vite listens on localhost only, so the LAN IP
+    // cannot reach it. HMR host is left UNSET on purpose so Vite infers the
+    // websocket host from the page (localhost→localhost, IP→IP).
+    host: true,
     // Use the PORT env var when the launcher (start.sh) provides one so the
     // dev server matches the platform port map (PrivacyPilot frontend = 3006).
     // We use 3006 (not 1004) because ports below 1024 are "privileged" on
