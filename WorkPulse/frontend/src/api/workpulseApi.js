@@ -67,7 +67,14 @@ export const getAuditLogs = (params = {}) => request(`/audit-logs${qs(params)}`)
 
 // ── Notifications ────────────────────────────────────────────────────────────
 export const getNotifications = (params = {}) => request(`/notifications${qs(params)}`);
+export const getUnreadCount = () => request("/notifications/unread-count");
 export const markNotificationRead = (id) => request(`/notifications/${id}/read`, { method: "PATCH" });
+export const markAllNotificationsRead = () => request("/notifications/read-all", { method: "PATCH" });
+
+// Full URL of the real-time notification stream (Server-Sent Events). The bell
+// opens this with `new EventSource(url, { withCredentials: true })`; the shared
+// auth cookie rides along automatically, so no token has to go in the URL.
+export const notificationStreamUrl = () => `${WORKPULSE_API}/notifications/stream`;
 
 // Build a query string, skipping empty values.
 function qs(params) {

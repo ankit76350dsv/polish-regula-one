@@ -24,6 +24,7 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       enum: [
         'BREAK_DUE', // approaching / reached the 6-hour break point
+        'BREAK_VIOLATION', // shift ended without the legally required break (art. 134)
         'OPEN_BREAK', // break started but not ended
         'MISSING_CLOCK_OUT', // shift ended, no clock-out recorded
         'OVERTIME_APPROVAL', // overtime needs a manager decision

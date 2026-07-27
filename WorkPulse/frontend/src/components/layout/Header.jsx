@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { NavLink, Link } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useAuth } from "../../context/AuthContext";
+import NotificationBell from "../NotificationBell";
 
 // Navigation items. `adminOnly` items are shown only to admins/super admins.
 const NAV_ITEMS = [
@@ -75,6 +76,8 @@ export default function Header() {
 
           {/* Desktop right side */}
           <div className="hidden lg:flex items-center gap-3">
+            {/* Live break/overtime/rest alerts — only for signed-in users. */}
+            {isAuthenticated && <NotificationBell />}
             {user?.name || user?.email ? (
               <span className="text-xs text-slate-500 max-w-[180px] truncate">{user.name || user.email}</span>
             ) : null}
@@ -86,16 +89,19 @@ export default function Header() {
             </button>
           </div>
 
-          {/* Mobile hamburger */}
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="lg:hidden flex flex-col justify-center items-center w-10 h-10 rounded-xl hover:bg-slate-100 gap-1.5"
-            aria-label="Toggle menu"
-          >
+          {/* Mobile right side: live alerts bell + hamburger */}
+          <div className="lg:hidden flex items-center gap-1">
+            {isAuthenticated && <NotificationBell />}
+            <button
+              onClick={() => setMobileOpen(!mobileOpen)}
+              className="flex flex-col justify-center items-center w-10 h-10 rounded-xl hover:bg-slate-100 gap-1.5"
+              aria-label="Toggle menu"
+            >
             <span className={`block w-5 h-0.5 bg-slate-600 transition-all ${mobileOpen ? "rotate-45 translate-y-2" : ""}`} />
             <span className={`block w-5 h-0.5 bg-slate-600 transition-all ${mobileOpen ? "opacity-0" : ""}`} />
-            <span className={`block w-5 h-0.5 bg-slate-600 transition-all ${mobileOpen ? "-rotate-45 -translate-y-2" : ""}`} />
-          </button>
+              <span className={`block w-5 h-0.5 bg-slate-600 transition-all ${mobileOpen ? "-rotate-45 -translate-y-2" : ""}`} />
+            </button>
+          </div>
         </div>
       </div>
 

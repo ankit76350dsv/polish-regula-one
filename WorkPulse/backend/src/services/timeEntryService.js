@@ -222,6 +222,33 @@ async function clockOut(user, tenantId, meta) {
     });
   }
 
+  // Break compliance flag (art. 134). The break outcome is already recorded on
+  // the entry above (breakComplianceStatus). Here we ALSO raise a visible alert
+  // when the required break was missed or too short, so the breach is surfaced —
+  // not silently buried in the record. This is the "flag" half of the compliance
+  // flow: the entry is the evidence, this notification is the active warning.
+  if (totals.breakComplianceStatus === 'MISSING_BREAK') {
+    await notificationService.createNotification({
+      tenantId,
+      userId: user._id,
+      employeeId: user._id.toString(),
+      type: 'BREAK_VIOLATION',
+      title: 'Required break was not recorded',
+      message: `You worked ${wt.formatDuration(totals.netWorkedMinutes)} but no break was recorded. Polish law (art. 134) requires at least ${wt.formatDuration(totals.requiredBreakMinutes)}. Please tell your manager so the record can be corrected.`,
+      relatedEntryId: entry._id,
+    });
+  } else if (totals.breakComplianceStatus === 'SHORT_BREAK') {
+    await notificationService.createNotification({
+      tenantId,
+      userId: user._id,
+      employeeId: user._id.toString(),
+      type: 'BREAK_VIOLATION',
+      title: 'Break was shorter than required',
+      message: `Your recorded break was ${wt.formatDuration(totals.breakMinutes)}, but art. 134 requires at least ${wt.formatDuration(totals.requiredBreakMinutes)} for the hours you worked. Please tell your manager so the record can be corrected.`,
+      relatedEntryId: entry._id,
+    });
+  }
+
   await logAudit({
     tenantId,
     userId: user._id.toString(),
