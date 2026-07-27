@@ -598,6 +598,104 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Processors (Art. 28 / DPAs)",
+      "description": "Your outside suppliers that process data for you (processors under Art. 28 GDPR) — an ERP, a mailing tool, a hosting provider. Each should have a signed Data Processing Agreement (DPA) and be reviewed regularly.\n\nProcessors are linked FROM activities (an activity lists the processors it uses) and FROM transfers. Because of that, a processor CANNOT be deleted while any activity or transfer still points at it — you get a 409 asking you to unlink it first. This stops the register from ending up with a broken link.\n\ndpaStatus is one of: signed, in_negotiation, missing. riskLevel is one of: low, medium, high.",
+      "item": [
+        {
+          "name": "List processors",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/vendors",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "vendors"]
+            },
+            "description": "Get all live processors for your company, newest change first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Get processor by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/vendors/{{vendorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "vendors", "{{vendorId}}"]
+            },
+            "description": "Get one processor by its id (only if it belongs to your company, else 404). Set {{vendorId}} first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Create processor",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mailchimp (Intuit Inc.)\",\n  \"country\": \"USA\",\n  \"region\": \"US data centers\",\n  \"dpaStatus\": \"in_negotiation\",\n  \"subprocessors\": [\"Intuit group\"],\n  \"riskLevel\": \"high\",\n  \"lastReviewAt\": \"2026-06-01T00:00:00Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/vendors",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "vendors"]
+            },
+            "description": "Add a new processor. Only 'name' is required; dpaStatus defaults to 'missing' and riskLevel to 'medium' when left out. The server sets the company, timestamps and who created it. Allowed roles: Admin, Compliance Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "Update processor",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mailchimp (Intuit Inc.)\",\n  \"country\": \"USA\",\n  \"region\": \"US data centers\",\n  \"dpaStatus\": \"signed\",\n  \"subprocessors\": [\"Intuit group\"],\n  \"riskLevel\": \"high\",\n  \"lastReviewAt\": \"2026-07-01T00:00:00Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/vendors/{{vendorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "vendors", "{{vendorId}}"]
+            },
+            "description": "Replace the editable fields of a processor (send the whole object). Only the fields that changed are written to the audit trail. Set {{vendorId}} first. Allowed roles: Admin, Compliance Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "Archive processor",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/vendors/{{vendorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "vendors", "{{vendorId}}"]
+            },
+            "description": "Soft-delete a processor (kept on disk for the retention rules). REFUSED with 409 if any activity or transfer still links to it — unlink it there first. Set {{vendorId}} first. Allowed roles: Admin."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
@@ -629,6 +727,11 @@
       "key": "noticeId",
       "value": "",
       "description": "The id of one privacy notice. Fill this in before the 'get notice by id' request."
+    },
+    {
+      "key": "vendorId",
+      "value": "",
+      "description": "The id of one processor. Fill this in before the get-one, update, and archive processor requests."
     }
   ]
 }

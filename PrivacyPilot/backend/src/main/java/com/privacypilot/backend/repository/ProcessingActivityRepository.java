@@ -22,4 +22,9 @@ public interface ProcessingActivityRepository extends MongoRepository<Processing
 
     // One live entry, but only if it belongs to this company (else empty → 404).
     Optional<ProcessingActivity> findByIdAndTenantIdAndDeletedFalse(String id, String tenantId);
+
+    // True if any live activity in this company still lists the given vendor in its
+    // vendorIds (Mongo matches an array that contains the value). Used to block
+    // deleting a processor that an activity still relies on (Art. 28 link).
+    boolean existsByTenantIdAndVendorIdsAndDeletedFalse(String tenantId, String vendorId);
 }
