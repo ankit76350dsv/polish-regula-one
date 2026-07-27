@@ -55,6 +55,14 @@ public class GlobalExceptionHandler {
                 .body(AppResponse.fail(ex.getMessage(), "BAD_REQUEST", 400));
     }
 
+    // A notice was asked for but the register is not complete enough yet → 422 with a
+    // dedicated code the frontend keys on to show the "fix these first" list.
+    @ExceptionHandler(NoticeIncompleteException.class)
+    public ResponseEntity<AppResponse<Object>> handleNoticeIncomplete(NoticeIncompleteException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(AppResponse.fail(ex.getMessage(), "CHECKLIST_INCOMPLETE", 422));
+    }
+
     // Anything unexpected → 500, logged server-side but NEVER leaked to the client.
     @ExceptionHandler(Exception.class)
     public ResponseEntity<AppResponse<Object>> handleUnexpected(Exception ex) {
