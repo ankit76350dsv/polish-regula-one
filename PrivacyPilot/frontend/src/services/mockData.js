@@ -210,19 +210,11 @@ export function buildSeed() {
       },
     ],
 
-    notices: [
-      {
-        id: 'not-001',
-        audience: 'employees',
-        language: 'pl',
-        version: 1,
-        title: 'Klauzula informacyjna dla pracowników',
-        generatedAt: iso(now - days(60)),
-        generatedBy: 'Janusz Nowak',
-        activityIds: ['act-001', 'act-003'],
-        content: '',  // regenerated on demand; kept for version history
-      },
-    ],
+    // Privacy notices are NO LONGER mocked — they come from the real PrivacyPilot
+    // backend (NoticeController), through noticeService.js + client.js. The notice
+    // TEXT is still compiled on the client (from the settings/transfers/vendors that
+    // remain mock), but the notice records themselves live on the server. Empty here.
+    notices: [],
 
     // The audit trail is NO LONGER mocked — it comes from the real PrivacyPilot
     // backend (AuditController), through auditService.js + client.js. This array is

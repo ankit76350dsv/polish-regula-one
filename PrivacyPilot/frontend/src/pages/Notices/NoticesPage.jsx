@@ -13,6 +13,13 @@ import PageHeader from '../../components/common/PageHeader';
 import { Select, FormField } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchNotices, fetchChecklist, generateNotice } from '../../store/slices/noticesSlice';
+// The notice TEXT is compiled on the client from live data, so the page makes sure
+// the activities (real backend) and the settings/transfers/vendors (still mock) are
+// loaded before "Generate" runs. See noticesSlice.generateNotice.
+import { fetchActivities } from '../../store/slices/activitiesSlice';
+import { fetchSettings } from '../../store/slices/settingsSlice';
+import { fetchTransfers } from '../../store/slices/transfersSlice';
+import { fetchVendors } from '../../store/slices/vendorsSlice';
 import { useT } from '../../i18n';
 import { NOTICE_AUDIENCES, NOTICE_REQUIRED_ITEMS, byId } from '../../lib/gdpr';
 
@@ -42,6 +49,11 @@ export default function NoticesPage() {
   const dispatch = useDispatch();
   const { items } = useSliceData('notices', fetchNotices);
   const { checklists, saveStatus } = useSelector((s) => s.notices);
+  // Slices whose data the client-side notice builder needs (loaded below).
+  const settings = useSelector((s) => s.settings);
+  const activities = useSelector((s) => s.activities);
+  const transfers = useSelector((s) => s.transfers);
+  const vendors = useSelector((s) => s.vendors);
 
   const [audience, setAudience] = useState('employees');
   const [docLang, setDocLang] = useState('pl');
@@ -50,6 +62,17 @@ export default function NoticesPage() {
   useEffect(() => {
     dispatch(fetchChecklist(audience));
   }, [audience, dispatch]);
+
+  // Make sure everything the notice text is built from is loaded (once each).
+  useEffect(() => {
+    if (activities.status === 'idle') dispatch(fetchActivities());
+    if (settings.status === 'idle') dispatch(fetchSettings());
+    if (transfers.status === 'idle') dispatch(fetchTransfers());
+    if (vendors.status === 'idle') dispatch(fetchVendors());
+  }, [dispatch, activities.status, settings.status, transfers.status, vendors.status]);
+
+  // Generate needs the company/DPO settings to compile the notice text.
+  const settingsReady = Boolean(settings.data);
 
   const check = checklists[audience];
   const history = useMemo(
@@ -133,7 +156,8 @@ export default function NoticesPage() {
                   </Select>
                 )}
               </FormField>
-              <Button onClick={generate} disabled={!check || check.blocked || saveStatus === 'saving'}>
+              <Button onClick={generate}
+                disabled={!check || check.blocked || !settingsReady || saveStatus === 'saving'}>
                 <FileText /> {t('notices.generate')}
               </Button>
               {check?.blocked && (

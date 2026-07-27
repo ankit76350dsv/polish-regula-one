@@ -1,58 +1,39 @@
-// Privacy notices — generation gated by the Art. 13/14 completeness checklist.
-import { apiGet, apiMutate, newId } from './api';
-import { ACTIONS } from '../lib/permissions';
-import { buildChecklist, buildNoticeContent } from '../lib/noticeBuilder';
+// Privacy notices — Art. 13/14 documents compiled from the register.
+//
+// This now talks to the REAL PrivacyPilot backend (NoticeController):
+// GET/POST on /api/privacypilot/notices plus GET /notices/checklist. It replaced
+// the in-browser mock.
+//
+// SPLIT OF RESPONSIBILITY (see the backend NoticeService for the full reasoning):
+//   - the server owns the version number, the author, the timestamp, the covered
+//     activity links, the audit entry, and the register-completeness GATE (it
+//     re-checks the real activities and returns 422 CHECKLIST_INCOMPLETE if the
+//     register can't back the notice);
+//   - the notice TEXT itself is still compiled on the client (buildNoticeContent),
+//     because a full notice also needs the company/DPO identity and vendor/transfer
+//     names, which are not backend features yet. The client sends that text; the
+//     server governs everything around it.
+import { get, post } from './client';
+
+const BASE = '/api/privacypilot/notices';
 
 export const noticeService = {
-  list: () => apiGet((db) => db.notices),
+  /** All notices (every audience, every version) for the caller's tenant, newest first. */
+  list: () => get(BASE),
 
-  /** Checklist preview (no mutation) — the page shows this before generating. */
-  checklist: (audienceId) =>
-    apiGet((db) =>
-      buildChecklist({ settings: db.settings, activities: db.activities, audienceId }),
-    ),
+  /**
+   * The Art. 13/14 completeness check for one audience, computed from the REAL
+   * register. Returns { audience, relevantCount, activityIds, checklist, blocked }.
+   * (Identity items — company/DPO — are checked on the client until Settings is a
+   * backend feature.)
+   */
+  checklist: (audience) => get(`${BASE}/checklist?audience=${encodeURIComponent(audience)}`),
 
-  generate: (actor, { audienceId, language }) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.GENERATE_NOTICES,
-      audit: (notice) => ({
-        action: 'GENERATE', entityType: 'notice', entityId: notice.id,
-        entityLabel: notice.title, oldValue: null,
-        newValue: { audience: notice.audience, version: notice.version },
-      }),
-      mutator: (db) => {
-        const { blocked, checklist } = buildChecklist({
-          settings: db.settings, activities: db.activities, audienceId,
-        });
-        if (blocked) {
-          const err = new Error('CHECKLIST_INCOMPLETE');
-          err.code = 'CHECKLIST_INCOMPLETE';
-          err.missing = checklist.filter((c) => !c.ok);
-          throw err;
-        }
-        const content = buildNoticeContent({
-          settings: db.settings,
-          activities: db.activities,
-          transfers: db.transfers,
-          vendors: db.vendors,
-          audienceId,
-          language,
-        });
-        const version =
-          Math.max(0, ...db.notices.filter((n) => n.audience === audienceId).map((n) => n.version)) + 1;
-        const notice = {
-          id: newId('not'),
-          audience: audienceId,
-          language,
-          version,
-          title: content.split('\n')[0].replace(/^#\s*/, ''),
-          content,
-          generatedAt: new Date().toISOString(),
-          generatedBy: actor.name,
-        };
-        db.notices.unshift(notice);
-        return notice;
-      },
-    }),
+  /**
+   * Generate a new notice version. The caller passes the already-compiled fields:
+   * { audience, language, content, title }. The server sets version/author/time,
+   * links the covered activities, and refuses (422) if the register is incomplete.
+   */
+  generate: ({ audience, language, content, title }) =>
+    post(BASE, { audience, language, content, title }),
 };
