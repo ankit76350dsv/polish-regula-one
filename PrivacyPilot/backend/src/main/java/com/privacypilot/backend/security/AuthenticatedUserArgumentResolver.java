@@ -41,6 +41,11 @@ public class AuthenticatedUserArgumentResolver implements HandlerMethodArgumentR
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "No request context available");
         }
         // Delegates to RegulaOne /api/auth/me (forwards the idToken cookie); cached in the client.
-        return authClient.resolve(request);
+        AuthenticatedUser user = authClient.resolve(request);
+        // Remember WHO this is for the rest of the request so MongoDB auditing can stamp
+        // createdBy / updatedBy with the real user id (not a "system" placeholder).
+        // CurrentUserContextFilter clears it when the request ends.
+        CurrentUserContext.setUserId(user.userId());
+        return user;
     }
 }

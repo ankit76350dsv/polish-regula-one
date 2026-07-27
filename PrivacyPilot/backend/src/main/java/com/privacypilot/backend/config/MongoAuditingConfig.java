@@ -1,5 +1,6 @@
 package com.privacypilot.backend.config;
 
+import com.privacypilot.backend.security.CurrentUserContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.AuditorAware;
@@ -29,15 +30,16 @@ public class MongoAuditingConfig {
      * Tells Spring the id of the user doing the current action, so it can stamp
      * createdBy / updatedBy automatically.
      *
-     * NOTE: Login/security is not wired up in the backend yet, so for now this
-     * returns a safe placeholder ("system"). The MOMENT authentication is added,
-     * change this ONE method to read the logged-in user's id from the security
-     * context (e.g. SecurityContextHolder) and return it here — nothing else in
-     * the app needs to change.
+     * The id comes from {@link CurrentUserContext}, which is filled at the start of
+     * every request from the verified RegulaOne session (see the argument resolver).
+     * So a record's createdBy / updatedBy now hold the REAL user id.
+     *
+     * Fallback: when there is no user in context — for example a scheduled/background
+     * job that saves outside any web request — we stamp "system" so the field is never
+     * left empty.
      */
     @Bean
     public AuditorAware<String> auditorAware() {
-        // Always returns a value so createdBy / updatedBy are never left empty.
-        return () -> Optional.of("system");
+        return () -> Optional.of(CurrentUserContext.getUserId().orElse("system"));
     }
 }
