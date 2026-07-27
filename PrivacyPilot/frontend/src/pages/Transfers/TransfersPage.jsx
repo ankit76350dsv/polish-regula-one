@@ -19,25 +19,44 @@ import { LoadingState, EmptyState, ErrorState } from '../../components/common/St
 import { FormField, Input, Select } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchTransfers, createTransfer, updateTransfer } from '../../store/slices/transfersSlice';
+import { fetchVendors } from '../../store/slices/vendorsSlice';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { TRANSFER_MECHANISMS, ADEQUACY_COUNTRIES, labelOf } from '../../lib/gdpr';
 
-const EMPTY_FORM = { recipient: '', destinationCountry: '', mechanism: 'scc', adequacyNote: '', tiaDocumented: false, tiaRef: '' };
+// vendorId '' means "no linked processor — type the recipient by hand".
+const EMPTY_FORM = { vendorId: '', recipient: '', destinationCountry: '', mechanism: 'scc', adequacyNote: '', tiaDocumented: false, tiaRef: '' };
 
 export default function TransfersPage() {
   const { t, lang } = useT();
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
   const { items, status, error, refetch } = useSliceData('transfers', fetchTransfers);
+  // Processors, so a transfer can be linked to one instead of typing the recipient.
+  const { items: vendors } = useSliceData('vendors', fetchVendors);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const canManage = can(user, ACTIONS.MANAGE_TRANSFERS);
 
+  // True when a processor is linked: the recipient is taken from the vendor's name,
+  // so the free-text recipient box is filled automatically and locked.
+  const vendorLinked = Boolean(form.vendorId);
+
+  const closeDialog = () => { setOpen(false); setForm(EMPTY_FORM); };
+
+  // Picking a processor fills (and locks) the recipient from its name; picking
+  // "None" clears it so the user types a recipient by hand.
+  const onVendorChange = (vendorId) => {
+    const v = vendors.find((x) => x.id === vendorId);
+    setForm((f) => ({ ...f, vendorId, recipient: v ? v.name : '' }));
+  };
+
   const submit = async () => {
-    const action = await dispatch(createTransfer(form));
+    // Send vendorId only when a processor is linked (never an empty string). The
+    // recipient always has a value: the vendor's name, or what the user typed.
+    const action = await dispatch(createTransfer({ ...form, vendorId: form.vendorId || null }));
     if (action.error) toast.error(t('common.notAuthorized'));
-    else { toast.success(t('common.save')); setOpen(false); setForm(EMPTY_FORM); }
+    else { toast.success(t('common.save')); closeDialog(); }
   };
 
   const toggleTia = async (tr) => {
@@ -108,12 +127,37 @@ export default function TransfersPage() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : closeDialog())}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>{t('transfers.add')}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
-            <FormField label={lang === 'pl' ? 'Odbiorca danych' : 'Data recipient'} required>
-              {(fid) => <Input id={fid} value={form.recipient} onChange={(e) => setForm({ ...form, recipient: e.target.value })} />}
+            {/* Optional processor link: pick one and the recipient is filled from it. */}
+            <FormField
+              label={lang === 'pl' ? 'Podmiot przetwarzający (opcjonalnie)' : 'Processor (optional)'}
+              hint={lang === 'pl'
+                ? 'Wybierz podmiot, aby powiązać transfer i pobrać nazwę odbiorcy z jego danych.'
+                : 'Pick a processor to link the transfer and take the recipient name from it.'}
+            >
+              {(fid) => (
+                <Select id={fid} value={form.vendorId} onChange={(e) => onVendorChange(e.target.value)}>
+                  <option value="">{lang === 'pl' ? '— Brak (wpisz odbiorcę ręcznie) —' : '— None (type recipient) —'}</option>
+                  {vendors.map((v) => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </Select>
+              )}
+            </FormField>
+            <FormField
+              label={lang === 'pl' ? 'Odbiorca danych' : 'Data recipient'}
+              required={!vendorLinked}
+              hint={vendorLinked
+                ? (lang === 'pl' ? 'Pobrano z wybranego podmiotu.' : 'Filled from the selected processor.')
+                : undefined}
+            >
+              {(fid) => (
+                <Input id={fid} value={form.recipient} disabled={vendorLinked}
+                  onChange={(e) => setForm({ ...form, recipient: e.target.value })} />
+              )}
             </FormField>
             <FormField label={t('transfers.destination')} required
               hint={`${lang === 'pl' ? 'Decyzje adekwatności' : 'Adequacy decisions'}: ${ADEQUACY_COUNTRIES.slice(0, 6).join(', ')}…`}>
@@ -133,7 +177,7 @@ export default function TransfersPage() {
             </FormField>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
+            <Button variant="outline" onClick={closeDialog}>{t('common.cancel')}</Button>
             <Button onClick={submit} disabled={!form.recipient.trim() || !form.destinationCountry.trim()}>
               {t('common.save')}
             </Button>
