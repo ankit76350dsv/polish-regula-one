@@ -1,56 +1,54 @@
 // Chapter V transfer register — destination, mechanism, TIA documentation.
-import { apiGet, apiMutate, newId } from './api';
-import { ACTIONS } from '../lib/permissions';
+//
+// This now talks to the REAL PrivacyPilot backend (TransferController):
+// GET/POST/PUT/DELETE on /api/privacypilot/transfers. It replaced the in-browser mock.
+//
+// The server owns the tenant, the timestamps, the created/updated-by stamps and the
+// audit trail, and it protects the links: an optional vendorId/activityId must belong
+// to this tenant, and a transfer cannot be archived while an activity still lists it.
+import { get, post, put, del } from './client';
+
+const BASE = '/api/privacypilot/transfers';
+
+/**
+ * Map a transfer object to the exact TransferRequest the backend expects — only the
+ * editable fields (never id/tenantId/timestamps). Empty link/enum values become null.
+ */
+function toRequest(t) {
+  return {
+    vendorId: t.vendorId || null,
+    activityId: t.activityId || null,
+    destinationCountry: t.destinationCountry ?? '',
+    recipient: t.recipient ?? '',
+    mechanism: t.mechanism || null,
+    adequacyNote: t.adequacyNote ?? '',
+    tiaDocumented: !!t.tiaDocumented,
+    tiaRef: t.tiaRef ?? '',
+  };
+}
 
 export const transferService = {
-  list: () => apiGet((db) => db.transfers),
+  /** All live transfers for the caller's tenant, newest change first. */
+  list: () => get(BASE),
 
-  create: (actor, data) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_TRANSFERS,
-      audit: (transfer) => ({
-        action: 'CREATE', entityType: 'transfer', entityId: transfer.id,
-        entityLabel: `${transfer.recipient} → ${transfer.destinationCountry}`,
-        oldValue: null, newValue: { mechanism: transfer.mechanism },
-      }),
-      mutator: (db) => {
-        const transfer = {
-          id: newId('trf'),
-          tiaDocumented: false,
-          tiaRef: '',
-          adequacyNote: '',
-          createdAt: new Date().toISOString(),
-          ...data,
-        };
-        db.transfers.unshift(transfer);
-        return transfer;
-      },
-    }),
+  /** One transfer by id (404 if it is not this tenant's). */
+  get: (id) => get(`${BASE}/${id}`),
 
-  update: (actor, id, patch) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_TRANSFERS,
-      audit: ({ updated, oldValue, newValue }) => ({
-        action: 'UPDATE', entityType: 'transfer', entityId: id,
-        entityLabel: `${updated.recipient} → ${updated.destinationCountry}`, oldValue, newValue,
-      }),
-      mutator: (db) => {
-        const idx = db.transfers.findIndex((t) => t.id === id);
-        if (idx === -1) throw new Error('NOT_FOUND');
-        const before = db.transfers[idx];
-        const oldValue = {};
-        const newValue = {};
-        for (const key of Object.keys(patch)) {
-          if (JSON.stringify(before[key]) !== JSON.stringify(patch[key])) {
-            oldValue[key] = before[key];
-            newValue[key] = patch[key];
-          }
-        }
-        const updated = { ...before, ...patch };
-        db.transfers[idx] = updated;
-        return { updated, oldValue, newValue };
-      },
-    }).then((r) => r.updated),
+  /** Create a transfer. */
+  create: (data) => post(BASE, toRequest(data)),
+
+  /**
+   * Update a transfer. The backend PUT replaces the whole record, so the caller passes
+   * the FULL current transfer (the slice merges the small UI patch onto it).
+   */
+  update: (id, data) => put(`${BASE}/${id}`, toRequest(data)),
+
+  /**
+   * Archive (soft-delete) a transfer. The backend refuses (409) if an activity still
+   * lists it. Returns the id so the slice can drop it from the list.
+   */
+  archive: async (id) => {
+    await del(`${BASE}/${id}`);
+    return id;
+  },
 };

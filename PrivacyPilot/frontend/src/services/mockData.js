@@ -69,32 +69,11 @@ export function buildSeed() {
     // notice builder all read the real vendors slice now.
     vendors: [],
 
-    transfers: [
-      {
-        id: 'trf-001',
-        vendorId: 'ven-mailchimp',
-        activityId: 'act-005',
-        destinationCountry: 'USA',
-        recipient: 'Mailchimp (Intuit Inc.)',
-        mechanism: 'scc',
-        adequacyNote: 'Intuit is not certified under the EU-US Data Privacy Framework — SCCs (2021/914) module 2 used.',
-        tiaDocumented: false,
-        tiaRef: '',
-        createdAt: iso(now - days(60)),
-      },
-      {
-        id: 'trf-002',
-        vendorId: null,
-        activityId: 'act-001',
-        destinationCountry: 'United Kingdom',
-        recipient: 'UK payroll consultant (group company)',
-        mechanism: 'adequacy',
-        adequacyNote: 'UK adequacy decision renewed December 2025.',
-        tiaDocumented: true,
-        tiaRef: 'TIA-2026-01 (not required for adequacy, documented voluntarily)',
-        createdAt: iso(now - days(100)),
-      },
-    ],
+    // Third-country transfers (Chapter V) are NO LONGER mocked — they come from the
+    // real PrivacyPilot backend (TransferController), through transferService.js +
+    // client.js. Empty here; the Transfers page, the activity wizard's transfer picker,
+    // the activity detail page and the notice builder all read the real transfers slice.
+    transfers: [],
 
     breaches: [
       {
