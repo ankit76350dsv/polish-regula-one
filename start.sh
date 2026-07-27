@@ -17,6 +17,65 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+# Find the machine's current LAN address. REGULAONE_LAN_IP can be set explicitly
+# when a machine has several active network adapters and a specific one is
+# required for tester access.
+detect_lan_ip() {
+  local default_interface=""
+  local detected_ip=""
+
+  if command -v route >/dev/null 2>&1 && command -v ipconfig >/dev/null 2>&1; then
+    default_interface="$(route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}')"
+    if [ -n "$default_interface" ]; then
+      detected_ip="$(ipconfig getifaddr "$default_interface" 2>/dev/null)"
+    fi
+  fi
+
+  if [ -z "$detected_ip" ] && command -v hostname >/dev/null 2>&1; then
+    detected_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  fi
+
+  if [ -z "$detected_ip" ] && command -v ifconfig >/dev/null 2>&1; then
+    detected_ip="$(
+      ifconfig 2>/dev/null |
+        awk '
+          /^[[:alnum:]][[:alnum:]_.-]*:/ {
+            interface_name=$1
+            sub(/:$/, "", interface_name)
+          }
+          $1 == "inet" &&
+          $2 != "127.0.0.1" &&
+          $2 !~ /^169\.254\./ &&
+          interface_name !~ /^(lo|utun|awdl|llw|bridge)/ {
+            print $2
+            exit
+          }
+        '
+    )"
+  fi
+
+  printf '%s' "$detected_ip"
+}
+
+LAN_IP="${REGULAONE_LAN_IP:-$(detect_lan_ip)}"
+if [ -n "$LAN_IP" ] && ! [[ "$LAN_IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+  echo "  [warn] Ignoring invalid REGULAONE_LAN_IP value: ${LAN_IP}"
+  LAN_IP=""
+fi
+
+# Build an explicit CORS allowlist for one local frontend. Credentials are used
+# by the platform, so a wildcard origin would be insecure and is not permitted.
+local_frontend_origins() {
+  local frontend_port="$1"
+  local origins="http://localhost:${frontend_port},http://127.0.0.1:${frontend_port}"
+
+  if [ -n "$LAN_IP" ]; then
+    origins="${origins},http://${LAN_IP}:${frontend_port}"
+  fi
+
+  printf '%s' "$origins"
+}
+
 # Free a port before we use it.
 # Sometimes an old server from a previous run is still alive and is still
 # holding the port. If we try to start a new server on the same port, it
@@ -64,7 +123,9 @@ open_tab() {
 start_backend() {
   local module="$1"   # e.g. RegulaOne
   local port="$2"
-  local dir="${ROOT}/${module}/backend"
+  local directory_name="${3:-$module}"
+  local frontend_port="${4:-}"
+  local dir="${ROOT}/${directory_name}/backend"
 
   if [ ! -d "$dir" ]; then
     echo "  [skip] ${module} backend — directory not found"
@@ -84,8 +145,13 @@ start_backend() {
     # This is a Node.js backend (for example SafeWork).
     # If the dependencies were never installed, install them first so the
     # server does not crash with "command not found". Then start the server.
-    # We pass PORT so the Node app listens on the right port.
-    cmd="cd '${dir}' && echo '▶ Starting ${module} backend on :${port}' && { [ -d node_modules ] || npm install ; } && PORT=${port} npm start ; exec \$SHELL"
+    # We pass PORT and BIND_HOST so the Node app listens on the assigned port
+    # on every local network interface.
+    local runtime_env="BIND_HOST=0.0.0.0 PORT=${port}"
+    if [ -n "$frontend_port" ]; then
+      runtime_env="${runtime_env} CORS_ORIGIN=$(local_frontend_origins "$frontend_port")"
+    fi
+    cmd="cd '${dir}' && echo '▶ Starting ${module} backend on :${port}' && { [ -d node_modules ] || npm install ; } && ${runtime_env} npm start ; exec \$SHELL"
 
   else
     echo "  [skip] ${module} backend — no pom.xml or package.json"
@@ -102,7 +168,8 @@ start_backend() {
 start_frontend() {
   local module="$1"
   local port="$2"
-  local dir="${ROOT}/${module}/frontend"
+  local directory_name="${3:-$module}"
+  local dir="${ROOT}/${directory_name}/frontend"
 
   if [ ! -d "$dir" ]; then
     echo "  [skip] ${module} frontend — directory not found"
@@ -152,19 +219,19 @@ sleep 0.4
 
 # ── WasteSync (BDO waste reporting) ─────────────────────────────────────────
 echo "► WasteSync"
-start_backend  "WasteSync" 8083
+start_backend  "WasteSync" 8083 "WasteSync" 3003
 start_frontend "WasteSync" 3003
 sleep 0.4
 
 # ── SafeWork (HR / BHP compliance) ──────────────────────────────────────────
 echo "► SafeWork"
-start_backend  "SafeWork" 8082
-start_frontend "SafeWork" 3002
+start_backend  "SafeWork" 8082 "safeWork" 3002
+start_frontend "SafeWork" 3002 "safeWork"
 sleep 0.4
 
 # ── WorkPulse (Time tracking) ────────────────────────────────────────────────
 echo "► WorkPulse"
-start_backend  "WorkPulse" 8085
+start_backend  "WorkPulse" 8085 "WorkPulse" 3005
 start_frontend "WorkPulse" 3005
 sleep 0.4
 
@@ -185,3 +252,15 @@ echo "  SafeWork      → http://localhost:3002"
 echo "  WorkPulse     → http://localhost:3005"
 echo "  PrivacyPilot  → http://localhost:3006"
 echo ""
+
+if [ -n "$LAN_IP" ]; then
+  echo "Tester access on this network (${LAN_IP}):"
+  echo "  WasteSync     → http://${LAN_IP}:3003  (API: http://${LAN_IP}:8083)"
+  echo "  SafeWork      → http://${LAN_IP}:3002  (API: http://${LAN_IP}:8082)"
+  echo "  WorkPulse     → http://${LAN_IP}:3005  (API: http://${LAN_IP}:8085)"
+  echo ""
+else
+  echo "LAN IP was not detected. Set REGULAONE_LAN_IP before running start.sh"
+  echo "to print and allow tester URLs for a specific network adapter."
+  echo ""
+fi
