@@ -5,6 +5,7 @@ import Login from "../components/Login";
 import SsoCallback from "../components/SsoCallback";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
+import ModuleAccessGuard from "./ModuleAccessGuard";
 
 import Dashboard from "../pages/Dashboard";
 import Companies from "../pages/Companies";
@@ -30,19 +31,27 @@ const router = createBrowserRouter([
     element: <ProtectedRoute />,
     children: [
       {
-        path: "/",
-        element: <Layout />,
+        // ModuleAccessGuard sits between "is logged in" (ProtectedRoute) and the
+        // real app (Layout). It blocks users whose tenant has no WasteSync
+        // licence or whose subscription plan has expired.
+        element: <ModuleAccessGuard />,
         children: [
-          { index: true, element: <Dashboard /> },
-          { path: "companies", element: <Companies /> },
-          { path: "companies/new", element: <CompanyForm /> },
-          { path: "companies/:id/edit", element: <CompanyForm /> },
-          { path: "waste-entries", element: <WasteEntries /> },
-          { path: "reports", element: <Reports /> },
-          { path: "reports/:id", element: <ReportDetail /> },
-          { path: "thresholds", element: <Thresholds /> },
-          { path: "audit-logs", element: <AuditLogs /> },
-          { path: "*", element: <NotFound /> },
+          {
+            path: "/",
+            element: <Layout />,
+            children: [
+              { index: true, element: <Dashboard /> },
+              { path: "companies", element: <Companies /> },
+              { path: "companies/new", element: <CompanyForm /> },
+              { path: "companies/:id/edit", element: <CompanyForm /> },
+              { path: "waste-entries", element: <WasteEntries /> },
+              { path: "reports", element: <Reports /> },
+              { path: "reports/:id", element: <ReportDetail /> },
+              { path: "thresholds", element: <Thresholds /> },
+              { path: "audit-logs", element: <AuditLogs /> },
+              { path: "*", element: <NotFound /> },
+            ],
+          },
         ],
       },
     ],
