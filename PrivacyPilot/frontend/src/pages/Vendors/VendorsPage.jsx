@@ -1,9 +1,10 @@
 // Processors & DPAs (Art. 28) — inventory with DPA status; a missing DPA is a
-// visible red finding, not a decoration.
+// visible red finding, not a decoration. Managers can add, edit and archive
+// processors; a processor still linked to an activity/transfer cannot be archived.
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,12 +15,13 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import PageHeader from '../../components/common/PageHeader';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { LoadingState, EmptyState, ErrorState } from '../../components/common/States';
 import { FormField, Input, Select } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
-import { fetchVendors, createVendor, updateVendor } from '../../store/slices/vendorsSlice';
+import { fetchVendors, createVendor, updateVendor, archiveVendor } from '../../store/slices/vendorsSlice';
 import { useT } from '../../i18n';
-import { can, ACTIONS } from '../../lib/permissions';
+import { can, hasRole, ACTIONS, ROLES } from '../../lib/permissions';
 import { cn } from '@/lib/utils';
 
 const DPA_STYLES = {
@@ -37,20 +39,58 @@ export default function VendorsPage() {
   const { items, status, error, refetch } = useSliceData('vendors', fetchVendors);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editingId, setEditingId] = useState(null); // null = create mode
+  const [confirmId, setConfirmId] = useState(null);  // vendor id pending delete
   const canManage = can(user, ACTIONS.MANAGE_VENDORS);
+  // Deleting is destructive, so the backend restricts it to Admins — mirror that here.
+  const canDelete = canManage && (hasRole(user, ROLES.PRIVACYPILOT_ADMIN) || user?.role === 'ROLE_SUPER_ADMIN');
+
+  const openCreate = () => { setForm(EMPTY_FORM); setEditingId(null); setOpen(true); };
+
+  const openEdit = (v) => {
+    setForm({
+      name: v.name ?? '', country: v.country ?? '', region: v.region ?? '',
+      dpaStatus: v.dpaStatus ?? 'missing', riskLevel: v.riskLevel ?? 'medium',
+      subprocessors: v.subprocessors ?? [],
+    });
+    setEditingId(v.id);
+    setOpen(true);
+  };
+
+  const closeDialog = () => { setOpen(false); setEditingId(null); setForm(EMPTY_FORM); };
 
   const submit = async () => {
-    const action = await dispatch(createVendor({
-      ...form,
-      lastReviewAt: new Date().toISOString(),
-    }));
+    // Edit sends the full form as the patch (the slice merges it onto the current
+    // record); create stamps a fresh "last reviewed" time like before.
+    const action = editingId
+      ? await dispatch(updateVendor({ id: editingId, patch: form }))
+      : await dispatch(createVendor({ ...form, lastReviewAt: new Date().toISOString() }));
     if (action.error) toast.error(t('common.notAuthorized'));
-    else { toast.success(t('common.save')); setOpen(false); setForm(EMPTY_FORM); }
+    else { toast.success(t('common.save')); closeDialog(); }
   };
 
   const setDpa = async (id, dpaStatus) => {
     const action = await dispatch(updateVendor({ id, patch: { dpaStatus } }));
     if (action.error) toast.error(t('common.notAuthorized'));
+  };
+
+  const remove = async () => {
+    const id = confirmId;
+    setConfirmId(null);
+    if (!id) return;
+    const action = await dispatch(archiveVendor(id));
+    if (action.error) {
+      // 409 CONFLICT = still referenced by an activity/transfer; 403 = not allowed.
+      toast.error(
+        action.error.message === 'CONFLICT'
+          ? (lang === 'pl'
+              ? 'Nie można usunąć — podmiot jest nadal powiązany z czynnością lub transferem. Najpierw usuń powiązanie.'
+              : 'Cannot delete — this processor is still linked to an activity or transfer. Unlink it there first.')
+          : t('common.notAuthorized'),
+      );
+    } else {
+      toast.success(lang === 'pl' ? 'Usunięto' : 'Deleted');
+    }
   };
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={4} />;
@@ -60,7 +100,7 @@ export default function VendorsPage() {
     <div>
       <PageHeader title={t('vendors.title')} subtitle={t('vendors.subtitle')}>
         {canManage && (
-          <Button onClick={() => setOpen(true)}><Plus /> {t('vendors.add')}</Button>
+          <Button onClick={openCreate}><Plus /> {t('vendors.add')}</Button>
         )}
       </PageHeader>
 
@@ -77,6 +117,7 @@ export default function VendorsPage() {
                 <TableHead>{t('vendors.dpaStatus')}</TableHead>
                 <TableHead>{t('vendors.subprocessors')}</TableHead>
                 <TableHead>{lang === 'pl' ? 'Ostatni przegląd' : 'Last review'}</TableHead>
+                {canManage && <TableHead className="w-20 text-right">{lang === 'pl' ? 'Akcje' : 'Actions'}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -105,6 +146,20 @@ export default function VendorsPage() {
                   <TableCell className="text-muted-foreground">
                     {v.lastReviewAt ? new Date(v.lastReviewAt).toLocaleDateString(lang === 'pl' ? 'pl-PL' : 'en-GB') : '—'}
                   </TableCell>
+                  {canManage && (
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon-sm" aria-label={t('common.edit')} onClick={() => openEdit(v)}>
+                          <Pencil />
+                        </Button>
+                        {canDelete && (
+                          <Button variant="ghost" size="icon-sm" aria-label={t('common.delete')} onClick={() => setConfirmId(v.id)}>
+                            <Trash2 />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -112,9 +167,11 @@ export default function VendorsPage() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : closeDialog())}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{t('vendors.add')}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editingId ? (lang === 'pl' ? 'Edytuj podmiot' : 'Edit processor') : t('vendors.add')}</DialogTitle>
+          </DialogHeader>
           <div className="grid gap-3">
             <FormField label={lang === 'pl' ? 'Nazwa podmiotu' : 'Processor name'} required>
               {(fid) => <Input id={fid} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />}
@@ -144,11 +201,20 @@ export default function VendorsPage() {
             </FormField>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
+            <Button variant="outline" onClick={closeDialog}>{t('common.cancel')}</Button>
             <Button onClick={submit} disabled={!form.name.trim()}>{t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(confirmId)}
+        onOpenChange={(o) => !o && setConfirmId(null)}
+        title={lang === 'pl' ? 'Usunąć podmiot?' : 'Delete processor?'}
+        description={t('common.confirmDelete')}
+        confirmLabel={t('common.delete')}
+        onConfirm={remove}
+      />
     </div>
   );
 }

@@ -63,13 +63,11 @@ export function buildSeed() {
     // crash; the DPIA screens read the real backend, not this.
     dpias: [],
 
-    vendors: [
-      { id: 'ven-comarch',    name: 'Comarch S.A. (Optima ERP)',      country: 'Poland',  region: 'EU (Krakow, PL)',        dpaStatus: 'signed',        subprocessors: ['Comarch Data Center PL'], riskLevel: 'low',    lastReviewAt: iso(now - days(90)) },
-      { id: 'ven-erecruiter', name: 'eRecruiter Sp. z o.o.',          country: 'Poland',  region: 'EU (Warszawa, PL)',      dpaStatus: 'signed',        subprocessors: [], riskLevel: 'low',    lastReviewAt: iso(now - days(120)) },
-      { id: 'ven-aws',        name: 'Amazon Web Services EMEA SARL',  country: 'Luxembourg', region: 'EU (eu-central-1 Frankfurt)', dpaStatus: 'signed', subprocessors: ['AWS subprocessor list (public)'], riskLevel: 'low', lastReviewAt: iso(now - days(60)) },
-      { id: 'ven-mailchimp',  name: 'Mailchimp (Intuit Inc.)',        country: 'USA',     region: 'US data centers',        dpaStatus: 'in_negotiation', subprocessors: ['Intuit group'], riskLevel: 'high',  lastReviewAt: iso(now - days(30)) },
-      { id: 'ven-logistrack', name: 'LogisTrack GPS Sp. z o.o.',      country: 'Poland',  region: 'EU (Poznan, PL)',        dpaStatus: 'missing',       subprocessors: [], riskLevel: 'medium', lastReviewAt: null },
-    ],
+    // Processors (Art. 28 vendors) are NO LONGER mocked — they come from the real
+    // PrivacyPilot backend (VendorController), through vendorService.js + client.js.
+    // Empty here; the Vendors page, the activity wizard's processor picker and the
+    // notice builder all read the real vendors slice now.
+    vendors: [],
 
     transfers: [
       {

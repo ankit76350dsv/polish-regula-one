@@ -1,54 +1,54 @@
-// Processors (Art. 28) with DPA status and sub-processors.
-import { apiGet, apiMutate, newId } from './api';
-import { ACTIONS } from '../lib/permissions';
+// Processors / sub-processors (Art. 28 GDPR vendors and their DPAs).
+//
+// This now talks to the REAL PrivacyPilot backend (VendorController):
+// GET/POST/PUT/DELETE on /api/privacypilot/vendors. It replaced the in-browser mock.
+//
+// The server owns the tenant, the timestamps, the created/updated-by stamps and the
+// audit trail, and it protects the links: a processor cannot be archived while an
+// activity or transfer still references it (409).
+import { get, post, put, del } from './client';
+
+const BASE = '/api/privacypilot/vendors';
+
+/**
+ * Map a vendor object to the exact VendorRequest the backend expects — only the
+ * editable fields (never id/tenantId/timestamps). Empty enum values become null so
+ * the server applies its defaults (dpaStatus → missing, riskLevel → medium).
+ */
+function toRequest(v) {
+  return {
+    name: v.name,
+    country: v.country ?? '',
+    region: v.region ?? '',
+    dpaStatus: v.dpaStatus || null,
+    subprocessors: v.subprocessors ?? [],
+    riskLevel: v.riskLevel || null,
+    lastReviewAt: v.lastReviewAt ?? null,
+  };
+}
 
 export const vendorService = {
-  list: () => apiGet((db) => db.vendors),
+  /** All live processors for the caller's tenant, newest change first. */
+  list: () => get(BASE),
 
-  create: (actor, data) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_VENDORS,
-      audit: (vendor) => ({
-        action: 'CREATE', entityType: 'vendor', entityId: vendor.id,
-        entityLabel: vendor.name, oldValue: null, newValue: { dpaStatus: vendor.dpaStatus },
-      }),
-      mutator: (db) => {
-        const vendor = {
-          id: newId('ven'),
-          subprocessors: [],
-          riskLevel: 'medium',
-          lastReviewAt: null,
-          ...data,
-        };
-        db.vendors.unshift(vendor);
-        return vendor;
-      },
-    }),
+  /** One processor by id (404 if it is not this tenant's). */
+  get: (id) => get(`${BASE}/${id}`),
 
-  update: (actor, id, patch) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_VENDORS,
-      audit: ({ updated, oldValue, newValue }) => ({
-        action: 'UPDATE', entityType: 'vendor', entityId: id,
-        entityLabel: updated.name, oldValue, newValue,
-      }),
-      mutator: (db) => {
-        const idx = db.vendors.findIndex((v) => v.id === id);
-        if (idx === -1) throw new Error('NOT_FOUND');
-        const before = db.vendors[idx];
-        const oldValue = {};
-        const newValue = {};
-        for (const key of Object.keys(patch)) {
-          if (JSON.stringify(before[key]) !== JSON.stringify(patch[key])) {
-            oldValue[key] = before[key];
-            newValue[key] = patch[key];
-          }
-        }
-        const updated = { ...before, ...patch };
-        db.vendors[idx] = updated;
-        return { updated, oldValue, newValue };
-      },
-    }).then((r) => r.updated),
+  /** Create a processor. */
+  create: (data) => post(BASE, toRequest(data)),
+
+  /**
+   * Update a processor. The backend PUT replaces the whole record, so the caller
+   * passes the FULL current vendor (the slice merges the small UI patch onto it).
+   */
+  update: (id, data) => put(`${BASE}/${id}`, toRequest(data)),
+
+  /**
+   * Archive (soft-delete) a processor. The backend refuses (409) if an activity or
+   * transfer still links to it. Returns the id so the slice can drop it from the list.
+   */
+  archive: async (id) => {
+    await del(`${BASE}/${id}`);
+    return id;
+  },
 };
