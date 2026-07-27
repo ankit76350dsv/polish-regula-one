@@ -73,9 +73,44 @@ function resolveBlockReason(e) {
 
 // Static option lists — match the values used in AddEmployee and EmployeeProfile.
 // Kept here so filter dropdowns work even before any data is loaded.
+// Department filter options for the employee list.
+// "All" is a special filter value that means "do not filter by department".
+// Each item has: value -> what we send to the backend filter (kept as the
+// original English name so it matches saved records); label -> what we SHOW
+// (bilingual "Polish / English"). MUST stay in sync with the DEPARTMENTS list
+// used in AddEmployee.jsx and EmployeeProfile.jsx.
 const DEPARTMENTS = [
-  "All", "Warehouse", "Operations", "Manufacturing", "Logistics",
-  "Admin", "HR", "IT", "Finance", "Security",
+  { value: "All",                    label: "All Departments" },
+  { value: "Warehouse",              label: "Magazyn / Warehouse" },
+  { value: "Operations",             label: "Operacje / Operations" },
+  { value: "Manufacturing",          label: "Wytwarzanie / Manufacturing" },
+  { value: "Production",             label: "Produkcja / Production" },
+  { value: "Logistics",              label: "Logistyka / Logistics" },
+  { value: "Supply Chain",           label: "Łańcuch dostaw / Supply Chain" },
+  { value: "Procurement",            label: "Zakupy / Procurement" },
+  { value: "Transport",              label: "Transport" },
+  { value: "Distribution",           label: "Dystrybucja / Distribution" },
+  { value: "Maintenance",            label: "Utrzymanie ruchu / Maintenance" },
+  { value: "Engineering",            label: "Inżynieria / Engineering" },
+  { value: "Quality Assurance",      label: "Zapewnienie jakości / Quality Assurance" },
+  { value: "Quality Control",        label: "Kontrola jakości / Quality Control" },
+  { value: "Research & Development", label: "Badania i rozwój / R&D" },
+  { value: "Health & Safety (BHP)",  label: "BHP / Health & Safety" },
+  { value: "Environmental",          label: "Ochrona środowiska / Environmental" },
+  { value: "Facilities",             label: "Obsługa obiektu / Facilities" },
+  { value: "Admin",                  label: "Administracja / Admin" },
+  { value: "HR",                     label: "Kadry / HR" },
+  { value: "IT",                     label: "Informatyka / IT" },
+  { value: "Finance",                label: "Finanse / Finance" },
+  { value: "Accounting",             label: "Księgowość / Accounting" },
+  { value: "Legal",                  label: "Dział prawny / Legal" },
+  { value: "Compliance",             label: "Zgodność / Compliance" },
+  { value: "Sales",                  label: "Sprzedaż / Sales" },
+  { value: "Marketing",              label: "Marketing" },
+  { value: "Customer Service",       label: "Obsługa klienta / Customer Service" },
+  { value: "Security",               label: "Ochrona / Security" },
+  { value: "Training & Development", label: "Szkolenia i rozwój / Training & Development" },
+  { value: "Project Management",     label: "Zarządzanie projektami / Project Management" },
 ];
 const SITES = [
   "All", "Warsaw Site", "Krakow Site", "Gdansk Site",
@@ -203,7 +238,7 @@ function EmployeeList() {
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
             >
               {DEPARTMENTS.map((d) => (
-                <option key={d} value={d}>{d === "All" ? "All Departments" : d}</option>
+                <option key={d.value} value={d.value}>{d.label}</option>
               ))}
             </select>
             <select

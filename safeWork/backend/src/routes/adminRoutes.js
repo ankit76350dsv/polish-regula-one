@@ -65,7 +65,8 @@ router.put(
     body('department').optional().isString(),
     body('position').optional().isString(),
     body('riskLevel').optional().isIn(['LOW', 'MEDIUM', 'HIGH']),
-    body('contractType').optional().isIn(['UOP', 'UZ', 'UOD', 'B2B', 'OTHER']),
+    // Must match the contractType enum in models/Employee.js exactly.
+    body('contractType').optional().isIn(['UOP', 'UOP_PROBATION', 'UOP_FIXED', 'UOP_INDEFINITE', 'UZ', 'UOD', 'B2B', 'INTERNSHIP', 'OTHER']),
   ],
   employeeController.upsertEmployeeProfile
 );

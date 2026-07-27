@@ -1,9 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
-// safeWork's own backend. Read from the pinned env (VITE_SAFEWORK_API_URL) so the
-// app works over the LAN IP; falls back to localhost for same-machine dev.
-const API_BASE_URL = (import.meta.env.VITE_SAFEWORK_API_URL ?? "http://localhost:8082") + "/api";
+const API_BASE_URL = "http://localhost:8082/api";
 
 // We no longer read a token from localStorage or send an Authorization header.
 // The auth token travels in an HttpOnly cookie, which axios attaches

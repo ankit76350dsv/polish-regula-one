@@ -7,22 +7,22 @@ const NAV_ITEMS = [
   {
     label: "Employees",
     path: "/employees",
-    children: [
-      { label: "Employee List", path: "/employees" },
-      { label: "Add Employee", path: "/employees/add" },
-      { label: "Compliance Timeline", path: "/employees/compliance-timeline" },
-      { label: "Risk Assessment", path: "/employees/risk-assessment" },
-      { label: "Safety Training", path: "/employees/safety-training" },
-      { label: "Incident Management", path: "/employees/incident-management" },
-    ],
+    // children: [
+    //   { label: "Employee List", path: "/employees" },
+    //   { label: "Add Employee", path: "/employees/add" },
+    //   { label: "Compliance Timeline", path: "/employees/compliance-timeline" },
+    //   { label: "Risk Assessment", path: "/employees/risk-assessment" },
+    //   { label: "Safety Training", path: "/employees/safety-training" },
+    //   { label: "Incident Management", path: "/employees/incident-management" },
+    // ],
   },
   {
     label: "Audit Reports",
     path: "/audit-logs",
   },
   { label: "Dashboard", path: "/dashboard" },
-  { label: "Reports", path: "/reports" },
-  { label: "Contact", path: "/contact" },
+  // { label: "Reports", path: "/reports" },
+  // { label: "Contact", path: "/contact" },
 ];
 
 export default function Header() {
