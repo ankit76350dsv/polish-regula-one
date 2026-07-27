@@ -17,14 +17,14 @@ export default defineConfig(({mode}) => {
     },
     server: {
       // Bind to all network interfaces (0.0.0.0) so the app is reachable BOTH on
-      // http://localhost:3000 AND http://192.168.20.6:3000 (other devices on the
+      // http://localhost:3000 AND http://192.168.20.38:3000 (other devices on the
       // same Wi-Fi). Without this Vite listens on localhost only, so the LAN IP
       // cannot reach it. HMR host is left UNSET on purpose so Vite infers the
       // websocket host from the page (localhost→localhost, IP→IP).
       host: true,
       // Let Vite serve the app when opened via the machine's LAN IP. Literal IPs
       // are usually allowed, but we list it so it never 403s as an "unknown host".
-      allowedHosts: ['localhost', '192.168.20.6'],
+      allowedHosts: ['localhost', '192.168.20.38'],
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
