@@ -9,6 +9,7 @@ import SsoCallback from "../components/SsoCallback";
 
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
+import ModuleAccessGuard from "./ModuleAccessGuard";
 import EmployeeList from "../components/EmployeeList";
 import AddEmployee from "../components/AddEmployee";
 import EmployeeProfile from "../components/EmployeeProfile";
@@ -34,6 +35,12 @@ const router = createBrowserRouter([
   {
     element: <ProtectedRoute />,
     children: [
+      {
+        // ModuleAccessGuard sits between "is logged in" (ProtectedRoute) and the
+        // real app (Layout). It blocks users whose tenant has no SafeWork
+        // licence or whose subscription plan has expired.
+        element: <ModuleAccessGuard />,
+        children: [
       {
         path: "/",
         element: <Layout />,
@@ -61,6 +68,8 @@ const router = createBrowserRouter([
           { path: "terms", element: <Placeholder /> },
 
           { path: "*", element: <Placeholder /> },
+        ],
+      },
         ],
       },
     ],
