@@ -8,6 +8,7 @@ const config = {
   // The network port the server listens on. SafeWork uses 8082, so WasteSync
   // uses 8083 to avoid a clash when both backends run on the same machine.
   port: parseInt(process.env.PORT, 10) || 8083,
+  bindHost: process.env.BIND_HOST || '0.0.0.0',
   nodeEnv: process.env.NODE_ENV || 'development',
 
   mongo: {
@@ -43,7 +44,10 @@ const config = {
 
   cors: {
     // Accept a comma-separated list of origins so several frontends can connect.
-    origins: (process.env.CORS_ORIGIN || 'http://localhost:3003').split(','),
+    origins: (process.env.CORS_ORIGIN || 'http://localhost:3003')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
   },
 
   rateLimit: {

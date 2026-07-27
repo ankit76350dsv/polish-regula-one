@@ -84,8 +84,8 @@ const start = async () => {
   // Start the scheduled compliance jobs (break / open-break / missing clock-out).
   registerJobs();
 
-  app.listen(config.port, () => {
-    console.log(`[APP] WorkPulse backend running on port ${config.port} (${config.nodeEnv})`);
+  app.listen(config.port, config.bindHost, () => {
+    console.log(`[APP] WorkPulse backend running on ${config.bindHost}:${config.port} (${config.nodeEnv})`);
     console.log(`[APP] Health: http://localhost:${config.port}/health`);
     console.log(`[APP] Auth is served by RegulaOne at ${config.regulaOne.baseUrl}`);
   });

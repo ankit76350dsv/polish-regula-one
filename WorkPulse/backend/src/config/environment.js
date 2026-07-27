@@ -7,6 +7,7 @@ require('dotenv').config();
 const config = {
   // WorkPulse backend listens on 8085 by default (see platform start.sh port map).
   port: parseInt(process.env.PORT, 10) || 8085,
+  bindHost: process.env.BIND_HOST || '0.0.0.0',
   nodeEnv: process.env.NODE_ENV || 'development',
 
   mongo: {
@@ -42,7 +43,10 @@ const config = {
 
   cors: {
     // Accept comma-separated origins so several frontends can share the API.
-    origins: (process.env.CORS_ORIGIN || 'http://localhost:3005').split(','),
+    origins: (process.env.CORS_ORIGIN || 'http://localhost:3005')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
   },
 
   rateLimit: {

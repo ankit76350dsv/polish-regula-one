@@ -1,15 +1,13 @@
 import axios from "axios";
+import { WASTESYNC_API_URL } from "../config/serviceUrls";
 
 // One shared axios instance for every call to the WasteSync backend.
 //
 // withCredentials: true means the browser automatically attaches the shared
 // HttpOnly auth cookie (set by RegulaOne at login) on every request. We never
 // read or store the token in JavaScript, so an XSS attacker cannot steal it.
-const WASTESYNC_API_URL =
-  (import.meta.env.VITE_WASTESYNC_API_URL ?? "http://localhost:8083") + "/api";
-
 const axiosClient = axios.create({
-  baseURL: WASTESYNC_API_URL,
+  baseURL: `${WASTESYNC_API_URL}/api`,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
