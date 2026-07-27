@@ -27,4 +27,9 @@ public interface ProcessingActivityRepository extends MongoRepository<Processing
     // vendorIds (Mongo matches an array that contains the value). Used to block
     // deleting a processor that an activity still relies on (Art. 28 link).
     boolean existsByTenantIdAndVendorIdsAndDeletedFalse(String tenantId, String vendorId);
+
+    // True if any live activity in this company still lists the given transfer in its
+    // transferIds. Used to block deleting a transfer that an activity still relies on
+    // (Art. 30(1)(e) link).
+    boolean existsByTenantIdAndTransferIdsAndDeletedFalse(String tenantId, String transferId);
 }

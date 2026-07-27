@@ -696,6 +696,104 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "International Transfers (Chapter V)",
+      "description": "Records of personal data being sent OUTSIDE the EEA (GDPR Chapter V). Each transfer names the destination country, who receives the data, and the legal tool that makes it safe: adequacy (Art. 45), scc (Art. 46), bcr (Art. 47) or derogation (Art. 49).\n\nA transfer can optionally link to a processor (vendorId) and/or an activity (activityId). If you send those ids, the server checks they belong to YOUR company (else 404). And a transfer CANNOT be deleted while an activity still lists it — you get a 409 asking you to unlink it first.",
+      "item": [
+        {
+          "name": "List transfers",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/transfers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "transfers"]
+            },
+            "description": "Get all live transfers for your company, newest change first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Get transfer by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/transfers/{{transferId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "transfers", "{{transferId}}"]
+            },
+            "description": "Get one transfer by its id (only if it belongs to your company, else 404). Set {{transferId}} first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Create transfer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipient\": \"Mailchimp (Intuit Inc.)\",\n  \"destinationCountry\": \"USA\",\n  \"mechanism\": \"scc\",\n  \"adequacyNote\": \"Intuit is not certified under the EU-US Data Privacy Framework — SCCs (2021/914) module 2 used.\",\n  \"tiaDocumented\": false,\n  \"tiaRef\": \"\",\n  \"vendorId\": \"\",\n  \"activityId\": \"\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/transfers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "transfers"]
+            },
+            "description": "Add a new transfer. 'destinationCountry', 'recipient' and 'mechanism' are required. vendorId/activityId are optional links — if set, they must be your company's own records (else 404). The server sets the company, timestamps and who created it. Allowed roles: Admin, Compliance Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "Update transfer",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipient\": \"Mailchimp (Intuit Inc.)\",\n  \"destinationCountry\": \"USA\",\n  \"mechanism\": \"scc\",\n  \"adequacyNote\": \"SCCs (2021/914) module 2 used.\",\n  \"tiaDocumented\": true,\n  \"tiaRef\": \"TIA-2026-004\",\n  \"vendorId\": \"\",\n  \"activityId\": \"\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/transfers/{{transferId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "transfers", "{{transferId}}"]
+            },
+            "description": "Replace the editable fields of a transfer (send the whole object). Only the fields that changed are written to the audit trail. Marking a TIA as documented is a common edit. Set {{transferId}} first. Allowed roles: Admin, Compliance Officer."
+          },
+          "response": []
+        },
+        {
+          "name": "Archive transfer",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Cookie", "value": "idToken={{idToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/transfers/{{transferId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "privacypilot", "transfers", "{{transferId}}"]
+            },
+            "description": "Soft-delete a transfer (kept on disk for the retention rules). REFUSED with 409 if any activity still lists it in its transferIds — unlink it in the activity first. Set {{transferId}} first. Allowed roles: Admin."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
@@ -732,6 +830,11 @@
       "key": "vendorId",
       "value": "",
       "description": "The id of one processor. Fill this in before the get-one, update, and archive processor requests."
+    },
+    {
+      "key": "transferId",
+      "value": "",
+      "description": "The id of one international transfer. Fill this in before the get-one, update, and archive transfer requests."
     }
   ]
 }
