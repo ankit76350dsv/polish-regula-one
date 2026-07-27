@@ -28,13 +28,12 @@ public class Transfer extends BaseDocument {
     @Indexed
     private String vendorId;
 
-    // WHAT: The id of the ProcessingActivity this transfer belongs to, if any.
-    //       Holds the `_id` of a document in privacypilot_activities.
-    // WHY: Ties the transfer to the register activity whose data is being sent.
-    //      Indexed because "find transfers for this activity" is a common query.
-    // EXAMPLE: "act-newsletter". Null if not tied to one activity.
-    @Indexed
-    private String activityId;
+    // NOTE: There is deliberately NO activityId here. The link between an activity and
+    // its transfers is kept on the ACTIVITY side only — ProcessingActivity.transferIds
+    // (a list) is the single source of truth the whole app reads. A back-pointer here
+    // would be a second link that nothing reads and that could disagree with that list
+    // (a transfer can appear in several activities' transferIds, but could hold only one
+    // activityId), so it was removed.
 
     // WHAT: The country the data is sent to (Art. 30(1)(e)).
     // WHY: The register must name the third country the data leaves the EEA for.

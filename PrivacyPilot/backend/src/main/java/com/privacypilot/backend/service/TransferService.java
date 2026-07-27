@@ -27,11 +27,12 @@ import java.util.Objects;
  * immutable audit entry through {@link AuditService}.
  *
  * A transfer sits between a vendor and an activity, so this service protects that graph
- * from both sides (all reached through repositories, so no service-to-service cycle):
- *   - on create/update, an optional vendorId / activityId must belong to the caller's
- *     own tenant — a transfer can never point at a missing or another company's record;
+ * (all reached through repositories, so no service-to-service cycle):
+ *   - on create/update, an optional vendorId must belong to the caller's own tenant —
+ *     a transfer can never point at a missing or another company's processor;
  *   - on delete, the transfer cannot be archived while an activity still lists it in
  *     its transferIds — no dangling Art. 30(1)(e) link is ever left behind.
+ * (The activity→transfer link lives only on the activity's transferIds list.)
  */
 @Service
 @RequiredArgsConstructor
@@ -124,26 +125,20 @@ public class TransferService {
 
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
-    // Verify the optional links point at the caller's OWN live records. A blank id
-    // means "no link". A non-existent / other-tenant id is a bad request → 404.
+    // Verify the optional vendor link points at the caller's OWN live processor. A
+    // blank id means "no link". A non-existent / other-tenant id is a bad request → 404.
     private void validateLinks(AuthenticatedUser caller, TransferRequest req) {
         String vendorId = blankToNull(req.getVendorId());
         if (vendorId != null
                 && vendorRepository.findByIdAndTenantIdAndDeletedFalse(vendorId, caller.tenantId()).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Linked processor (vendor) not found");
         }
-        String activityId = blankToNull(req.getActivityId());
-        if (activityId != null
-                && activityRepository.findByIdAndTenantIdAndDeletedFalse(activityId, caller.tenantId()).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Linked activity not found");
-        }
     }
 
-    // Copy the user-editable fields onto the entity. Blank vendor/activity ids are
-    // stored as null (a true "no link"). Server-owned base fields are never touched.
+    // Copy the user-editable fields onto the entity. A blank vendor id is stored as
+    // null (a true "no link"). Server-owned base fields are never touched.
     private void applyRequest(Transfer t, TransferRequest r) {
         t.setVendorId(blankToNull(r.getVendorId()));
-        t.setActivityId(blankToNull(r.getActivityId()));
         t.setDestinationCountry(r.getDestinationCountry());
         t.setRecipient(r.getRecipient());
         t.setMechanism(r.getMechanism());
@@ -162,7 +157,6 @@ public class TransferService {
     private static Map<String, Object> snapshot(Transfer t) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("vendorId", t.getVendorId());
-        m.put("activityId", t.getActivityId());
         m.put("destinationCountry", t.getDestinationCountry());
         m.put("recipient", t.getRecipient());
         m.put("mechanism", enumName(t.getMechanism()));

@@ -14,18 +14,15 @@ import lombok.Data;
  * required. The mechanism enum accepts the string code ("scc", "adequacy", …); an
  * unknown code is rejected as 400 by the enum's JsonCreator.
  *
- * vendorId / activityId are OPTIONAL links; when given, the service verifies they
- * belong to the caller's own tenant, so a transfer can never point at a missing or
- * another company's record.
+ * vendorId is an OPTIONAL link; when given, the service verifies it belongs to the
+ * caller's own tenant, so a transfer can never point at a missing or another company's
+ * processor. (There is no activityId — the activity owns that link via its transferIds.)
  */
 @Data
 public class TransferRequest {
 
     // Optional link to the processor (vendor) that sends the data abroad.
     private String vendorId;
-
-    // Optional link to the processing activity whose data is being sent.
-    private String activityId;
 
     @NotBlank(message = "destinationCountry is required")
     private String destinationCountry;

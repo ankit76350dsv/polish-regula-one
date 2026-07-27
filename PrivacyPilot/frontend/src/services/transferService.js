@@ -17,7 +17,6 @@ const BASE = '/api/privacypilot/transfers';
 function toRequest(t) {
   return {
     vendorId: t.vendorId || null,
-    activityId: t.activityId || null,
     destinationCountry: t.destinationCountry ?? '',
     recipient: t.recipient ?? '',
     mechanism: t.mechanism || null,

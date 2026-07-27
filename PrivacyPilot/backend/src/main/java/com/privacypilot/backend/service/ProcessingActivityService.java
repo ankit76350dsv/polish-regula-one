@@ -11,6 +11,8 @@ import com.privacypilot.backend.model.enums.audit.AuditAction;
 import com.privacypilot.backend.model.enums.audit.AuditEntityType;
 import com.privacypilot.backend.repository.DpiaRepository;
 import com.privacypilot.backend.repository.ProcessingActivityRepository;
+import com.privacypilot.backend.repository.TransferRepository;
+import com.privacypilot.backend.repository.VendorRepository;
 import com.privacypilot.backend.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -39,6 +41,11 @@ public class ProcessingActivityService {
     // Used only to READ the linked DPIA when approving (Art. 35(1) guard). Depending on
     // the repository — not DpiaService — keeps the two services free of a circular link.
     private final DpiaRepository dpiaRepository;
+    // Used to VALIDATE the vendor links, and to VALIDATE + maintain the transfer links
+    // (stamping Transfer.activityId) when an activity is saved. Repositories only, so no
+    // service-to-service cycle.
+    private final VendorRepository vendorRepository;
+    private final TransferRepository transferRepository;
     private final AuditService auditService;
 
     // ── Reads ───────────────────────────────────────────────────────────────────
@@ -67,8 +74,12 @@ public class ProcessingActivityService {
         a.setStatus(sanitizeStatus(req.getStatus(), ActivityStatus.DRAFT));
         applyRequest(a, req);
         a.setDpiaVerdict(verdictFor(a.getDpiaCriteria()));
+        // Every referenced processor / transfer must be one of this tenant's own live
+        // records — reject before we persist anything (safe + no dangling links).
+        validateReferences(caller, a);
 
         ProcessingActivity saved = repository.save(a);
+
         Map<String, Object> newValue = new LinkedHashMap<>();
         newValue.put("name", saved.getName());
         newValue.put("status", enumName(saved.getStatus()));
@@ -89,6 +100,7 @@ public class ProcessingActivityService {
             a.setStatus(req.getStatus());
         }
         a.setDpiaVerdict(verdictFor(a.getDpiaCriteria()));
+        validateReferences(caller, a);
         ProcessingActivity saved = repository.save(a);
 
         Map<String, Object> after = snapshot(saved);
@@ -156,6 +168,31 @@ public class ProcessingActivityService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────
+
+    // Every processor / transfer this activity links to MUST be one of the caller's
+    // own live records. A missing or other-tenant id is a bad reference → 404, thrown
+    // before anything is saved so we never persist a dangling link.
+    private void validateReferences(AuthenticatedUser caller, ProcessingActivity a) {
+        String tenant = caller.tenantId();
+        if (a.getVendorIds() != null) {
+            for (String vendorId : a.getVendorIds()) {
+                if (vendorId != null && !vendorId.isBlank()
+                        && vendorRepository.findByIdAndTenantIdAndDeletedFalse(vendorId, tenant).isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                            "Linked processor (vendor) not found: " + vendorId);
+                }
+            }
+        }
+        if (a.getTransferIds() != null) {
+            for (String transferId : a.getTransferIds()) {
+                if (transferId != null && !transferId.isBlank()
+                        && transferRepository.findByIdAndTenantIdAndDeletedFalse(transferId, tenant).isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                            "Linked transfer not found: " + transferId);
+                }
+            }
+        }
+    }
 
     // Copy the user-editable fields from the request onto the entity. Server-owned
     // fields (id, tenantId, status, dpiaVerdict, dpiaId, owner, timestamps) are NOT here.
