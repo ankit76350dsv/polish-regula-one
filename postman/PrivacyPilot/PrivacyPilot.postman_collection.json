@@ -1,11 +1,11 @@
 {
   "info": {
-    "_postman_id": "ab002f21-351c-448d-9644-8d85d0f5c1fc",
+    "_postman_id": "a65c38ce-c237-4bb4-912c-b45d0b4c87bf",
     "name": "PrivacyPilot",
     "description": "PrivacyPilot is the privacy / GDPR part of RegulaOne. This collection has all of its APIs, with one folder per feature. The backend runs on port 9004.\n\nHOW TO SIGN IN (do this first):\n1. Sign in on the normal RegulaOne login page in your browser.\n2. That login saves a cookie called `idToken` in the browser.\n3. Copy that cookie's value (browser DevTools -> Application -> Cookies) and paste it into the collection variable {{idToken}}.\nEvery request below sends that cookie. The server uses it to know WHO you are and WHICH company you belong to. You never type the company id yourself — the server reads it from your login, so one company can never see another company's data.\n\nWHAT EVERY ANSWER LOOKS LIKE:\nEach response has the same shape: { success, message, data, errorCode, status }. The thing you asked for is inside `data`.\nIf something goes wrong:\n- 401 = you are not signed in (fix the {{idToken}} cookie).\n- 403 = you are signed in, but your role is not allowed to do this.\n- 404 = not found (or it belongs to another company).\n- 400 = something you sent was wrong (bad value, bad date, etc.).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "47336508",
-    "_collection_link": "https://go.postman.co/collection/47336508-ab002f21-351c-448d-9644-8d85d0f5c1fc?source=collection_link"
+    "_collection_link": "https://go.postman.co/collection/47336508-a65c38ce-c237-4bb4-912c-b45d0b4c87bf?source=collection_link"
   },
   "item": [
     {
@@ -522,19 +522,27 @@
     },
     {
       "name": "Privacy Notices (Art. 13/14)",
-      "description": "A privacy notice (klauzula informacyjna) is the text you must give people to explain how their data is used. PrivacyPilot builds it FROM the register, so it always matches the real activities. Each notice is written for one audience (employees, website users, candidates, contractors, whistleblowers) and in one language (pl/en).\n\nNotices are kept as VERSIONS: generating one always makes a new version and never overwrites an old one, so you can prove what people were told and when. That is why there is no update or delete here.\n\nBefore it saves a notice, the server re-checks the register: if an activity that covers this audience is missing its purpose, lawful basis, retention, etc., generation is refused with a 422 and errorCode CHECKLIST_INCOMPLETE listing what to fix. (The company name / DPO contact parts are checked on the client for now, until Settings becomes a backend feature.)",
       "item": [
         {
           "name": "List notices",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/notices",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "notices"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "notices"
+              ]
             },
             "description": "Get every notice (all audiences, all versions) for your company, newest first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
@@ -545,12 +553,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/notices/{{noticeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "notices", "{{noticeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "notices",
+                "{{noticeId}}"
+              ]
             },
             "description": "Get one notice by its id (only if it belongs to your company, else 404). Set {{noticeId}} first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
@@ -561,14 +579,28 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/notices/checklist?audience=employees",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "notices", "checklist"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "notices",
+                "checklist"
+              ],
               "query": [
-                { "key": "audience", "value": "employees", "description": "Which audience to check: website, employees, candidates, contractors, whistleblowers." }
+                {
+                  "key": "audience",
+                  "value": "employees",
+                  "description": "Which audience to check: website, employees, candidates, contractors, whistleblowers."
+                }
               ]
             },
             "description": "Check whether the register is complete enough to generate this audience's notice. Returns each requirement with { id, ref, ok, details } and a 'blocked' flag. Only register-derived items are checked here (identity items are on the client). Allowed roles: Admin, Compliance Officer, DPO, Auditor."
@@ -580,40 +612,65 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"audience\": \"employees\",\n  \"language\": \"pl\",\n  \"title\": \"Klauzula informacyjna dla pracownikow\",\n  \"content\": \"# Klauzula informacyjna dla pracownikow\\n\\n## Kto jest administratorem?\\n...\\n\\n## Cele i podstawy prawne\\n...\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/notices",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "notices"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "notices"
+              ]
             },
             "description": "Create a NEW version of the notice for an audience. You send the audience, language and the compiled Markdown content (title is optional; the server derives it from the first heading when blank).\n\nThe server sets the version (next number for this audience), the author (you) and the time, works out which register activities the notice covers, and writes an audit entry. If the register is missing required facts it returns 422 with errorCode CHECKLIST_INCOMPLETE and the list of GDPR references to fix. Allowed roles: Admin, Compliance Officer."
           },
           "response": []
         }
-      ]
+      ],
+      "description": "A privacy notice (klauzula informacyjna) is the text you must give people to explain how their data is used. PrivacyPilot builds it FROM the register, so it always matches the real activities. Each notice is written for one audience (employees, website users, candidates, contractors, whistleblowers) and in one language (pl/en).\n\nNotices are kept as VERSIONS: generating one always makes a new version and never overwrites an old one, so you can prove what people were told and when. That is why there is no update or delete here.\n\nBefore it saves a notice, the server re-checks the register: if an activity that covers this audience is missing its purpose, lawful basis, retention, etc., generation is refused with a 422 and errorCode CHECKLIST_INCOMPLETE listing what to fix. (The company name / DPO contact parts are checked on the client for now, until Settings becomes a backend feature.)"
     },
     {
       "name": "Processors (Art. 28 / DPAs)",
-      "description": "Your outside suppliers that process data for you (processors under Art. 28 GDPR) — an ERP, a mailing tool, a hosting provider. Each should have a signed Data Processing Agreement (DPA) and be reviewed regularly.\n\nProcessors are linked FROM activities (an activity lists the processors it uses) and FROM transfers. Because of that, a processor CANNOT be deleted while any activity or transfer still points at it — you get a 409 asking you to unlink it first. This stops the register from ending up with a broken link.\n\ndpaStatus is one of: signed, in_negotiation, missing. riskLevel is one of: low, medium, high.",
       "item": [
         {
           "name": "List processors",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/vendors",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "vendors"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "vendors"
+              ]
             },
             "description": "Get all live processors for your company, newest change first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
@@ -624,12 +681,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/vendors/{{vendorId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "vendors", "{{vendorId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "vendors",
+                "{{vendorId}}"
+              ]
             },
             "description": "Get one processor by its id (only if it belongs to your company, else 404). Set {{vendorId}} first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
@@ -640,18 +707,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Mailchimp (Intuit Inc.)\",\n  \"country\": \"USA\",\n  \"region\": \"US data centers\",\n  \"dpaStatus\": \"in_negotiation\",\n  \"subprocessors\": [\"Intuit group\"],\n  \"riskLevel\": \"high\",\n  \"lastReviewAt\": \"2026-06-01T00:00:00Z\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/vendors",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "vendors"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "vendors"
+              ]
             },
             "description": "Add a new processor. Only 'name' is required; dpaStatus defaults to 'missing' and riskLevel to 'medium' when left out. The server sets the company, timestamps and who created it. Allowed roles: Admin, Compliance Officer."
           },
@@ -662,18 +745,35 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Mailchimp (Intuit Inc.)\",\n  \"country\": \"USA\",\n  \"region\": \"US data centers\",\n  \"dpaStatus\": \"signed\",\n  \"subprocessors\": [\"Intuit group\"],\n  \"riskLevel\": \"high\",\n  \"lastReviewAt\": \"2026-07-01T00:00:00Z\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/vendors/{{vendorId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "vendors", "{{vendorId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "vendors",
+                "{{vendorId}}"
+              ]
             },
             "description": "Replace the editable fields of a processor (send the whole object). Only the fields that changed are written to the audit trail. Set {{vendorId}} first. Allowed roles: Admin, Compliance Officer."
           },
@@ -684,34 +784,53 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/vendors/{{vendorId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "vendors", "{{vendorId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "vendors",
+                "{{vendorId}}"
+              ]
             },
             "description": "Soft-delete a processor (kept on disk for the retention rules). REFUSED with 409 if any activity or transfer still links to it — unlink it there first. Set {{vendorId}} first. Allowed roles: Admin."
           },
           "response": []
         }
-      ]
+      ],
+      "description": "Your outside suppliers that process data for you (processors under Art. 28 GDPR) — an ERP, a mailing tool, a hosting provider. Each should have a signed Data Processing Agreement (DPA) and be reviewed regularly.\n\nProcessors are linked FROM activities (an activity lists the processors it uses) and FROM transfers. Because of that, a processor CANNOT be deleted while any activity or transfer still points at it — you get a 409 asking you to unlink it first. This stops the register from ending up with a broken link.\n\ndpaStatus is one of: signed, in_negotiation, missing. riskLevel is one of: low, medium, high."
     },
     {
       "name": "International Transfers (Chapter V)",
-      "description": "Records of personal data being sent OUTSIDE the EEA (GDPR Chapter V). Each transfer names the destination country, who receives the data, and the legal tool that makes it safe: adequacy (Art. 45), scc (Art. 46), bcr (Art. 47) or derogation (Art. 49).\n\nA transfer can optionally link to a processor (vendorId) and/or an activity (activityId). If you send those ids, the server checks they belong to YOUR company (else 404). And a transfer CANNOT be deleted while an activity still lists it — you get a 409 asking you to unlink it first.",
       "item": [
         {
           "name": "List transfers",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/transfers",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "transfers"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "transfers"
+              ]
             },
             "description": "Get all live transfers for your company, newest change first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
@@ -722,12 +841,22 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/transfers/{{transferId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "transfers", "{{transferId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "transfers",
+                "{{transferId}}"
+              ]
             },
             "description": "Get one transfer by its id (only if it belongs to your company, else 404). Set {{transferId}} first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
@@ -738,18 +867,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"recipient\": \"Mailchimp (Intuit Inc.)\",\n  \"destinationCountry\": \"USA\",\n  \"mechanism\": \"scc\",\n  \"adequacyNote\": \"Intuit is not certified under the EU-US Data Privacy Framework — SCCs (2021/914) module 2 used.\",\n  \"tiaDocumented\": false,\n  \"tiaRef\": \"\",\n  \"vendorId\": \"\",\n  \"activityId\": \"\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "raw": "{\n  \"recipient\": \"Mailchimp (Intuit Inc.)\",\n  \"destinationCountry\": \"USA\",\n  \"mechanism\": \"scc\",\n  \"adequacyNote\": \"Intuit is not certified under the EU-US Data Privacy Framework — SCCs (2021/914) module 2 used.\",\n  \"tiaDocumented\": false,\n  \"tiaRef\": \"\",\n  \"vendorId\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/transfers",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "transfers"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "transfers"
+              ]
             },
             "description": "Add a new transfer. 'destinationCountry', 'recipient' and 'mechanism' are required. vendorId/activityId are optional links — if set, they must be your company's own records (else 404). The server sets the company, timestamps and who created it. Allowed roles: Admin, Compliance Officer."
           },
@@ -760,18 +905,35 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"recipient\": \"Mailchimp (Intuit Inc.)\",\n  \"destinationCountry\": \"USA\",\n  \"mechanism\": \"scc\",\n  \"adequacyNote\": \"SCCs (2021/914) module 2 used.\",\n  \"tiaDocumented\": true,\n  \"tiaRef\": \"TIA-2026-004\",\n  \"vendorId\": \"\",\n  \"activityId\": \"\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/transfers/{{transferId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "transfers", "{{transferId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "transfers",
+                "{{transferId}}"
+              ]
             },
             "description": "Replace the editable fields of a transfer (send the whole object). Only the fields that changed are written to the audit trail. Marking a TIA as documented is a common edit. Set {{transferId}} first. Allowed roles: Admin, Compliance Officer."
           },
@@ -782,14 +944,101 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Cookie", "value": "idToken={{idToken}}" }
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/privacypilot/transfers/{{transferId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "privacypilot", "transfers", "{{transferId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "transfers",
+                "{{transferId}}"
+              ]
             },
             "description": "Soft-delete a transfer (kept on disk for the retention rules). REFUSED with 409 if any activity still lists it in its transferIds — unlink it in the activity first. Set {{transferId}} first. Allowed roles: Admin."
+          },
+          "response": []
+        }
+      ],
+      "description": "Records of personal data being sent OUTSIDE the EEA (GDPR Chapter V). Each transfer names the destination country, who receives the data, and the legal tool that makes it safe: adequacy (Art. 45), scc (Art. 46), bcr (Art. 47) or derogation (Art. 49).\n\nA transfer can optionally link to a processor (vendorId). If you send that id, the server checks it belongs to YOUR company (else 404). And a transfer CANNOT be deleted while an activity still lists it — you get a 409 asking you to unlink it first."
+    },
+    {
+      "name": "Data Breaches (Art. 33/34)",
+      "description": "Personal-data breach cases (something lost, leaked or exposed). Every breach is written down even when you don't report it (Art. 33(5) accountability). If a breach is risky you must tell the authority (UODO) within 72 hours, and for high-risk ones tell the affected people too (Art. 34).\n\nThe 72-hour clock is counted from 'discoveredAt' (when you became aware) — the app shows the countdown; nothing extra is stored. 'Telling UODO' and 'telling the people' are their own actions that stamp the time on the server, so they can never be faked by an ordinary edit. There is NO delete — a breach is a record you must keep.\n\ndataCategories use the same codes as activities (identity, contact, financial, ...). riskLevel: low/medium/high. status: open/closed.",
+      "item": [
+        {
+          "name": "List breaches",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches"] },
+            "description": "Get all breaches for your company, most recently recorded first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Get breach by id",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches", "{{breachId}}"] },
+            "description": "Get one breach by its id (only if it belongs to your company, else 404). Set {{breachId}} first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Record breach",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Lost laptop with HR spreadsheets\",\n  \"riskLevel\": \"medium\",\n  \"description\": \"Company laptop lost on a train. Disk held payroll exports for ~180 employees; BitLocker-encrypted.\",\n  \"subjectsCount\": 180,\n  \"recordsCount\": 3500,\n  \"dataCategories\": [\"identity\", \"financial\", \"employment\"],\n  \"uodoNotificationRequired\": true,\n  \"subjectsNotificationRequired\": false,\n  \"riskRationale\": \"Encryption reduces risk (Art. 34(3)(a)); UODO notification prepared as a precaution.\",\n  \"discoveredAt\": \"2026-07-24T06:00:00Z\",\n  \"remediation\": [\n    { \"text\": \"Remote wipe issued via MDM\", \"done\": true },\n    { \"text\": \"Confirm no unencrypted backup existed\", \"done\": false }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches"] },
+            "description": "Record a new breach. It always starts OPEN; the server sets the company, timestamps and who recorded it. 'discoveredAt' is optional (when you became aware) and defaults to now. title, description, riskLevel and riskRationale are required. Allowed roles: Admin, Compliance Officer, DPO."
+          },
+          "response": []
+        },
+        {
+          "name": "Update breach",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Lost laptop with HR spreadsheets\",\n  \"riskLevel\": \"medium\",\n  \"description\": \"Company laptop lost on a train. Disk held payroll exports for ~180 employees; BitLocker-encrypted.\",\n  \"subjectsCount\": 180,\n  \"recordsCount\": 3500,\n  \"dataCategories\": [\"identity\", \"financial\", \"employment\"],\n  \"uodoNotificationRequired\": true,\n  \"subjectsNotificationRequired\": false,\n  \"riskRationale\": \"Encryption reduces risk (Art. 34(3)(a)); UODO notification prepared as a precaution.\",\n  \"status\": \"open\",\n  \"remediation\": [\n    { \"id\": \"keep-existing-id-here\", \"text\": \"Remote wipe issued via MDM\", \"done\": true },\n    { \"text\": \"Confirm no unencrypted backup existed\", \"done\": true }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches", "{{breachId}}"] },
+            "description": "Replace the editable fields of a breach — including the remediation list and the open/closed status (send the whole object; keep each remediation item's id to preserve it, omit it for a new one). Only the fields that changed are written to the audit trail. The 'notified at' times are NOT changed here — use the notify actions. Set {{breachId}} first. Allowed roles: Admin, Compliance Officer, DPO."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark notified to UODO",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}/notify-uodo", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches", "{{breachId}}", "notify-uodo"] },
+            "description": "Record that UODO has now been told about this breach — the server stamps the exact time (proves the 72-hour duty was met). Set {{breachId}} first. Allowed roles: Admin, Compliance Officer, DPO."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark data subjects notified",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}/notify-subjects", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches", "{{breachId}}", "notify-subjects"] },
+            "description": "Record that the affected people have now been told directly (Art. 34) — the server stamps the time. Set {{breachId}} first. Allowed roles: Admin, Compliance Officer, DPO."
           },
           "response": []
         }
@@ -835,6 +1084,11 @@
       "key": "transferId",
       "value": "",
       "description": "The id of one international transfer. Fill this in before the get-one, update, and archive transfer requests."
+    },
+    {
+      "key": "breachId",
+      "value": "",
+      "description": "The id of one breach case. Fill this in before the get-one, update, and notify breach requests."
     }
   ]
 }

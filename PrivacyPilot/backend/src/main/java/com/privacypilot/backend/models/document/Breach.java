@@ -69,6 +69,11 @@ public class Breach extends BaseDocument {
     // EXAMPLE: [IDENTITY, FINANCIAL, EMPLOYMENT] for a payroll leak.
     private List<DataCategory> dataCategories = new ArrayList<>();
 
+
+    //! UODO = Urząd Ochrony Danych Osobowych — in English, the "Office for Personal Data Protection."
+    //! It's Poland's national data-protection authority (DPA) — yes, an official government regulator/legal body.
+
+
     // WHAT: True if this breach must be reported to UODO (Art. 33(1)).
     // WHY: Drives the 72-hour notification clock shown on the page.
     // EXAMPLE: true for the stolen payroll laptop; false for a trivial, no-risk slip.
