@@ -1,11 +1,20 @@
-// Personal data breach register — ALL breaches documented (Art. 33(5)),
-// with the real 72-hour UODO notification clock computed from discoveredAt.
-import { apiGet, apiMutate, newId } from './api';
-import { ACTIONS } from '../lib/permissions';
+// Personal data breach register (Art. 33–34).
+//
+// This now talks to the REAL PrivacyPilot backend (BreachController):
+// GET/POST/PUT on /api/privacypilot/breaches plus POST /{id}/notify-uodo and
+// POST /{id}/notify-subjects. It replaced the in-browser mock.
+//
+// The 72-hour UODO clock is still computed on the client from discoveredAt (nothing
+// extra is stored). The two "notified at" moments are server-stamped by their own
+// actions, so an ordinary edit can never fake a notification. There is NO delete — a
+// breach is an accountability record that must be kept (Art. 33(5)).
+import { get, post, put } from './client';
+
+const BASE = '/api/privacypilot/breaches';
 
 export const UODO_WINDOW_MS = 72 * 60 * 60 * 1000;
 
-/** Live clock helper used by list and detail pages. */
+/** Live clock helper used by the list, detail and dashboard pages. */
 export function breachClock(breach) {
   if (!breach.uodoNotificationRequired) return { applicable: false };
   if (breach.uodoNotifiedAt) return { applicable: true, notified: true };
@@ -14,99 +23,53 @@ export function breachClock(breach) {
   return { applicable: true, notified: false, remainingMs, expired: remainingMs <= 0 };
 }
 
+/**
+ * Map a breach object to the exact BreachRequest the backend expects — only the
+ * editable fields. The server owns the two "notified at" moments and the timestamps.
+ */
+function toRequest(b) {
+  return {
+    title: b.title,
+    riskLevel: b.riskLevel || null,
+    description: b.description,
+    subjectsCount: Number(b.subjectsCount) || 0,
+    recordsCount: Number(b.recordsCount) || 0,
+    dataCategories: b.dataCategories ?? [],
+    uodoNotificationRequired: !!b.uodoNotificationRequired,
+    subjectsNotificationRequired: !!b.subjectsNotificationRequired,
+    riskRationale: b.riskRationale ?? '',
+    // Optional — when the client sends it the server uses it; create defaults to now.
+    discoveredAt: b.discoveredAt ?? null,
+    // open/closed only; create forces OPEN server-side.
+    status: (b.status === 'open' || b.status === 'closed') ? b.status : null,
+    uodoReference: b.uodoReference ?? null,
+    remediation: (b.remediation ?? []).map((r) => ({
+      id: r.id,
+      text: r.text,
+      done: !!r.done,
+    })),
+  };
+}
+
 export const breachService = {
-  list: () => apiGet((db) => db.breaches),
+  /** All breaches for the caller's tenant, most recently recorded first. */
+  list: () => get(BASE),
 
-  get: (id) => apiGet((db) => db.breaches.find((b) => b.id === id) ?? null),
+  /** One breach by id (404 if it is not this tenant's). */
+  get: (id) => get(`${BASE}/${id}`),
 
-  create: (actor, data) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_BREACHES,
-      audit: (breach) => ({
-        action: 'CREATE', entityType: 'breach', entityId: breach.id,
-        entityLabel: breach.title, oldValue: null, newValue: { status: 'open' },
-      }),
-      mutator: (db) => {
-        const nowIso = new Date().toISOString();
-        const breach = {
-          id: newId('br'),
-          status: 'open',
-          discoveredAt: nowIso,
-          uodoNotifiedAt: null,
-          remediation: [],
-          ...data,
-          createdAt: nowIso,
-          updatedAt: nowIso,
-        };
-        db.breaches.unshift(breach);
-        return breach;
-      },
-    }),
+  /** Record a new breach (starts OPEN; the 72h clock runs from discoveredAt). */
+  create: (data) => post(BASE, toRequest(data)),
 
-  update: (actor, id, patch) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_BREACHES,
-      audit: ({ updated, oldValue, newValue }) => ({
-        action: 'UPDATE', entityType: 'breach', entityId: id,
-        entityLabel: updated.title, oldValue, newValue,
-      }),
-      mutator: (db) => {
-        const idx = db.breaches.findIndex((b) => b.id === id);
-        if (idx === -1) throw new Error('NOT_FOUND');
-        const before = db.breaches[idx];
-        const oldValue = {};
-        const newValue = {};
-        for (const key of Object.keys(patch)) {
-          if (JSON.stringify(before[key]) !== JSON.stringify(patch[key])) {
-            oldValue[key] = before[key];
-            newValue[key] = patch[key];
-          }
-        }
-        const updated = { ...before, ...patch, updatedAt: new Date().toISOString() };
-        db.breaches[idx] = updated;
-        return { updated, oldValue, newValue };
-      },
-    }).then((r) => r.updated),
+  /**
+   * Update a breach. The backend PUT replaces the whole record, so the caller passes
+   * the FULL current breach (the slice merges the small UI patch onto it).
+   */
+  update: (id, data) => put(`${BASE}/${id}`, toRequest(data)),
 
-  /** Art. 34: record that the affected data subjects were communicated with
-   *  (timestamped + audited), mirroring the UODO notification flow. Without this
-   *  a high-risk breach that must be told to individuals could not be evidenced. */
-  markSubjectsNotified: (actor, id) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_BREACHES,
-      audit: (breach) => ({
-        action: 'SUBJECTS_NOTIFIED', entityType: 'breach', entityId: id,
-        entityLabel: breach.title, oldValue: { subjectsNotifiedAt: null },
-        newValue: { subjectsNotifiedAt: breach.subjectsNotifiedAt },
-      }),
-      mutator: (db) => {
-        const breach = db.breaches.find((b) => b.id === id);
-        if (!breach) throw new Error('NOT_FOUND');
-        breach.subjectsNotifiedAt = new Date().toISOString();
-        breach.updatedAt = breach.subjectsNotifiedAt;
-        return breach;
-      },
-    }),
+  /** Record that UODO has now been notified — the server stamps the moment. */
+  markNotified: (id) => post(`${BASE}/${id}/notify-uodo`),
 
-  /** Record that the UODO notification was submitted (timestamped). */
-  markNotified: (actor, id) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_BREACHES,
-      audit: (breach) => ({
-        action: 'UODO_NOTIFIED', entityType: 'breach', entityId: id,
-        entityLabel: breach.title, oldValue: { uodoNotifiedAt: null },
-        newValue: { uodoNotifiedAt: breach.uodoNotifiedAt },
-      }),
-      mutator: (db) => {
-        const breach = db.breaches.find((b) => b.id === id);
-        if (!breach) throw new Error('NOT_FOUND');
-        breach.uodoNotifiedAt = new Date().toISOString();
-        breach.updatedAt = breach.uodoNotifiedAt;
-        return breach;
-      },
-    }),
+  /** Record that the affected people have now been told directly (Art. 34). */
+  markSubjectsNotified: (id) => post(`${BASE}/${id}/notify-subjects`),
 };

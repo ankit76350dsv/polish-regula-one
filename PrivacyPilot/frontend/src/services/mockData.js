@@ -75,49 +75,11 @@ export function buildSeed() {
     // the activity detail page and the notice builder all read the real transfers slice.
     transfers: [],
 
-    breaches: [
-      {
-        id: 'br-001',
-        title: 'Lost laptop with HR spreadsheets',
-        status: 'open',
-        discoveredAt: iso(now - hours(30)),
-        description: 'Company laptop lost on train Warszawa–Poznan. Disk contains payroll exports for ~180 employees. Disk is BitLocker-encrypted; password not stored with device.',
-        dataCategories: ['identity', 'financial', 'employment'],
-        subjectsCount: 180,
-        riskLevel: 'medium',
-        uodoNotificationRequired: true,
-        uodoNotifiedAt: null,
-        subjectsNotificationRequired: false,
-        riskRationale: 'Encryption reduces risk (Art. 34(3)(a)) so subject communication is not required, but confidentiality breach of unencrypted backup copy is unconfirmed — UODO notification prepared as precaution.',
-        remediation: [
-          { id: 'rm1', text: 'Remote wipe issued via MDM', done: true },
-          { id: 'rm2', text: 'Confirm no unencrypted backup existed on device', done: false },
-          { id: 'rm3', text: 'Submit UODO notification (Art. 33(3) content)', done: false },
-        ],
-        createdAt: iso(now - hours(29)),
-        updatedAt: iso(now - hours(2)),
-      },
-      {
-        id: 'br-002',
-        title: 'Misdirected e-mail with one client contract',
-        status: 'closed',
-        discoveredAt: iso(now - days(40)),
-        description: 'Sales employee sent a contract PDF (name, address, NIP of one sole trader) to a wrong but known counterparty, who confirmed deletion in writing.',
-        dataCategories: ['identity', 'contact'],
-        subjectsCount: 1,
-        riskLevel: 'low',
-        uodoNotificationRequired: false,
-        uodoNotifiedAt: null,
-        subjectsNotificationRequired: false,
-        riskRationale: 'Unlikely to result in a risk to rights and freedoms (single recipient, deletion confirmed) — not notified per Art. 33(1); documented in this register per Art. 33(5).',
-        remediation: [
-          { id: 'rm1', text: 'Deletion confirmation archived', done: true },
-          { id: 'rm2', text: 'Autocomplete disabled for external domains', done: true },
-        ],
-        createdAt: iso(now - days(40)),
-        updatedAt: iso(now - days(38)),
-      },
-    ],
+    // Personal-data breaches (Art. 33/34) are NO LONGER mocked — they come from the
+    // real PrivacyPilot backend (BreachController), through breachService.js +
+    // client.js. Empty here; the Breaches list/detail pages and the dashboard's
+    // breach counts / 72h clock all read the real breaches slice now.
+    breaches: [],
 
     dsars: [
       {

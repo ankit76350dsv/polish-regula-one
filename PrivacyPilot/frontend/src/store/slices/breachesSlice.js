@@ -1,19 +1,27 @@
 // Breach register slice (Arts. 33–34).
+//
+// Talks to the real backend through breachService. Identity/tenant come from the
+// session cookie, so no "actor" is passed — the server derives it.
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { breachService } from '../../services/breachService';
 import { addFetchCases, addMutationCases } from './sliceHelpers';
 
-const actor = (getState) => getState().auth.user;
-
 export const fetchBreaches = createAsyncThunk('breaches/fetch', () => breachService.list());
-export const createBreach = createAsyncThunk('breaches/create', (data, { getState }) =>
-  breachService.create(actor(getState), data));
-export const updateBreach = createAsyncThunk('breaches/update', ({ id, patch }, { getState }) =>
-  breachService.update(actor(getState), id, patch));
-export const markBreachNotified = createAsyncThunk('breaches/markNotified', (id, { getState }) =>
-  breachService.markNotified(actor(getState), id));
-export const markBreachSubjectsNotified = createAsyncThunk('breaches/markSubjectsNotified', (id, { getState }) =>
-  breachService.markSubjectsNotified(actor(getState), id));
+export const createBreach = createAsyncThunk('breaches/create', (data) =>
+  breachService.create(data));
+
+// The backend PUT replaces the WHOLE breach, but the UI edits a few fields at a time
+// (e.g. { remediation, status } or { uodoReference }). Merge the patch onto the current
+// record from the store and send the complete object, so unedited fields are not wiped.
+export const updateBreach = createAsyncThunk('breaches/update', ({ id, patch }, { getState }) => {
+  const current = getState().breaches.items.find((b) => b.id === id) ?? {};
+  return breachService.update(id, { ...current, ...patch });
+});
+
+export const markBreachNotified = createAsyncThunk('breaches/markNotified', (id) =>
+  breachService.markNotified(id));
+export const markBreachSubjectsNotified = createAsyncThunk('breaches/markSubjectsNotified', (id) =>
+  breachService.markSubjectsNotified(id));
 
 const breachesSlice = createSlice({
   name: 'breaches',
