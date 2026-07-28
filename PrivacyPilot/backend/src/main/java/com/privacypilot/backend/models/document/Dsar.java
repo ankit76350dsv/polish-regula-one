@@ -131,4 +131,16 @@ public class Dsar extends BaseDocument {
     // WHY: Proves we answered, and when — useful evidence during an audit.
     // EXAMPLE: set to the completion time; null until the request is finished.
     private Instant completedAt;
+
+    // WHAT: The legal reason the request was refused.
+    // WHY: A request may only be declined on lawful grounds (e.g. manifestly unfounded
+    //      or excessive, Art. 12(5)), and the person must be told why — this stores that
+    //      mandatory justification. Set by the "refuse" action; empty otherwise.
+    // EXAMPLE: "Manifestly excessive — the same data was provided last week (Art. 12(5))."
+    private String refusalReason;
+
+    // WHAT: The moment the request was refused.
+    // WHY: Proves WHEN we declined, mirroring completedAt for the completed path.
+    // EXAMPLE: set to the refusal time; null unless the request was refused.
+    private Instant refusedAt;
 }

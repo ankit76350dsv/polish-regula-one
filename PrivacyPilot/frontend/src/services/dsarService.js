@@ -1,146 +1,62 @@
 // Data subject requests (Arts. 15–22).
-// Deadline engine: 1 month from receipt (Art. 12(3)), extendable by TWO
-// further months for complex/numerous requests — the requester must be told
-// within the first month. Both prototypes had this wrong or hardcoded.
-import { apiGet, apiMutate, newId } from './api';
-import { ACTIONS } from '../lib/permissions';
+//
+// This service talks to the real PrivacyPilot backend (DsarController):
+// GET/POST/PUT on /api/privacypilot/dsars plus the dedicated extend, complete,
+// and refuse actions. The server owns the tenant, lifecycle, legal deadline,
+// timestamps, authorization, and immutable audit trail.
+import { get, post, put } from './client';
 
-function addMonths(dateIso, months) {
-  const d = new Date(dateIso);
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString();
-}
+const BASE = '/api/privacypilot/dsars';
 
 /** Days remaining until the deadline; negative = overdue. */
 export function dsarDaysLeft(dsar) {
   return Math.ceil((new Date(dsar.dueAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
+/**
+ * Map a DSAR object to the exact DsarRequest accepted by the backend. Lifecycle,
+ * deadline, tenant, audit, and timestamp fields are deliberately excluded because
+ * the server owns them.
+ */
+function toRequest(dsar) {
+  return {
+    type: dsar.type,
+    requesterName: dsar.requesterName,
+    requesterEmail: dsar.requesterEmail ?? '',
+    relation: dsar.relation ?? '',
+    // Used on create; ignored by the backend on update so the legal clock cannot
+    // be moved through an ordinary edit.
+    receivedAt: dsar.receivedAt ?? null,
+    notes: dsar.notes ?? '',
+    identityVerified: !!dsar.identityVerified,
+    identityMethod: dsar.identityMethod ?? '',
+    tasks: (dsar.tasks ?? []).map((task) => ({
+      id: task.id,
+      text: task.text,
+      done: !!task.done,
+    })),
+  };
+}
+
 export const dsarService = {
-  list: () => apiGet((db) => db.dsars),
+  /** All requests for the caller's tenant, most recently recorded first. */
+  list: () => get(BASE),
 
-  get: (id) => apiGet((db) => db.dsars.find((r) => r.id === id) ?? null),
+  /** One request by id (404 if it is not in the caller's tenant). */
+  get: (id) => get(`${BASE}/${id}`),
 
-  create: (actor, data) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_DSAR,
-      audit: (dsar) => ({
-        action: 'CREATE', entityType: 'dsar', entityId: dsar.id,
-        entityLabel: `${dsar.type} — ${dsar.requesterName}`, oldValue: null,
-        newValue: { dueAt: dsar.dueAt },
-      }),
-      mutator: (db) => {
-        const nowIso = new Date().toISOString();
-        const receivedAt = data.receivedAt ?? nowIso;
-        const dsar = {
-          id: newId('dsar'),
-          status: 'in_progress',
-          extended: false,
-          identityVerified: false,   // never auto-verified — a human confirms it
-          identityMethod: '',
-          tasks: [],
-          notes: '',
-          ...data,
-          receivedAt,
-          dueAt: addMonths(receivedAt, 1),
-          createdAt: nowIso,
-          updatedAt: nowIso,
-        };
-        db.dsars.unshift(dsar);
-        return dsar;
-      },
-    }),
+  /** Record a request; the server sets its initial state and one-month deadline. */
+  create: (data) => post(BASE, toRequest(data)),
 
-  update: (actor, id, patch) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_DSAR,
-      audit: ({ updated, oldValue, newValue }) => ({
-        action: 'UPDATE', entityType: 'dsar', entityId: id,
-        entityLabel: `${updated.type} — ${updated.requesterName}`, oldValue, newValue,
-      }),
-      mutator: (db) => {
-        const idx = db.dsars.findIndex((r) => r.id === id);
-        if (idx === -1) throw new Error('NOT_FOUND');
-        const before = db.dsars[idx];
-        const oldValue = {};
-        const newValue = {};
-        for (const key of Object.keys(patch)) {
-          if (JSON.stringify(before[key]) !== JSON.stringify(patch[key])) {
-            oldValue[key] = before[key];
-            newValue[key] = patch[key];
-          }
-        }
-        const updated = { ...before, ...patch, updatedAt: new Date().toISOString() };
-        db.dsars[idx] = updated;
-        return { updated, oldValue, newValue };
-      },
-    }).then((r) => r.updated),
+  /** Replace the request's editable content; server-owned lifecycle fields stay intact. */
+  update: (id, data) => put(`${BASE}/${id}`, toRequest(data)),
 
-  /** Art. 12(3) extension: +2 months on top of the original 1-month deadline. */
-  extend: (actor, id, reason) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_DSAR,
-      audit: (dsar) => ({
-        action: 'EXTEND', entityType: 'dsar', entityId: id,
-        entityLabel: `${dsar.type} — ${dsar.requesterName}`,
-        oldValue: { extended: false }, newValue: { extended: true, dueAt: dsar.dueAt },
-      }),
-      mutator: (db) => {
-        const dsar = db.dsars.find((r) => r.id === id);
-        if (!dsar) throw new Error('NOT_FOUND');
-        if (dsar.extended) throw new Error('ALREADY_EXTENDED');
-        dsar.extended = true;
-        dsar.extensionReason = reason;
-        dsar.dueAt = addMonths(dsar.receivedAt, 3); // 1 month + 2 further months
-        dsar.updatedAt = new Date().toISOString();
-        return dsar;
-      },
-    }),
+  /** Art. 12(3): extend the original one-month deadline by two further months. */
+  extend: (id, reason) => post(`${BASE}/${id}/extend`, { reason }),
 
-  complete: (actor, id) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_DSAR,
-      audit: (dsar) => ({
-        action: 'COMPLETE', entityType: 'dsar', entityId: id,
-        entityLabel: `${dsar.type} — ${dsar.requesterName}`,
-        oldValue: { status: 'in_progress' }, newValue: { status: 'completed' },
-      }),
-      mutator: (db) => {
-        const dsar = db.dsars.find((r) => r.id === id);
-        if (!dsar) throw new Error('NOT_FOUND');
-        dsar.status = 'completed';
-        dsar.completedAt = new Date().toISOString();
-        dsar.updatedAt = dsar.completedAt;
-        return dsar;
-      },
-    }),
+  /** Mark an in-progress request completed; the server stamps completedAt. */
+  complete: (id) => post(`${BASE}/${id}/complete`),
 
-  /** Refuse a request with a mandatory documented reason. Covers Art. 12(5)-(6)
-   *  (manifestly unfounded/excessive) and lawful refusals such as an erasure
-   *  request barred by a statutory retention duty. Without this a validly
-   *  declined request had no way to be closed correctly. */
-  refuse: (actor, id, reason) =>
-    apiMutate({
-      actor,
-      action: ACTIONS.MANAGE_DSAR,
-      audit: (dsar) => ({
-        action: 'REFUSE', entityType: 'dsar', entityId: id,
-        entityLabel: `${dsar.type} — ${dsar.requesterName}`,
-        oldValue: { status: 'in_progress' }, newValue: { status: 'refused', reason },
-      }),
-      mutator: (db) => {
-        const dsar = db.dsars.find((r) => r.id === id);
-        if (!dsar) throw new Error('NOT_FOUND');
-        if (!reason?.trim()) throw new Error('REASON_REQUIRED');
-        dsar.status = 'refused';
-        dsar.refusalReason = reason;
-        dsar.refusedAt = new Date().toISOString();
-        dsar.updatedAt = dsar.refusedAt;
-        return dsar;
-      },
-    }),
+  /** Refuse an in-progress request with the mandatory documented legal reason. */
+  refuse: (id, reason) => post(`${BASE}/${id}/refuse`, { reason }),
 };

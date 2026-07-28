@@ -1043,6 +1043,102 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Data Subject Requests (Art. 15-22)",
+      "description": "Requests where a person exercises a GDPR right — a copy of their data (access), fix it (rectification), delete it (erasure), and so on. You must answer within ONE MONTH of receiving the request (Art. 12(3)); that can be extended by TWO more months for a hard case, if you tell the person why.\n\nThe deadline (dueAt) is computed by the server from 'receivedAt' (+1 month, or +3 when extended); the app shows the countdown. Intake and day-to-day work (verify identity, edit the task list, notes) go through create/update. The three steps that carry legal weight are their own actions: extend (needs a reason), complete, refuse (needs a reason). Identity is NEVER auto-verified. There is NO delete — a DSAR is the record that a right was handled on time.\n\ntype: access/rectification/erasure/restriction/portability/objection. status: in_progress/completed/refused.",
+      "item": [
+        {
+          "name": "List requests",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars"] },
+            "description": "Get all requests for your company, most recently recorded first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Get request by id",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars", "{{dsarId}}"] },
+            "description": "Get one request by its id (only if it belongs to your company, else 404). Set {{dsarId}} first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        },
+        {
+          "name": "Record request",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"access\",\n  \"requesterName\": \"Tomasz Mazur\",\n  \"requesterEmail\": \"tomasz.mazur@example.com\",\n  \"relation\": \"Former employee\",\n  \"receivedAt\": \"2026-07-20T09:00:00Z\",\n  \"notes\": \"Requester also phoned to confirm; see call log.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars"] },
+            "description": "Record a new request. It always starts IN_PROGRESS and UNVERIFIED. 'receivedAt' is optional (defaults to now) and starts the 1-month clock; the server sets dueAt = receivedAt + 1 month. 'type' and 'requesterName' are required. Allowed roles: Admin, Compliance Officer, DPO."
+          },
+          "response": []
+        },
+        {
+          "name": "Update request (identity / tasks / notes)",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"access\",\n  \"requesterName\": \"Tomasz Mazur\",\n  \"requesterEmail\": \"tomasz.mazur@example.com\",\n  \"relation\": \"Former employee\",\n  \"notes\": \"Requester also phoned to confirm; see call log.\",\n  \"identityVerified\": true,\n  \"identityMethod\": \"Reply from the e-mail address on file + employee ID number\",\n  \"tasks\": [\n    { \"id\": \"keep-existing-id-here\", \"text\": \"Export personnel file\", \"done\": true },\n    { \"text\": \"Prepare Art. 15 response letter\", \"done\": false }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars", "{{dsarId}}"] },
+            "description": "Edit the request's content — verify identity (set identityVerified + identityMethod), and edit the collection-task list and notes (send the whole object; keep each task's id to preserve it, omit it for a new one). Does NOT change the deadline, status, extension or completion — use the actions for those. Set {{dsarId}} first. Allowed roles: Admin, Compliance Officer, DPO."
+          },
+          "response": []
+        },
+        {
+          "name": "Extend deadline (+2 months)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Complex request — data spread across three archived systems; requester informed on day 20 (Art. 12(3)).\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}/extend", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars", "{{dsarId}}", "extend"] },
+            "description": "Extend the one-month deadline by two more months (Art. 12(3)). Reason is REQUIRED (400 if blank). 409 if the request is not in progress or is already extended. The server recomputes dueAt = receivedAt + 3 months. Set {{dsarId}} first. Allowed roles: Admin, Compliance Officer, DPO."
+          },
+          "response": []
+        },
+        {
+          "name": "Complete request",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}/complete", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars", "{{dsarId}}", "complete"] },
+            "description": "Mark the request completed (answered and closed) — the server stamps completedAt. 409 if it is already closed. Set {{dsarId}} first. Allowed roles: Admin, Compliance Officer, DPO."
+          },
+          "response": []
+        },
+        {
+          "name": "Refuse request",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Manifestly excessive — the same data was provided last week (Art. 12(5)).\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}/refuse", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars", "{{dsarId}}", "refuse"] },
+            "description": "Refuse the request on a lawful ground (Art. 12(5)). Reason is REQUIRED (400 if blank). 409 if the request is already closed. The server stamps refusedAt and stores the reason. Set {{dsarId}} first. Allowed roles: Admin, Compliance Officer, DPO."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "variable": [
@@ -1089,6 +1185,11 @@
       "key": "breachId",
       "value": "",
       "description": "The id of one breach case. Fill this in before the get-one, update, and notify breach requests."
+    },
+    {
+      "key": "dsarId",
+      "value": "",
+      "description": "The id of one data-subject request. Fill this in before the get-one, update, extend, complete, and refuse requests."
     }
   ]
 }

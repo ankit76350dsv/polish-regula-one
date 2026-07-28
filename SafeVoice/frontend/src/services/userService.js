@@ -19,6 +19,7 @@ import { SAFEVOICE_ROLE_PERMISSIONS, primarySafeVoiceRole } from "../utils/permi
 
 // The compliance module this app represents (matches RegulaOne's TenantModule enum).
 const SAFEVOICE_MODULE = "SAFEVOICE";
+const SAFEVOICE_PERMISSION_PREFIX = "SAFEVOICE_";
 
 // The permission matrix rows: one per SAFEVOICE_* role with its capability flags.
 // Built once from the shared role→capability map so the table can never drift from
@@ -39,6 +40,12 @@ function toPersonnel(user) {
     name: user.name,
     email: user.email,
     hasAccess,
+    accountRole: user.role,
+    safeVoicePermissions: permissions.filter(
+      (permission) =>
+        typeof permission === "string" &&
+        permission.startsWith(SAFEVOICE_PERMISSION_PREFIX),
+    ),
     // The SafeVoice display role is the highest SAFEVOICE_* role the user holds; only
     // users with access have one, so others fall back to their platform role.
     role: primarySafeVoiceRole(permissions) || user.role,

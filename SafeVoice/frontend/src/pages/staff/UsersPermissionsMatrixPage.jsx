@@ -111,7 +111,16 @@ export default function UsersPermissionsMatrixPage() {
       </div>
 
       <SecureCard title={t("users.personnel")} className="min-w-0">
-        <AppTable className="min-w-0" headers={[t("users.colOfficer"), t("users.colRole"), t("users.colStatus"), ""]}>
+        <AppTable
+          className="min-w-0"
+          headers={[
+            t("users.colOfficer"),
+            t("users.colPermissions"),
+            t("users.colAccountRole"),
+            t("users.colStatus"),
+            "",
+          ]}
+        >
           {users.map((user) => (
             <tr
               key={user.id}
@@ -137,15 +146,23 @@ export default function UsersPermissionsMatrixPage() {
                 <span className="block font-normal text-[10px] text-slate-500 mt-0.5 break-all">{user.email}</span>
               </td>
               <td className="px-4 py-3">
-                <span
-                  className={`px-2.5 py-1 rounded border font-semibold uppercase tracking-wider ${
-                    user.hasAccess
-                      ? "bg-cyan-50 border-cyan-200 text-cyan-700"
-                      : "bg-slate-50 border-slate-200 text-slate-400"
-                  }`}
-                >
-                  {t(`roles.${user.role}`, user.role)}
-                </span>
+                {(user.safeVoicePermissions ?? []).length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {user.safeVoicePermissions.map((permission) => (
+                      <span
+                        key={permission}
+                        className="px-2.5 py-1 rounded border bg-cyan-50 border-cyan-200 text-cyan-700 font-semibold"
+                      >
+                        {t(`roles.${permission}`, permission)}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-slate-400">{t("users.noPermissions")}</span>
+                )}
+              </td>
+              <td className="px-4 py-3 text-slate-700 font-semibold">
+                {t(`roles.${user.accountRole}`, user.accountRole || "—")}
               </td>
               <td className="px-4 py-3 text-slate-700">{user.status}</td>
               <td className="px-4 py-3 text-right">
