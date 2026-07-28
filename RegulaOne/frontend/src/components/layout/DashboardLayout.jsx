@@ -85,11 +85,11 @@ export default function DashboardLayout() {
   // ROLE_ADMIN and ROLE_USER only see the modules listed in user.moduleIds.
   const ALL_MODULES = [
     { title: 'KSeFFlow',    icon: ReceiptText,   path: `/company/${tid}/modules/ksef`,         moduleKey: 'KSEFFLOW',     dotColor: 'bg-blue-300' },
-    { title: 'WorkPulse',   icon: Clock,         path: `/company/${tid}/modules/workpulse`,    moduleKey: 'WORKPULSE',    dotColor: 'bg-green-300' },
-    { title: 'SafeWork',    icon: ShieldCheck,   path: `/company/${tid}/modules/safework`,     moduleKey: 'SAFEWORK',     dotColor: 'bg-amber-300' },
     { title: 'SafeVoice',   icon: MessageSquare, path: `/company/${tid}/modules/safevoice`,    moduleKey: 'SAFEVOICE',    dotColor: 'bg-orange-300' },
-    { title: 'WasteSync',   icon: Trash2,        path: `/company/${tid}/modules/wastesync`,    moduleKey: 'WASTESYNC',    dotColor: 'bg-red-300' },
     { title: 'PrivacyPilot',icon: ShieldAlert,   path: `/company/${tid}/modules/privacypilot`, moduleKey: 'PRIVACYPILOT', dotColor: 'bg-emerald-300' },
+    { title: 'SafeWork',    icon: ShieldCheck,   path: `/company/${tid}/modules/safework`,     moduleKey: 'SAFEWORK',     dotColor: 'bg-amber-300' },
+    { title: 'WasteSync',   icon: Trash2,        path: `/company/${tid}/modules/wastesync`,    moduleKey: 'WASTESYNC',    dotColor: 'bg-red-300' },
+    { title: 'WorkPulse',   icon: Clock,         path: `/company/${tid}/modules/workpulse`,    moduleKey: 'WORKPULSE',    dotColor: 'bg-green-300' },
   ];
 
   const visibleModules = user?.role === 'ROLE_SUPER_ADMIN'
