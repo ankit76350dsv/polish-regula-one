@@ -334,6 +334,13 @@ export default {
   'users.role': 'Role',
   'users.matrix': 'Permission matrix',
   'users.matrixHint': 'This matrix is enforced on every route, button, and service call — not just displayed.',
+  'users.statusUpdated': 'User status updated.',
+  'users.statusProtected': 'This account status cannot be changed. It may be your own account, the organisation primary contact, or the last active administrator.',
+  'users.deleteTitle': 'Permanently delete user',
+  'users.deleteDescription': 'This removes the RegulaOne account and access to PrivacyPilot and every other module. This action cannot be undone.',
+  'users.deleteSuccess': 'User deleted successfully.',
+  'users.deleteProtected': 'This protected account cannot be deleted. It may be your own account, the organisation primary contact, or the last active administrator.',
+  'users.deleteNotFound': 'This user no longer exists.',
 
   // AI assistant
   'ai.name': 'AI Assistant',

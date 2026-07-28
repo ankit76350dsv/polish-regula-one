@@ -28,7 +28,7 @@ export const ROLES = {
 };
 
 export const ROLE_LABELS = {
-  PRIVACYPILOT_ADMIN:              { en: 'Company Admin',      pl: 'Administrator firmy' },
+  PRIVACYPILOT_ADMIN:              { en: 'PrivacyPilot Admin', pl: 'Administrator PrivacyPilot' },
   PRIVACYPILOT_COMPLIANCE_OFFICER: { en: 'Compliance Officer', pl: 'Specjalista ds. zgodności' },
   PRIVACYPILOT_DPO:                { en: 'DPO (IOD)',          pl: 'Inspektor Ochrony Danych (IOD)' },
   PRIVACYPILOT_AUDITOR:            { en: 'Auditor',            pl: 'Audytor' },

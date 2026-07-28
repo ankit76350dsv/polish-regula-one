@@ -334,6 +334,13 @@ export default {
   'users.role': 'Rola',
   'users.matrix': 'Macierz uprawnień',
   'users.matrixHint': 'Macierz jest egzekwowana na każdej trasie, przycisku i wywołaniu usługi — nie tylko wyświetlana.',
+  'users.statusUpdated': 'Zaktualizowano status użytkownika.',
+  'users.statusProtected': 'Statusu tego konta nie można zmienić. Może to być Twoje konto, główny kontakt organizacji lub ostatni aktywny administrator.',
+  'users.deleteTitle': 'Trwale usuń użytkownika',
+  'users.deleteDescription': 'Spowoduje to usunięcie konta RegulaOne oraz dostępu do PrivacyPilot i wszystkich pozostałych modułów. Tej operacji nie można cofnąć.',
+  'users.deleteSuccess': 'Użytkownik został usunięty.',
+  'users.deleteProtected': 'Tego chronionego konta nie można usunąć. Może to być Twoje konto, główny kontakt organizacji lub ostatni aktywny administrator.',
+  'users.deleteNotFound': 'Ten użytkownik już nie istnieje.',
 
   // Asystent AI
   'ai.name': 'Asystent AI',

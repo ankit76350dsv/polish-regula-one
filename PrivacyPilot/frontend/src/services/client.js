@@ -23,13 +23,18 @@ import { PRIVACYPILOT_API_BASE, tryRefreshSession, redirectToLogin } from './htt
  * Do one authenticated JSON request and unwrap the AppResponse envelope.
  *
  * @param {string} path   e.g. "/api/privacypilot/activities" (leading slash).
- * @param {object} [opts] { method, body } — body is a plain object, JSON-encoded here.
+ * @param {object} [opts] { method, body, baseUrl } — body is a plain object,
+ *          JSON-encoded here. baseUrl defaults to PrivacyPilot's feature backend;
+ *          identity-owned services may explicitly target RegulaOne.
  * @returns {Promise<any>} the `data` field of the success envelope.
  * @throws  {Error} .message = server errorCode (FORBIDDEN / NOT_FOUND / …) or a
  *          readable message; .code and .status carry the machine code and HTTP status.
  */
-export async function apiRequest(path, { method = 'GET', body } = {}) {
-  const url = `${PRIVACYPILOT_API_BASE}${path}`;
+export async function apiRequest(
+  path,
+  { method = 'GET', body, baseUrl = PRIVACYPILOT_API_BASE } = {},
+) {
+  const url = `${baseUrl}${path}`;
 
   // One attempt. Factored out so we can replay it after a silent token refresh.
   const attempt = () =>

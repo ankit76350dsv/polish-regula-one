@@ -848,9 +848,11 @@ public class UserService {
      *  - A user with no email/Cognito link (edge data) is still removed from our database.
      *
      * @param identifier the user's id, Cognito sub, or email
+     * @param actorCognitoSub the authenticated administrator's Cognito subject
      */
     //! delete user
-    public void deleteUser(String identifier) {
+    @Transactional
+    public void deleteUser(String identifier, String actorCognitoSub) {
         if (identifier == null || identifier.isBlank()) {
             throw new IllegalArgumentException("A user identifier is required to delete a user");
         }
@@ -861,11 +863,28 @@ public class UserService {
                 .or(() -> userRepository.findByEmail(identifier))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // Protect the organisation's primary-contact account: the user whose email matches
-        // the tenant's contact email is the owner and must not be removable here.
+        User actor = requireStatusActor(actorCognitoSub);
+        assertStatusChangeIsTenantScoped(actor, user);
+
+        if (sameUser(actor, user)) {
+            throw new IllegalStateException("You cannot delete your own account.");
+        }
+
+        // Protect the organisation's owner and its last enabled admin. Removing either
+        // would make the tenant unmanageable.
         if (isTenantPrimaryContact(user)) {
             throw new IllegalStateException(
                     "This account is the organisation's primary contact and cannot be deleted.");
+        }
+        if (user.isEnabled() && user.getRole() == Role.ROLE_ADMIN) {
+            String tenantId = tenantIdOf(user);
+            long enabledAdminCount = userRepository.findByTenant_IdAndEnabledTrue(tenantId).stream()
+                    .filter(candidate -> candidate.getRole() == Role.ROLE_ADMIN)
+                    .count();
+            if (enabledAdminCount <= 1) {
+                throw new IllegalStateException(
+                        "Cannot delete the last active admin in this organisation.");
+            }
         }
 
         // Remove from Cognito by email (its username), tolerating an already-removed account
@@ -876,6 +895,8 @@ public class UserService {
 
         // Remove from our database.
         userRepository.delete(user);
+        log.info("[deleteUser] Admin [{}] deleted user [{}] from tenant [{}]",
+                actor.getId(), user.getId(), tenantIdOf(user));
     }
 
     private Role parseRole(String roleStr) {
