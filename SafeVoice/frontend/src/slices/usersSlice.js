@@ -7,6 +7,10 @@ import userService from "../services/userService";
 
 export const fetchUsers = createAsyncThunk("users/fetch", () => userService.list());
 export const inviteUser = createAsyncThunk("users/invite", (payload) => userService.invite(payload));
+export const setUserEnabled = createAsyncThunk(
+  "users/setEnabled",
+  ({ id, enabled }) => userService.setEnabled(id, enabled),
+);
 // The delete endpoint returns no body, so we resolve with the id we removed and let the
 // reducer drop that row from the list.
 export const removeUser = createAsyncThunk("users/remove", async (id) => {
@@ -22,6 +26,8 @@ const usersSlice = createSlice({
     status: "idle",
     error: null,
     inviting: false,
+    statusUpdateState: "idle",
+    updatingStatusId: null,
   },
   reducers: {},
   extraReducers: (builder) => {
@@ -49,6 +55,22 @@ const usersSlice = createSlice({
       .addCase(inviteUser.rejected, (s) => {
         s.inviting = false;
       })
+      .addCase(setUserEnabled.pending, (s, a) => {
+        s.statusUpdateState = "loading";
+        s.updatingStatusId = a.meta.arg.id;
+        s.error = null;
+      })
+      .addCase(setUserEnabled.fulfilled, (s, a) => {
+        s.statusUpdateState = "succeeded";
+        s.updatingStatusId = null;
+        const index = s.list.findIndex((user) => user.id === a.payload.id);
+        if (index !== -1) s.list[index] = a.payload;
+      })
+      .addCase(setUserEnabled.rejected, (s, a) => {
+        s.statusUpdateState = "failed";
+        s.updatingStatusId = null;
+        s.error = a.error?.message || "error";
+      })
       .addCase(removeUser.fulfilled, (s, a) => {
         s.list = s.list.filter((u) => u.id !== a.payload);
       });
@@ -59,5 +81,6 @@ export const selectUsers = (s) => s.users.list;
 export const selectRolePermissions = (s) => s.users.rolePermissions;
 export const selectUsersStatus = (s) => s.users.status;
 export const selectInviting = (s) => s.users.inviting;
+export const selectUpdatingStatusId = (s) => s.users.updatingStatusId;
 
 export default usersSlice.reducer;

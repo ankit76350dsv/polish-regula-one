@@ -570,6 +570,7 @@
     "exported": "Export started — check your downloads.",
     "inviteSent": "Invitation sent.",
     "accessRemoved": "Access removed.",
+    "userStatusUpdated": "User status updated.",
     "saved": "Changes saved.",
     "copyOk": "Copied to clipboard.",
     "downloaded": "Key downloaded — store the file somewhere safe.",

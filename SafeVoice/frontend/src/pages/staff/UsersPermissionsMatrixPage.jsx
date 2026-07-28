@@ -18,11 +18,14 @@ import {
   fetchUsers,
   inviteUser,
   removeUser,
+  setUserEnabled,
   selectInviting,
   selectRolePermissions,
+  selectUpdatingStatusId,
   selectUsers,
   selectUsersStatus,
 } from "../../slices/usersSlice";
+import { selectCurrentUser } from "../../slices/authSlice";
 import { addToast } from "../../slices/uiSlice";
 import { firstError, email as emailRule, required } from "../../utils/validation";
 
@@ -44,6 +47,8 @@ export default function UsersPermissionsMatrixPage() {
   const rolePermissions = useSelector(selectRolePermissions);
   const status = useSelector(selectUsersStatus);
   const inviting = useSelector(selectInviting);
+  const updatingStatusId = useSelector(selectUpdatingStatusId);
+  const currentUser = useSelector(selectCurrentUser);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   // Invite defaults: SafeVoice access is implied (module fixed), one or more SafeVoice
@@ -93,6 +98,26 @@ export default function UsersPermissionsMatrixPage() {
       dispatch(addToast({ type: "error", message: e?.message || t("toast.genericError") }));
     } finally {
       setToRemove(null);
+    }
+  }
+
+  async function toggleUserStatus(user) {
+    if (
+      !user ||
+      user.id === currentUser?.id ||
+      currentUser?.role !== "ROLE_ADMIN"
+    ) return;
+
+    try {
+      await dispatch(
+        setUserEnabled({ id: user.id, enabled: !user.enabled }),
+      ).unwrap();
+      dispatch(addToast({ type: "success", message: t("toast.userStatusUpdated") }));
+    } catch (error) {
+      dispatch(addToast({
+        type: "error",
+        message: error?.message || t("toast.genericError"),
+      }));
     }
   }
 
@@ -164,7 +189,25 @@ export default function UsersPermissionsMatrixPage() {
               <td className="px-4 py-3 text-slate-700 font-semibold">
                 {t(`roles.${user.accountRole}`, user.accountRole || "—")}
               </td>
-              <td className="px-4 py-3 text-slate-700">{user.status}</td>
+              <td className="px-4 py-3">
+                <AppButton
+                  type="button"
+                  size="sm"
+                  variant={user.enabled ? "secure" : "outline"}
+                  disabled={
+                    user.id === currentUser?.id ||
+                    currentUser?.role !== "ROLE_ADMIN" ||
+                    updatingStatusId === user.id
+                  }
+                  onClick={() => toggleUserStatus(user)}
+                >
+                  {updatingStatusId === user.id
+                    ? <Spinner size={14} />
+                    : user.enabled
+                      ? t("profile.active")
+                      : t("profile.disabled")}
+                </AppButton>
+              </td>
               <td className="px-4 py-3 text-right">
                 <button
                   type="button"

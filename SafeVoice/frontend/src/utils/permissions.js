@@ -124,6 +124,7 @@ export function normalizeUser(raw) {
   if (!raw || typeof raw !== "object") return null;
   const permissions = Array.isArray(raw.permissions) ? raw.permissions : [];
   return {
+    id: raw.id ?? "",
     name: raw.name ?? "",
     email: raw.email ?? "",
     role: raw.role ?? "", // raw platform role, e.g. ROLE_ADMIN / ROLE_SUPER_ADMIN

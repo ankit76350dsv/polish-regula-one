@@ -33,6 +33,7 @@ const ROLE_MATRIX = Object.entries(SAFEVOICE_ROLE_PERMISSIONS).map(([role, caps]
 function toPersonnel(user) {
   const permissions = user.permissions || [];
   const modules = user.moduleIds || [];
+  const enabled = user.enabled !== false;
   // Does this teammate actually have SafeVoice access? (the module is enabled for them)
   const hasAccess = modules.includes(SAFEVOICE_MODULE);
   return {
@@ -46,10 +47,11 @@ function toPersonnel(user) {
         typeof permission === "string" &&
         permission.startsWith(SAFEVOICE_PERMISSION_PREFIX),
     ),
+    enabled,
     // The SafeVoice display role is the highest SAFEVOICE_* role the user holds; only
     // users with access have one, so others fall back to their platform role.
     role: primarySafeVoiceRole(permissions) || user.role,
-    status: user.enabled ? "Active" : "Disabled",
+    status: enabled ? "Active" : "Disabled",
     // RegulaOne enforces MFA at the identity layer for every account, so we show it as
     // required. (There is no per-user MFA flag on this response to vary it.)
     mfaRequired: true,
@@ -90,6 +92,13 @@ export const userService = {
       permissions: Array.isArray(permissions) ? permissions : [],
     });
     return toPersonnel(created);
+  },
+  async setEnabled(id, enabled) {
+    const updated = await api.patch(
+      `/api/admin/users/${encodeURIComponent(id)}/status`,
+      { enabled },
+    );
+    return toPersonnel(updated);
   },
   remove(id) {
     return api.del(`/api/admin/users/${encodeURIComponent(id)}`);
