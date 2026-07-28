@@ -6,11 +6,12 @@
 //   5. allowed             → the real app (DashboardLayout, which renders <Outlet/>)
 import { useDispatch, useSelector } from 'react-redux';
 import { Navigate, useParams, useLocation } from 'react-router-dom';
-import { AlertTriangle, RefreshCw, ShieldX } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import LoginPage from '../../pages/Auth/LoginPage';
 import DashboardLayout from '../layout/DashboardLayout';
+import PrivacyPilotAccessModal from './PrivacyPilotAccessModal';
 import { evaluatePrivacyPilotAccess } from '../../lib/sso';
 import { orgPath } from '../../lib/paths';
 import { useT } from '../../i18n';
@@ -23,14 +24,6 @@ import {
   selectCurrentUser,
   selectSsoLoop,
 } from '../../store/slices/authSlice';
-
-// Maps the access-denied reason to a translation key.
-const REASON_KEY = {
-  disabled: 'access.disabled',
-  module: 'access.module',
-  package: 'access.package',
-  permission: 'access.permission',
-};
 
 export default function AuthGate() {
   const { t } = useT();
@@ -83,18 +76,10 @@ export default function AuthGate() {
   const { allowed, reason } = evaluatePrivacyPilotAccess(user);
   if (!allowed) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background p-4">
-        <div className="w-full max-w-sm rounded-2xl border bg-card p-8 text-center shadow-sm">
-          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-destructive/10">
-            <ShieldX className="size-5 text-destructive" />
-          </div>
-          <h2 className="text-base font-semibold text-foreground">{t('access.deniedTitle')}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{t(REASON_KEY[reason] ?? 'access.permission')}</p>
-          <Button variant="outline" className="mt-4 w-full" onClick={() => dispatch(signOut())}>
-            {t('auth.signOut')}
-          </Button>
-        </div>
-      </div>
+      <PrivacyPilotAccessModal
+        reason={reason}
+        onSignOut={() => dispatch(signOut())}
+      />
     );
   }
 

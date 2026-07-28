@@ -84,7 +84,8 @@ export function normalizeUser(raw) {
     tenantId: raw.tenantId ?? '',
     tenantName: raw.tenantName ?? null,
     tenantStatus: raw.tenantStatus ?? null,
-    enabled: raw.enabled,
+    // Fail closed if the identity response omits or changes the enabled flag.
+    enabled: raw.enabled === true,
     moduleIds: Array.isArray(raw.moduleIds) ? raw.moduleIds : [],
     planExpired: Boolean(raw.planExpired),
     planExpiresAt: raw.planExpiresAt ?? null,
@@ -103,11 +104,11 @@ export function normalizeUser(raw) {
  */
 export function evaluatePrivacyPilotAccess(user) {
   if (!user) return { allowed: false, reason: 'unauthenticated' };
-  if (user.enabled === false) return { allowed: false, reason: 'disabled' };
+  if (user.enabled !== true) return { allowed: false, reason: 'disabled' };
   if (user.role === 'ROLE_SUPER_ADMIN') return { allowed: true, reason: null };
 
-  if (!user.moduleIds.includes(PRIVACYPILOT_MODULE)) return { allowed: false, reason: 'module' };
   if (user.planExpired) return { allowed: false, reason: 'package' };
+  if (!user.moduleIds.includes(PRIVACYPILOT_MODULE)) return { allowed: false, reason: 'module' };
   if (privacyPilotPermissions(user).length === 0) return { allowed: false, reason: 'permission' };
 
   return { allowed: true, reason: null };

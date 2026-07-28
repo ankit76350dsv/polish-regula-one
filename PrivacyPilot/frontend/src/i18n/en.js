@@ -155,11 +155,15 @@ export default {
   'auth.openLogin': 'Open the login page',
   'auth.signOut': 'Sign out',
   // Access denied (signed in, but not allowed into PrivacyPilot)
-  'access.deniedTitle': 'No access to PrivacyPilot',
-  'access.disabled': 'Your account is disabled. Please contact your administrator.',
-  'access.module': 'Your organisation’s plan does not include the PrivacyPilot module.',
-  'access.package': 'Your subscription has expired. Please renew to continue.',
-  'access.permission': 'You do not have a PrivacyPilot role yet. Ask an administrator to grant one.',
+  'access.disabledTitle': 'Your account is suspended',
+  'access.disabledBody': 'Your RegulaOne account is disabled, so access to PrivacyPilot is blocked. Contact your organisation administrator.',
+  'access.packageTitle': 'Your plan has expired',
+  'access.packageBody': 'Your organisation’s RegulaOne plan has expired. Renew the plan before accessing PrivacyPilot.',
+  'access.moduleTitle': 'No access to PrivacyPilot',
+  'access.moduleBody': 'PrivacyPilot is not assigned to your account. Ask your organisation administrator to enable this application.',
+  'access.permissionTitle': 'PrivacyPilot permission required',
+  'access.permissionBody': 'You do not have a PrivacyPilot permission yet. Ask your organisation administrator to grant one.',
+  'access.needHelp': 'If this appears incorrect, contact your organisation administrator.',
 
   // Profile
   'nav.profile': 'My profile',

@@ -155,11 +155,15 @@ export default {
   'auth.openLogin': 'Otwórz stronę logowania',
   'auth.signOut': 'Wyloguj się',
   // Brak dostępu (zalogowano, ale bez uprawnień do PrivacyPilot)
-  'access.deniedTitle': 'Brak dostępu do PrivacyPilot',
-  'access.disabled': 'Twoje konto jest wyłączone. Skontaktuj się z administratorem.',
-  'access.module': 'Plan Twojej organizacji nie obejmuje modułu PrivacyPilot.',
-  'access.package': 'Twoja subskrypcja wygasła. Odnów ją, aby kontynuować.',
-  'access.permission': 'Nie masz jeszcze roli w PrivacyPilot. Poproś administratora o jej nadanie.',
+  'access.disabledTitle': 'Twoje konto jest zawieszone',
+  'access.disabledBody': 'Twoje konto RegulaOne jest wyłączone, dlatego dostęp do PrivacyPilot został zablokowany. Skontaktuj się z administratorem organizacji.',
+  'access.packageTitle': 'Twój plan wygasł',
+  'access.packageBody': 'Plan RegulaOne Twojej organizacji wygasł. Odnów plan przed uzyskaniem dostępu do PrivacyPilot.',
+  'access.moduleTitle': 'Brak dostępu do PrivacyPilot',
+  'access.moduleBody': 'PrivacyPilot nie jest przypisany do Twojego konta. Poproś administratora organizacji o włączenie tej aplikacji.',
+  'access.permissionTitle': 'Wymagane uprawnienie PrivacyPilot',
+  'access.permissionBody': 'Nie masz jeszcze uprawnienia PrivacyPilot. Poproś administratora organizacji o jego nadanie.',
+  'access.needHelp': 'Jeśli uważasz, że to błąd, skontaktuj się z administratorem organizacji.',
 
   // Profil
   'nav.profile': 'Mój profil',
