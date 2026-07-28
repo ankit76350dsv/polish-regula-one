@@ -144,6 +144,7 @@ public class BreachService {
         b.setUodoNotificationRequired(r.isUodoNotificationRequired());
         b.setSubjectsNotificationRequired(r.isSubjectsNotificationRequired());
         b.setRiskRationale(r.getRiskRationale());
+        b.setUodoReference(r.getUodoReference());
         b.setRemediation(mapRemediation(r.getRemediation()));
     }
 
@@ -172,6 +173,7 @@ public class BreachService {
         m.put("riskLevel", enumName(b.getRiskLevel()));
         m.put("uodoNotificationRequired", b.isUodoNotificationRequired());
         m.put("subjectsNotificationRequired", b.isSubjectsNotificationRequired());
+        m.put("uodoReference", b.getUodoReference());
         m.put("riskRationale", b.getRiskRationale());
         m.put("subjectsCount", b.getSubjectsCount());
         m.put("recordsCount", b.getRecordsCount());

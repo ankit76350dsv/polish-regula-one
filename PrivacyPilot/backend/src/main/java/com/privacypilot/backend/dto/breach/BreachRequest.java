@@ -64,6 +64,10 @@ public class BreachRequest {
     // OPEN / CLOSED. Optional — create forces OPEN; update may change it.
     private BreachStatus status;
 
+    // The UODO case number, recorded after the report is filed on uodo.gov.pl. Free
+    // text, optional. (The "notified at" MOMENT is still set only by the notify action.)
+    private String uodoReference;
+
     // The fix-it action list; each item's text is validated (see RemediationItemRequest).
     @Valid
     private List<RemediationItemRequest> remediation = new ArrayList<>();

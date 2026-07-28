@@ -113,6 +113,15 @@ public class Breach extends BaseDocument {
     // NOTE: Set by the "mark notified" action, not typed on the form.
     private Instant uodoNotifiedAt;
 
+    // WHAT: The reference / case number UODO gives back after a breach is submitted.
+    // WHY: Ties our record to the regulator's own file, so the register can prove
+    //      exactly which case was reported (Art. 33(5) accountability). Empty until the
+    //      officer submits on uodo.gov.pl and receives the number.
+    // EXAMPLE: "DKN.5131.2026.XYZ". Null/empty when no report has been filed yet.
+    // NOTE: A plain editable field — recorded through an ordinary update, not a
+    //       server-stamped action (unlike uodoNotifiedAt).
+    private String uodoReference;
+
     // WHAT: When the affected people were actually told directly (Art. 34).
     // WHY: Proves the Art. 34 duty was met, and when. Mirrors uodoNotifiedAt.
     // EXAMPLE: 2026-07-18. Null means "the people have not been told yet".

@@ -1,13 +1,17 @@
 // Breach workspace — live 72h clock, remediation checklist, risk rationale,
-// and the "notified UODO" action that timestamps the submission.
-import { useState } from 'react';
+// the "notified UODO" action that timestamps the submission, a ready-to-submit
+// UODO report (Art. 33(3)) you can export, and the UODO case reference.
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
-import { CheckCircle2, Sparkles, Plus, Users } from 'lucide-react';
+import { CheckCircle2, Sparkles, Plus, Users, FileText, Copy, Download, Printer, Save } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
 import PageHeader from '../../components/common/PageHeader';
 import { LoadingState, ErrorState } from '../../components/common/States';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -17,13 +21,46 @@ import { useNow, formatCountdown } from '../../hooks/useNow';
 import {
   fetchBreaches, updateBreach, markBreachNotified, markBreachSubjectsNotified,
 } from '../../store/slices/breachesSlice';
+import { fetchSettings } from '../../store/slices/settingsSlice';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { UODO_WINDOW_MS } from '../../services/breachService';
 import { DATA_CATEGORIES, labelOf } from '../../lib/gdpr';
+import { buildBreachReport } from '../../lib/breachReport';
 import { BreachClockBadge } from './BreachesPage';
 import { AiDraftDialog, useAiEnabled } from '../../components/common/AiAssist';
 import { aiDraftBreachNotification } from '../../store/slices/aiSlice';
+
+// A reminder fires once the 72h window is inside this much time (or already gone).
+const REMIND_THRESHOLD_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+// ── Export helpers (browser downloads / print) ───────────────────────────────
+function escapeHtml(s) {
+  return String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+function downloadBlob(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+// A .doc that Microsoft Word opens: HTML wrapped and served as msword.
+function downloadWord(filename, title, content) {
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head>`
+    + `<body><pre style="font-family: Georgia, serif; white-space: pre-wrap; font-size: 12pt;">${escapeHtml(content)}</pre></body></html>`;
+  downloadBlob(filename, html, 'application/msword');
+}
+function printDoc(title, content) {
+  const win = window.open('', '_blank');
+  if (!win) return;
+  win.document.write(`<!doctype html><title>${escapeHtml(title)}</title>`
+    + `<pre style="font-family: Georgia, serif; white-space: pre-wrap; max-width: 46rem; margin: 2rem auto;">${escapeHtml(content)}</pre>`);
+  win.document.close();
+  win.print();
+}
 
 export default function BreachDetailPage() {
   const { id } = useParams();
@@ -31,15 +68,45 @@ export default function BreachDetailPage() {
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
   const { items, status, error, refetch } = useSliceData('breaches', fetchBreaches);
+  const settings = useSelector((s) => s.settings);
   const now = useNow(1000);
   const aiEnabled = useAiEnabled();
   const [aiOpen, setAiOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [newTask, setNewTask] = useState('');
+  const [reference, setReference] = useState('');
+  const remindedFor = useRef(null); // breach id we've already reminded about
+
+  const breach = items.find((b) => b.id === id);
+
+  // Load the company/DPO settings the report needs.
+  useEffect(() => {
+    if (settings.status === 'idle') dispatch(fetchSettings());
+  }, [settings.status, dispatch]);
+
+  // Keep the reference input in step with the loaded breach.
+  useEffect(() => {
+    if (breach) setReference(breach.uodoReference ?? '');
+  }, [breach?.id, breach?.uodoReference]);
+
+  // Near-deadline reminder: once per breach, when the UODO clock is nearly up (or
+  // already elapsed) and UODO has not been notified. (Email/push reminders would come
+  // from the RegulaOne notification service — this is the in-app nudge.)
+  useEffect(() => {
+    if (!breach || remindedFor.current === breach.id) return;
+    if (!breach.uodoNotificationRequired || breach.uodoNotifiedAt) return;
+    const remainingMs = new Date(breach.discoveredAt).getTime() + UODO_WINDOW_MS - Date.now();
+    if (remainingMs <= REMIND_THRESHOLD_MS) {
+      remindedFor.current = breach.id;
+      const msg = remainingMs <= 0
+        ? (lang === 'pl' ? 'Minęło 72 h — zgłoś naruszenie do UODO i podaj przyczynę opóźnienia.' : '72h window elapsed — notify UODO now and state the reason for delay.')
+        : (lang === 'pl' ? `Zostało mniej niż ${Math.ceil(remainingMs / 3600000)} h na zgłoszenie do UODO.` : `Less than ${Math.ceil(remainingMs / 3600000)}h left to notify UODO.`);
+      toast.warning(msg, { duration: 8000 });
+    }
+  }, [breach?.id, breach?.uodoNotificationRequired, breach?.uodoNotifiedAt, breach?.discoveredAt, lang]);
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={5} />;
   if (status === 'failed') return <ErrorState error={error} onRetry={refetch} />;
-
-  const breach = items.find((b) => b.id === id);
   if (!breach) return <ErrorState error="NOT_FOUND" />;
 
   const canManage = can(user, ACTIONS.MANAGE_BREACHES);
@@ -47,10 +114,13 @@ export default function BreachDetailPage() {
 
   // A breach may only be CLOSED once every legal obligation is discharged: all
   // remediation done AND (if required) UODO notified AND (if required) the data
-  // subjects communicated with. Previously any last checkbox closed the record
-  // even with an outstanding UODO/Art. 34 notification.
+  // subjects communicated with.
   const uodoDone = !breach.uodoNotificationRequired || Boolean(breach.uodoNotifiedAt);
   const subjectsDone = !breach.subjectsNotificationRequired || Boolean(breach.subjectsNotifiedAt);
+
+  // The ready-to-submit report, freshly built from the breach + current settings.
+  const report = buildBreachReport({ breach, settings: settings.data, lang });
+  const reportFilename = `UODO_breach_report_${breach.id}`;
 
   const applyRemediation = async (remediation) => {
     const patch = { remediation };
@@ -88,11 +158,33 @@ export default function BreachDetailPage() {
     else toast.success(t('breach.subjectsNotified'));
   };
 
+  const saveReference = async () => {
+    const value = reference.trim();
+    if (value === (breach.uodoReference ?? '')) return;
+    const action = await dispatch(updateBreach({ id: breach.id, patch: { uodoReference: value } }));
+    if (action.error) toast.error(t('common.notAuthorized'));
+    else toast.success(t('common.save'));
+  };
+
+  const copyReport = async () => {
+    try {
+      await navigator.clipboard.writeText(report);
+      toast.success(t('ai.copied'));
+    } catch {
+      toast.error(t('common.error'));
+    }
+  };
+
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title={breach.title}>
         <BreachClockBadge breach={breach} now={now} />
         <StatusBadge status={breach.status} />
+        {/* The ready-to-submit UODO report is available at any time (before or after
+            notifying) — for submission and for the file. */}
+        <Button variant="outline" onClick={() => setReportOpen(true)}>
+          <FileText /> {lang === 'pl' ? 'Raport UODO' : 'UODO report'}
+        </Button>
       </PageHeader>
 
       <div className="grid gap-4">
@@ -173,6 +265,37 @@ export default function BreachDetailPage() {
           </CardContent>
         </Card>
 
+        {/* UODO reference / case number — recorded AFTER submitting on uodo.gov.pl,
+            so the register carries the regulator's own file number (Art. 33(5)). */}
+        {breach.uodoNotificationRequired && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">{lang === 'pl' ? 'Sygnatura / numer sprawy UODO' : 'UODO reference / case number'}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {canManage ? (
+                <div className="flex flex-wrap gap-2">
+                  <Input value={reference} onChange={(e) => setReference(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveReference(); }}
+                    placeholder={lang === 'pl' ? 'np. DKN.5131.2026.XYZ' : 'e.g. DKN.5131.2026.XYZ'}
+                    aria-label={lang === 'pl' ? 'Numer sprawy UODO' : 'UODO case number'} className="max-w-xs" />
+                  <Button variant="outline" size="sm" onClick={saveReference}
+                    disabled={reference.trim() === (breach.uodoReference ?? '')}>
+                    <Save /> {t('common.save')}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-foreground">{breach.uodoReference || '—'}</p>
+              )}
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {lang === 'pl'
+                  ? 'Wpisz numer nadany przez UODO po wysłaniu zgłoszenia na uodo.gov.pl.'
+                  : 'Enter the case number UODO gives you after you submit the report on uodo.gov.pl.'}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">{t('breach.riskRationale')} — Art. 33(5)</CardTitle></CardHeader>
           <CardContent>
@@ -206,6 +329,44 @@ export default function BreachDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Ready-to-submit UODO report (Art. 33(3)) — deterministic, filled from the
+          breach + company/DPO settings. Copy it into UODO's online form, or keep the
+          download for the file. */}
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{lang === 'pl' ? 'Raport zgłoszenia do UODO — art. 33(3)' : 'UODO breach report — Art. 33(3)'}</DialogTitle>
+            <DialogDescription>
+              {lang === 'pl'
+                ? 'Gotowy do wysłania. Skopiuj do formularza na uodo.gov.pl lub pobierz do akt.'
+                : 'Ready to submit. Copy it into the form on uodo.gov.pl, or download it for your file.'}
+            </DialogDescription>
+          </DialogHeader>
+          {!settings.data && (
+            <p className="text-xs text-(--status-warn)">
+              {lang === 'pl'
+                ? 'Uwaga: dane administratora/IOD nie są jeszcze uzupełnione w Ustawieniach — pola te pokażą się jako [uzupełnij w Ustawieniach].'
+                : 'Note: controller/DPO details are not set in Settings yet — those fields show as [set in Settings].'}
+            </p>
+          )}
+          <pre className="max-h-[26rem] overflow-auto whitespace-pre-wrap rounded-lg border bg-muted/30 p-3 font-sans text-xs leading-relaxed text-foreground">
+            {report}
+          </pre>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={copyReport}><Copy /> {t('ai.copy')}</Button>
+            <Button variant="outline" size="sm" onClick={() => downloadBlob(`${reportFilename}.md`, report, 'text/markdown;charset=utf-8')}>
+              <Download /> Markdown
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => downloadWord(`${reportFilename}.doc`, breach.title, report)}>
+              <Download /> Word
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => printDoc(breach.title, report)}>
+              <Printer /> {lang === 'pl' ? 'Drukuj / PDF' : 'Print / PDF'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AiDraftDialog
         open={aiOpen}
