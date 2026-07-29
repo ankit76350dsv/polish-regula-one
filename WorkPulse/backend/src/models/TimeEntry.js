@@ -12,6 +12,26 @@ const breakSchema = new mongoose.Schema(
   { _id: true }
 );
 
+// Where a single clock action happened (only stored when the tenant has turned
+// location monitoring on and the employee was told — see Art. 22²). `valid` is
+// false when something looked wrong (fake GPS, off-site, poor accuracy).
+const punchLocationSchema = new mongoose.Schema(
+  {
+    latitude: { type: Number },
+    longitude: { type: Number },
+    accuracy: { type: Number }, // GPS accuracy in metres (smaller is better)
+    mocked: { type: Boolean, default: false }, // app reported a fake location
+    platform: { type: String }, // e.g. "android" / "ios"
+    withinGeofence: { type: Boolean },
+    matchedSite: { type: String },
+    distanceMeters: { type: Number },
+    valid: { type: Boolean, default: true },
+    flags: { type: [String], default: [] }, // e.g. ["OUTSIDE_GEOFENCE"]
+    at: { type: Date },
+  },
+  { _id: false }
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TimeEntry — the core working-time evidence record.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,6 +66,16 @@ const timeEntrySchema = new mongoose.Schema(
     clockInSource: { type: String, enum: ['WEB', 'MOBILE', 'KIOSK', 'SYSTEM'], default: 'WEB' },
     clockOutSource: { type: String, enum: ['WEB', 'MOBILE', 'KIOSK', 'SYSTEM'], default: 'WEB' },
 
+    // GPS of each clock action (only when location monitoring is on — Art. 22²).
+    clockInLocation: { type: punchLocationSchema, default: undefined },
+    clockOutLocation: { type: punchLocationSchema, default: undefined },
+    // True if any punch on this shift raised a location warning (spoof/off-site).
+    locationFlagged: { type: Boolean, default: false },
+
+    // True if a protected employee (pregnant / young / parent of a small child)
+    // did overtime or night work without the required consent (art. 178 / 203).
+    protectedWorkFlagged: { type: Boolean, default: false },
+
     breaks: { type: [breakSchema], default: [] },
 
     // ── Derived working-time numbers (from utils/workingTime.js) ─────────────
@@ -64,9 +94,30 @@ const timeEntrySchema = new mongoose.Schema(
       default: 'NOT_REQUIRED',
     },
 
+    // ── Night work (art. 151⁷/151⁸) ──────────────────────────────────────────
+    // How many minutes of the shift fell in the night window (21:00–07:00 by
+    // default) and the % night bonus that applies to them (20% by default).
+    nightMinutes: { type: Number, default: 0 },
+    isNightWork: { type: Boolean, default: false },
+    nightPremiumPercent: { type: Number, default: 0 },
+
+    // ── What kind of day was this? (art. 151⁹–151¹²) ──────────────────────────
+    //   WORKDAY — an ordinary working day
+    //   SUNDAY  — worked on a Sunday
+    //   HOLIDAY — worked on a public holiday
+    dayType: {
+      type: String,
+      enum: ['WORKDAY', 'SUNDAY', 'HOLIDAY'],
+      default: 'WORKDAY',
+    },
+    isSundayWork: { type: Boolean, default: false },
+    isHolidayWork: { type: Boolean, default: false },
+
     // ── Overtime (art. 151) — controlled, not silent ─────────────────────────
     overtimeMinutes: { type: Number, default: 0 },
     isOvertime: { type: Boolean, default: false },
+    // The pay rate for any overtime on this shift: 50% or 100% (art. 151¹).
+    overtimePremiumRate: { type: Number, default: 0 },
     overtimeReason: {
       type: String,
       enum: ['EMPLOYER_REQUEST', 'EMERGENCY', 'MANUAL_HR_APPROVAL', 'OTHER', null],
@@ -83,6 +134,15 @@ const timeEntrySchema = new mongoose.Schema(
     // ── Daily rest check (art. 132 — at least 11 h before this shift) ─────────
     dailyRest: {
       restGapMinutes: { type: Number },
+      requiredMinutes: { type: Number },
+      violation: { type: Boolean, default: false },
+    },
+
+    // ── Weekly rest check (art. 133 — at least 35 continuous hours per week) ──
+    // Measured over the 7 days ending at this shift's clock-in. longestRestMinutes
+    // is the biggest unbroken rest block found in that window.
+    weeklyRest: {
+      longestRestMinutes: { type: Number },
       requiredMinutes: { type: Number },
       violation: { type: Boolean, default: false },
     },

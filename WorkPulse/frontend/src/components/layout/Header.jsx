@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { label: "Absences", path: "/absences" },
   { label: "Time Records", path: "/records", adminOnly: true },
   { label: "Dashboard", path: "/dashboard", adminOnly: true },
+  { label: "Settlement", path: "/settlement", adminOnly: true },
   { label: "Policy", path: "/policy", adminOnly: true },
   { label: "Audit", path: "/audit-logs", adminOnly: true },
 ];

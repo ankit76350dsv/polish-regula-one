@@ -6,14 +6,19 @@ import { formatDuration, formatTime, formatDate, breakStatusMeta, entryStatusMet
 // The logged-in employee's own working-time history (read-only).
 export default function MyTimesheet() {
   const [data, setData] = useState(null);
+  const [settlement, setSettlement] = useState(null); // my period + yearly picture
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.getMyEntries({ limit: 60 });
+        const [res, s] = await Promise.all([
+          api.getMyEntries({ limit: 60 }),
+          api.getMySettlement().catch(() => null),
+        ]);
         setData(res);
+        setSettlement(s);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -40,6 +45,9 @@ export default function MyTimesheet() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       <PageHeader title="My Timesheet" subtitle="Your recorded working time and breaks" />
       <ErrorBanner message={error} />
+
+      {/* My working-time compliance this settlement period (art. 131 / 151 §3). */}
+      {settlement && <MyComplianceCard s={settlement} />}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
         <Card className="p-4">
@@ -111,5 +119,48 @@ export default function MyTimesheet() {
         </div>
       </Card>
     </div>
+  );
+}
+
+// A compact card showing the employee's own settlement-period compliance:
+// average weekly hours (vs the 48h cap) and overtime used this year (vs 150h).
+function MyComplianceCard({ s }) {
+  const avgHours = (s.averageWeeklyMinutes / 60).toFixed(1);
+  const annualHours = (s.annualOvertimeMinutes / 60).toFixed(1);
+  const limitHours = (s.annualOvertimeLimitMinutes / 60).toFixed(0);
+  const maxAvg = (s.maxAverageWeeklyMinutes / 60).toFixed(0);
+
+  return (
+    <Card className="p-5 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold text-slate-700">My compliance this period</p>
+        {s.exceedsWeeklyAverageCap || s.exceedsAnnualOvertimeLimit ? (
+          <Badge cls="bg-red-50 text-red-700 border-red-200">Attention needed</Badge>
+        ) : s.approachingAnnualOvertimeLimit ? (
+          <Badge cls="bg-amber-50 text-amber-700 border-amber-200">Near yearly limit</Badge>
+        ) : (
+          <Badge cls="bg-emerald-50 text-emerald-700 border-emerald-200">Within limits</Badge>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-400">Average weekly hours</p>
+          <p className={`text-xl font-extrabold mt-1 ${s.exceedsWeeklyAverageCap ? "text-red-600" : "text-slate-800"}`}>
+            {avgHours}h <span className="text-xs font-medium text-slate-400">/ {maxAvg}h cap</span>
+          </p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-400">Overtime this year</p>
+          <p
+            className={`text-xl font-extrabold mt-1 ${
+              s.exceedsAnnualOvertimeLimit ? "text-red-600" : s.approachingAnnualOvertimeLimit ? "text-amber-600" : "text-slate-800"
+            }`}
+          >
+            {annualHours}h <span className="text-xs font-medium text-slate-400">/ {limitHours}h limit</span>
+          </p>
+        </div>
+      </div>
+    </Card>
   );
 }

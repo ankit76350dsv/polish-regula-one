@@ -36,8 +36,13 @@ async function request(path, { method = "GET", body } = {}) {
 // ── Clock / time tracking (self-service) ─────────────────────────────────────
 export const getEligibility = () => request("/time/eligibility");
 export const getStatus = () => request("/time/status");
-export const clockIn = (source = "WEB") => request("/time/clock-in", { method: "POST", body: { source } });
-export const clockOut = (source = "WEB") => request("/time/clock-out", { method: "POST", body: { source } });
+// clockIn/clockOut can carry GPS + device info. These are ONLY used by the
+// backend when the tenant has turned location monitoring on (Art. 22²);
+// otherwise they are ignored. `opts` = { source, location, device }.
+export const clockIn = ({ source = "WEB", location, device } = {}) =>
+  request("/time/clock-in", { method: "POST", body: { source, location, device } });
+export const clockOut = ({ source = "WEB", location, device } = {}) =>
+  request("/time/clock-out", { method: "POST", body: { source, location, device } });
 export const startBreak = () => request("/time/break/start", { method: "POST" });
 export const endBreak = () => request("/time/break/end", { method: "POST" });
 export const getMyEntries = (params = {}) => request(`/time/my-entries${qs(params)}`);
@@ -51,6 +56,24 @@ export const decideOvertime = (id, body) => request(`/time/entries/${id}/overtim
 // ── Working time policy ──────────────────────────────────────────────────────
 export const getPolicy = () => request("/policy");
 export const updatePolicy = (body) => request("/policy", { method: "PUT", body });
+
+// ── Settlement-period reconciliation (Art. 131 / 151 §3) ─────────────────────
+// The logged-in employee's own period + yearly overtime picture.
+export const getMySettlement = () => request("/settlement/me");
+// Admin/HR view of every employee. ?onlyViolations=true to see only breaches.
+export const getTenantSettlement = (params = {}) => request(`/settlement${qs(params)}`);
+
+// ── Location monitoring notice (Art. 22²) ────────────────────────────────────
+// Does this employee still need to accept the monitoring notice before their
+// location may be recorded? Returns { locationTrackingEnabled, required,
+// acknowledged, noticeText, noticeVersion }.
+export const getMonitoringStatus = () => request("/monitoring/status");
+export const acknowledgeMonitoring = () => request("/monitoring/acknowledge", { method: "POST" });
+
+// ── Employee protection profiles (Art. 178 / 203) — admin/HR only ────────────
+export const getEmployeeProfile = (userId) => request(`/employee-profiles/${userId}`);
+export const updateEmployeeProfile = (userId, body) =>
+  request(`/employee-profiles/${userId}`, { method: "PUT", body });
 
 // ── Absences ─────────────────────────────────────────────────────────────────
 export const createAbsence = (body) => request("/absences", { method: "POST", body });

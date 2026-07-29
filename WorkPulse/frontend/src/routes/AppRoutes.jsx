@@ -12,6 +12,7 @@ import MyTimesheet from "../pages/MyTimesheet";
 import Absences from "../pages/Absences";
 import TimeRecords from "../pages/TimeRecords";
 import Dashboard from "../pages/Dashboard";
+import Settlement from "../pages/Settlement";
 import Policy from "../pages/Policy";
 import AuditReport from "../pages/AuditReport";
 import NotFound from "../pages/NotFound";
@@ -38,6 +39,7 @@ const router = createBrowserRouter([
           { path: "absences", element: <Absences /> },
           { path: "records", element: <TimeRecords /> },
           { path: "dashboard", element: <Dashboard /> },
+          { path: "settlement", element: <Settlement /> },
           { path: "policy", element: <Policy /> },
           { path: "audit-logs", element: <AuditReport /> },
           { path: "*", element: <NotFound /> },

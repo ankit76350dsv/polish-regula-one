@@ -133,6 +133,111 @@ function checkWeeklyRest(shifts = []) {
   };
 }
 
+// ── Weekly rest over a rolling 7-day window (Art. 133) ───────────────────────
+// The simple checkWeeklyRest above only looks at the gaps BETWEEN shifts. But
+// the law wants at least 35 continuous hours of rest inside every 7-day period,
+// and the biggest rest block might be at the START of the week (before the first
+// shift) or the END (after the last shift) — not just between two shifts.
+//
+// This version looks at a fixed time window (for example "the last 7 days") and
+// finds the single longest stretch of time with NO work at all, including the
+// time before the first shift and after the last shift in that window. That is
+// the honest answer to "did this person get their 35 hours off this week?".
+//
+//   shifts      — every shift for the employee (only finished ones are used).
+//   windowStart — the start of the 7-day window (a Date or ISO string).
+//   windowEnd   — the end of the window (usually "now").
+function checkWeeklyRestWindow(shifts = [], windowStart, windowEnd) {
+  const start = new Date(windowStart).getTime();
+  const end = new Date(windowEnd).getTime();
+
+  // Turn finished shifts into {start,end} time ranges, keep only the ones that
+  // fall inside the window, and cut them to the window edges so a shift that
+  // began before the window does not count as work from before it.
+  const intervals = shifts
+    .filter((s) => s.clockIn && s.clockOut)
+    .map((s) => ({ start: new Date(s.clockIn).getTime(), end: new Date(s.clockOut).getTime() }))
+    .filter((iv) => iv.end > start && iv.start < end)
+    .map((iv) => ({ start: Math.max(iv.start, start), end: Math.min(iv.end, end) }))
+    .sort((a, b) => a.start - b.start);
+
+  // Merge shifts that touch or overlap so the gaps between them are real rest.
+  const merged = [];
+  for (const iv of intervals) {
+    const last = merged[merged.length - 1];
+    if (last && iv.start <= last.end) {
+      last.end = Math.max(last.end, iv.end);
+    } else {
+      merged.push({ ...iv });
+    }
+  }
+
+  // Walk the window and measure every rest gap: before the first shift, between
+  // shifts, and after the last shift. Keep the longest one.
+  let longest = 0;
+  let cursor = start;
+  for (const iv of merged) {
+    if (iv.start - cursor > longest) longest = iv.start - cursor;
+    if (iv.end > cursor) cursor = iv.end;
+  }
+  if (end - cursor > longest) longest = end - cursor;
+
+  const longestRestMinutes = Math.round(longest / 60000);
+  return {
+    longestRestMinutes,
+    requiredMinutes: WEEKLY_REST_MINUTES,
+    violation: longestRestMinutes < WEEKLY_REST_MINUTES,
+  };
+}
+
+// ── Night work (Art. 151⁷) ───────────────────────────────────────────────────
+// Polish law says "night" is 8 chosen hours between 21:00 and 07:00. Work done
+// in that window earns an extra 20% night bonus (art. 151⁸). This helper adds up
+// how many minutes of a shift fell inside the night window. Because the window
+// crosses midnight, we check the night block for each day the shift could touch.
+function overlapMinutes(aStart, aEnd, bStart, bEnd) {
+  const s = Math.max(aStart, bStart);
+  const e = Math.min(aEnd, bEnd);
+  return e > s ? Math.round((e - s) / 60000) : 0;
+}
+
+function nightWorkMinutes(clockIn, clockOut, startHour = 21, endHour = 7) {
+  if (!clockIn || !clockOut) return 0;
+  const start = new Date(clockIn).getTime();
+  const end = new Date(clockOut).getTime();
+  if (end <= start) return 0;
+
+  let total = 0;
+  const firstDay = new Date(clockIn);
+  firstDay.setHours(0, 0, 0, 0);
+  const lastDay = new Date(clockOut);
+  lastDay.setHours(0, 0, 0, 0);
+
+  // Look at each night block from the day before the shift to the shift's last
+  // day. Each block runs from `startHour` one day to `endHour` the next day.
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  for (let t = firstDay.getTime() - ONE_DAY; t <= lastDay.getTime(); t += ONE_DAY) {
+    const winStart = new Date(t);
+    winStart.setHours(startHour, 0, 0, 0);
+    const winEnd = new Date(t + ONE_DAY);
+    winEnd.setHours(endHour, 0, 0, 0);
+    total += overlapMinutes(start, end, winStart.getTime(), winEnd.getTime());
+  }
+  return total;
+}
+
+// ── Overtime pay rate (Art. 151¹) ────────────────────────────────────────────
+// Overtime is paid with an extra bonus on top of normal pay:
+//   * 100% — overtime at night, on Sundays, or on public holidays.
+//   *  50% — all other overtime (for example an ordinary weekday).
+// We favour the employee: if the shift touched any night hours we use 100%.
+// (This is a simplification; exact pay also depends on the schedule and any
+//  day off given in exchange — payroll should confirm the final figure.)
+function overtimePremiumRate({ isSunday = false, isHoliday = false, nightMinutes = 0 } = {}) {
+  if (isSunday || isHoliday || nightMinutes > 0) return 100;
+  return 50;
+}
+
 // ── The main calculator ──────────────────────────────────────────────────────
 // Takes a finished (or in-progress) time entry plus the day's scheduled norm and
 // returns every derived working-time number in one object. This is the single
@@ -175,6 +280,55 @@ function computeEntryTotals(entry, scheduledMinutes = 480) {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Settlement-period rules (okres rozliczeniowy)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Polish law does NOT only look at one day. It also checks longer periods:
+//
+//   * Art. 131 §1 — across the whole settlement period, the AVERAGE working time
+//                   per week (including overtime) must not go above 48 hours.
+//   * Art. 151 §3 — overtime worked because of the employer's special needs is
+//                   limited to 150 hours per calendar year (a company can raise
+//                   this in its work rules, so we keep it configurable).
+//
+// A "settlement period" (okres rozliczeniowy) is a block of 1–4 months (or more
+// in special systems) over which the employer balances the hours. To keep the
+// periods steady and non-overlapping, we anchor them to the start of the
+// calendar year and step forward in equal blocks of `months`.
+
+const WEEKLY_AVG_CAP_MINUTES = 48 * 60; // art. 131 — 48h average weekly cap
+const ANNUAL_OVERTIME_LIMIT_MINUTES = 150 * 60; // art. 151 §3 — 150h/year default
+const MINUTES_PER_WEEK = 7 * 24 * 60;
+
+// Work out which settlement period a given date falls into, anchored to 1 Jan.
+// Returns the period's start (inclusive) and end (exclusive) as Dates.
+//   referenceDate — any date inside the period we want.
+//   months        — how many whole months each period lasts (from the policy).
+function settlementPeriodBounds(referenceDate, months = 1) {
+  const ref = new Date(referenceDate);
+  const size = Math.max(1, Math.round(months));
+  const year = ref.getFullYear();
+
+  // How many months into the year we are (0 = January).
+  const monthIndex = ref.getMonth();
+  // Which block of `size` months this month sits in.
+  const blockStartMonth = Math.floor(monthIndex / size) * size;
+
+  const start = new Date(year, blockStartMonth, 1, 0, 0, 0, 0);
+  const end = new Date(year, blockStartMonth + size, 1, 0, 0, 0, 0);
+  return { start, end };
+}
+
+// The average working time per 7-day week across a period.
+// totalWorkedMinutes already includes overtime (it is the real time worked).
+function averageWeeklyMinutes(totalWorkedMinutes, periodStart, periodEnd) {
+  const spanMinutes = diffMinutes(periodStart, periodEnd);
+  const weeks = spanMinutes / MINUTES_PER_WEEK;
+  if (weeks <= 0) return 0;
+  return Math.round(totalWorkedMinutes / weeks);
+}
+
 // ── Small time helpers ───────────────────────────────────────────────────────
 
 // Whole minutes between two dates (b - a). Accepts Date objects or ISO strings.
@@ -199,12 +353,20 @@ module.exports = {
   MINUTES_PER_HOUR,
   DAILY_REST_MINUTES,
   WEEKLY_REST_MINUTES,
+  WEEKLY_AVG_CAP_MINUTES,
+  ANNUAL_OVERTIME_LIMIT_MINUTES,
+  MINUTES_PER_WEEK,
+  settlementPeriodBounds,
+  averageWeeklyMinutes,
   requiredBreakMinutes,
   breakComplianceStatus,
   totalBreakMinutes,
   dailyOvertimeMinutes,
   checkDailyRest,
   checkWeeklyRest,
+  checkWeeklyRestWindow,
+  nightWorkMinutes,
+  overtimePremiumRate,
   computeEntryTotals,
   diffMinutes,
   minutesToHours,

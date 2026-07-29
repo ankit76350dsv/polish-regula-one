@@ -8,6 +8,10 @@ function metaFrom(req) {
     source: req.body?.source || 'WEB',
     ipAddress: req.ip,
     userAgent: req.headers['user-agent'],
+    // GPS + device info the mobile app may send. Only used when the tenant has
+    // turned location monitoring on (Art. 22²); ignored otherwise.
+    location: req.body?.location,
+    device: req.body?.device,
   };
 }
 function actorFrom(req) {

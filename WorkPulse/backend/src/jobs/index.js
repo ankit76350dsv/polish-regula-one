@@ -3,6 +3,9 @@ const config = require('../config/environment');
 const { runBreakReminderJob } = require('./breakReminderJob');
 const { runOpenBreakJob } = require('./openBreakJob');
 const { runMissingClockOutJob } = require('./missingClockOutJob');
+const { runOvertimeReconciliationJob } = require('./overtimeReconciliationJob');
+const { runAttendanceReconciliationJob } = require('./attendanceReconciliationJob');
+const { runShiftAnomalyJob } = require('./shiftAnomalyJob');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cron job registry.
@@ -38,7 +41,22 @@ function registerJobs() {
   // Every 30 minutes — chase (and eventually flag) missing clock-outs.
   cron.schedule('*/30 * * * *', safe('missingClockOut', runMissingClockOutJob));
 
-  console.log('[JOB] WorkPulse cron jobs registered (break / open-break / missing-clock-out)');
+  // Every 3 hours — spot unusual finished shifts (very long, unapproved
+  // overtime, rest breaches, flagged location) so a human reviews them.
+  cron.schedule('0 */3 * * *', safe('shiftAnomaly', runShiftAnomalyJob));
+
+  // Once a day at 00:30 — reconcile yesterday's attendance into a daily,
+  // dated audit summary per tenant (labour-law record-keeping evidence).
+  cron.schedule('30 0 * * *', safe('attendanceReconciliation', runAttendanceReconciliationJob));
+
+  // Once a day at 01:00 — add up each employee's hours across the settlement
+  // period and the year, save the summaries, and alert on the 48h / 150h caps.
+  cron.schedule('0 1 * * *', safe('overtimeReconciliation', runOvertimeReconciliationJob));
+
+  console.log(
+    '[JOB] WorkPulse cron jobs registered (break / open-break / missing-clock-out / ' +
+      'shift-anomaly / attendance-reconciliation / overtime-reconciliation)'
+  );
 }
 
 module.exports = { registerJobs };

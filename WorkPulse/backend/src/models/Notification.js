@@ -29,6 +29,10 @@ const notificationSchema = new mongoose.Schema(
         'MISSING_CLOCK_OUT', // shift ended, no clock-out recorded
         'OVERTIME_APPROVAL', // overtime needs a manager decision
         'REST_VIOLATION', // daily/weekly rest rule looks breached
+        'LOCATION_FLAG', // clock-in GPS looked wrong (off-site / spoofed)
+        'OVERTIME_LIMIT', // settlement-period / yearly overtime cap reached
+        'PROTECTED_WORK', // protected employee did overtime/night work (art. 178/203)
+        'SHIFT_ANOMALY', // unusual shift spotted by the anomaly job
       ],
       required: true,
     },

@@ -31,6 +31,18 @@ const breakRuleSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// A single allowed work-site circle for mobile clock-in ("geofence").
+// A punch is "at the site" when it lands within radiusMeters of this point.
+const geofenceSchema = new mongoose.Schema(
+  {
+    site: { type: String, trim: true },
+    latitude: { type: Number },
+    longitude: { type: Number },
+    radiusMeters: { type: Number, default: 200 },
+  },
+  { _id: false }
+);
+
 const workingTimePolicySchema = new mongoose.Schema(
   {
     // Tenant this policy belongs to (stored as a string id, same as audit logs).
@@ -65,6 +77,15 @@ const workingTimePolicySchema = new mongoose.Schema(
     // settled. Configurable because different systems allow different lengths.
     settlementPeriodMonths: { type: Number, default: 1 },
 
+    // Art. 131 §1 — across the settlement period the average weekly working
+    // time (including overtime) must not exceed this. 48h is the legal ceiling.
+    maxAverageWeeklyHours: { type: Number, default: 48 },
+
+    // Art. 151 §3 — yearly cap on overtime worked for the employer's special
+    // needs. Default is the statutory 150h; a company may raise it in its work
+    // rules (up to the limit implied by the 48h average), so it is configurable.
+    annualOvertimeLimitHours: { type: Number, default: 150 },
+
     // Break thresholds (configurable, defaulting to the statutory values).
     breakRules: { type: breakRuleSchema, default: () => ({}) },
 
@@ -76,6 +97,39 @@ const workingTimePolicySchema = new mongoose.Schema(
     // but defaulting to the legal minimums.
     dailyRestHours: { type: Number, default: 11 },
     weeklyRestHours: { type: Number, default: 35 },
+
+    // Night-work window (art. 151⁷). The law lets the employer pick 8 hours
+    // between 21:00 and 07:00; the default is the whole 21:00–07:00 span.
+    // nightPremiumPercent is the extra pay for night hours (art. 151⁸ = 20%).
+    nightStartHour: { type: Number, default: 21 },
+    nightEndHour: { type: Number, default: 7 },
+    nightPremiumPercent: { type: Number, default: 20 },
+
+    // ── Location monitoring (Art. 22² Kodeks pracy + GDPR/RODO) ───────────────
+    // OFF BY DEFAULT on purpose. Tracking an employee's location is only lawful
+    // when the employer has a real reason AND has told the employee first, so a
+    // tenant must deliberately turn this on. When off, no location is captured.
+    locationTrackingEnabled: { type: Boolean, default: false },
+    // Allowed work-site circles. If empty, we cannot check "were they on site".
+    geofences: { type: [geofenceSchema], default: [] },
+    // If true, a clock-in outside every geofence is BLOCKED. If false (default),
+    // it is only flagged for HR — blocking people over one bad GPS reading is
+    // risky, so blocking is opt-in.
+    blockOutsideGeofence: { type: Boolean, default: false },
+    // GPS readings worse (larger) than this many metres are treated as unreliable.
+    maxAccuracyMeters: { type: Number, default: 100 },
+
+    // The monitoring notice shown to employees. Location/GPS tracking is a form
+    // of employee monitoring: art. 22² covers video monitoring and art. 22³ §4
+    // extends the same information duty to "other forms of monitoring" (GPS,
+    // email). The version lets us require a fresh acknowledgement when the text
+    // changes. (Verified against pip.gov.pl / uodo.gov.pl, July 2026.)
+    monitoringNoticeVersion: { type: String, default: '1.0' },
+    monitoringNoticeText: {
+      type: String,
+      default:
+        'This application records the time and, when enabled, the location of your clock-in and clock-out to confirm attendance at the work site. This is a form of employee monitoring under art. 22² and art. 22³ of the Polish Labour Code and is processed in line with GDPR/RODO. The data is used only for attendance and payroll, kept for the legally required period, and never used to track you outside working time.',
+    },
 
     // Exactly one policy per tenant should be the default used for new employees.
     isDefault: { type: Boolean, default: true },
