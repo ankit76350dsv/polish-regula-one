@@ -22,6 +22,13 @@ export default function ModuleAccessGuard() {
   // Decide the user's access level using the single shared rule.
   const access = getModuleAccess(user);
 
+  // The account itself has been switched off by an administrator
+  // (/me returned "enabled": false). Checked first, because nothing else matters
+  // if the account is suspended.
+  if (access === ACCESS.ACCOUNT_SUSPENDED) {
+    return <AccessRestricted variant={ACCESS.ACCOUNT_SUSPENDED} />;
+  }
+
   // Tenant has no SafeWork licence -> ask them to contact their administrator.
   if (access === ACCESS.MODULE_UNAVAILABLE) {
     return <AccessRestricted variant={ACCESS.MODULE_UNAVAILABLE} />;

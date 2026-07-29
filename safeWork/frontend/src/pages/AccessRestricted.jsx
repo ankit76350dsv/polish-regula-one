@@ -15,6 +15,19 @@ import { ACCESS } from "../config/moduleAccess";
 // (instead of lots of if/else in the JSX) makes it easy to read and to add new
 // cases later if we ever need them.
 const VARIANTS = {
+  // An administrator switched this account off (/me returns "enabled": false).
+  // Nothing in SafeWork works while that is the case, so the wording is final
+  // and simply points the person at whoever can turn the account back on.
+  [ACCESS.ACCOUNT_SUSPENDED]: {
+    accent: "red",
+    eyebrow: "Account Suspended",
+    title: "Your account has been suspended",
+    message:
+      "Your account is currently switched off, so SafeWork is not available to you. Please contact your administrator to have your account reactivated.",
+    // A "circle with a line through it" (no entry) icon path.
+    iconPath:
+      "M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636",
+  },
   [ACCESS.MODULE_UNAVAILABLE]: {
     accent: "amber",
     eyebrow: "Access Restricted",

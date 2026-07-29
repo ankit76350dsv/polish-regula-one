@@ -38,6 +38,7 @@ export const SAFEWORK_PERMISSIONS = SAFEWORK_ROLES;
 // We use plain strings (not numbers) so logs and debugging are easy to read.
 export const ACCESS = {
   ALLOWED: "ALLOWED", // user may use SafeWork
+  ACCOUNT_SUSPENDED: "ACCOUNT_SUSPENDED", // the account itself has been switched off
   MODULE_UNAVAILABLE: "MODULE_UNAVAILABLE", // tenant has no SafeWork licence
   PLAN_EXPIRED: "PLAN_EXPIRED", // subscription plan has expired
   PERMISSION_DENIED: "PERMISSION_DENIED", // tenant has SafeWork, this user was not given it
@@ -46,12 +47,14 @@ export const ACCESS = {
 
 // Look at the logged-in user object and decide what they are allowed to do.
 //
-// Order of the checks matters:
-//   1. First we make sure SafeWork is even part of their package. If the module
-//      is missing there is nothing they can do here except contact an admin, so
-//      we return MODULE_UNAVAILABLE straight away.
-//   2. Only if they DO own the module do we then care about whether the plan is
-//      still paid for. An expired plan is something they can fix by renewing.
+// Order of the checks matters. We answer the most basic question first, because
+// the user should see the message that actually explains their situation:
+//   1. Is the ACCOUNT switched on at all? A suspended account cannot do anything,
+//      no matter what licence or role it has, so this comes first.
+//   2. Is SafeWork part of their package? If not, all they can do is ask an
+//      administrator to add it.
+//   3. Is the plan still paid for? An expired plan is fixed by renewing.
+//   4. Was THIS person given SafeWork? (their permission list)
 //
 // `user` is the object returned by getMe(). We stay defensive because a broken
 // or partial response should never accidentally grant access.
@@ -60,6 +63,24 @@ export const getModuleAccess = (user) => {
   // this case, but we double-check so the function is safe on its own.)
   if (!user) {
     return ACCESS.MODULE_UNAVAILABLE;
+  }
+
+  // An administrator can suspend a person's account. When that happens the /me
+  // response comes back with "enabled": false, and that person must not be able
+  // to use SafeWork at all — not the dashboard, not employee records, nothing.
+  //
+  // We only treat it as suspended when the answer EXPLICITLY says false (the
+  // boolean false, or the text "false" which some clients send). If the field is
+  // missing we leave the account alone, because guessing "suspended" from a
+  // missing field would lock out everybody the day the field gets renamed.
+  //
+  // The backend refuses these requests as well (see authMiddleware.js), so this
+  // check is about showing a clear message instead of a page full of errors.
+  const isSuspended =
+    user.enabled === false || String(user.enabled).toLowerCase() === "false";
+
+  if (isSuspended) {
+    return ACCESS.ACCOUNT_SUSPENDED;
   }
 
   // moduleIds should be an array. If it is missing or the wrong type, treat it
