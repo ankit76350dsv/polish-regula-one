@@ -10,6 +10,8 @@ import SsoCallback from "../components/SsoCallback";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
 import ModuleAccessGuard from "./ModuleAccessGuard";
+import RequireCapability from "./RequireCapability";
+import { CAPABILITIES } from "../config/capabilities";
 import EmployeeList from "../components/EmployeeList";
 import AddEmployee from "../components/AddEmployee";
 import EmployeeProfile from "../components/EmployeeProfile";
@@ -45,11 +47,32 @@ const router = createBrowserRouter([
         path: "/",
         element: <Layout />,
         children: [
-          { index: true, element: <Dashboard /> },
-          { path: "dashboard", element: <Home /> },
-           { path: "employees", element: <EmployeeList /> },
-           { path: "/employees/add", element: <AddEmployee /> },
-           { path: "/employees/:id", element: <EmployeeProfile /> },
+          // ── Pages gated by what the user's role may DO ────────────────────
+          // Each page below is wrapped in RequireCapability, which shows a short
+          // "not part of your role" message instead of letting the page load and
+          // fill up with failed requests. The rules come from
+          // config/capabilities.js, and the backend enforces the same rules on
+          // every API call — the browser check is only for a tidy screen.
+          {
+            element: <RequireCapability capability={CAPABILITIES.DASHBOARD_READ} />,
+            children: [
+              { index: true, element: <Dashboard /> },
+              { path: "dashboard", element: <Home /> },
+            ],
+          },
+          {
+            // Viewing employee records (list + single profile).
+            element: <RequireCapability capability={CAPABILITIES.EMPLOYEE_READ} />,
+            children: [
+              { path: "employees", element: <EmployeeList /> },
+              { path: "/employees/:id", element: <EmployeeProfile /> },
+            ],
+          },
+          {
+            // Creating an employee profile is a write, so auditors cannot open it.
+            element: <RequireCapability capability={CAPABILITIES.EMPLOYEE_WRITE} />,
+            children: [{ path: "/employees/add", element: <AddEmployee /> }],
+          },
           { path: "services", element: <Placeholder /> },
           { path: "services/compliance-audits", element: <Placeholder /> },
           { path: "services/risk-assessment", element: <Placeholder /> },
@@ -62,7 +85,13 @@ const router = createBrowserRouter([
           { path: "solutions/construction", element: <Placeholder /> },
 
           { path: "reports",    element: <Placeholder /> },
-          { path: "audit-logs", element: <AuditReport /> },
+          {
+            // Only admins and auditors may read the audit trail. HR is excluded
+            // on purpose: it would let HR see which colleagues opened whose
+            // records, which is staff surveillance with no work reason.
+            element: <RequireCapability capability={CAPABILITIES.AUDIT_READ} />,
+            children: [{ path: "audit-logs", element: <AuditReport /> }],
+          },
           { path: "contact", element: <Placeholder /> },
           { path: "privacy", element: <Placeholder /> },
           { path: "terms", element: <Placeholder /> },

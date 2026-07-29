@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchEmployees } from "../store/slices/employeeSlice";
+import { useCapabilities } from "../hooks/useCapabilities";
 
 // ─── Status config ─────────────────────────────────────────────────────────────
 const statusConfig = {
@@ -122,6 +123,11 @@ function EmployeeList() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { list: employees, pagination, summary, loading, error } = useSelector((s) => s.employees);
+
+  // Creating an employee profile is a write action, so read-only roles (such as
+  // an auditor) must not be offered the button. The backend refuses the call too.
+  const { can, CAPABILITIES } = useCapabilities();
+  const canAddEmployee = can(CAPABILITIES.EMPLOYEE_WRITE);
 
   const [searchTerm, setSearchTerm]                 = useState("");
   const [debouncedSearch, setDebouncedSearch]       = useState("");
@@ -403,7 +409,7 @@ function EmployeeList() {
                       ? "Add your first employee to get started."
                       : "Try changing your filters or search keyword."}
                   </p>
-                  {!searchTerm && selectedDepartment === "All" && selectedSite === "All" && selectedStatus === "All" && (
+                  {canAddEmployee && !searchTerm && selectedDepartment === "All" && selectedSite === "All" && selectedStatus === "All" && (
                     <button
                       onClick={() => navigate("/employees/add")}
                       className="mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"

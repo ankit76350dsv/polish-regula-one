@@ -1,12 +1,21 @@
 import { useState, useEffect, useRef } from "react";
 import { NavLink, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useCapabilities } from "../../hooks/useCapabilities";
+import { CAPABILITIES } from "../../config/capabilities";
 
+// Every menu item says which ONE thing a user must be allowed to do before the
+// link is shown. For example "Audit Reports" needs AUDIT_READ, which admins and
+// auditors have but HR does not — so HR simply never sees that menu item instead
+// of clicking it and being turned away.
+//
+// An item with no `capability` is shown to everyone who can open SafeWork.
 const NAV_ITEMS = [
-  { label: "Home", path: "/" },
+  { label: "Home", path: "/", capability: CAPABILITIES.DASHBOARD_READ },
   {
     label: "Employees",
     path: "/employees",
+    capability: CAPABILITIES.EMPLOYEE_READ,
     // children: [
     //   { label: "Employee List", path: "/employees" },
     //   { label: "Add Employee", path: "/employees/add" },
@@ -19,8 +28,9 @@ const NAV_ITEMS = [
   {
     label: "Audit Reports",
     path: "/audit-logs",
+    capability: CAPABILITIES.AUDIT_READ,
   },
-  { label: "Dashboard", path: "/dashboard" },
+  { label: "Dashboard", path: "/dashboard", capability: CAPABILITIES.DASHBOARD_READ },
   // { label: "Reports", path: "/reports" },
   // { label: "Contact", path: "/contact" },
 ];
@@ -35,6 +45,16 @@ export default function Header() {
   // login() sends the user to the central RegulaOne login page.
   // logout() clears the shared cookie and returns to the central login page.
   const { isAuthenticated, login, logout } = useAuth();
+
+  // What this user is allowed to do. Used to drop menu items they cannot use.
+  const { can } = useCapabilities();
+
+  // Keep only the menu items this user's role covers. Items with no capability
+  // set are always kept. We work this out once per render of the header, and both
+  // the desktop and mobile menus use the same list so they can never disagree.
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => !item.capability || can(item.capability)
+  );
 
   const dropdownRef = useRef(null);
 
@@ -118,7 +138,7 @@ export default function Header() {
 
           {/* Desktop Navigation */}
           <nav ref={dropdownRef} className="hidden lg:flex items-center gap-1">
-            {NAV_ITEMS.map((item) =>
+            {visibleNavItems.map((item) =>
               item.children ? (
                 <div
                   key={item.label}
@@ -265,7 +285,7 @@ export default function Header() {
         }`}
       >
         <div className="bg-white border-t border-slate-100 px-4 pb-6 pt-2">
-          {NAV_ITEMS.map((item) =>
+          {visibleNavItems.map((item) =>
             item.children ? (
               <div key={item.label}>
                 <button

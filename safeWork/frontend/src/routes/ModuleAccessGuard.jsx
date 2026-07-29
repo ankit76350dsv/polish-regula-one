@@ -32,6 +32,13 @@ export default function ModuleAccessGuard() {
     return <AccessRestricted variant={ACCESS.PLAN_EXPIRED} />;
   }
 
+  // The company has SafeWork, but this particular user was not given permission
+  // to use it. Every SafeWork API would answer 403 for them, so we show one
+  // clear message instead of letting every page fail on its own.
+  if (access === ACCESS.PERMISSION_DENIED) {
+    return <AccessRestricted variant={ACCESS.PERMISSION_DENIED} />;
+  }
+
   // Everything is fine -> let the app render normally.
   return <Outlet />;
 }

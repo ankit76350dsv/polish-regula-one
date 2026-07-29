@@ -10,6 +10,7 @@ import {
   clearSubmitError,
   clearUploadError,
 } from "../store/slices/employeeSlice";
+import { useCapabilities } from "../hooks/useCapabilities";
 
 const API_BASE_URL = "http://localhost:8082/api";
 // We no longer read a token from localStorage or send an Authorization header.
@@ -726,6 +727,20 @@ function EmployeeProfile() {
   const [viewingDoc, setViewingDoc] = useState(null); // "medical" | "bhp" | null
   const [viewDocError, setViewDocError] = useState(null);
 
+  // ── What is this user allowed to do on this page? ───────────────────────────
+  // We work these out once and reuse them, so the whole page agrees with itself.
+  // The backend checks the same rules on every request; hiding a button here just
+  // stops people clicking something that would be refused.
+  const { can, CAPABILITIES } = useCapabilities();
+  // May change profile details (department, contract, risk level).
+  const canEditProfile = can(CAPABILITIES.EMPLOYEE_WRITE);
+  // May upload or replace a certificate file.
+  const canUploadDocuments = can(CAPABILITIES.DOCUMENT_WRITE);
+  // May OPEN the certificate file itself. Auditors do not have this: the status
+  // and expiry date above already prove a valid certificate exists, and the
+  // doctor's note is health data we keep to the smallest possible audience.
+  const canViewDocuments = can(CAPABILITIES.DOCUMENT_READ);
+
   useEffect(() => {
     if (id) dispatch(fetchEmployee(id));
     return () => { dispatch(clearSelected()); };
@@ -881,7 +896,7 @@ function EmployeeProfile() {
       <div className="mx-auto max-w-7xl">
 
         {/* ── Profile Header ─────────────────────────────────────────────────── */}
-        <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-xl">
+        <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 p-6 text-white shadow-xl">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
 
             <div className="flex items-start gap-4">
@@ -892,18 +907,18 @@ function EmployeeProfile() {
               <div>
                 <button
                   onClick={() => navigate("/employees")}
-                  className="mb-2 text-xs text-slate-400 hover:text-white transition-colors"
+                  className="mb-2 text-xs text-white-400 hover:text-white transition-colors"
                 >
                   ← Back to list
                 </button>
                 <h1 className="text-3xl font-bold">{employee.user?.name ?? "—"}</h1>
-                <p className="mt-1 text-sm text-slate-300">
+                <p className="mt-1 text-sm text-white-300">
                   {employee.user?.email}
                   {employee.position ? ` • ${employee.position}` : ""}
                   {employee.department ? ` • ${employee.department}` : ""}
                   {employee.site ? ` • ${employee.site}` : ""}
                 </p>
-                <p className="mt-1 text-xs text-slate-400 capitalize">
+                <p className="mt-1 text-xs text-white-400 capitalize">
                   {employee.user?.role?.toLowerCase().replace(/_/g, " ")}
                   {" • "}
                   {employee.isActive ? "Active" : "Inactive"}
@@ -914,28 +929,31 @@ function EmployeeProfile() {
             {/* Status cards */}
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 text-center">
-                <p className="mb-2 text-xs text-slate-300">Compliance</p>
+                <p className="mb-2 text-xs text-white-300">Compliance</p>
                 <StatusBadge status={overallStatus} />
               </div>
               <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 text-center">
-                <p className="mb-2 text-xs text-slate-300">Clock-in</p>
+                <p className="mb-2 text-xs text-white-300">Clock-in</p>
                 <StatusBadge status={clockStatus} />
               </div>
               <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 text-center">
-                <p className="mb-1 text-xs text-slate-300">Risk</p>
+                <p className="mb-1 text-xs text-white-300">Risk</p>
                 <p className={`text-sm font-bold ${riskColor(employee.riskLevel)}`}>
                   {employee.riskLevel ?? "—"}
                 </p>
               </div>
             </div>
 
-            {/* Edit button */}
-            <button
-              onClick={() => { setEditMode(true); setActiveTab("employment"); }}
-              className="self-start rounded-xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20 lg:self-auto"
-            >
-              Edit Profile
-            </button>
+            {/* Edit button — only for roles that may change profile details.
+                An auditor sees this page read-only. */}
+            {canEditProfile && (
+              <button
+                onClick={() => { setEditMode(true); setActiveTab("employment"); }}
+                className="self-start rounded-xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20 lg:self-auto"
+              >
+                Edit Profile
+              </button>
+            )}
           </div>
         </div>
 
@@ -1322,12 +1340,14 @@ function EmployeeProfile() {
                       <h3 className="text-base font-bold text-slate-900">Medical Certificate</h3>
                       <p className="mt-1 text-sm text-slate-500">Badania medycyny pracy</p>
                     </div>
-                    <button
-                      onClick={() => setUploadModal("medical")}
-                      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
-                    >
-                      Upload
-                    </button>
+                    {canUploadDocuments && (
+                      <button
+                        onClick={() => setUploadModal("medical")}
+                        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                      >
+                        Upload
+                      </button>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -1361,30 +1381,45 @@ function EmployeeProfile() {
                           {employee.medicalCertificate.documentPath.split("/").pop()}
                         </p>
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => handleViewDocument("medical")}
-                            disabled={viewingDoc === "medical"}
-                            className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                          >
-                            {viewingDoc === "medical" ? "Opening…" : "View Document"}
-                          </button>
-                          <button
-                            onClick={() => setUploadModal("medical")}
-                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
-                          >
-                            Replace
-                          </button>
+                          {/* Opening the file needs DOCUMENT_READ (health data). */}
+                          {canViewDocuments && (
+                            <button
+                              onClick={() => handleViewDocument("medical")}
+                              disabled={viewingDoc === "medical"}
+                              className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {viewingDoc === "medical" ? "Opening…" : "View Document"}
+                            </button>
+                          )}
+                          {canUploadDocuments && (
+                            <button
+                              onClick={() => setUploadModal("medical")}
+                              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                            >
+                              Replace
+                            </button>
+                          )}
+                          {/* Read-only roles (for example an auditor) see the file
+                              name and its status, which is what an audit needs,
+                              but cannot open the certificate itself. */}
+                          {!canViewDocuments && !canUploadDocuments && (
+                            <p className="text-xs text-slate-400">
+                              On file — opening certificates is not part of your role
+                            </p>
+                          )}
                         </div>
                       </div>
                     ) : (
                       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
                         <p className="text-sm text-slate-400">No document uploaded yet</p>
-                        <button
-                          onClick={() => setUploadModal("medical")}
-                          className="mt-3 text-sm font-bold text-blue-600 hover:underline"
-                        >
-                          Upload Now →
-                        </button>
+                        {canUploadDocuments && (
+                          <button
+                            onClick={() => setUploadModal("medical")}
+                            className="mt-3 text-sm font-bold text-blue-600 hover:underline"
+                          >
+                            Upload Now →
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1399,12 +1434,14 @@ function EmployeeProfile() {
                       <h3 className="text-base font-bold text-slate-900">BHP Safety Training</h3>
                       <p className="mt-1 text-sm text-slate-500">Bezpieczenstwo i Higiena Pracy</p>
                     </div>
-                    <button
-                      onClick={() => setUploadModal("bhp")}
-                      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
-                    >
-                      Upload
-                    </button>
+                    {canUploadDocuments && (
+                      <button
+                        onClick={() => setUploadModal("bhp")}
+                        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                      >
+                        Upload
+                      </button>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -1442,30 +1479,41 @@ function EmployeeProfile() {
                           {employee.bhpTraining.documentPath.split("/").pop()}
                         </p>
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => handleViewDocument("bhp")}
-                            disabled={viewingDoc === "bhp"}
-                            className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                          >
-                            {viewingDoc === "bhp" ? "Opening…" : "View Document"}
-                          </button>
-                          <button
-                            onClick={() => setUploadModal("bhp")}
-                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
-                          >
-                            Replace
-                          </button>
+                          {canViewDocuments && (
+                            <button
+                              onClick={() => handleViewDocument("bhp")}
+                              disabled={viewingDoc === "bhp"}
+                              className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {viewingDoc === "bhp" ? "Opening…" : "View Document"}
+                            </button>
+                          )}
+                          {canUploadDocuments && (
+                            <button
+                              onClick={() => setUploadModal("bhp")}
+                              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                            >
+                              Replace
+                            </button>
+                          )}
+                          {!canViewDocuments && !canUploadDocuments && (
+                            <p className="text-xs text-slate-400">
+                              On file — opening certificates is not part of your role
+                            </p>
+                          )}
                         </div>
                       </div>
                     ) : (
                       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
                         <p className="text-sm text-slate-400">No document uploaded yet</p>
-                        <button
-                          onClick={() => setUploadModal("bhp")}
-                          className="mt-3 text-sm font-bold text-blue-600 hover:underline"
-                        >
-                          Upload Now →
-                        </button>
+                        {canUploadDocuments && (
+                          <button
+                            onClick={() => setUploadModal("bhp")}
+                            className="mt-3 text-sm font-bold text-blue-600 hover:underline"
+                          >
+                            Upload Now →
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

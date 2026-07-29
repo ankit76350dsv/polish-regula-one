@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 // useNavigate lets us move the user to another page when they click a button.
 import { useNavigate } from "react-router-dom";
 import { fetchDashboard } from "../store/slices/dashboardSlice";
+import { useCapabilities } from "../hooks/useCapabilities";
 
 // ── Status badges ─────────────────────────────────────────────────────────────
 const statusConfig = {
@@ -134,6 +135,11 @@ function ComplianceHealthCard({ health }) {
 
 function BlockedEmployees({ employees = [] }) {
   const list = employees.filter(e => e.clockInStatus === "blocked");
+  // Fixing a block means uploading a valid certificate, so only roles allowed to
+  // upload documents are offered the button. Read-only roles still SEE who is
+  // blocked and why — that is the information an auditor needs.
+  const { can, CAPABILITIES } = useCapabilities();
+  const canFixCompliance = can(CAPABILITIES.DOCUMENT_WRITE);
   return (
     <Card className="p-5 flex flex-col h-full">
       <CardHeader
@@ -170,9 +176,11 @@ function BlockedEmployees({ employees = [] }) {
                   : "Compliance issue — action required"}
               </span>
             </div>
-            <button className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-red-600 hover:bg-red-700 px-3 py-2 text-xs font-semibold text-white transition-colors">
-              Resolve Compliance Issue
-            </button>
+            {canFixCompliance && (
+              <button className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-red-600 hover:bg-red-700 px-3 py-2 text-xs font-semibold text-white transition-colors">
+                Resolve Compliance Issue
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -249,6 +257,9 @@ function EmployeeComplianceTable({ employees = [] }) {
 function ExpiringDocumentsTable({ expiringDocuments = [] }) {
   // "navigate" is the function that changes the page the user is looking at.
   const navigate = useNavigate();
+  // Only roles that may upload a certificate get the "Upload / Renew" action.
+  const { can, CAPABILITIES } = useCapabilities();
+  const canUploadDocuments = can(CAPABILITIES.DOCUMENT_WRITE);
 
   return (
     <Card className="p-5">
@@ -310,12 +321,17 @@ function ExpiringDocumentsTable({ expiringDocuments = [] }) {
                       </span>
                     </td>
                     <td className="py-3.5 px-2 text-right">
-                      <button className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-800 transition-colors">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                        </svg>
-                        Upload / Renew
-                      </button>
+                      {canUploadDocuments ? (
+                        <button className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-800 transition-colors">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                          </svg>
+                          Upload / Renew
+                        </button>
+                      ) : (
+                        // Read-only roles see the warning but not the fix action.
+                        <span className="text-xs text-slate-300">—</span>
+                      )}
                     </td>
                   </tr>
                 );
