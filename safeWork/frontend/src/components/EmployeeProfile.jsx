@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
-import { SAFEWORK_API_URL } from "../config/serviceUrls";
 import {
   fetchEmployee,
   clearSelected,
@@ -12,7 +11,7 @@ import {
   clearUploadError,
 } from "../store/slices/employeeSlice";
 
-const API_BASE_URL = `${SAFEWORK_API_URL}/api`;
+const API_BASE_URL = "http://localhost:8082/api";
 // We no longer read a token from localStorage or send an Authorization header.
 // The auth token travels in an HttpOnly cookie, which axios attaches
 // automatically when we set `withCredentials: true` on the request.

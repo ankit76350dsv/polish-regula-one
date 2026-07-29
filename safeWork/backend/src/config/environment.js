@@ -4,7 +4,6 @@ require('dotenv').config();
 
 const config = {
   port: parseInt(process.env.PORT, 10) || 8082,
-  bindHost: process.env.BIND_HOST || '0.0.0.0',
   nodeEnv: process.env.NODE_ENV || 'development',
 
   mongo: {
@@ -45,10 +44,7 @@ const config = {
 
   cors: {
     // Accept comma-separated origins for multi-frontend support
-    origins: (process.env.CORS_ORIGIN || 'http://localhost:3002')
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter(Boolean),
+    origins: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(','),
   },
 
   rateLimit: {

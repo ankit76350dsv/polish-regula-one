@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
+// useNavigate lets us move the user to another page when they click a button.
+import { useNavigate } from "react-router-dom";
 import { fetchDashboard } from "../store/slices/dashboardSlice";
 
 // ── Status badges ─────────────────────────────────────────────────────────────
@@ -53,21 +55,35 @@ function MetricCard({ title, value, subtitle, icon, colorKey, trend }) {
     violet:  { iconBg: "bg-violet-500",  shadow: "shadow-violet-500/25",  trend: "bg-violet-50 text-violet-700"},
   }[colorKey] || {};
 
+  // The card is laid out as one short row: icon on the left, numbers on the
+  // right. Keeping everything side by side (instead of stacked) makes the card
+  // much shorter, so the five cards take up less space at the top of the page.
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default">
-      <div className="flex items-start justify-between mb-5">
-        <div className={`w-12 h-12 rounded-2xl ${palette.iconBg} shadow-lg ${palette.shadow} flex items-center justify-center text-white`}>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`w-10 h-10 shrink-0 rounded-xl ${palette.iconBg} shadow-md ${palette.shadow} flex items-center justify-center text-white`}>
           {icon}
         </div>
-        {trend && (
-          <span className={`text-[10px] font-semibold rounded-full px-2.5 py-1 ${palette.trend}`}>
-            {trend}
-          </span>
-        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2 min-w-0">
+            <span className="shrink-0 text-2xl font-black text-slate-900 tracking-tight leading-none">{value}</span>
+            {/* The little grey label (for example "Active records") is hidden on
+                small phones. Two cards sit side by side there, so the card is
+                too narrow and the label would stick out past the border.
+                It comes back on wider screens where there is room for it. */}
+            {trend && (
+              <span
+                title={trend}
+                className={`hidden sm:inline-block min-w-0 truncate text-[9px] font-semibold rounded-full px-2 py-0.5 ${palette.trend}`}
+              >
+                {trend}
+              </span>
+            )}
+          </div>
+          <p className="text-[13px] font-semibold text-slate-700 mt-1 truncate">{title}</p>
+          <p className="text-[11px] text-slate-400 truncate">{subtitle}</p>
+        </div>
       </div>
-      <div className="text-4xl font-black text-slate-900 tracking-tight">{value}</div>
-      <div className="text-sm font-semibold text-slate-700 mt-1">{title}</div>
-      <div className="text-xs text-slate-400 mt-0.5">{subtitle}</div>
     </div>
   );
 }
@@ -231,13 +247,23 @@ function EmployeeComplianceTable({ employees = [] }) {
 }
 
 function ExpiringDocumentsTable({ expiringDocuments = [] }) {
+  // "navigate" is the function that changes the page the user is looking at.
+  const navigate = useNavigate();
+
   return (
     <Card className="p-5">
       <CardHeader
         title="Expiring & Missing Documents"
         subtitle="30-day and 7-day compliance warning queue"
         action={
-          <button className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors shadow-sm shadow-emerald-500/20">
+          // When the user clicks "View All" we send them to the employee list
+          // page, where they can see every employee and their document status.
+          <button
+            type="button"
+            onClick={() => navigate("/employees")}
+            aria-label="View all employees and their document status"
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors shadow-sm shadow-emerald-500/20"
+          >
             View All
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
@@ -349,7 +375,7 @@ function RecentDocumentsTable({ recentDocuments = [] }) {
       ) : (
         <div className="space-y-1 flex-1">
           {recentDocuments.map((doc, idx) => (
-            <div key={doc.id || idx} className="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors">
+            <div key={doc.id || idx} className="flex items-start gap-3  rounded-xl hover:bg-slate-50 transition-colors">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconCls(doc.documentType)}`}>
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -482,7 +508,8 @@ function LoadingSkeleton() {
     <div className="space-y-6 animate-pulse">
       <div className="h-40 rounded-3xl bg-slate-200" />
       <div className="grid grid-cols-5 gap-4">
-        {[...Array(5)].map((_, i) => <div key={i} className="h-32 rounded-2xl bg-slate-200" />)}
+        {/* Same height as the real metric cards so the page does not jump. */}
+        {[...Array(5)].map((_, i) => <div key={i} className="h-20 rounded-2xl bg-slate-200" />)}
       </div>
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-8 h-64 rounded-2xl bg-slate-200" />
@@ -534,7 +561,7 @@ export default function ComplianceDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <div className="max-w-9xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
         {/* Page Header */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 p-6 text-white shadow-lg shadow-emerald-500/20">

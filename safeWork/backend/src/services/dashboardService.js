@@ -179,7 +179,7 @@ const getDashboardOverview = async (tenantId) => {
         // ── Compliance table: top-50 employees ────────────────────────────
         employees: [
           { $sort: { createdAt: -1 } },
-          { $limit: 50 },
+          { $limit: 10 },
           {
             $project: {
               _id:              1,
@@ -207,7 +207,7 @@ const getDashboardOverview = async (tenantId) => {
             },
           },
           { $sort: { updatedAt: -1 } },
-          { $limit: 20 },
+          { $limit: 5 },
           {
             $project: {
               _id:          1,
@@ -221,7 +221,7 @@ const getDashboardOverview = async (tenantId) => {
         // ── Recently added employees ───────────────────────────────────────
         recentEmployees: [
           { $sort: { createdAt: -1 } },
-          { $limit: 10 },
+          { $limit: 5 },
           {
             $project: {
               _id:        1,
@@ -256,11 +256,11 @@ const getDashboardOverview = async (tenantId) => {
   const [recentAuditRaw, recentDocRaw] = await Promise.all([
     AuditLog.find({ tenantId, action: { $in: DASHBOARD_ACTIONS } })
       .sort({ createdAt: -1 })
-      .limit(15)
+      .limit(5)
       .lean(),
     AuditLog.find({ tenantId, action: 'DOCUMENT_UPLOADED' })
       .sort({ createdAt: -1 })
-      .limit(10)
+      .limit(5)
       .lean(),
   ]);
 

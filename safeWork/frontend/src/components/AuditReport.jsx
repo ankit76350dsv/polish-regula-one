@@ -131,10 +131,10 @@ function AuditReport() {
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-9xl">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 text-white shadow-xl">
+        <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 p-6 text-white shadow-xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="mb-2 inline-flex rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-indigo-200 ring-1 ring-white/20">

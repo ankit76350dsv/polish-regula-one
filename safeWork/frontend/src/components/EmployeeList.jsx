@@ -168,7 +168,7 @@ function EmployeeList() {
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-9xl">
 
         {/* Header */}
         <div className="mb-6 rounded-3xl bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 p-6 text-white shadow-lg shadow-emerald-500/20">
@@ -182,12 +182,12 @@ function EmployeeList() {
                 Track employee medical certificates, BHP safety training, document expiry status, and clock-in eligibility.
               </p>
             </div>
-            <button
+            {/* <button
               onClick={() => navigate("/employees/add")}
               className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-900 transition hover:bg-blue-50"
             >
               + Add Employee
-            </button>
+            </button> */}
           </div>
         </div>
 
@@ -291,9 +291,9 @@ function EmployeeList() {
                   <option value={50}>50</option>
                 </select>
               </label>
-              <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              {/* <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                 Export Register
-              </button>
+              </button> */}
             </div>
           </div>
 
@@ -378,12 +378,12 @@ function EmployeeList() {
                           >
                             View
                           </button>
-                          <button className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+                          {/* <button className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
                             Upload
-                          </button>
-                          <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700">
+                          </button> */}
+                          {/* <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700">
                             Alert
-                          </button>
+                          </button> */}
                         </div>
                       </td>
                     </tr>
