@@ -39,7 +39,35 @@ const config = {
   // by calling GET /api/auth/me, which returns the user's tenantId. We use that
   // as the single source of truth for tenant isolation.
   regulaOne: {
-    baseUrl: process.env.REGULAONE_API_URL || 'http://localhost:8080',
+    // Two spellings of this variable exist in older .env files
+    // (REGULAONE_API_URL and REGULA_ONE_API_URL). We accept BOTH so an existing
+    // deployment keeps working after this change. This matters a lot now: the
+    // user's permissions are read from RegulaOne, so if this address is wrong we
+    // cannot check permissions and every request is refused.
+    baseUrl:
+      process.env.REGULAONE_API_URL ||
+      process.env.REGULA_ONE_API_URL ||
+      'http://localhost:8080',
+  },
+
+  // SafeWork access rules.
+  //
+  // The central RegulaOne login tells us what a user is allowed to do by
+  // returning a "permissions" list (see config/permissions.js). Only the
+  // permissions named here may call SafeWork APIs — everyone else is refused.
+  //
+  // Kept as configuration (not hard-coded in the routes) so the list can change
+  // per environment, and so the platform can rename a permission without a code
+  // change. Comma-separated, for example:
+  //   SAFEWORK_ALLOWED_PERMISSIONS=SAFEVOICE_ADMIN,SAFEVOICE_HR_MANAGER
+  safework: {
+    allowedPermissions: (
+      process.env.SAFEWORK_ALLOWED_PERMISSIONS ||
+      'SAFEWORK_ADMIN,SAFEWORK_HR_MANAGER,SAFEWORK_AUDITOR'
+    )
+      .split(',')
+      .map((permission) => permission.trim())
+      .filter(Boolean),
   },
 
   cors: {
