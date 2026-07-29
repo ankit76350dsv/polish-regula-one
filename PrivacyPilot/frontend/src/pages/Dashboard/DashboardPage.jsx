@@ -1,6 +1,9 @@
-// Compliance dashboard — every number is computed from live register data.
+// Compliance dashboard — every number comes from the real dashboard API
+// (GET /api/privacypilot/dashboard). The server does the counting and the legal-clock
+// maths (72h breach window, DSAR due dates) once, authoritatively; this page only paints.
 // No hardcoded "compliance scores" or grades: factual counts and deadlines only.
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
@@ -10,18 +13,10 @@ import { BookOpenCheck, ShieldAlert, Siren, Inbox } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import PageHeader from '../../components/common/PageHeader';
 import StatCard from '../../components/common/StatCard';
-import { LoadingState } from '../../components/common/States';
-import { useSliceData } from '../../hooks/useSliceData';
-import { fetchDpias } from '../../store/slices/dpiasSlice';
-import { fetchBreaches } from '../../store/slices/breachesSlice';
-import { fetchDsars } from '../../store/slices/dsarsSlice';
-import { fetchVendors } from '../../store/slices/vendorsSlice';
-import { fetchAudit } from '../../store/slices/auditSlice';
+import { LoadingState, ErrorState } from '../../components/common/States';
+import { fetchDashboard } from '../../store/slices/dashboardSlice';
 import { useT } from '../../i18n';
 import { useOrgBase } from '../../lib/paths';
-import { activityCompleteness } from '../../lib/completeness';
-import { breachClock } from '../../services/breachService';
-import { dsarDaysLeft } from '../../services/dsarService';
 import { ART6_BASES, DEPARTMENTS, labelOf } from '../../lib/gdpr';
 
 // Single-series charts: identity is carried by row/column labels, so one brand
@@ -29,13 +24,6 @@ import { ART6_BASES, DEPARTMENTS, labelOf } from '../../lib/gdpr';
 const GOLD = '#c5a059';
 const GRID = '#2a2a2c';
 const LABEL = '#9a9aa0';
-
-// The dashboard's activity-derived metrics are TEMPORARILY decoupled from the live
-// register. They will be served by a dedicated dashboard/stats API (to be built),
-// so the dashboard is deliberately NOT re-wired to the real activities slice here.
-// Until that API exists, every activity-derived number renders empty/zero.
-// See docs/dashboard-api-pending.md. A stable empty array keeps useMemo deps calm.
-const NO_ACTIVITIES = [];
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -47,106 +35,61 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
+// Turn one structured attention item from the server into the line of text to show.
+// Kept on the client so it can be Polish or English; the server only sends the facts
+// (type, label, daysLeft).
+function attentionText(item, t) {
+  switch (item.type) {
+    case 'BREACH_72H': return `${item.label} — ${t('breach.clock')}`;
+    case 'DSAR_URGENT': return `DSAR ${item.label}: ${item.daysLeft} ${t('common.daysLeft')}`;
+    case 'DPIA_REQUIRED': return `${item.label} — ${t('dpia.verdict.required')}`;
+    case 'PRIOR_CONSULTATION': return `${item.label} — Art. 36`;
+    case 'VENDOR_DPA_MISSING': return `${item.label} — ${t('vendors.dpa.missing')}`;
+    default: return item.label;
+  }
+}
+
 export default function DashboardPage() {
   const base = useOrgBase();
   const { t, lang } = useT();
-  // Activities are intentionally NOT fetched here — see NO_ACTIVITIES above.
-  const activities = { items: NO_ACTIVITIES };
-  const dpias = useSliceData('dpias', fetchDpias);
-  const breaches = useSliceData('breaches', fetchBreaches);
-  const dsars = useSliceData('dsars', fetchDsars);
-  const vendors = useSliceData('vendors', fetchVendors);
-  const audit = useSliceData('audit', fetchAudit);
+  const dispatch = useDispatch();
+  const { data, status, error } = useSelector((s) => s.dashboard);
 
-  const loading = [dpias, breaches, dsars].some((s) => s.status === 'loading' || s.status === 'idle');
+  useEffect(() => {
+    if (status === 'idle') dispatch(fetchDashboard());
+  }, [status, dispatch]);
 
-  const stats = useMemo(() => {
-    const active = activities.items.filter((a) => a.status !== 'archived');
-    const avgCompleteness = active.length
-      ? Math.round(active.reduce((sum, a) => sum + activityCompleteness(a), 0) / active.length)
-      : 0;
-    const openBreaches = breaches.items.filter((b) => b.status === 'open');
-    const in72h = openBreaches.filter((b) => {
-      const clock = breachClock(b);
-      return clock.applicable && !clock.notified && !clock.expired;
-    });
-    const openDsars = dsars.items.filter((r) => r.status !== 'completed');
-    const urgentDsars = openDsars.filter((r) => dsarDaysLeft(r) <= 7);
-    return {
-      active,
-      avgCompleteness,
-      dpiaInProgress: dpias.items.filter((d) => d.status === 'in_progress').length,
-      dpiaRequired: active.filter((a) => a.dpiaVerdict === 'required' && !a.dpiaId).length,
-      openBreaches,
-      in72h,
-      openDsars,
-      urgentDsars,
-    };
-  }, [activities.items, dpias.items, breaches.items, dsars.items]);
+  // Map the server's category CODES to translated chart labels.
+  const byDepartment = useMemo(() => (data?.byDepartment ?? []).map((g) => ({
+    name: labelOf(DEPARTMENTS, g.key, lang), count: g.count,
+  })), [data, lang]);
+  const byBasis = useMemo(() => (data?.byBasis ?? []).map((g) => ({
+    name: labelOf(ART6_BASES, g.key, lang), count: g.count,
+  })), [data, lang]);
 
-  const byDepartment = useMemo(() => {
-    const counts = {};
-    for (const a of stats.active) counts[a.department] = (counts[a.department] ?? 0) + 1;
-    return Object.entries(counts).map(([dep, count]) => ({
-      name: labelOf(DEPARTMENTS, dep, lang),
-      count,
-    }));
-  }, [stats.active, lang]);
+  if (status === 'loading' || status === 'idle' || !data) return <LoadingState rows={6} />;
+  if (status === 'failed') return <ErrorState error={error} onRetry={() => dispatch(fetchDashboard())} />;
 
-  const byBasis = useMemo(() => {
-    const counts = {};
-    for (const a of stats.active) {
-      if (!a.lawfulBasis) continue;
-      counts[a.lawfulBasis] = (counts[a.lawfulBasis] ?? 0) + 1;
-    }
-    return Object.entries(counts).map(([basis, count]) => ({
-      name: labelOf(ART6_BASES, basis, lang),
-      count,
-    }));
-  }, [stats.active, lang]);
-
-  // Items genuinely needing action, each linking to where it's fixed.
-  const attention = useMemo(() => {
-    const list = [];
-    for (const b of stats.in72h) {
-      list.push({ to: `/breaches/${b.id}`, tone: 'risk', text: `${b.title} — ${t('breach.clock')}` });
-    }
-    for (const r of stats.urgentDsars) {
-      const d = dsarDaysLeft(r);
-      list.push({ to: `/dsar/${r.id}`, tone: d < 0 ? 'risk' : 'warn', text: `DSAR ${r.requesterName}: ${d} ${t('common.daysLeft')}` });
-    }
-    for (const a of stats.active.filter((x) => x.dpiaVerdict === 'required' && !x.dpiaId)) {
-      list.push({ to: `/register/${a.id}`, tone: 'warn', text: `${a.name} — ${t('dpia.verdict.required')}` });
-    }
-    for (const d of dpias.items.filter((x) => x.priorConsultation && x.status !== 'approved')) {
-      list.push({ to: `/dpia/${d.id}`, tone: 'risk', text: `${d.title} — Art. 36` });
-    }
-    for (const v of vendors.items.filter((x) => x.dpaStatus === 'missing')) {
-      list.push({ to: '/vendors', tone: 'warn', text: `${v.name} — ${t('vendors.dpa.missing')}` });
-    }
-    return list;
-  }, [stats, dpias.items, vendors.items, t]);
-
-  if (loading) return <LoadingState rows={6} />;
+  const c = data.counts;
+  const attention = data.attention ?? [];
+  const recentAudit = data.recentAudit ?? [];
 
   return (
     <div>
       <PageHeader title={t('dash.title')} />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {/* ROPA metrics are decoupled until the dashboard API exists — show a
-            placeholder instead of a misleading real "0". */}
-        <StatCard icon={BookOpenCheck} label={t('dash.ropaCount')} value="—"
-          hint={t('dash.pendingApi')} tone="neutral" />
-        <StatCard icon={ShieldAlert} label={t('dash.dpiaOpen')} value={stats.dpiaInProgress}
-          hint={`${t('dash.dpiaRequired')}: ${stats.dpiaRequired}`}
-          tone={stats.dpiaRequired > 0 ? 'warn' : 'neutral'} />
-        <StatCard icon={Siren} label={t('dash.breachOpen')} value={stats.openBreaches.length}
-          hint={`${stats.in72h.length} ${t('dash.breach72h')}`}
-          tone={stats.in72h.length > 0 ? 'risk' : 'neutral'} />
-        <StatCard icon={Inbox} label={t('dash.dsarOpen')} value={stats.openDsars.length}
-          hint={`${stats.urgentDsars.length} ${t('dash.dsarUrgent')}`}
-          tone={stats.urgentDsars.length > 0 ? 'warn' : 'neutral'} />
+        <StatCard icon={BookOpenCheck} label={t('dash.ropaCount')} value={c.ropaActive}
+          hint={t('dash.ropaHint')} tone="neutral" />
+        <StatCard icon={ShieldAlert} label={t('dash.dpiaOpen')} value={c.dpiaInProgress}
+          hint={`${t('dash.dpiaRequired')}: ${c.dpiaRequired}`}
+          tone={c.dpiaRequired > 0 ? 'warn' : 'neutral'} />
+        <StatCard icon={Siren} label={t('dash.breachOpen')} value={c.breachesOpen}
+          hint={`${c.breachesWithin72h} ${t('dash.breach72h')}`}
+          tone={c.breachesWithin72h > 0 ? 'risk' : 'neutral'} />
+        <StatCard icon={Inbox} label={t('dash.dsarOpen')} value={c.dsarsOpen}
+          hint={`${c.dsarsUrgent} ${t('dash.dsarUrgent')}`}
+          tone={c.dsarsUrgent > 0 ? 'warn' : 'neutral'} />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -191,16 +134,16 @@ export default function DashboardPage() {
               <p className="text-sm text-muted-foreground">{t('dash.noAttention')}</p>
             ) : (
               <ul className="grid gap-1.5">
-                {attention.map((item, i) => (
-                  <li key={i}>
+                {attention.map((item) => (
+                  <li key={`${item.type}-${item.id}`}>
                     <Link to={`${base}${item.to}`}
                       className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent">
                       <span aria-hidden className={
-                        item.tone === 'risk'
+                        item.tone === 'RISK'
                           ? 'size-1.5 rounded-full bg-(--status-risk)'
                           : 'size-1.5 rounded-full bg-(--status-warn)'
                       } />
-                      <span className="text-foreground">{item.text}</span>
+                      <span className="text-foreground">{attentionText(item, t)}</span>
                     </Link>
                   </li>
                 ))}
@@ -213,7 +156,7 @@ export default function DashboardPage() {
           <CardHeader><CardTitle className="text-sm">{t('dash.recentAudit')}</CardTitle></CardHeader>
           <CardContent>
             <ul className="grid gap-2">
-              {audit.items.slice(0, 6).map((entry) => (
+              {recentAudit.map((entry) => (
                 <li key={entry.id} className="flex items-baseline gap-2 text-xs">
                   <span className="shrink-0 tabular-nums text-muted-foreground">
                     {new Date(entry.at).toLocaleString(lang === 'pl' ? 'pl-PL' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })}

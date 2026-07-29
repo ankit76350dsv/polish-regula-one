@@ -4,6 +4,7 @@ import { configureStore } from '@reduxjs/toolkit';
 
 import ui from './slices/uiSlice';
 import auth from './slices/authSlice';
+import dashboard from './slices/dashboardSlice';
 import activities from './slices/activitiesSlice';
 import dpias from './slices/dpiasSlice';
 import vendors from './slices/vendorsSlice';
@@ -20,6 +21,7 @@ export const store = configureStore({
   reducer: {
     ui,
     auth,
+    dashboard,
     activities,
     dpias,
     vendors,

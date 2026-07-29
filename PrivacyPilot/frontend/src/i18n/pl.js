@@ -192,8 +192,7 @@ export default {
   // Pulpit
   'dash.title': 'Pulpit zgodności',
   'dash.ropaCount': 'Czynności przetwarzania',
-  'dash.ropaComplete': 'Kompletność rejestru',
-  'dash.pendingApi': 'Oczekiwanie na API pulpitu',
+  'dash.ropaHint': 'W rejestrze art. 30',
   'dash.dpiaOpen': 'DPIA w toku',
   'dash.dpiaRequired': 'Czynności wymagające DPIA',
   'dash.breachOpen': 'Otwarte naruszenia',

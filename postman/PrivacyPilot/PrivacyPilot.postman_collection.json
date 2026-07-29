@@ -9,6 +9,22 @@
   },
   "item": [
     {
+      "name": "Dashboard",
+      "description": "One read that powers the whole compliance dashboard. The server counts everything for your company and works out the legal clocks (the 72-hour breach window, the DSAR due dates) so the screen only has to draw the numbers.\n\nWhat comes back in `data`:\n- counts: the four top cards — how many activities are in the register, how many DPIAs are in progress and how many activities still need one, how many breaches are open and how many are still inside the 72h window, how many data-subject requests are open and how many are due within 7 days.\n- byDepartment / byBasis: the two bar charts — each is a category code and a count.\n- attention: the 'needs action' list — only things with a real deadline or gap (a ticking breach, an urgent request, a missing DPIA, a prior-consultation case, a processor with no signed contract). Each row has a type, the record id, and where to open it.\n- recentAudit: the last few history lines.\n\nAllowed roles: Admin, Compliance Officer, DPO, Auditor.",
+      "item": [
+        {
+          "name": "Get dashboard",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/privacypilot/dashboard", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dashboard"] },
+            "description": "Get the full dashboard summary for your company (counts, chart data, attention list, recent audit). Read-only. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Processing Activities (ROPA)",
       "item": [
         {

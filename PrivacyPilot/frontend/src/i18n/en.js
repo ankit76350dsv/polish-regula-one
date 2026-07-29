@@ -192,8 +192,7 @@ export default {
   // Dashboard
   'dash.title': 'Compliance Dashboard',
   'dash.ropaCount': 'Processing activities',
-  'dash.ropaComplete': 'Register completeness',
-  'dash.pendingApi': 'Awaiting dashboard API',
+  'dash.ropaHint': 'In the Art. 30 register',
   'dash.dpiaOpen': 'DPIAs in progress',
   'dash.dpiaRequired': 'Activities needing DPIA',
   'dash.breachOpen': 'Open breaches',
