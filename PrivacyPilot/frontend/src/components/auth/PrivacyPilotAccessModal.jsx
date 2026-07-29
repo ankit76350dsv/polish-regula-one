@@ -1,5 +1,6 @@
 import {
   BadgeX,
+  Building2,
   CalendarX2,
   Lock,
   LogOut,
@@ -14,6 +15,12 @@ const ACCESS_STATES = {
     title: 'access.disabledTitle',
     body: 'access.disabledBody',
     Icon: BadgeX,
+  },
+  // The organisation itself is suspended or closed at RegulaOne.
+  organisation: {
+    title: 'access.organisationTitle',
+    body: 'access.organisationBody',
+    Icon: Building2,
   },
   package: {
     title: 'access.packageTitle',

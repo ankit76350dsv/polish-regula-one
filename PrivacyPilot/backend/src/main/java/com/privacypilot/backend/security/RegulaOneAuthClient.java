@@ -26,8 +26,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * RegulaOne's GET /api/auth/me and trusts the identity it returns. RegulaOne stays
  * the single source of truth for authentication and tenant membership.
  *
+ * Resolving is ALSO the module gate: once the identity is known, the caller must still be
+ * allowed to use PrivacyPilot — account switched on, company active, plan not expired,
+ * module licensed, and at least one PrivacyPilot permission. Those rules live in
+ * {@link PrivacyPilotAccessPolicy} and are enforced HERE, on the server, because the
+ * browser's copy of them (frontend lib/sso.js) can be bypassed by calling the API directly.
+ *
  * {@link #resolve(HttpServletRequest)} throws a status the browser understands:
- * 401 (no/invalid session), 403 (no organisation), 503 (RegulaOne unreachable).
+ * 401 (no/invalid session), 403 (no organisation, or PrivacyPilot access refused),
+ * 503 (RegulaOne unreachable).
  */
 @Slf4j
 @Component
@@ -60,7 +67,13 @@ public class RegulaOneAuthClient {
     /**
      * Resolve the caller from the incoming request's idToken cookie. Never returns
      * null — throws {@link ResponseStatusException} when the caller cannot be
-     * authenticated (401), has no tenant (403), or RegulaOne is down (503).
+     * authenticated (401), has no tenant or is not allowed to use PrivacyPilot (403),
+     * or RegulaOne is down (503).
+     *
+     * Only callers that PASSED the access policy are cached, so a cache hit is always an
+     * already-allowed session. A change made at RegulaOne (account disabled, plan expired,
+     * module removed) therefore takes effect within the cache TTL, not instantly — the
+     * same bounded window that already applies to a revoked token.
      */
     public AuthenticatedUser resolve(HttpServletRequest request) {
         String idToken = extractIdToken(request);
@@ -80,6 +93,15 @@ public class RegulaOneAuthClient {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Your account is not associated with an organisation");
         }
+
+        // MAY THIS PERSON USE PRIVACYPILOT AT ALL? Account switched on, company active,
+        // plan not expired, module licensed, and at least one PrivacyPilot permission.
+        // These used to be checked ONLY in the browser, which left the API open to a
+        // disabled account or a lapsed plan — so they are enforced here, server-side,
+        // before any controller runs. Throws 403 with the reason. See
+        // PrivacyPilotAccessPolicy (kept in step with the frontend's evaluatePrivacyPilotAccess).
+        PrivacyPilotAccessPolicy.requireAccess(d.id(), d.role(), d.enabled(),
+                d.tenantStatus(), d.planExpired(), d.moduleIds(), d.permissions());
 
         AuthenticatedUser user = new AuthenticatedUser(d.id(), d.name(), d.email(), d.role(),
                 d.tenantId(), d.tenantName(), d.tenantStatus(), d.permissions());
@@ -140,8 +162,21 @@ public class RegulaOneAuthClient {
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record MeResponse(boolean success, String message, MeData data) {}
 
+    /**
+     * The parts of RegulaOne's user answer PrivacyPilot needs. Field names match
+     * RegulaOne's UserResponse exactly; everything else in the answer is ignored.
+     *
+     * {@code enabled} and {@code planExpired} are the boxed Boolean type ON PURPOSE: if the
+     * field is ever missing from the answer we get null instead of a silent "false", and
+     * {@link PrivacyPilotAccessPolicy} can then fail CLOSED on a missing "account switched
+     * on" flag rather than letting the caller through.
+     *
+     * {@code moduleIds} arrives as plain strings (RegulaOne's TenantModule enum names),
+     * e.g. ["KSEFFLOW", "PRIVACYPILOT"].
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record MeData(String id, String name, String email, String role,
                           String tenantId, String tenantName, String tenantStatus,
+                          Boolean enabled, Boolean planExpired, List<String> moduleIds,
                           List<String> permissions) {}
 }

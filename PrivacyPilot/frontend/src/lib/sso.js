@@ -95,18 +95,29 @@ export function normalizeUser(raw) {
 /**
  * Decide whether a signed-in user may enter PrivacyPilot.
  *
- * Allowed when: the account is enabled, the plan includes the PRIVACYPILOT module,
- * the subscription has not expired, AND they hold at least one PRIVACYPILOT_*
- * permission. Platform super-admins (ROLE_SUPER_ADMIN) bypass the module/plan/
- * permission checks.
+ * Allowed when: the account is enabled, the organisation is active, the plan includes
+ * the PRIVACYPILOT module, the subscription has not expired, AND they hold at least one
+ * PRIVACYPILOT_* permission. Platform super-admins (ROLE_SUPER_ADMIN) bypass the
+ * organisation/module/plan/permission checks.
  *
- * @returns {{ allowed: boolean, reason: 'unauthenticated'|'disabled'|'module'|'package'|'permission'|null }}
+ * IMPORTANT: this is the FRIENDLY copy of the rule — it decides which explanation screen
+ * to show. The rule that actually PROTECTS the data is the identical one on the server
+ * (backend PrivacyPilotAccessPolicy.java), because anyone can skip the browser and call
+ * the API directly. Keep the two in step: same checks, same order, same meaning.
+ *
+ * @returns {{ allowed: boolean, reason: 'unauthenticated'|'disabled'|'organisation'|'module'|'package'|'permission'|null }}
  */
 export function evaluatePrivacyPilotAccess(user) {
   if (!user) return { allowed: false, reason: 'unauthenticated' };
   if (user.enabled !== true) return { allowed: false, reason: 'disabled' };
   if (user.role === 'ROLE_SUPER_ADMIN') return { allowed: true, reason: null };
 
+  // A suspended or closed organisation may not use the app. We only block on a status we
+  // were actually told — an older organisation record may not carry the field yet, and
+  // refusing on "unknown" would lock out companies that are in fact fine.
+  if (user.tenantStatus && user.tenantStatus.toUpperCase() !== 'ACTIVE') {
+    return { allowed: false, reason: 'organisation' };
+  }
   if (user.planExpired) return { allowed: false, reason: 'package' };
   if (!user.moduleIds.includes(PRIVACYPILOT_MODULE)) return { allowed: false, reason: 'module' };
   if (privacyPilotPermissions(user).length === 0) return { allowed: false, reason: 'permission' };

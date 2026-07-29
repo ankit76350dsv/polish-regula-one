@@ -157,6 +157,8 @@ export default {
   // Access denied (signed in, but not allowed into PrivacyPilot)
   'access.disabledTitle': 'Your account is suspended',
   'access.disabledBody': 'Your RegulaOne account is disabled, so access to PrivacyPilot is blocked. Contact your organisation administrator.',
+  'access.organisationTitle': 'Your organisation’s access is suspended',
+  'access.organisationBody': 'Your organisation is not active in RegulaOne, so PrivacyPilot is blocked. Contact your organisation administrator.',
   'access.packageTitle': 'Your plan has expired',
   'access.packageBody': 'Your organisation’s RegulaOne plan has expired. Renew the plan before accessing PrivacyPilot.',
   'access.moduleTitle': 'No access to PrivacyPilot',

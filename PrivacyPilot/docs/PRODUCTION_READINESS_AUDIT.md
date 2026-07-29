@@ -30,12 +30,13 @@ published "two criteria" test. Ten of eleven feature domains run on the real bac
 
 It is **not production-ready**, for three distinct classes of reason:
 
-1. **Authorization is incomplete in a way the frontend hides.** The backend never checks
-   whether the account is enabled, whether the tenant's subscription is live, or whether
-   the tenant even licenses the PrivacyPilot module — those checks exist *only* in the
-   browser (`lib/sso.js:105-115`). A disabled user with an unexpired token keeps full API
-   access. This directly contravenes the project's own rule "never trust frontend
-   validation".
+1. ~~**Authorization is incomplete in a way the frontend hides.**~~ **✅ FIXED 2026-07-29
+   — see §17.** The backend did not check whether the account was enabled, whether the
+   subscription was live, or whether the tenant licensed the module; those checks existed
+   only in the browser, so a disabled user kept full API access until their token expired.
+   The rules are now enforced server-side in `security/PrivacyPilotAccessPolicy.java`,
+   called from `RegulaOneAuthClient.resolve()` before any controller runs, and covered by
+   15 hermetic tests.
 2. **Accountability has a hole where it matters most.** `AuditAction.EXPORT` is defined
    and never written: every export — the full Art. 30 register CSV, the audit trail
    itself, notices, breach reports — happens entirely in the browser and leaves **no
@@ -54,18 +55,20 @@ working domain code.
 
 ## 2. Overall Production Readiness Score
 
-### **54 / 100 — ❌ Not Production Ready**
+### **57 / 100 — ❌ Not Production Ready**
+
+*(54 at first assessment; +3 after H1 was fixed on 2026-07-29 — see §17.)*
 
 | Layer | Score | Basis |
 |---|---:|---|
 | Domain code & architecture | 80% | Clean layering, tenant scoping and audit verified end-to-end |
 | Feature completeness | 85% | 10/11 domains real; AI assistant mock; no erasure/export paths |
-| Authentication & authorization | 60% | Auth + RBAC solid; entitlement/account-status gate missing server-side |
+| Authentication & authorization | 80% | Auth + RBAC solid; **entitlement gate now enforced server-side (H1 fixed)**; residual: 30 s cache window, frontend/backend matrix drift (M6) |
 | Security hardening | 40% | No rate limiting, no field encryption, no TLS config, weak DTO limits |
 | Compliance (GDPR/Polish mapping) | 65% | Feature-to-article mapping is accurate; retention/erasure/export-audit gaps |
 | Database & performance | 45% | No pagination, no compound indexes, no transactions, full-collection reads |
 | Ops / infra / deploy | 15% | No prod profile, Docker, CI/CD, observability; config not in git |
-| Testing | 5% | One test, and it cannot run without the production Atlas cluster |
+| Testing | 12% | Still effectively none, but there is now one **hermetic** suite (15 tests on the access policy, §17); the original context-load test still needs the live Atlas cluster |
 
 ---
 
@@ -131,19 +134,29 @@ wizard prefill, correctly gated to `import.meta.env.DEV`
 ### 4.2 Findings — High
 
 **H1 · Account status and module entitlement are enforced only in the browser.**
-The frontend refuses entry when the account is disabled, the plan expired, or the tenant
-does not license the module (`frontend/src/lib/sso.js:105-115`). The backend parses
-`tenantStatus` but **never reads it**, and never receives or checks `enabled`,
-`planExpired` or `moduleIds` — a full-text grep across `backend/src/main/java` returns
-only the field declarations (`RegulaOneAuthClient.java:85,145`; `AuthenticatedUser.java:35`).
-RegulaOne's `/api/auth/me` does not gate either: it returns the profile for any valid
-token (`RegulaOne/.../AuthController.java:58-63` → `UserService.java:151-155`).
+**✅ FIXED 2026-07-29 — see §17 for the change report.**
+*As found:* the frontend refused entry when the account was disabled, the plan expired, or
+the tenant did not license the module (`frontend/src/lib/sso.js:105-115`), but the backend
+parsed `tenantStatus` and **never read it**, and never received or checked `enabled`,
+`planExpired` or `moduleIds` — a full-text grep across `backend/src/main/java` returned
+only field declarations. RegulaOne's `/api/auth/me` does not gate either: it returns the
+profile for any valid token (`RegulaOne/.../AuthController.java:58-63` →
+`UserService.java:151-155`).
 *Failure scenario:* an admin disables a user or the subscription lapses; that user's
 existing token stays valid, and `curl` against `/api/privacypilot/activities` with the
-cookie keeps returning the whole register until the token expires. The UI lock is
+cookie keeps returning the whole register until the token expires. The UI lock was
 cosmetic.
-*Fix:* have `RegulaOneAuthClient` project `enabled`, `planExpired` and `moduleIds`, and
-refuse in `resolve()` — 403 for disabled/unlicensed/expired, before any controller runs.
+*Resolution:* the five rules now run server-side in
+`security/PrivacyPilotAccessPolicy.java`, invoked from `RegulaOneAuthClient.resolve()`
+(`:97-104`) before any controller executes. The `/me` projection was widened to carry
+`enabled`, `planExpired` and `moduleIds`, with `enabled` boxed so a missing flag **fails
+closed**. Company suspension (`tenantStatus`) is enforced too, blocking only an explicitly
+non-`ACTIVE` status so older tenant records are not locked out. The frontend rule and its
+access modal were extended to match, keeping the two copies in step.
+*Residual:* the 30-second identity cache still bounds how fast a revocation takes effect
+(L3, unchanged and documented). **The same gap remains in the sibling modules** — neither
+SafeVoice's nor KSeFFlow's `RegulaOneAuthClient` enforces these fields; fixing them is
+outside this module's scope but should be tracked.
 
 **H2 · Exports are never audited (GDPR Art. 5(2) accountability).**
 `AuditAction.EXPORT` exists (`models/enums/audit/AuditAction.java:21`) but is written
@@ -635,7 +648,7 @@ unverified: the Art. 28 data processing agreement with MongoDB Inc. as sub-proce
 
 | # | Issue | Fix |
 |---|---|---|
-| H1 | Account status / plan / module entitlement enforced only in the browser | Check `enabled`, `planExpired`, `moduleIds` in `RegulaOneAuthClient.resolve()` |
+| ~~H1~~ | ~~Account status / plan / module entitlement enforced only in the browser~~ | **✅ FIXED** — `PrivacyPilotAccessPolicy` enforced in `RegulaOneAuthClient.resolve()`; 15 tests (§17) |
 | H2 | `AuditAction.EXPORT` never written; all exports client-side | Server-side export endpoints that write an `EXPORT` audit entry |
 | H3 | Audit query loads and sorts the whole tenant collection in memory, unindexed | Push filters/limit into Mongo; add `(tenantId, createdAt)` compound indexes |
 | H4 | No rate limiting or brute-force protection | Edge + app limits, stricter on writes and `/audit` |
@@ -712,6 +725,102 @@ One will break in production as data accumulates (**H3**). The remainder are the
 operational floor: encryption at rest, TLS, rate limiting, a production profile, a
 container, a pipeline, observability, and a test suite that can actually run.
 
-Resolve **H1–H9**, and settle the **EEA data-residency and backup/DR questions** — which
-cannot be answered from this repository at all — before any regulated EU/Poland
-production deployment.
+Resolve **H2–H9** (H1 is now fixed — §17), and settle the **EEA data-residency and
+backup/DR questions** — which cannot be answered from this repository at all — before any
+regulated EU/Poland production deployment.
+
+---
+
+## 17. Remediation Log
+
+### 2026-07-29 — H1 fixed: entitlement and account status enforced server-side
+
+**1. Files modified**
+
+| File | Change |
+|---|---|
+| `backend/.../security/PrivacyPilotAccessPolicy.java` | **new** — the single place that decides "may this person use PrivacyPilot at all?" |
+| `backend/.../security/RegulaOneAuthClient.java` | calls the policy in `resolve()`; `MeData` widened with `enabled`, `planExpired`, `moduleIds` (boxed Booleans so a missing flag is detectable); docs updated |
+| `backend/src/test/.../security/PrivacyPilotAccessPolicyTest.java` | **new** — 15 hermetic tests (no Spring, no Mongo, no network) |
+| `frontend/src/lib/sso.js` | `evaluatePrivacyPilotAccess` also checks `tenantStatus`, so the browser rule matches the server rule |
+| `frontend/src/components/auth/PrivacyPilotAccessModal.jsx` | new `organisation` state with a `Building2` icon |
+| `frontend/src/i18n/en.js`, `frontend/src/i18n/pl.js` | `access.organisationTitle` / `access.organisationBody` (parity kept: 350 keys each) |
+
+**2. Old behaviour**
+
+The backend authenticated the caller and checked their per-action PrivacyPilot permission,
+but never asked whether the caller was *allowed in the product at all*. `enabled`,
+`planExpired` and `moduleIds` were not even requested from `/api/auth/me`, and
+`tenantStatus` was carried but never read. Those four rules lived only in
+`frontend/src/lib/sso.js`. A user whose account had been disabled, whose organisation had
+been suspended, whose subscription had lapsed, or whose organisation never licensed the
+module could bypass the locked UI entirely and call the API with their existing cookie —
+reading and writing the whole GDPR register until the token expired.
+
+**3. New behaviour**
+
+`RegulaOneAuthClient.resolve()` now runs `PrivacyPilotAccessPolicy.requireAccess(...)`
+immediately after the identity is resolved and before any controller body executes, in the
+same order the browser uses: account enabled → super-admin short-circuit → organisation
+active → plan not expired → module licensed → holds a PrivacyPilot permission. Each
+refusal is a 403 with a readable reason and a `log.warn` carrying the user id and a
+machine-readable reason code (`account_disabled`, `tenant_suspended`, `plan_expired`,
+`module_not_licensed`, `no_permission`) for security monitoring. Only callers that pass are
+cached, so a cache hit is always an already-allowed session.
+
+**4. Why the old code was changed**
+
+Nothing was deleted — the change is purely additive; the existing tenant-presence check and
+all per-endpoint `requireAnyPermission` calls are untouched. The old arrangement was not a
+missing feature but a misplaced control: an authorization rule enforced only in code the
+user controls is not enforced at all, and CLAUDE.md §6/§22 explicitly forbid trusting
+frontend validation.
+
+**5. Security impact**
+
+Closes the audit's H1 (a privilege-persistence / broken-access-control defect, OWASP
+A01:2021). Deactivation, suspension, plan expiry and licence removal now take effect on the
+API, not just in the UI. Step 6 doubles as defence-in-depth against L4: a future endpoint
+that forgets its own permission check is still closed to anyone holding no PrivacyPilot
+permission. Denials are now observable in logs, which they were not before. Only the user
+id is logged — no name, e-mail or other personal data.
+
+**6. Compliance impact**
+
+Supports GDPR Art. 32(1)(b) and 32(4) — access to personal data is restricted to persons
+currently authorised, not merely to persons whose browser agrees they are. It also
+strengthens Art. 5(1)(f) (integrity and confidentiality) and makes the least-privilege
+claim in the ROPA's technical-measures list defensible under audit. No processing purpose,
+lawful basis, retention period or data category changed, so no ROPA or notice update is
+required.
+
+**7. Testing performed**
+
+`./mvnw -o -Dtest=PrivacyPilotAccessPolicyTest test` → **15 tests, 0 failures, 0 errors**
+(`target/surefire-reports/TEST-…PrivacyPilotAccessPolicyTest.xml`), covering: entitled user
+allowed; a lesser permission (auditor) allowed; disabled account refused; **missing
+`enabled` flag refused (fail-closed)**; disabled super-admin refused; suspended and
+inactive organisations refused; absent organisation status *not* blocked; expired plan
+refused; missing plan flag treated as not expired; unlicensed module and missing module
+list refused; no PrivacyPilot permission and other-apps-only permissions refused;
+super-admin bypass of the organisation/plan/module/permission checks. Every refusal is
+asserted to be HTTP 403. Frontend `npm run build` succeeds; i18n key parity verified
+(350 = 350).
+
+**8. Potential risks / side effects**
+
+- *Lockout risk is low by construction:* the three primary rules were already enforced in
+  the browser, so any user who can use the app today already satisfies them.
+- *The one genuinely new restriction is `tenantStatus`,* which the frontend did not check.
+  It is deliberately narrow — only an explicitly non-`ACTIVE` status blocks; null or blank
+  is allowed through — so a legacy tenant record without the field is unaffected. A tenant
+  explicitly marked `SUSPENDED` that is still using PrivacyPilot today **will** now be
+  refused, which is the intended meaning of suspension. Confirm no active customer sits in
+  that state before deploying.
+- *Revocation is not instant:* the 30-second identity cache still applies (L3).
+- *Two copies of one rule* now exist (server + browser) and could drift. The server copy is
+  authoritative; both files cross-reference each other, and the contract test suggested in
+  M6 would cover this as well.
+- **Not fixed here:** SafeVoice and KSeFFlow have the identical gap in their own
+  `RegulaOneAuthClient`. Out of scope for this module, but it should be tracked as a
+  platform-wide item.
