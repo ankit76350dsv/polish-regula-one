@@ -66,8 +66,11 @@ public class User {
     // For example the KSeF module uses:
     //   KSEF_ADMIN, KSEF_CASE_MANAGER, KSEF_COMPLIANCE_OFFICER,
     //   KSEF_AUDITOR, KSEF_EMPLOYEE
-    // When a new app is added later it can define new codes (e.g. WORKPULSE_*,
-    // SAFEVOICE_*) and simply store them here — no change to this model is needed.
+    // Other apps define their own codes the same way, for example:
+    //   SAFEWORK_ADMIN, SAFEWORK_HR_MANAGER, SAFEWORK_AUDITOR
+    //   SAFEVOICE_*, PRIVACYPILOT_*
+    // When a new app is added later it can define new codes (e.g. WORKPULSE_*)
+    // and simply store them here — no change to this model is needed.
     //
     // Why a list of strings instead of an enum?
     //   - Keeps RegulaOne (the identity service) decoupled from each module.

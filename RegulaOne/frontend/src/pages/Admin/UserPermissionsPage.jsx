@@ -61,6 +61,28 @@ const PERMISSION_GROUPS = [
     ],
   },
   {
+    app: 'SafeWork',
+    description: 'HR/BHP workplace safety compliance (medical certificates, BHP training) permissions',
+    // Codes MUST match SafeWorkPermission on the SafeWork backend.
+    permissions: [
+      {
+        code: 'SAFEWORK_ADMIN',
+        label: 'SafeWork Admin',
+        desc: 'Full control: manage employee compliance records, medical certificates, BHP training, expiry rules and SafeWork settings.',
+      },
+      {
+        code: 'SAFEWORK_HR_MANAGER',
+        label: 'HR Manager',
+        desc: 'Day-to-day HR compliance: add employees, upload certificates and training records, and act on expiry alerts.',
+      },
+      {
+        code: 'SAFEWORK_AUDITOR',
+        label: 'Auditor',
+        desc: 'Read-only access to compliance records, documents and audit logs, plus export.',
+      },
+    ],
+  },
+  {
     app: 'SafeVoice',
     description: 'Whistleblower case-management (EU Directive 2019/1937) permissions',
     // Codes MUST match SafeVoicePermission on the SafeVoice backend.
