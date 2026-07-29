@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { Plus, Download } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,6 +20,7 @@ import { Select } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchActivities } from '../../store/slices/activitiesSlice';
 import { fetchSettings } from '../../store/slices/settingsSlice';
+import { recordExport } from '../../store/slices/exportsSlice';
 import { useDispatch } from 'react-redux';
 import { useEffect } from 'react';
 import { useT } from '../../i18n';
@@ -138,8 +140,26 @@ export default function RegisterPage() {
         a.purpose?.toLowerCase().includes(query.toLowerCase()))),
     [items, tab, query, department, basis]);
 
-  const exportCsv = () => {
+  // Export the register — but RECORD it first. The register is the single biggest pile of
+  // personal data in the app, so taking a copy must leave an EXPORT line in the audit trail
+  // (GDPR Art. 5(2)). If the recording fails we do NOT hand over the file: no evidence,
+  // no copy. The filter summary tells a later auditor which slice of the register left.
+  const exportCsv = async () => {
     if (!settings.data) return;
+    const action = await dispatch(recordExport({
+      target: tab === 'processor' ? 'register_processor' : 'register_controller',
+      format: 'csv',
+      itemCount: filtered.length,
+      filterSummary: [
+        `search=${query || 'none'}`,
+        `department=${department}`,
+        `basis=${basis}`,
+      ].join('; '),
+    }));
+    if (action.error) {
+      toast.error(action.error.message === 'FORBIDDEN' ? t('common.notAuthorized') : t('export.failed'));
+      return;
+    }
     download(
       `ROPA_${tab}_${new Date().toISOString().slice(0, 10)}.csv`,
       buildRegisterCsv({ settings: settings.data, activities: filtered, lang, tab }),

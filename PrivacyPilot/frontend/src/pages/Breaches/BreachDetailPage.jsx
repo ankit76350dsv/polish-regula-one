@@ -22,6 +22,7 @@ import {
   fetchBreaches, updateBreach, markBreachNotified, markBreachSubjectsNotified,
 } from '../../store/slices/breachesSlice';
 import { fetchSettings } from '../../store/slices/settingsSlice';
+import { recordExport } from '../../store/slices/exportsSlice';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { UODO_WINDOW_MS } from '../../services/breachService';
@@ -166,7 +167,28 @@ export default function BreachDetailPage() {
     else toast.success(t('common.save'));
   };
 
+  /**
+   * Record that the UODO report is leaving the app, and only then hand it over.
+   *
+   * Copying counts as an export here — pasting into the official form on biznes.gov.pl is
+   * in fact the MAIN way this document leaves — so every route (copy, Markdown, Word,
+   * print) is recorded (GDPR Art. 5(2)). Returns true when the caller may proceed.
+   */
+  const recordReportExport = async (format) => {
+    const action = await dispatch(recordExport({
+      target: 'breach_report',
+      format,
+      entityId: breach.id,
+    }));
+    if (action.error) {
+      toast.error(action.error.message === 'FORBIDDEN' ? t('common.notAuthorized') : t('export.failed'));
+      return false;
+    }
+    return true;
+  };
+
   const copyReport = async () => {
+    if (!(await recordReportExport('clipboard'))) return;
     try {
       await navigator.clipboard.writeText(report);
       toast.success(t('ai.copied'));
@@ -355,13 +377,23 @@ export default function BreachDetailPage() {
           </pre>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={copyReport}><Copy /> {t('ai.copy')}</Button>
-            <Button variant="outline" size="sm" onClick={() => downloadBlob(`${reportFilename}.md`, report, 'text/markdown;charset=utf-8')}>
+            <Button variant="outline" size="sm" onClick={async () => {
+              if (await recordReportExport('markdown')) {
+                downloadBlob(`${reportFilename}.md`, report, 'text/markdown;charset=utf-8');
+              }
+            }}>
               <Download /> Markdown
             </Button>
-            <Button variant="outline" size="sm" onClick={() => downloadWord(`${reportFilename}.doc`, breach.title, report)}>
+            <Button variant="outline" size="sm" onClick={async () => {
+              if (await recordReportExport('word')) {
+                downloadWord(`${reportFilename}.doc`, breach.title, report);
+              }
+            }}>
               <Download /> Word
             </Button>
-            <Button variant="outline" size="sm" onClick={() => printDoc(breach.title, report)}>
+            <Button variant="outline" size="sm" onClick={async () => {
+              if (await recordReportExport('print')) printDoc(breach.title, report);
+            }}>
               <Printer /> {lang === 'pl' ? 'Drukuj / PDF' : 'Print / PDF'}
             </Button>
           </div>

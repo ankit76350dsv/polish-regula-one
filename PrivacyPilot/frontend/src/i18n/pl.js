@@ -157,6 +157,7 @@ export default {
   // Brak dostępu (zalogowano, ale bez uprawnień do PrivacyPilot)
   'access.disabledTitle': 'Twoje konto jest zawieszone',
   'access.disabledBody': 'Twoje konto RegulaOne jest wyłączone, dlatego dostęp do PrivacyPilot został zablokowany. Skontaktuj się z administratorem organizacji.',
+  'export.failed': 'Nie udało się zapisać eksportu w rejestrze audytowym, dlatego został anulowany. Spróbuj ponownie.',
   'access.organisationTitle': 'Dostęp Twojej organizacji jest zawieszony',
   'access.organisationBody': 'Twoja organizacja nie jest aktywna w RegulaOne, dlatego PrivacyPilot został zablokowany. Skontaktuj się z administratorem organizacji.',
   'access.packageTitle': 'Twój plan wygasł',
@@ -331,7 +332,7 @@ export default {
   'audit.diff': 'Pokaż zmiany',
   'audit.oldValue': 'Wartość poprzednia',
   'audit.newValue': 'Wartość nowa',
-  'audit.exportJson': 'Eksport (JSON)',
+  'audit.exportCsv': 'Eksport (CSV)',
 
   // Użytkownicy
   'users.title': 'Użytkownicy i role',

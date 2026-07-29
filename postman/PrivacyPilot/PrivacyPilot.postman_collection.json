@@ -16,8 +16,23 @@
           "name": "Get dashboard",
           "request": {
             "method": "GET",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/dashboard", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dashboard"] },
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dashboard"
+              ]
+            },
             "description": "Get the full dashboard summary for your company (counts, chart data, attention list, recent audit). Read-only. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
@@ -330,6 +345,177 @@
         }
       ],
       "description": "A permanent history of everything important that happened: WHO did it, WHAT they did, to WHICH record, WHEN, from WHERE, and the values BEFORE and AFTER the change.\n\nYou can only READ this history. Nobody can add, change, or delete entries by hand — the server writes them automatically whenever something really changes. It is kept for 10 years.\n\nAllowed roles to read it: Admin, Compliance Officer, DPO, Auditor."
+    },
+    {
+      "name": "Exports (Art. 5(2) accountability)",
+      "description": "Records that data LEFT the app — a download, a print view, or a clipboard copy. The frontend calls this BEFORE producing the file and only produces it if this succeeds, so every copy taken out of PrivacyPilot leaves an immutable EXPORT line in the audit trail. Read the lines back through the Audit Trail endpoints. Allowed roles: Admin, Compliance Officer, DPO, Auditor.",
+      "item": [
+        {
+          "name": "Record register export (controller)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"register_controller\",\n  \"format\": \"csv\",\n  \"itemCount\": 42,\n  \"filterSummary\": \"department=hr; basis=consent\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/exports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "exports"
+              ]
+            },
+            "description": "Records a copy of the Art. 30(1) controller register. Whole-list export: no entityId, but itemCount and filterSummary record how big the copy was and which slice of the register it covered. Returns 201 with the audit line written."
+          },
+          "response": []
+        },
+        {
+          "name": "Record register export (processor)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"register_processor\",\n  \"format\": \"csv\",\n  \"itemCount\": 7,\n  \"filterSummary\": \"department=all; basis=all\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/exports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "exports"
+              ]
+            },
+            "description": "Records a copy of the Art. 30(2) processor register."
+          },
+          "response": []
+        },
+        {
+          "name": "Record audit-trail export",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"audit_trail\",\n  \"format\": \"csv\",\n  \"itemCount\": 500,\n  \"filterSummary\": \"entityType=activity\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/exports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "exports"
+              ]
+            },
+            "description": "Records a copy of the audit trail itself. The UI exports CSV (openable in Excel/LibreOffice by an auditor or UODO inspector); the before/after values are carried as JSON text inside their cells, so nothing is lost. The resulting EXPORT line is also append-only, so the evidence cannot be copied silently."
+          },
+          "response": []
+        },
+        {
+          "name": "Record privacy-notice export",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"privacy_notice\",\n  \"format\": \"print\",\n  \"entityId\": \"{{noticeId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/exports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "exports"
+              ]
+            },
+            "description": "Records that one notice version was downloaded or printed. entityId is REQUIRED and must be one of your own notices — another company's id returns 404."
+          },
+          "response": []
+        },
+        {
+          "name": "Record breach-report export",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"target\": \"breach_report\",\n  \"format\": \"clipboard\",\n  \"entityId\": \"{{breachId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/exports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "exports"
+              ]
+            },
+            "description": "Records that the Art. 33(3) UODO report left the app. 'clipboard' is the main route in practice: the officer pastes it into the official form on biznes.gov.pl. entityId is REQUIRED and must be one of your own breaches."
+          },
+          "response": []
+        }
+      ]
     },
     {
       "name": "DPIA (Art. 35)",
@@ -992,8 +1178,23 @@
           "name": "List breaches",
           "request": {
             "method": "GET",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches"] },
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/breaches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "breaches"
+              ]
+            },
             "description": "Get all breaches for your company, most recently recorded first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
@@ -1002,8 +1203,24 @@
           "name": "Get breach by id",
           "request": {
             "method": "GET",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches", "{{breachId}}"] },
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "breaches",
+                "{{breachId}}"
+              ]
+            },
             "description": "Get one breach by its id (only if it belongs to your company, else 404). Set {{breachId}} first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
@@ -1012,13 +1229,36 @@
           "name": "Record breach",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"title\": \"Lost laptop with HR spreadsheets\",\n  \"riskLevel\": \"medium\",\n  \"description\": \"Company laptop lost on a train. Disk held payroll exports for ~180 employees; BitLocker-encrypted.\",\n  \"subjectsCount\": 180,\n  \"recordsCount\": 3500,\n  \"dataCategories\": [\"identity\", \"financial\", \"employment\"],\n  \"uodoNotificationRequired\": true,\n  \"subjectsNotificationRequired\": false,\n  \"riskRationale\": \"Encryption reduces risk (Art. 34(3)(a)); UODO notification prepared as a precaution.\",\n  \"discoveredAt\": \"2026-07-24T06:00:00Z\",\n  \"remediation\": [\n    { \"text\": \"Remote wipe issued via MDM\", \"done\": true },\n    { \"text\": \"Confirm no unencrypted backup existed\", \"done\": false }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches"] },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/breaches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "breaches"
+              ]
+            },
             "description": "Record a new breach. It always starts OPEN; the server sets the company, timestamps and who recorded it. 'discoveredAt' is optional (when you became aware) and defaults to now. title, description, riskLevel and riskRationale are required. Allowed roles: Admin, Compliance Officer, DPO."
           },
           "response": []
@@ -1027,13 +1267,37 @@
           "name": "Update breach",
           "request": {
             "method": "PUT",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"title\": \"Lost laptop with HR spreadsheets\",\n  \"riskLevel\": \"medium\",\n  \"description\": \"Company laptop lost on a train. Disk held payroll exports for ~180 employees; BitLocker-encrypted.\",\n  \"subjectsCount\": 180,\n  \"recordsCount\": 3500,\n  \"dataCategories\": [\"identity\", \"financial\", \"employment\"],\n  \"uodoNotificationRequired\": true,\n  \"subjectsNotificationRequired\": false,\n  \"riskRationale\": \"Encryption reduces risk (Art. 34(3)(a)); UODO notification prepared as a precaution.\",\n  \"status\": \"open\",\n  \"uodoReference\": \"DKN.5131.2026.XYZ\",\n  \"remediation\": [\n    { \"id\": \"keep-existing-id-here\", \"text\": \"Remote wipe issued via MDM\", \"done\": true },\n    { \"text\": \"Confirm no unencrypted backup existed\", \"done\": true }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches", "{{breachId}}"] },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "breaches",
+                "{{breachId}}"
+              ]
+            },
             "description": "Replace the editable fields of a breach — including the remediation list and the open/closed status (send the whole object; keep each remediation item's id to preserve it, omit it for a new one). Only the fields that changed are written to the audit trail. The 'notified at' times are NOT changed here — use the notify actions. Set {{breachId}} first. Allowed roles: Admin, Compliance Officer, DPO."
           },
           "response": []
@@ -1042,8 +1306,25 @@
           "name": "Mark notified to UODO",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}/notify-uodo", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches", "{{breachId}}", "notify-uodo"] },
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}/notify-uodo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "breaches",
+                "{{breachId}}",
+                "notify-uodo"
+              ]
+            },
             "description": "Record that UODO has now been told about this breach — the server stamps the exact time (proves the 72-hour duty was met). Set {{breachId}} first. Allowed roles: Admin, Compliance Officer, DPO."
           },
           "response": []
@@ -1052,8 +1333,25 @@
           "name": "Mark data subjects notified",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}/notify-subjects", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "breaches", "{{breachId}}", "notify-subjects"] },
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/breaches/{{breachId}}/notify-subjects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "breaches",
+                "{{breachId}}",
+                "notify-subjects"
+              ]
+            },
             "description": "Record that the affected people have now been told directly (Art. 34) — the server stamps the time. Set {{breachId}} first. Allowed roles: Admin, Compliance Officer, DPO."
           },
           "response": []
@@ -1068,8 +1366,23 @@
           "name": "List requests",
           "request": {
             "method": "GET",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars"] },
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dsars",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dsars"
+              ]
+            },
             "description": "Get all requests for your company, most recently recorded first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
@@ -1078,8 +1391,24 @@
           "name": "Get request by id",
           "request": {
             "method": "GET",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars", "{{dsarId}}"] },
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dsars",
+                "{{dsarId}}"
+              ]
+            },
             "description": "Get one request by its id (only if it belongs to your company, else 404). Set {{dsarId}} first. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
@@ -1088,13 +1417,36 @@
           "name": "Record request",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"type\": \"access\",\n  \"requesterName\": \"Tomasz Mazur\",\n  \"requesterEmail\": \"tomasz.mazur@example.com\",\n  \"relation\": \"Former employee\",\n  \"receivedAt\": \"2026-07-20T09:00:00Z\",\n  \"notes\": \"Requester also phoned to confirm; see call log.\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars"] },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dsars",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dsars"
+              ]
+            },
             "description": "Record a new request. It always starts IN_PROGRESS and UNVERIFIED. 'receivedAt' is optional (defaults to now) and starts the 1-month clock; the server sets dueAt = receivedAt + 1 month. 'type' and 'requesterName' are required. Allowed roles: Admin, Compliance Officer, DPO."
           },
           "response": []
@@ -1103,13 +1455,37 @@
           "name": "Update request (identity / tasks / notes)",
           "request": {
             "method": "PUT",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"type\": \"access\",\n  \"requesterName\": \"Tomasz Mazur\",\n  \"requesterEmail\": \"tomasz.mazur@example.com\",\n  \"relation\": \"Former employee\",\n  \"notes\": \"Requester also phoned to confirm; see call log.\",\n  \"identityVerified\": true,\n  \"identityMethod\": \"Reply from the e-mail address on file + employee ID number\",\n  \"tasks\": [\n    { \"id\": \"keep-existing-id-here\", \"text\": \"Export personnel file\", \"done\": true },\n    { \"text\": \"Prepare Art. 15 response letter\", \"done\": false }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars", "{{dsarId}}"] },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dsars",
+                "{{dsarId}}"
+              ]
+            },
             "description": "Edit the request's content — verify identity (set identityVerified + identityMethod), and edit the collection-task list and notes (send the whole object; keep each task's id to preserve it, omit it for a new one). Does NOT change the deadline, status, extension or completion — use the actions for those. Set {{dsarId}} first. Allowed roles: Admin, Compliance Officer, DPO."
           },
           "response": []
@@ -1118,13 +1494,38 @@
           "name": "Extend deadline (+2 months)",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"reason\": \"Complex request — data spread across three archived systems; requester informed on day 20 (Art. 12(3)).\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}/extend", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars", "{{dsarId}}", "extend"] },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dsars",
+                "{{dsarId}}",
+                "extend"
+              ]
+            },
             "description": "Extend the one-month deadline by two more months (Art. 12(3)). Reason is REQUIRED (400 if blank). 409 if the request is not in progress or is already extended. The server recomputes dueAt = receivedAt + 3 months. Set {{dsarId}} first. Allowed roles: Admin, Compliance Officer, DPO."
           },
           "response": []
@@ -1133,8 +1534,25 @@
           "name": "Complete request",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}/complete", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars", "{{dsarId}}", "complete"] },
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dsars",
+                "{{dsarId}}",
+                "complete"
+              ]
+            },
             "description": "Mark the request completed (answered and closed) — the server stamps completedAt. 409 if it is already closed. Set {{dsarId}} first. Allowed roles: Admin, Compliance Officer, DPO."
           },
           "response": []
@@ -1143,13 +1561,38 @@
           "name": "Refuse request",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"reason\": \"Manifestly excessive — the same data was provided last week (Art. 12(5)).\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}/refuse", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "dsars", "{{dsarId}}", "refuse"] },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/dsars/{{dsarId}}/refuse",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "dsars",
+                "{{dsarId}}",
+                "refuse"
+              ]
+            },
             "description": "Refuse the request on a lawful ground (Art. 12(5)). Reason is REQUIRED (400 if blank). 409 if the request is already closed. The server stamps refusedAt and stores the reason. Set {{dsarId}} first. Allowed roles: Admin, Compliance Officer, DPO."
           },
           "response": []
@@ -1164,8 +1607,23 @@
           "name": "Get settings",
           "request": {
             "method": "GET",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/settings", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "settings"] },
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "settings"
+              ]
+            },
             "description": "Get your company's settings: the company identity (read from RegulaOne, read-only) plus this company's DPO + AI settings. If DPO/AI have not been saved yet, returns them blank with AI defaults. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
@@ -1174,13 +1632,36 @@
           "name": "Save settings",
           "request": {
             "method": "PUT",
-            "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "idToken={{idToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"dpo\": {\n    \"name\": \"Janusz Nowak\",\n    \"email\": \"iod@abclogistics.example.pl\",\n    \"phone\": \"+48 22 000 00 00\",\n    \"appointedAt\": \"2026-01-08T00:00:00Z\",\n    \"uodoNotifiedAt\": \"2026-01-13T00:00:00Z\",\n    \"publishedOnWebsite\": true\n  },\n  \"ai\": {\n    \"enabled\": true,\n    \"excludeSpecialCategories\": true\n  }\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": { "raw": "{{baseUrl}}/api/privacypilot/settings", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "settings"] },
+            "url": {
+              "raw": "{{baseUrl}}/api/privacypilot/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "privacypilot",
+                "settings"
+              ]
+            },
             "description": "Save the DPO + AI settings (creates the record on the first save, updates it after). Send both groups; a missing group is left unchanged. The company identity is NOT accepted here — it is read-only and owned by RegulaOne (edit it on RegulaOne's company profile page). Only the fields that changed are written to the audit trail. Allowed roles: Admin only."
           },
           "response": []

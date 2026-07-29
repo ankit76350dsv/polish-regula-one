@@ -19,7 +19,13 @@ public enum AuditEntityType {
     DSAR("dsar"),
     NOTICE("notice"),
     USER("user"),
-    SETTINGS("settings");
+    SETTINGS("settings"),
+    // The next two are WHOLE-COLLECTION things rather than one record, so an audit
+    // entry about them has no single entity id. They exist because taking a COPY of
+    // the whole register or the whole trail is itself an event we must record
+    // (GDPR Art. 5(2) accountability) — see ExportService.
+    REGISTER("register"),
+    AUDIT_TRAIL("audit_trail");
 
     private final String code;
 

@@ -37,11 +37,14 @@ It is **not production-ready**, for three distinct classes of reason:
    The rules are now enforced server-side in `security/PrivacyPilotAccessPolicy.java`,
    called from `RegulaOneAuthClient.resolve()` before any controller runs, and covered by
    15 hermetic tests.
-2. **Accountability has a hole where it matters most.** `AuditAction.EXPORT` is defined
-   and never written: every export — the full Art. 30 register CSV, the audit trail
-   itself, notices, breach reports — happens entirely in the browser and leaves **no
-   server-side record**. Bulk extraction of the register is therefore invisible to the
-   audit trail that exists to prove accountability (GDPR Art. 5(2)).
+2. ~~**Accountability has a hole where it matters most.**~~ **✅ FIXED 2026-07-29 — see
+   §17.** `AuditAction.EXPORT` was defined and never written: every export — the full
+   Art. 30 register CSV, the audit trail itself, notices, breach reports — happened
+   entirely in the browser and left no server-side record, so bulk extraction of the
+   register was invisible to the audit trail that exists to prove accountability
+   (GDPR Art. 5(2)). All eight export paths now record an immutable EXPORT entry via
+   `POST /api/privacypilot/exports` before any file, print view or clipboard copy is
+   produced, and abandon the export if that record cannot be written.
 3. **The operational layer does not exist yet.** No production profile, no container, no
    CI/CD, no health/metrics, no rate limiting, no TLS configuration, no field-level
    encryption, no runnable test suite, no retention or erasure job. Additionally
@@ -55,9 +58,9 @@ working domain code.
 
 ## 2. Overall Production Readiness Score
 
-### **57 / 100 — ❌ Not Production Ready**
+### **61 / 100 — ❌ Not Production Ready**
 
-*(54 at first assessment; +3 after H1 was fixed on 2026-07-29 — see §17.)*
+*(54 at first assessment; +3 for H1 and +4 for H2, both fixed 2026-07-29 — see §17.)*
 
 | Layer | Score | Basis |
 |---|---:|---|
@@ -65,10 +68,10 @@ working domain code.
 | Feature completeness | 85% | 10/11 domains real; AI assistant mock; no erasure/export paths |
 | Authentication & authorization | 80% | Auth + RBAC solid; **entitlement gate now enforced server-side (H1 fixed)**; residual: 30 s cache window, frontend/backend matrix drift (M6) |
 | Security hardening | 40% | No rate limiting, no field encryption, no TLS config, weak DTO limits |
-| Compliance (GDPR/Polish mapping) | 65% | Feature-to-article mapping is accurate; retention/erasure/export-audit gaps |
+| Compliance (GDPR/Polish mapping) | 75% | Feature-to-article mapping is accurate; **export accountability now recorded (H2 fixed)**; retention/erasure gaps remain |
 | Database & performance | 45% | No pagination, no compound indexes, no transactions, full-collection reads |
 | Ops / infra / deploy | 15% | No prod profile, Docker, CI/CD, observability; config not in git |
-| Testing | 12% | Still effectively none, but there is now one **hermetic** suite (15 tests on the access policy, §17); the original context-load test still needs the live Atlas cluster |
+| Testing | 20% | Still far from the 80% target, but **25 hermetic tests** now exist (access policy + export accountability, §17); the original context-load test still needs the live Atlas cluster |
 
 ---
 
@@ -159,18 +162,28 @@ SafeVoice's nor KSeFFlow's `RegulaOneAuthClient` enforces these fields; fixing t
 outside this module's scope but should be tracked.
 
 **H2 · Exports are never audited (GDPR Art. 5(2) accountability).**
-`AuditAction.EXPORT` exists (`models/enums/audit/AuditAction.java:21`) but is written
-**zero** times anywhere in the backend (`grep AuditAction.EXPORT` → no hits in
-`service/` or `controller/`). Every export path is client-side: the full Art. 30 register
-CSV (`pages/Ropa/RegisterPage.jsx:103-144`), the audit-trail export
-(`pages/Audit/AuditTrailPage.jsx:68`), notice downloads/print
-(`pages/Notices/NoticesPage.jsx:27-45`), breach report + `.doc`
-(`pages/Breaches/BreachDetailPage.jsx:41-63`).
+**✅ FIXED 2026-07-29 — see §17 for the change report.**
+*As found:* `AuditAction.EXPORT` existed (`models/enums/audit/AuditAction.java:21`) and was
+written **zero** times anywhere in the backend. Every export path was client-side: the full
+Art. 30 register CSV, the audit-trail export, notice downloads/print, and the breach
+report in Markdown/Word/print/clipboard.
 *Failure scenario:* an auditor or admin downloads the complete register and the entire
 audit trail; the audit trail — the very artefact that is supposed to demonstrate
-accountability — shows nothing happened.
-*Fix:* add a server endpoint per export that produces the file **and** writes an
-`EXPORT` audit entry; make the UI call it instead of building files locally.
+accountability — showed nothing happened.
+*Resolution:* new `POST /api/privacypilot/exports` (`controller/ExportController.java`,
+`service/ExportService.java`) writes one immutable `EXPORT` entry per export, recording the
+target, format, record count and the on-screen filters, with the actor/company/IP taken
+from the session. All **eight** export paths call it first and abandon the export if the
+record cannot be written — "no evidence, no copy". Single-document exports must name a
+record, which is verified to belong to the caller's tenant (404 otherwise), so the trail
+can never contain a line about another company's data. Clipboard copy of the UODO report is
+recorded too, because pasting into the biznes.gov.pl form is how that document actually
+leaves. 10 hermetic tests.
+*Residual (documented, by design):* this records the export **event**; it does not generate
+the bytes server-side. Someone already authorised to read the data could still call the
+ordinary read APIs and assemble their own copy with no entry. Closing that fully means
+server-side rendering of every export, which needs the bilingual register labels that today
+exist only in the frontend (`lib/gdpr.js`) — tracked as follow-up, not a regression.
 
 **H3 · The audit-trail query loads the whole tenant collection into memory and sorts it
 without an index.**
@@ -263,6 +276,11 @@ plaintext HTTP origins. TLS 1.3/HSTS (CLAUDE.md §2) is not evidenced anywhere.
 ### 4.3 Findings — Medium
 
 **M1 · Stored DOM-XSS via the notice title in the print window.**
+**✅ FIXED 2026-07-29** as a side-effect of the H2 work (§17): `printContent` now escapes
+both title and body with an `escapeHtml` helper, matching the sibling implementation, and
+also guards against a blocked pop-up. *(The missing `@Size` on `NoticeGenerateRequest.title`
+remains — see M2.)* The original finding is kept below for the record.
+
 `printContent()` interpolates `title` into `document.write` **unescaped**
 (`pages/Notices/NoticesPage.jsx:36-45`) while the body *is* escaped — and the sibling
 implementation gets it right (`pages/Breaches/BreachDetailPage.jsx:56-62` escapes both).
@@ -391,12 +409,12 @@ or require an explicit `X-Acting-Tenant` that is validated and audited.
 | A01 Broken Access Control | ⚠️ Tenant isolation and RBAC verified strong — but **H1** (entitlement not server-enforced) and **M6** (matrix drift) are genuine access-control defects |
 | A02 Cryptographic Failures | ❌ **H5** (no field encryption/KMS), **H9** (no TLS configured, `secure=false` default) |
 | A03 Injection | ✅ Low — derived queries only, no XML, no eval; ⚠️ **M1** DOM-XSS sink |
-| A04 Insecure Design | ⚠️ **H2** (unauditable exports), **H6** (no erasure path) |
+| A04 Insecure Design | ⚠️ ~~H2~~ (fixed), **H6** (no erasure path) |
 | A05 Security Misconfiguration | ❌ **H4** (no rate limiting), **H7** (no prod profile, config not in git), **M4** (headers) |
 | A06 Vulnerable Components | ⚠️ **M10** (one patch behind), **L1/L2** (advisories present, exposure build-time only). Backend CVE scan **unable to verify** |
 | A07 Auth Failures | ⚠️ Delegated and sound; **H1** and **L3** are the residual gaps |
 | A08 Integrity Failures | ✅ Audit immutability enforced at DB layer; server owns lifecycle state |
-| A09 Logging & Monitoring | ❌ Domain audit trail is strong, but **H2** (exports unlogged) and **H7** (no metrics/alerting) mean nothing is *monitored* |
+| A09 Logging & Monitoring | ⚠️ Domain audit trail is strong and exports are now logged (H2 fixed), but **H7** (no metrics/alerting) means nothing is *monitored* |
 | A10 SSRF | ✅ Not applicable — config-fixed single outbound target |
 
 **OWASP ASVS L2:** fails at minimum on V2 (rate limiting), V6 (data-at-rest encryption),
@@ -480,7 +498,7 @@ does database work in Java (H3). No pagination (M3), no transactions (M8), no ve
 | Versioning | ❌ none (L5) |
 | Rate limiting | ❌ none (H4) |
 | Pagination | ❌ none (M3) |
-| Documentation | ⚠️ Postman collection complete and current; no OpenAPI served (L5) |
+| Documentation | ⚠️ Postman collection complete and current (50 requests, incl. the new Exports folder); no OpenAPI served (L5) |
 
 ---
 
@@ -594,7 +612,7 @@ against the live EUR-Lex text before sign-off.
 | Identity confirmation | Art. 12(6) | ✅ | Never auto-verified; a new DSAR always starts unverified (`DsarService.java:71`) |
 | Processor obligations / DPA | Art. 28 | ✅ | Vendor register + DPA-status guard |
 | Transfers outside the EEA | Ch. V (44–49) | ✅ | Transfer register, mechanisms + adequacy list verified (§10.1) |
-| Accountability | Art. 5(2) | ⚠️ **gap** | Immutable trail with actor/IP/UA/old/new — but **exports are not logged (H2)** |
+| Accountability | Art. 5(2) | ✅ | Immutable trail with actor/IP/UA/old/new, **and every export/print/copy now recorded (H2 fixed, §17)** |
 | Security of processing | Art. 32 | ❌ **gap** | No field-level encryption (H5), no TLS configured (H9), no rate limiting (H4) |
 | Storage limitation | Art. 5(1)(e) | ❌ **gap** | Soft-delete keeps everything forever; no retention schedule (M9) |
 | Right to erasure | Art. 17 | ❌ **gap** | No erasure path, and subject PII is frozen in the immutable trail (H6) |
@@ -649,7 +667,7 @@ unverified: the Art. 28 data processing agreement with MongoDB Inc. as sub-proce
 | # | Issue | Fix |
 |---|---|---|
 | ~~H1~~ | ~~Account status / plan / module entitlement enforced only in the browser~~ | **✅ FIXED** — `PrivacyPilotAccessPolicy` enforced in `RegulaOneAuthClient.resolve()`; 15 tests (§17) |
-| H2 | `AuditAction.EXPORT` never written; all exports client-side | Server-side export endpoints that write an `EXPORT` audit entry |
+| ~~H2~~ | ~~`AuditAction.EXPORT` never written; all exports client-side~~ | **✅ FIXED** — `POST /api/privacypilot/exports` recorded before all 8 export paths; 10 tests (§17) |
 | H3 | Audit query loads and sorts the whole tenant collection in memory, unindexed | Push filters/limit into Mongo; add `(tenantId, createdAt)` compound indexes |
 | H4 | No rate limiting or brute-force protection | Edge + app limits, stricter on writes and `/audit` |
 | H5 | No field-level encryption / KMS / per-tenant keys for PII | Mongo CSFLE or app-layer AES-GCM via KMS |
@@ -660,7 +678,7 @@ unverified: the Art. 28 data processing agreement with MongoDB Inc. as sub-proce
 
 **Medium**
 
-M1 stored DOM-XSS in the notice print title · M2 thin DTO validation, `SettingsRequest`
+~~M1 stored DOM-XSS in the notice print title~~ (**✅ fixed**, §17) · M2 thin DTO validation, `SettingsRequest`
 unvalidated, no body cap · M3 no pagination · M4 CSP meta-only (`frame-ancestors`
 ineffective), no security headers · M5 mock AI seeds fake data into browser storage and
 logs nowhere auditable · M6 frontend/backend RBAC drift (DPO gets a DPIA editor the API
@@ -725,13 +743,141 @@ One will break in production as data accumulates (**H3**). The remainder are the
 operational floor: encryption at rest, TLS, rate limiting, a production profile, a
 container, a pipeline, observability, and a test suite that can actually run.
 
-Resolve **H2–H9** (H1 is now fixed — §17), and settle the **EEA data-residency and
+Resolve **H3–H9** (H1 and H2 are now fixed — §17), and settle the **EEA data-residency and
 backup/DR questions** — which cannot be answered from this repository at all — before any
 regulated EU/Poland production deployment.
 
 ---
 
 ## 17. Remediation Log
+
+### 2026-07-29 — H2 fixed: every export is recorded in the audit trail
+
+**1. Files modified**
+
+| File | Change |
+|---|---|
+| `backend/.../models/enums/export/ExportTarget.java` | **new** — what was copied (register controller/processor, audit trail, notice, breach report); maps to an `AuditEntityType` and says whether a record id is required |
+| `backend/.../models/enums/export/ExportFormat.java` | **new** — how it left: `csv`, `json`, `markdown`, `word`, `print`, `clipboard` |
+| `backend/.../models/enums/audit/AuditEntityType.java` | added `REGISTER` and `AUDIT_TRAIL` for whole-list exports (additive; existing stored codes unaffected) |
+| `backend/.../dto/export/ExportRequest.java` | **new** — validated payload (`target`, `format`, `entityId` ≤64, `itemCount` 0–1 000 000, `filterSummary` ≤500) |
+| `backend/.../service/ExportService.java` | **new** — verifies single-document ownership, then writes the `EXPORT` audit entry |
+| `backend/.../controller/ExportController.java` | **new** — `POST /api/privacypilot/exports`, 201, gated to the four roles that hold `EXPORT_DATA` |
+| `backend/src/test/.../service/ExportServiceTest.java` | **new** — 10 hermetic tests (JUnit + Mockito) |
+| `frontend/src/services/exportService.js` | **new** — transport |
+| `frontend/src/store/slices/exportsSlice.js`, `store/index.js` | **new** slice (CLAUDE.md §26) with `saveStatus`/`error`/`lastReceipt`; registered as `exports` |
+| `frontend/src/pages/Ropa/RegisterPage.jsx` | CSV export records first (target by tab, row count, live filters) |
+| `frontend/src/pages/Audit/AuditTrailPage.jsx` | trail export records first; `ENTITY_TYPES` filter gains `register`, `audit_trail`; **export switched from JSON to CSV** |
+| `frontend/src/lib/auditCsv.js` | **new** — the audit-trail CSV document format, alongside `breachReport.js` / `noticeBuilder.js` |
+| `frontend/src/pages/Notices/NoticesPage.jsx` | one `exportNotice(format)` handler for download + print; **also escapes the print title (fixes M1)** |
+| `frontend/src/pages/Breaches/BreachDetailPage.jsx` | all four routes (copy, Markdown, Word, print) record first |
+| `frontend/src/i18n/en.js`, `pl.js` | `export.failed` (parity kept: 351 keys each) |
+| `postman/PrivacyPilot/PrivacyPilot.postman_collection.json` | new "Exports (Art. 5(2) accountability)" folder, 5 requests (collection now 50) |
+
+**2. Old behaviour**
+
+`AuditAction.EXPORT` was declared in the enum and written zero times. All eight export
+routes ran entirely in the browser: the Art. 30 controller/processor register CSV, the audit
+trail JSON, the notice `.md` download and print view, and the breach report as Markdown,
+Word, print and clipboard. The server never learned that any of it happened, so the audit
+trail showed nothing when the entire register left the building.
+
+**3. New behaviour**
+
+Each route calls `POST /api/privacypilot/exports` **before** producing anything and only
+proceeds if the call succeeds; on failure the user gets a toast and no file. One immutable
+`EXPORT` audit line is written per export, carrying the target, the format, the record count
+and the on-screen filters, with actor / role / company / IP / user-agent taken from the
+verified session. Single-document exports must name a record, and that record is looked up
+in the caller's own tenant — a missing or foreign id is a 404 and **no** audit line is
+written, so the trail can never assert something that did not happen. Exporting the audit
+trail is itself recorded in the audit trail, and that line is append-only like every other.
+
+**3b. Audit-trail export format changed from JSON to CSV**
+
+The trail exported a raw JSON dump, which is the wrong artefact for its audience: this file
+is handed to an auditor, a lawyer or a UODO inspector, who opens it in Excel or LibreOffice.
+It is now a CSV with one column per audit field, carrying a provenance header block (what the
+file is, who exported it, when, which filters, how many records, and **the id of the EXPORT
+audit entry that records this very download** — so the evidence names the entry proving who
+took it). Nothing is lost in the change: the before/after diffs are the only nested part of
+an entry and they travel as compact JSON text inside their own cells, verified to round-trip
+back to the identical objects. The file is CRLF-terminated and downloaded with a UTF-8 BOM so
+Excel renders Polish characters (ą, ę, ł, ż) correctly rather than mojibake — the same
+convention the ROPA register export already uses. `ExportFormat.JSON` remains a valid API
+value; the UI simply no longer uses it.
+
+**4. Why the old code was changed**
+
+Beyond the JSON→CSV switch above, nothing was removed. The client-side file builders for the
+register, notices and breach report are untouched — deliberately: they render
+the register and the notices in Polish and English from label tables that exist only in the
+frontend, and re-implementing them server-side would have risked regressing a legal document
+in the product's primary language. The one behavioural change to existing code is that an
+export can now fail; that is the point of the control. The unescaped print title was fixed
+in passing because the change touched the same function.
+
+**5. Security impact**
+
+Closes H2. Bulk extraction of personal data is now attributable. `EXPORT` lines inherit the
+existing database-level immutability (`AuditEntryImmutableListener`), so they cannot be
+edited or deleted afterwards. The endpoint cannot be used to probe another tenant's ids
+(404 on any id outside the caller's tenant), and an Employee — who can read none of this
+data — cannot record an export at all. **Honest limit:** this records the export *event*, it
+does not generate the bytes. Anyone already authorised to read the data can still call the
+ordinary read APIs and assemble a copy with no entry written. It is an accountability
+record, not a data-loss-prevention control, and the report says so in §4.2.
+
+**6. Compliance impact**
+
+Directly supports GDPR Art. 5(2) accountability: the controller can now demonstrate who took
+a copy of the register, which slice, how large, in what format and when — the question an
+auditor or UODO inspection actually asks. It also strengthens the Art. 30 record's
+evidential value and gives Art. 33(3) breach handling a trace of when the UODO report left
+the app (including the clipboard route, which is how it reaches the biznes.gov.pl form).
+No processing purpose, lawful basis, retention period or data category changed, so no ROPA
+or notice update is needed. Note that the EXPORT lines themselves contain no personal data
+beyond the actor's own name/role, which the trail already stored.
+
+**7. Testing performed**
+
+`./mvnw -o -Dtest='ExportServiceTest,PrivacyPilotAccessPolicyTest' test` → **25 tests, 0
+failures, 0 errors**. The 10 new tests assert: register export records target/format/count/
+filters; audit-trail export is recorded; whole-list exports never touch the record
+repositories and claim no id; an export line never carries a "before" state; blank
+count/filters are omitted; a notice export records the readable version label
+(`employees v3`); a clipboard copy of a breach report is recorded; a single-document export
+with no id is a 400 **with nothing written**; and a foreign notice or breach id is a 404
+**with nothing written** (tenant isolation). Frontend `npm run build` succeeds; i18n parity
+verified (351 = 351); Postman collection re-parsed and valid (50 requests). The pre-existing
+`BackendApplicationTests.contextLoads` still errors for the unrelated reason in H8 (it needs
+the live Atlas cluster).
+
+The audit CSV was executed directly against realistic data (Polish diacritics, an embedded
+`"` in an entity label, a null `oldValue`, a nested `newValue`) and the output parsed back
+with a strict CSV reader: 12 cells in every row, quotes correctly doubled and recovered,
+diacritics intact, and both diff cells `JSON.parse`-ing back to the identical objects — i.e.
+the format is lossless.
+
+**8. Potential risks / side effects**
+
+- *A new failure mode:* exports now depend on a successful API call. If the backend is
+  unreachable the user cannot export — intended ("no evidence, no copy"), but it is a
+  behaviour change worth mentioning in release notes.
+- *Audit volume grows.* Print and clipboard actions are recorded, so a user who prints
+  repeatedly generates several entries. This compounds **H3** (the audit query already loads
+  the whole collection into memory) — H3 should be fixed before heavy use.
+- *`itemCount` and `filterSummary` are client-stated.* They describe the copy, not the
+  authorisation, and cannot grant access; the trustworthy fields (who/when/which tenant/
+  which record) are all server-derived. A client could understate the count; it cannot hide
+  that an export happened.
+- *Two new `AuditEntityType` values* (`register`, `audit_trail`) will appear in the
+  audit-trail filter. Older stored entries are unaffected.
+- *The audit export filename and format changed* (`.json` → `.csv`). Anything downstream that
+  consumed the old JSON dump — a script, a saved import mapping — needs updating. Nothing in
+  this repository reads it.
+
+---
 
 ### 2026-07-29 — H1 fixed: entitlement and account status enforced server-side
 

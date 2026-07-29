@@ -1,8 +1,9 @@
 // Audit trail — who/what/when with old→new diff, searchable, JSON export.
 // Entries include actor role and user agent; written only by the service layer.
 import { useMemo, useState } from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { Download, Eye } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -16,10 +17,26 @@ import { LoadingState, EmptyState, ErrorState } from '../../components/common/St
 import { Input, Select } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchAudit } from '../../store/slices/auditSlice';
+import { recordExport } from '../../store/slices/exportsSlice';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
+import { buildAuditCsv } from '../../lib/auditCsv';
 
-const ENTITY_TYPES = ['activity', 'dpia', 'vendor', 'transfer', 'breach', 'dsar', 'notice', 'user', 'settings'];
+// Includes the two whole-list kinds an EXPORT line can be about, so exports of the
+// register and of the trail itself are filterable here like any other entry.
+const ENTITY_TYPES = ['activity', 'dpia', 'vendor', 'transfer', 'breach', 'dsar', 'notice',
+  'user', 'settings', 'register', 'audit_trail'];
+
+// Download a CSV. The leading BOM is what makes Excel read it as UTF-8 (Polish characters).
+function downloadCsv(filename, content) {
+  const blob = new Blob(['﻿' + content], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 function DiffPanel({ label, value, tone }) {
   return (
@@ -34,6 +51,7 @@ function DiffPanel({ label, value, tone }) {
 
 export default function AuditTrailPage() {
   const { t, lang } = useT();
+  const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
   const { items, status, error, refetch } = useSliceData('audit', fetchAudit);
   const [query, setQuery] = useState('');
@@ -49,14 +67,33 @@ export default function AuditTrailPage() {
         e.action?.toLowerCase().includes(query.toLowerCase()))),
     [items, query, entityType]);
 
-  const exportJson = () => {
-    const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `audit_trail_${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+  // Exporting the trail is RECORDED IN THE TRAIL — and that export line is itself
+  // append-only, so a copy of the evidence can never be taken silently. If the recording
+  // fails the download is abandoned: no evidence, no copy.
+  //
+  // The recorded line comes back as a receipt, which is written into the file's header
+  // block — so the exported evidence names the audit entry that proves who exported it.
+  const exportCsv = async () => {
+    const filterSummary = [`search=${query || 'none'}`, `entityType=${entityType}`].join('; ');
+    const action = await dispatch(recordExport({
+      target: 'audit_trail',
+      format: 'csv',
+      itemCount: filtered.length,
+      filterSummary,
+    }));
+    if (action.error) {
+      toast.error(action.error.message === 'FORBIDDEN' ? t('common.notAuthorized') : t('export.failed'));
+      return;
+    }
+    downloadCsv(
+      `audit_trail_${new Date().toISOString().slice(0, 10)}.csv`,
+      buildAuditCsv({
+        entries: filtered,
+        receipt: action.payload,
+        filterSummary,
+        exportedAt: new Date().toISOString(),
+      }),
+    );
   };
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={6} />;
@@ -66,7 +103,7 @@ export default function AuditTrailPage() {
     <div>
       <PageHeader title={t('audit.title')} subtitle={t('audit.subtitle')}>
         {can(user, ACTIONS.EXPORT_DATA) && (
-          <Button variant="outline" onClick={exportJson}><Download /> {t('audit.exportJson')}</Button>
+          <Button variant="outline" onClick={exportCsv}><Download /> {t('audit.exportCsv')}</Button>
         )}
       </PageHeader>
 

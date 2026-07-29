@@ -13,6 +13,7 @@ import breaches from './slices/breachesSlice';
 import dsars from './slices/dsarsSlice';
 import notices from './slices/noticesSlice';
 import audit from './slices/auditSlice';
+import exports_ from './slices/exportsSlice';
 import users from './slices/usersSlice';
 import settings from './slices/settingsSlice';
 import ai from './slices/aiSlice';
@@ -30,6 +31,8 @@ export const store = configureStore({
     dsars,
     notices,
     audit,
+    // "exports" is a reserved word, so the import is aliased — the state key stays plain.
+    exports: exports_,
     users,
     settings,
     ai,

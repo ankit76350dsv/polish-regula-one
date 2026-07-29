@@ -20,6 +20,7 @@ import { fetchActivities } from '../../store/slices/activitiesSlice';
 import { fetchSettings } from '../../store/slices/settingsSlice';
 import { fetchTransfers } from '../../store/slices/transfersSlice';
 import { fetchVendors } from '../../store/slices/vendorsSlice';
+import { recordExport } from '../../store/slices/exportsSlice';
 import { useT } from '../../i18n';
 import { NOTICE_AUDIENCES, NOTICE_REQUIRED_ITEMS, byId } from '../../lib/gdpr';
 
@@ -33,12 +34,20 @@ function download(filename, content) {
   URL.revokeObjectURL(url);
 }
 
+// Turn any text into something safe to drop inside HTML. The notice TITLE is typed by a
+// user and stored, so writing it into the print window unescaped would let one colleague's
+// title run code in another colleague's browser. Escape both title and body.
+function escapeHtml(s) {
+  return String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
 function printContent(title, markdown) {
-  // Simple print view: browser's print-to-PDF is the export path in the mock.
+  // Simple print view — the browser's own print-to-PDF is the export path.
   const win = window.open('', '_blank');
-  win.document.write(`<!doctype html><title>${title}</title>
+  if (!win) return;
+  win.document.write(`<!doctype html><title>${escapeHtml(title)}</title>
     <pre style="font-family: Georgia, serif; white-space: pre-wrap; max-width: 48rem; margin: 2rem auto;">${
-      markdown.replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+      escapeHtml(markdown)
     }</pre>`);
   win.document.close();
   win.print();
@@ -80,6 +89,30 @@ export default function NoticesPage() {
     [items, audience],
   );
   const selected = history.find((n) => n.id === selectedId) ?? history[0];
+
+  /**
+   * Download or print the selected notice — RECORDED FIRST.
+   * A notice is the document people are actually shown, so who took a copy of which
+   * version is part of the accountability record (GDPR Art. 5(2)). If the recording
+   * fails we do not hand over the document: no evidence, no copy.
+   */
+  const exportNotice = async (format) => {
+    if (!selected?.content) return;
+    const action = await dispatch(recordExport({
+      target: 'privacy_notice',
+      format,
+      entityId: selected.id,
+    }));
+    if (action.error) {
+      toast.error(action.error.message === 'FORBIDDEN' ? t('common.notAuthorized') : t('export.failed'));
+      return;
+    }
+    if (format === 'print') {
+      printContent(selected.title, selected.content);
+    } else {
+      download(`${selected.audience}_notice_v${selected.version}.md`, selected.content);
+    }
+  };
 
   const generate = async () => {
     const action = await dispatch(generateNotice({ audienceId: audience, language: docLang }));
@@ -195,11 +228,10 @@ export default function NoticesPage() {
             <CardTitle className="text-sm">{selected?.title ?? '—'}</CardTitle>
             {selected?.content && (
               <div className="flex gap-2">
-                <Button variant="outline" size="sm"
-                  onClick={() => download(`${selected.audience}_notice_v${selected.version}.md`, selected.content)}>
+                <Button variant="outline" size="sm" onClick={() => exportNotice('markdown')}>
                   <Download /> {t('notices.download')}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => printContent(selected.title, selected.content)}>
+                <Button variant="outline" size="sm" onClick={() => exportNotice('print')}>
                   <Printer /> {t('notices.print')}
                 </Button>
               </div>

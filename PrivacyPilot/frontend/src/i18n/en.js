@@ -157,6 +157,7 @@ export default {
   // Access denied (signed in, but not allowed into PrivacyPilot)
   'access.disabledTitle': 'Your account is suspended',
   'access.disabledBody': 'Your RegulaOne account is disabled, so access to PrivacyPilot is blocked. Contact your organisation administrator.',
+  'export.failed': 'The export could not be recorded in the audit trail, so it was cancelled. Please try again.',
   'access.organisationTitle': 'Your organisation’s access is suspended',
   'access.organisationBody': 'Your organisation is not active in RegulaOne, so PrivacyPilot is blocked. Contact your organisation administrator.',
   'access.packageTitle': 'Your plan has expired',
@@ -331,7 +332,7 @@ export default {
   'audit.diff': 'View diff',
   'audit.oldValue': 'Old value',
   'audit.newValue': 'New value',
-  'audit.exportJson': 'Export (JSON)',
+  'audit.exportCsv': 'Export (CSV)',
 
   // Users
   'users.title': 'Users & Roles',
