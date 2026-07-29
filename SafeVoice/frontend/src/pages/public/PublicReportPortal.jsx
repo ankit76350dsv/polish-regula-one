@@ -1,12 +1,24 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, Check, ChevronLeft, ChevronRight, ExternalLink, Lock, Phone, Shield } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, ChevronRight, ExternalLink, Lock, Phone, Shield, ShieldAlert } from "lucide-react";
 import { AppButton, AttachmentUploader, Checkbox, SecureCard, SelectField, Spinner, TextArea, TextInput } from "../../components/ui";
 import { reportCategories, HR_ONLY_CATEGORIES } from "../../constants/caseFields";
 import { submitReport, selectSubmitStatus } from "../../slices/reportsSlice";
 import { addToast } from "../../slices/uiSlice";
+import { cryptoService } from "../../services/cryptoService";
 import { firstError, maxLength, minLength, notFutureDate, required } from "../../utils/validation";
+
+// Can this page lock (encrypt) the report in the browser?
+// The browser only hands out its encryption toolbox on a SECURE page (https://…, or
+// http://localhost while developing). Opened over plain http with a network address —
+// for example http://192.168.20.38:1003 — the toolbox is missing, so the report can
+// NEVER be encrypted here. We work this out ONCE, before the form is drawn, because a
+// reporter must not write out a painful account of what happened and only then be told
+// it cannot be sent. Checked at module load: it cannot change while the page is open.
+// (`isEncryptionBlocked` also honours the dev-only plaintext flag, so local testing
+// without AWS still works exactly as before.)
+const ENCRYPTION_BLOCKED = cryptoService.isEncryptionBlocked();
 
 // The anonymous report form, in TWO steps:
 //   Step 1 — the facts and any evidence (what happened).
@@ -91,6 +103,12 @@ export default function PublicReportPortal({ tenantId, orgName, navigate }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    // Safety net: never try to send a report we cannot encrypt. The button is already
+    // disabled, so this only catches a stray Enter key press inside the form.
+    if (ENCRYPTION_BLOCKED) {
+      dispatch(addToast({ type: "error", message: t("report.insecurePageTitle") }));
+      return;
+    }
     // Re-check both steps. If a facts field is somehow invalid, jump back to step 1
     // so the reporter sees and fixes it rather than being blocked with no explanation.
     const e1 = step1Errors();
@@ -165,6 +183,22 @@ export default function PublicReportPortal({ tenantId, orgName, navigate }) {
             <p className="mb-6 text-xs text-slate-500">
               {t("report.reportingTo")}: <span className="font-semibold text-slate-700">{orgName || tenantId}</span>
             </p>
+          )}
+
+          {/* Encryption is impossible on this page (not a secure https address).
+              We say so straight away and keep the submit button switched off, rather
+              than accepting a report we would have to send unprotected. */}
+          {ENCRYPTION_BLOCKED && (
+            <div
+              role="alert"
+              className="mb-6 bg-rose-50 border border-rose-200 rounded-lg p-4 text-xs text-rose-800 flex items-start gap-3"
+            >
+              <ShieldAlert className="w-5 h-5 text-rose-700 mt-0.5 shrink-0" aria-hidden="true" />
+              <div>
+                <span className="font-bold block mb-1">{t("report.insecurePageTitle")}</span>
+                {t("report.insecurePageBody")}
+              </div>
+            </div>
           )}
 
           <div className="space-y-6">
@@ -327,7 +361,7 @@ export default function PublicReportPortal({ tenantId, orgName, navigate }) {
                   <AppButton type="button" variant="outline" onClick={handleBack} disabled={submitting} icon={<ChevronLeft className="w-4 h-4" />}>
                     {t("common.back")}
                   </AppButton>
-                  <AppButton type="submit" variant="secure" disabled={submitting} icon={submitting ? null : <Shield className="w-4 h-4" />}>
+                  <AppButton type="submit" variant="secure" disabled={submitting || ENCRYPTION_BLOCKED} icon={submitting ? null : <Shield className="w-4 h-4" />}>
                     {submitting ? <Spinner size={16} label={t("report.submitting")} /> : t("report.submit")}
                   </AppButton>
                 </div>

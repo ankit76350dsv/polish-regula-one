@@ -34,6 +34,50 @@ const ALLOW_PLAINTEXT = import.meta.env.VITE_SAFEVOICE_ALLOW_PLAINTEXT === "true
 const ALGORITHM = "AES-256-GCM";
 const IV_BYTES = 12; // 96-bit IV is the standard, recommended size for AES-GCM
 
+// ── Is the browser lock actually available here? ──────────────────────────────────
+// SIMPLE EXPLANATION:
+// The browser only gives us its encryption toolbox (crypto.subtle) on pages it considers
+// SAFE. A safe page means https://…, or http://localhost while developing. On a plain
+// http:// page opened by its network address (for example http://192.168.20.38:1003) the
+// browser HIDES the toolbox: `crypto.subtle` is simply `undefined`.
+//
+// This is a browser rule we cannot switch off from our code. If we do not check for it, the
+// very first call fails with the confusing message
+//   "Cannot read properties of undefined (reading 'importKey')"
+// which tells nobody what the real problem is. So we check first and explain properly.
+
+/** True when this page is allowed to use the browser's encryption toolbox. */
+export function isWebCryptoAvailable() {
+  return typeof crypto !== "undefined" && typeof crypto.subtle !== "undefined";
+}
+
+/**
+ * True when a report simply CANNOT be sent from this page, because the browser cannot
+ * encrypt and the dev plaintext escape hatch is off. The UI uses this to warn up front
+ * instead of letting someone write a whole report that can never be submitted.
+ * Kept here so the plaintext-flag rule lives in ONE place.
+ */
+export function isEncryptionBlocked() {
+  return !isWebCryptoAvailable() && !ALLOW_PLAINTEXT;
+}
+
+// Stop early with a message a human can act on. We throw BEFORE asking the backend for a
+// data key on purpose: a key we can never use is a wasted AWS KMS call, and every issued
+// key is written to the audit trail, so we must not request one we cannot use.
+function assertWebCryptoAvailable() {
+  if (isWebCryptoAvailable()) return;
+
+  // The page address is the useful clue, so include it in the message.
+  const origin = typeof window !== "undefined" ? window.location.origin : "this address";
+  const err = new Error(
+    `Encryption is not available on ${origin}. The browser only allows encryption on a ` +
+      `secure page (https://… or http://localhost), so the report cannot be locked here. ` +
+      `Open SafeVoice over https, or use http://localhost during development.`,
+  );
+  err.errorCode = "CRYPTO_UNAVAILABLE";
+  throw err;
+}
+
 // ── tiny base64 <-> bytes helpers (browser-safe, no Node Buffer) ──────────────────
 function bytesToBase64(bytes) {
   let binary = "";
@@ -114,6 +158,8 @@ function fetchCaseKeysStaff(caseId) {
  */
 async function encryptForTenant(text, tenantId) {
   try {
+    // Check the browser can lock text BEFORE spending a KMS data key on it.
+    assertWebCryptoAvailable();
     const { plaintextKey, wrappedKey } = await fetchDataKeyPublic(tenantId);
     const locked = await aesEncrypt(text, plaintextKey);
     return { encrypted: { ...locked, wrappedKey } };
@@ -131,6 +177,8 @@ async function encryptForTenant(text, tenantId) {
  */
 async function encryptForStaff(text) {
   try {
+    // Same check as the reporter path — fail clearly instead of at importKey.
+    assertWebCryptoAvailable();
     const { plaintextKey, wrappedKey } = await fetchDataKeyStaff();
     const locked = await aesEncrypt(text, plaintextKey);
     return { encrypted: { ...locked, wrappedKey } };
@@ -176,6 +224,8 @@ async function decryptReportWithBundle(report, bundle) {
  * Used by the tracking page.
  */
 async function decryptCaseForReporter(accessKey, report, messages) {
+  // Explain the real problem instead of filling the page with "[unable to decrypt]".
+  assertWebCryptoAvailable();
   const bundle = await fetchCaseKeysPublic(accessKey);
   const decReport = await decryptReportWithBundle(report, bundle);
   const decMessages = await Promise.all(
@@ -187,6 +237,7 @@ async function decryptCaseForReporter(accessKey, report, messages) {
 /** STAFF read: fetch the case keys and decrypt the report narrative. */
 async function decryptReportForStaff(caseId, report) {
   if (!report?.encryptedContent) return report;
+  assertWebCryptoAvailable();
   const bundle = await fetchCaseKeysStaff(caseId);
   return decryptReportWithBundle(report, bundle);
 }
@@ -196,6 +247,7 @@ async function decryptMessagesForStaff(caseId, messages) {
   const list = messages || [];
   // Only pay for the KMS call if at least one message is actually encrypted.
   if (!list.some((m) => m?.encryptedText)) return list;
+  assertWebCryptoAvailable();
   const bundle = await fetchCaseKeysStaff(caseId);
   return Promise.all(list.map((m) => decryptMessageWithBundle(m, bundle)));
 }
@@ -203,6 +255,7 @@ async function decryptMessagesForStaff(caseId, messages) {
 /** REPORTER live message: decrypt one message that just arrived over WebSocket. */
 async function decryptIncomingReporterMessage(message, accessKey) {
   if (!message?.encryptedText) return message;
+  assertWebCryptoAvailable();
   const bundle = await fetchCaseKeysPublic(accessKey);
   return decryptMessageWithBundle(message, bundle);
 }
@@ -210,11 +263,14 @@ async function decryptIncomingReporterMessage(message, accessKey) {
 /** STAFF live message: decrypt one message that just arrived over WebSocket. */
 async function decryptIncomingStaffMessage(message, caseId) {
   if (!message?.encryptedText) return message;
+  assertWebCryptoAvailable();
   const bundle = await fetchCaseKeysStaff(caseId);
   return decryptMessageWithBundle(message, bundle);
 }
 
 export const cryptoService = {
+  isWebCryptoAvailable,
+  isEncryptionBlocked,
   encryptForTenant,
   encryptForStaff,
   decryptCaseForReporter,

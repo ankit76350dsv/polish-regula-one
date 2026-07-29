@@ -156,6 +156,8 @@
     "factsPlaceholder": "Opisz, co się wydarzyło, kiedy i jakiego procesu dotyczyło. Unikaj szczegółów, które mogłyby Cię zidentyfikować, chyba że są niezbędne do dalszych działań.",
     "factsHint": "Nie podawaj swojego imienia ani danych osobowych, chyba że jest to absolutnie konieczne.",
     "evidence": "Dowody (opcjonalnie)",
+    "insecurePageTitle": "Ta strona nie jest bezpieczna — nie można wysłać zgłoszenia",
+    "insecurePageBody": "Twoje zgłoszenie jest szyfrowane w przeglądarce, zanim opuści Twoje urządzenie, a przeglądarka pozwala na to wyłącznie na bezpiecznym adresie rozpoczynającym się od https://. Ta strona została otwarta przez połączenie niezabezpieczone, dlatego zgłoszenie nie może zostać zaszyfrowane, a wysyłanie jest wyłączone. Otwórz bezpieczny link https:// do tej strony zgłoszeń lub skorzystaj z jednego z zewnętrznych kanałów zgłoszeń wymienionych poniżej.",
     "channelTitle": "W jaki sposób chcesz zgłosić?",
     "channelWritten": "Pisemnie (ten formularz)",
     "channelOral": "Telefonicznie lub wiadomość głosowa",

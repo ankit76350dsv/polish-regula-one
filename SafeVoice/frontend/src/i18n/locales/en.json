@@ -156,6 +156,8 @@
     "factsPlaceholder": "Describe what happened, when, and which process was involved. Avoid details that could identify you unless they are necessary for follow-up.",
     "factsHint": "Do not include your name or personal details unless strictly necessary.",
     "evidence": "Evidence (optional)",
+    "insecurePageTitle": "This page is not secure — a report cannot be sent",
+    "insecurePageBody": "Your report is encrypted in your browser before it leaves your device, and your browser only allows that on a secure address starting with https://. This page was opened over an unsecured connection, so the report cannot be protected and submitting is switched off. Please open the secure https:// link to this reporting page, or use one of the external reporting channels listed below.",
     "channelTitle": "How would you like to report?",
     "channelWritten": "In writing (this form)",
     "channelOral": "By phone or voice message",
