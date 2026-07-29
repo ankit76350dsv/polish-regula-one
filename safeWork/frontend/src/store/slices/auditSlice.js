@@ -1,8 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
-import { SAFEWORK_API_URL } from "../../config/serviceUrls";
 
-const API_BASE_URL = `${SAFEWORK_API_URL}/api`;
+const API_BASE_URL = "http://localhost:8082/api";
 
 // We no longer read a token from localStorage or send an Authorization header.
 // The auth token travels in an HttpOnly cookie, which axios attaches
