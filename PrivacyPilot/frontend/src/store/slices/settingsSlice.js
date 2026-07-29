@@ -2,11 +2,9 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { settingsService } from '../../services/settingsService';
 
-const actor = (getState) => getState().auth.user;
-
 export const fetchSettings = createAsyncThunk('settings/fetch', () => settingsService.get());
-export const updateSettings = createAsyncThunk('settings/update', (patch, { getState }) =>
-  settingsService.update(actor(getState), patch));
+export const updateSettings = createAsyncThunk('settings/update', (patch) =>
+  settingsService.update(patch));
 
 const settingsSlice = createSlice({
   name: 'settings',

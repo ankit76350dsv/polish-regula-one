@@ -17,27 +17,14 @@ export function buildSeed() {
       name: 'ABC Logistics Poland Sp. z o.o.',
     },
 
+    // Company / DPO / AI settings are NO LONGER mocked — they come from the real
+    // PrivacyPilot backend (SettingsController), through settingsService.js + client.js.
+    // Only the `ai` defaults remain here so the mock transport (api.js) that other
+    // still-mock modules use keeps a valid shape; the company/DPO identity is real now.
     settings: {
-      company: {
-        name: 'ABC Logistics Poland Sp. z o.o.',
-        nip: '5252839201',
-        regon: '146789123',
-        krs: '0000921402',
-        address: 'ul. Prosta 68, 00-838 Warszawa',
-        website: 'https://abclogistics.example.pl',
-      },
-      dpo: {
-        name: 'Janusz Nowak',
-        email: 'iod@abclogistics.example.pl',
-        phone: '+48 22 000 00 00',
-        appointedAt: iso(now - days(200)),
-        uodoNotifiedAt: iso(now - days(195)),   // notified within the 14-day window
-        publishedOnWebsite: true,
-      },
-      // AI assistant preferences — per-tenant, off-switchable.
       ai: {
         enabled: true,
-        excludeSpecialCategories: true, // never send Art. 9 / whistleblowing data to the AI
+        excludeSpecialCategories: true,
       },
     },
 
