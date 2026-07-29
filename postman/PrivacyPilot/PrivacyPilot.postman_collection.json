@@ -1142,7 +1142,7 @@
     },
     {
       "name": "Company Settings",
-      "description": "One settings record per company: the legal identity (name, NIP, REGON, KRS, address, website — the 'controller' shown on the register and every notice), the DPO/IOD contact (name, email, phone) plus the Polish designation tracking (appointed date, UODO-notified-within-14-days per Art. 10, published-on-website per Art. 11), and the AI-assistant toggle.\n\nNote: this is the DPO CONTACT + paperwork, which is different from the DPO PERMISSION granted on the Users page (that controls who may act as DPO in the app). Everyone with a real role can READ settings (notices/register/breach report/AI check need them); only the Company Admin can save them.",
+      "description": "One settings record per company. It has two parts:\n\n1) The company legal identity (name, NIP, REGON, address — the 'controller' shown on the register and every notice). This part is READ-ONLY here: it is owned by RegulaOne (the shared company/tenant) and edited on RegulaOne's own company profile page. The Get below returns it (read from the tenant), but the Save below can NEVER change it.\n\n2) PrivacyPilot's own, editable settings: the DPO/IOD contact (name, email, phone) plus the Polish designation tracking (appointed date, UODO-notified-within-14-days per Art. 10, published-on-website per Art. 11), and the AI-assistant toggle. Only these two groups are saved.\n\nNote: this is the DPO CONTACT + paperwork, which is different from the DPO PERMISSION granted on the Users page (that controls who may act as DPO in the app). Everyone with a real role can READ settings (notices/register/breach report/AI check need them); only the Company Admin can save them.",
       "item": [
         {
           "name": "Get settings",
@@ -1150,7 +1150,7 @@
             "method": "GET",
             "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" } ],
             "url": { "raw": "{{baseUrl}}/api/privacypilot/settings", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "settings"] },
-            "description": "Get your company's settings. If none have been saved yet, returns a blank (unsaved) object with empty company/DPO and AI defaults. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
+            "description": "Get your company's settings: the company identity (read from RegulaOne, read-only) plus this company's DPO + AI settings. If DPO/AI have not been saved yet, returns them blank with AI defaults. Allowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
         },
@@ -1161,11 +1161,11 @@
             "header": [ { "key": "Cookie", "value": "idToken={{idToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"company\": {\n    \"name\": \"ABC Logistics Poland Sp. z o.o.\",\n    \"nip\": \"5252839201\",\n    \"regon\": \"146789123\",\n    \"krs\": \"0000921402\",\n    \"address\": \"ul. Prosta 68, 00-838 Warszawa\",\n    \"website\": \"https://abclogistics.example.pl\"\n  },\n  \"dpo\": {\n    \"name\": \"Janusz Nowak\",\n    \"email\": \"iod@abclogistics.example.pl\",\n    \"phone\": \"+48 22 000 00 00\",\n    \"appointedAt\": \"2026-01-08T00:00:00Z\",\n    \"uodoNotifiedAt\": \"2026-01-13T00:00:00Z\",\n    \"publishedOnWebsite\": true\n  },\n  \"ai\": {\n    \"enabled\": true,\n    \"excludeSpecialCategories\": true\n  }\n}",
+              "raw": "{\n  \"dpo\": {\n    \"name\": \"Janusz Nowak\",\n    \"email\": \"iod@abclogistics.example.pl\",\n    \"phone\": \"+48 22 000 00 00\",\n    \"appointedAt\": \"2026-01-08T00:00:00Z\",\n    \"uodoNotifiedAt\": \"2026-01-13T00:00:00Z\",\n    \"publishedOnWebsite\": true\n  },\n  \"ai\": {\n    \"enabled\": true,\n    \"excludeSpecialCategories\": true\n  }\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": { "raw": "{{baseUrl}}/api/privacypilot/settings", "host": ["{{baseUrl}}"], "path": ["api", "privacypilot", "settings"] },
-            "description": "Save the company settings (creates the record on the first save, updates it after). Send all three groups; a missing group is left unchanged. Only the fields that changed are written to the audit trail. Allowed roles: Admin only."
+            "description": "Save the DPO + AI settings (creates the record on the first save, updates it after). Send both groups; a missing group is left unchanged. The company identity is NOT accepted here — it is read-only and owned by RegulaOne (edit it on RegulaOne's company profile page). Only the fields that changed are written to the audit trail. Allowed roles: Admin only."
           },
           "response": []
         }

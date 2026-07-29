@@ -41,7 +41,9 @@ export default function SettingsPage() {
   const windowDays = uodoWindow(dpo);
 
   const save = async () => {
-    const action = await dispatch(updateSettings({ company, dpo, ai }));
+    // Only the DPO + AI settings are saved here. The company identity is owned by
+    // RegulaOne (read-only in this page), so it is deliberately not sent.
+    const action = await dispatch(updateSettings({ dpo, ai }));
     if (action.error) toast.error(t('common.notAuthorized'));
     else toast.success(t('common.save'));
   };
@@ -55,32 +57,23 @@ export default function SettingsPage() {
       </PageHeader>
 
       <div className="grid gap-4">
+        {/* Company identity is owned by RegulaOne (the shared tenant) and shown here
+            READ-ONLY. It still feeds the register header (Art. 30(1)(a)) and every
+            notice, but is edited on RegulaOne's company profile page, not here. */}
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">{t('settings.company')}</CardTitle></CardHeader>
           <CardContent className="grid gap-3">
-            <FormField label={t('settings.companyName')} required
-              hint={lang === 'pl'
-                ? 'Te dane trafiają do nagłówka rejestru (art. 30(1)(a)) i każdej klauzuli.'
-                : 'This identity feeds the register header (Art. 30(1)(a)) and every notice.'}>
-              {(fid) => <Input id={fid} value={company.name} onChange={(e) => setCompany({ ...company, name: e.target.value })} />}
-            </FormField>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <FormField label={t('settings.nip')}>
-                {(fid) => <Input id={fid} value={company.nip} onChange={(e) => setCompany({ ...company, nip: e.target.value })} />}
-              </FormField>
-              <FormField label={t('settings.regon')}>
-                {(fid) => <Input id={fid} value={company.regon} onChange={(e) => setCompany({ ...company, regon: e.target.value })} />}
-              </FormField>
-              <FormField label={t('settings.krs')}>
-                {(fid) => <Input id={fid} value={company.krs} onChange={(e) => setCompany({ ...company, krs: e.target.value })} />}
-              </FormField>
+            <p className="rounded-lg border border-border bg-muted/40 p-2.5 text-[11px] text-muted-foreground">
+              {lang === 'pl'
+                ? 'Dane firmy są zarządzane centralnie w RegulaOne (profil firmy) i tutaj są tylko do odczytu. Zasilają nagłówek rejestru (art. 30(1)(a)) i każdą klauzulę informacyjną.'
+                : 'Company details are managed centrally in RegulaOne (company profile) and are read-only here. They feed the register header (Art. 30(1)(a)) and every privacy notice.'}
+            </p>
+            <ReadOnlyRow label={t('settings.companyName')} value={company.name} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ReadOnlyRow label={t('settings.nip')} value={company.nip} />
+              <ReadOnlyRow label={t('settings.regon')} value={company.regon} />
             </div>
-            <FormField label={t('settings.address')}>
-              {(fid) => <Input id={fid} value={company.address} onChange={(e) => setCompany({ ...company, address: e.target.value })} />}
-            </FormField>
-            <FormField label="WWW">
-              {(fid) => <Input id={fid} value={company.website} onChange={(e) => setCompany({ ...company, website: e.target.value })} />}
-            </FormField>
+            <ReadOnlyRow label={t('settings.address')} value={company.address} />
           </CardContent>
         </Card>
 
@@ -162,6 +155,17 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+// A simple label + value line for a read-only field (company identity from RegulaOne).
+// Shows a muted "—" when the value has not been filled in on the RegulaOne side yet.
+function ReadOnlyRow({ label, value }) {
+  return (
+    <div className="grid gap-0.5">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-sm text-foreground">{value?.trim() ? value : '—'}</span>
     </div>
   );
 }

@@ -14,15 +14,19 @@ export function uodoWindow(dpo) {
   return Math.ceil((deadline - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
-// A brand-new tenant has no settings row yet, so the backend returns empty (null)
-// string fields. Coerce them to '' so the Settings form's inputs stay controlled,
-// and default the AI toggles — keeping the exact shape the page expects.
+// The company block is READ-ONLY here — it comes from RegulaOne (the shared tenant),
+// which is the single source of truth for the company legal identity. It is edited on
+// RegulaOne's company profile page, never here. A brand-new tenant has no PrivacyPilot
+// settings row yet, so the backend returns empty (null) DPO/AI fields — coerce them to
+// '' so the form inputs stay controlled, and default the AI toggles.
 function normalize(s) {
   const c = s?.company ?? {};
   const d = s?.dpo ?? {};
   const ai = s?.ai ?? {};
   return {
     ...s,
+    // Read-only, sourced from RegulaOne. NIP/REGON/address come from the tenant; KRS and
+    // website are not tracked in RegulaOne yet, so they stay blank.
     company: {
       name: c.name ?? '', nip: c.nip ?? '', regon: c.regon ?? '',
       krs: c.krs ?? '', address: c.address ?? '', website: c.website ?? '',
@@ -40,10 +44,10 @@ function normalize(s) {
   };
 }
 
-// Send only the three editable groups (the backend owns id/tenant/timestamps).
+// Send ONLY the two editable groups. The company is intentionally omitted — the backend
+// rejects any attempt to change it here (RegulaOne owns it).
 function toRequest(patch) {
   return {
-    company: patch.company,
     dpo: patch.dpo,
     ai: patch.ai,
   };

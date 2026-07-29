@@ -2,7 +2,7 @@ package com.privacypilot.backend.controller;
 
 import com.privacypilot.backend.dto.AppResponse;
 import com.privacypilot.backend.dto.settings.SettingsRequest;
-import com.privacypilot.backend.model.document.TenantSettings;
+import com.privacypilot.backend.dto.settings.SettingsResponse;
 import com.privacypilot.backend.security.AuthenticatedUser;
 import com.privacypilot.backend.security.PrivacyPilotPermission;
 import com.privacypilot.backend.service.AuditContext;
@@ -27,8 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
  *   - VIEW is broad, because the register header, every privacy notice, the breach
  *     report and the AI on/off check all READ these settings — so Admin, Compliance
  *     Officer, DPO and Auditor can read them.
- *   - EDIT is Admin-only (the EDIT_SETTINGS capability): company identity and the DPO
- *     designation are sensitive, tenant-wide facts.
+ *   - EDIT is Admin-only (the EDIT_SETTINGS capability): the DPO designation is a
+ *     sensitive, tenant-wide fact.
+ *
+ * The company legal identity in the response is READ-ONLY here — it is owned and edited
+ * in RegulaOne (the shared tenant). A PUT to this endpoint only saves DPO + AI.
  */
 @RestController
 @RequestMapping("/api/privacypilot/settings")
@@ -50,16 +53,19 @@ public class SettingsController {
             PrivacyPilotPermission.PRIVACYPILOT_ADMIN,
     };
 
-    /** The caller's company settings (a blank, unsaved object if none exist yet). */
+    /**
+     * The caller's settings: the company identity (read from RegulaOne) plus this
+     * tenant's DPO + AI settings (blank DPO/AI if none saved yet).
+     */
     @GetMapping
-    public AppResponse<TenantSettings> get(AuthenticatedUser caller) {
+    public AppResponse<SettingsResponse> get(AuthenticatedUser caller) {
         caller.requireAnyPermission(CAN_VIEW);
         return AppResponse.ok(service.get(caller));
     }
 
-    /** Save the company settings (creates the row on first save). */
+    /** Save the DPO + AI settings (creates the row on first save). Company is read-only. */
     @PutMapping
-    public AppResponse<TenantSettings> update(
+    public AppResponse<SettingsResponse> update(
             AuthenticatedUser caller,
             @Valid @RequestBody SettingsRequest request,
             HttpServletRequest http) {
