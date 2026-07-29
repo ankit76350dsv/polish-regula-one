@@ -1,12 +1,18 @@
 package com.regulaone.backend.services;
 
+import com.regulaone.backend.dto.Package.PackageChangeResponse;
 import com.regulaone.backend.dto.Package.PackagePageResponse;
+import com.regulaone.backend.dto.Package.PackageRenewalResponse;
 import com.regulaone.backend.dto.Package.PackageRequest;
 import com.regulaone.backend.dto.Package.PackageResponse;
 import com.regulaone.backend.dto.Package.PackageTierStatsResponse;
+import com.regulaone.backend.dto.Package.RenewPackageRequest;
 import com.regulaone.backend.dto.Package.TierChangeResponse;
+import com.regulaone.backend.dto.Package.UpgradePackageRequest;
 
 import com.regulaone.backend.models.AppPackage;
+import com.regulaone.backend.models.DurationType;
+import com.regulaone.backend.models.Invoice;
 import com.regulaone.backend.models.PackageStatus;
 import com.regulaone.backend.models.Tenant;
 import com.regulaone.backend.repository.PackageRepository;
@@ -30,6 +36,203 @@ public class PackageService {
 
     private final PackageRepository packageRepository;
     private final TenantRepository tenantRepository;
+    private final BillingService billingService;
+
+    // ── Package renewal ───────────────────────────────────────────────────────
+
+    /**
+     * Renews a tenant's CURRENT package for another billing period.
+     *
+     * What it does, in order:
+     *  1. Loads the tenant and checks it actually has an active package.
+     *  2. Blocks renewal for LIFETIME plans (they never expire) and for packages
+     *     whose catalogue entry is no longer ACTIVE.
+     *  3. Extends the validity window. If the plan is still valid, the new period
+     *     is STACKED on top of the current expiry (no time is lost); if it already
+     *     lapsed, a fresh period starts from now.
+     *  4. Archives the window that is ending into the tenant's packageHistory
+     *     (audit trail), with the supplied reason (or a default).
+     *  5. Generates an invoice for the renewal (FREE if the package is no-charge,
+     *     otherwise PAID) covering the exact new period.
+     *
+     * @Transactional so the tenant update and the invoice are consistent.
+     */
+    @Transactional
+    public PackageRenewalResponse renewTenantPackage(String tenantId, RenewPackageRequest request) {
+
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant not found: " + tenantId));
+
+        Tenant.PackageDetails current = tenant.getCurrentPackage();
+        if (current == null || current.getAppPackage() == null) {
+            throw new IllegalStateException("Tenant has no active package to renew");
+        }
+
+        AppPackage pkg = current.getAppPackage();
+
+        // A LIFETIME plan never expires, so there is nothing to renew.
+        if (pkg.getDurationType() == DurationType.LIFETIME || pkg.getDuration() == null) {
+            throw new IllegalStateException("LIFETIME packages do not require renewal");
+        }
+
+        // Do not renew onto a package that has been retired from the catalogue.
+        if (pkg.getStatus() != PackageStatus.ACTIVE) {
+            throw new IllegalStateException(
+                    "Cannot renew because the package '" + pkg.getName() + "' is not ACTIVE");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime oldExpiring = current.getPlanExpiring();
+
+        // Stack remaining time: extend from the current expiry if the plan is still
+        // valid, otherwise start a fresh window from now.
+        LocalDateTime baseDate = (oldExpiring != null && oldExpiring.isAfter(now)) ? oldExpiring : now;
+        LocalDateTime newExpiring = baseDate.plusDays(pkg.getDuration());
+
+        String reason = (request != null && request.getReason() != null && !request.getReason().isBlank())
+                ? request.getReason().trim()
+                : "Package renewal";
+
+        // 1. Extend the active window — same tier, later expiry.
+        current.setPlanStarted(baseDate);
+        current.setPlanExpiring(newExpiring);
+
+        // 2. Record the renewed period in the package history (the billing ledger).
+        //    Every paid period that STARTS gets its own entry — the platform revenue
+        //    report (PlatformService) counts one entry per period via planStarted, so
+        //    a renewal must add a fresh entry rather than editing the previous one.
+        //    getTierChanges() skips the entry whose planStarted matches the current
+        //    plan, so this does not double-show the active assignment.
+        ensureHistory(tenant).add(Tenant.PackageHistory.builder()
+                .appPackage(pkg)
+                .planStarted(baseDate)
+                .planExpired(newExpiring)
+                .usersCapacity(current.getUsersCapacity())
+                .reason(reason)
+                .build());
+
+        tenant.setUpdatedAt(now);
+        tenantRepository.save(tenant);
+
+        // 3. Bill the renewal. Free packages produce a FREE (zero-amount) invoice.
+        boolean isFree = pkg.getPrice() == null || pkg.getPrice().compareTo(BigDecimal.ZERO) == 0;
+        Invoice invoice = billingService.generateInvoice(tenant, pkg, isFree, baseDate, newExpiring);
+
+        return PackageRenewalResponse.builder()
+                .tenantId(tenant.getId())
+                .tenantName(tenant.getName())
+                .packageName(pkg.getName())
+                .planStarted(baseDate)
+                .planExpiring(newExpiring)
+                .invoiceNumber(invoice.getInvoiceNumber())
+                .amount(invoice.getAmount())
+                .currency(invoice.getCurrency())
+                .reason(reason)
+                .build();
+    }
+
+    // ── Package upgrade / change ──────────────────────────────────────────────
+
+    /**
+     * Moves a tenant to a DIFFERENT package tier (upgrade or downgrade).
+     *
+     * What it does, in order:
+     *  1. Loads the tenant and the target package; 404 if either is missing.
+     *  2. Blocks the change if the target package is not ACTIVE, or if it is the
+     *     same package the tenant already has (renew should be used instead).
+     *  3. Archives the outgoing plan into packageHistory (planExpired = now).
+     *  4. Sets a fresh validity window for the NEW plan starting now
+     *     (planExpiring = now + duration, or null for LIFETIME).
+     *  5. Generates an invoice for the new plan (FREE if no-charge, else PAID).
+     *
+     * Unlike renewal, this starts a brand-new period now — the old plan ends
+     * immediately, so no time is carried over.
+     *
+     * @Transactional so the tenant update and the invoice stay consistent.
+     */
+    @Transactional
+    public PackageChangeResponse upgradeTenantPackage(String tenantId, UpgradePackageRequest request) {
+
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant not found: " + tenantId));
+
+        AppPackage newPkg = packageRepository.findById(request.getPackageId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Package not found: " + request.getPackageId()));
+
+        if (newPkg.getStatus() != PackageStatus.ACTIVE) {
+            throw new IllegalStateException(
+                    "Cannot switch to package '" + newPkg.getName() + "' because it is not ACTIVE");
+        }
+
+        Tenant.PackageDetails current = tenant.getCurrentPackage();
+        String fromName = (current != null && current.getAppPackage() != null)
+                ? current.getAppPackage().getName() : null;
+
+        // Same tier → not an upgrade. Renewal is the correct operation for that.
+        if (current != null && current.getAppPackage() != null
+                && newPkg.getId().equals(current.getAppPackage().getId())) {
+            throw new IllegalStateException(
+                    "Tenant is already on package '" + newPkg.getName() + "'. Use renew to extend it.");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        String reason = (request.getReason() != null && !request.getReason().isBlank())
+                ? request.getReason().trim()
+                : "Plan change to " + newPkg.getName();
+
+        // 1. Mark the outgoing plan's active period as ended in the history ledger
+        //    (audit only — its revenue was already counted at its start). No-op if
+        //    the matching entry is not found (e.g. legacy tenant with no ledger).
+        if (current != null && current.getAppPackage() != null) {
+            markCurrentPeriodEnded(tenant, current, now);
+        }
+
+        // 2. Start a fresh window for the NEW plan.
+        boolean lifetime = newPkg.getDurationType() == DurationType.LIFETIME || newPkg.getDuration() == null;
+        LocalDateTime newExpiring = lifetime ? null : now.plusDays(newPkg.getDuration());
+
+        Tenant.PackageDetails updated = Tenant.PackageDetails.builder()
+                .appPackage(newPkg)
+                .planStarted(now)
+                .planExpiring(newExpiring)
+                .usersCapacity(newPkg.getUsersCapacity() != null
+                        ? String.valueOf(newPkg.getUsersCapacity()) : null)
+                .build();
+        tenant.setCurrentPackage(updated);
+
+        // 3. Record the NEW paid period in the history ledger (planStarted = now),
+        //    so revenue is counted and getTierChanges shows the change.
+        ensureHistory(tenant).add(Tenant.PackageHistory.builder()
+                .appPackage(newPkg)
+                .planStarted(now)
+                .planExpired(newExpiring)
+                .usersCapacity(updated.getUsersCapacity())
+                .reason(reason)
+                .build());
+
+        tenant.setUpdatedAt(now);
+        tenantRepository.save(tenant);
+
+        // 3. Bill the new plan. Free packages produce a FREE (zero-amount) invoice.
+        boolean isFree = newPkg.getPrice() == null || newPkg.getPrice().compareTo(BigDecimal.ZERO) == 0;
+        LocalDateTime periodEnd = (newExpiring != null) ? newExpiring : now.plusMonths(1);
+        Invoice invoice = billingService.generateInvoice(tenant, newPkg, isFree, now, periodEnd);
+
+        return PackageChangeResponse.builder()
+                .tenantId(tenant.getId())
+                .tenantName(tenant.getName())
+                .fromPackage(fromName)
+                .toPackage(newPkg.getName())
+                .planStarted(now)
+                .planExpiring(newExpiring)
+                .invoiceNumber(invoice.getInvoiceNumber())
+                .amount(invoice.getAmount())
+                .currency(invoice.getCurrency())
+                .reason(reason)
+                .build();
+    }
 
     // ── Package CRUD ──────────────────────────────────────────────────────────
 
@@ -128,8 +331,16 @@ public class PackageService {
         List<Tenant> affectedTenants = tenantRepository.findByCurrentPackageAppPackageId(id);
         
         affectedTenants.forEach(tenant -> {
+            LocalDateTime now = LocalDateTime.now();
+            // Close the active period in the history ledger before removing the plan,
+            // so the audit trail keeps a record that this tenant HAD the plan and
+            // when it ended. History is never deleted — only currentPackage is cleared.
+            Tenant.PackageDetails current = tenant.getCurrentPackage();
+            if (current != null && current.getAppPackage() != null) {
+                markCurrentPeriodEnded(tenant, current, now);
+            }
             tenant.setCurrentPackage(null);
-            tenant.setUpdatedAt(LocalDateTime.now());
+            tenant.setUpdatedAt(now);
             tenantRepository.save(tenant);
         });
 
@@ -228,6 +439,8 @@ public class PackageService {
                             .packageName(pkg.getName())
                             .price(pkg.getPrice())
                             .currency(pkg.getCurrency())
+                            .durationType(pkg.getDurationType())
+                            .duration(pkg.getDuration())
                             .tenantCount((int) count)
                             .tierMrr(tierMrr)
                             .usersCapacity(pkg.getUsersCapacity())
@@ -418,6 +631,37 @@ public class PackageService {
     }
 
     //TODO: ── Private Helpers ───────────────────────────────────────────────────────
+
+    // Returns the tenant's package-history list, creating it if a legacy document
+    // stored null. Guards every history append so we never hit a NullPointerException.
+    private List<Tenant.PackageHistory> ensureHistory(Tenant tenant) {
+        if (tenant.getPackageHistory() == null) {
+            tenant.setPackageHistory(new ArrayList<>());
+        }
+        return tenant.getPackageHistory();
+    }
+
+    // Marks the history entry that represents the tenant's CURRENT active period as
+    // ended (sets planExpired), matching by planStarted + package id. Used when a
+    // plan is replaced (upgrade) or removed (package deletion) so the ledger shows
+    // when the old period actually stopped. Safe no-op if no matching entry exists.
+    private void markCurrentPeriodEnded(Tenant tenant, Tenant.PackageDetails current, LocalDateTime endedAt) {
+        if (tenant.getPackageHistory() == null
+                || current == null
+                || current.getPlanStarted() == null
+                || current.getAppPackage() == null
+                || current.getAppPackage().getId() == null) {
+            return;
+        }
+        for (Tenant.PackageHistory h : tenant.getPackageHistory()) {
+            if (h.getAppPackage() != null
+                    && current.getPlanStarted().equals(h.getPlanStarted())
+                    && current.getAppPackage().getId().equals(h.getAppPackage().getId())) {
+                h.setPlanExpired(endedAt);
+                return;
+            }
+        }
+    }
 
     // OLD: syncTenantModules() removed — app access is now derived from Tenant.currentPackage.appIds
     // at query time, so there is no denormalized list to keep in sync.

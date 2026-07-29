@@ -19,6 +19,7 @@ import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefCurrency;
 import com.ksefflow.backend.models.utils.KsefEnvironment;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
+import com.ksefflow.backend.models.utils.KsefOfflineMode;
 import com.ksefflow.backend.models.utils.KsefPaymentMethod;
 import com.ksefflow.backend.models.utils.KsefVatRate;
 import com.ksefflow.backend.repository.KsefAuditLogRepository;
@@ -59,6 +60,7 @@ class KSeFInvoiceServiceTest {
     @Mock private UPOStorageService upoStorageService;
     @Mock private KsefQrService qrService;
     @Mock private KsefApiProperties apiProperties;
+    @Mock private KsefAvailabilityService availabilityService;
 
     @InjectMocks
     private KSeFInvoiceService invoiceService;
@@ -248,6 +250,7 @@ class KSeFInvoiceServiceTest {
         when(xmlGeneratorService.generateXml(any())).thenReturn(xmlResult);
         when(authService.openSession(TENANT_ID, NIP)).thenReturn(ACCESS_TOKEN);
         // Fetching the MF public key fails at the network layer → offline mode.
+        when(availabilityService.currentOfflineMode()).thenReturn(KsefOfflineMode.OFFLINE_UNAVAILABILITY);
         when(apiClient.getPublicKeyCertificates())
                 .thenThrow(new KsefSubmissionException("KSeF API is unreachable — triggering offline mode"));
         when(qrService.generateCertificateCode(any()))
@@ -277,6 +280,7 @@ class KSeFInvoiceServiceTest {
                 new FA3XmlGeneratorService.FA3XmlResult("<Faktura/>", "deadbeef");
         when(xmlGeneratorService.generateXml(any())).thenReturn(xmlResult);
         // KSeF auth unreachable → falls into offline handling.
+        when(availabilityService.currentOfflineMode()).thenReturn(KsefOfflineMode.OFFLINE_UNAVAILABILITY);
         when(authService.openSession(TENANT_ID, NIP))
                 .thenThrow(new KsefSubmissionException("KSeF API is unreachable"));
         when(qrService.generateCertificateCode(any()))
@@ -311,6 +315,7 @@ class KSeFInvoiceServiceTest {
         FA3XmlGeneratorService.FA3XmlResult xmlResult =
                 new FA3XmlGeneratorService.FA3XmlResult("<Faktura/>", "abc");
         when(xmlGeneratorService.generateXml(any())).thenReturn(xmlResult);
+        when(availabilityService.currentOfflineMode()).thenReturn(KsefOfflineMode.OFFLINE_UNAVAILABILITY);
         when(authService.openSession(TENANT_ID, NIP))
                 .thenThrow(new KsefSubmissionException("auth failed"));
 

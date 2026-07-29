@@ -1,0 +1,901 @@
+{
+  "info": {
+    "name": "SafeVoice",
+    "description": "SafeVoice (whistleblowing) API \u2014 one folder per controller. Base port 9003. TWO auth models:\n\u2022 PUBLIC /api/safevoice/** \u2014 anonymous reporter, NO login; identified by the case accessKey/PIN returned at submission.\n\u2022 INTERNAL /api/v1/internal/** \u2014 staff, requires the RegulaOne idToken cookie (log in via RegulaOne SSO first; the Bearer {{token}} header is a fallback).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:9003"
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Public \u2014 Reports (Reporter)",
+      "item": [
+        {
+          "name": "Submit Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/safevoice/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "safevoice",
+                "reports"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantId\": \"TENANT_ID_HERE\",\n  \"category\": \"fraud\",\n  \"incidentDate\": \"2026-05-01\",\n  \"area\": \"Finance department\",\n  \"facts\": \"Describe what happened here (plaintext if not client-side encrypted).\",\n  \"channel\": \"web\",\n  \"requestMeeting\": false,\n  \"attachments\": [],\n  \"encryptedContent\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Track Report (by accessKey)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/safevoice/reports/track",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "safevoice",
+                "reports",
+                "track"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accessKey\": \"ACCESS_KEY_HERE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Post Message (multipart)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/safevoice/reports/CASE_ID_HERE/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "safevoice",
+                "reports",
+                "CASE_ID_HERE",
+                "messages"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "accessKey",
+                  "value": "ACCESS_KEY_HERE",
+                  "type": "text"
+                },
+                {
+                  "key": "text",
+                  "value": "Reply from the reporter",
+                  "type": "text"
+                },
+                {
+                  "key": "ciphertext",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "iv",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "wrappedKey",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "algorithm",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Messages Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/safevoice/reports/CASE_ID_HERE/messages/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "safevoice",
+                "reports",
+                "CASE_ID_HERE",
+                "messages",
+                "read"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accessKey\": \"ACCESS_KEY_HERE\",\n  \"messageId\": \"MESSAGE_ID_HERE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download Attachment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/safevoice/reports/attachments/download",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "safevoice",
+                "reports",
+                "attachments",
+                "download"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accessKey\": \"ACCESS_KEY_HERE\",\n  \"messageId\": \"MESSAGE_ID_HERE\",\n  \"attachmentId\": \"ATTACHMENT_ID_HERE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Attachment (multipart)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/safevoice/reports/CASE_ID_HERE/attachments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "safevoice",
+                "reports",
+                "CASE_ID_HERE",
+                "attachments"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "accessKey",
+                  "value": "ACCESS_KEY_HERE",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Public \u2014 Crypto (Reporter)",
+      "item": [
+        {
+          "name": "Get Data Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/safevoice/crypto/data-key",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "safevoice",
+                "crypto",
+                "data-key"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenantId\": \"TENANT_ID_HERE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Case Keys",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/safevoice/crypto/case-keys",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "safevoice",
+                "crypto",
+                "case-keys"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accessKey\": \"ACCESS_KEY_HERE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Internal \u2014 Cases (Staff)",
+      "item": [
+        {
+          "name": "List Cases",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/cases?page=1&size=20&search=&filter=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "cases"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "filter",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Case",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/cases/CASE_ID_HERE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "cases",
+                "CASE_ID_HERE"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/cases/CASE_ID_HERE/status?status=INVESTIGATING&reason=Opening investigation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "cases",
+                "CASE_ID_HERE",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "INVESTIGATING"
+                },
+                {
+                  "key": "reason",
+                  "value": "Opening investigation"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Severity",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/cases/CASE_ID_HERE/severity?severity=HIGH",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "cases",
+                "CASE_ID_HERE",
+                "severity"
+              ],
+              "query": [
+                {
+                  "key": "severity",
+                  "value": "HIGH"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Investigator",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/cases/CASE_ID_HERE/assign?investigator=USER_ID_OR_NAME",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "cases",
+                "CASE_ID_HERE",
+                "assign"
+              ],
+              "query": [
+                {
+                  "key": "investigator",
+                  "value": "USER_ID_OR_NAME"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Post Message (multipart)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/cases/CASE_ID_HERE/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "cases",
+                "CASE_ID_HERE",
+                "messages"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "text",
+                  "value": "Reply from the case handler",
+                  "type": "text"
+                },
+                {
+                  "key": "ciphertext",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "iv",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "wrappedKey",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "algorithm",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Messages",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/cases/CASE_ID_HERE/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "cases",
+                "CASE_ID_HERE",
+                "messages"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Messages Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/cases/CASE_ID_HERE/messages/read?messageId=MESSAGE_ID_HERE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "cases",
+                "CASE_ID_HERE",
+                "messages",
+                "read"
+              ],
+              "query": [
+                {
+                  "key": "messageId",
+                  "value": "MESSAGE_ID_HERE"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download Case Attachment",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/cases/CASE_ID_HERE/attachments/ATTACHMENT_ID_HERE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "cases",
+                "CASE_ID_HERE",
+                "attachments",
+                "ATTACHMENT_ID_HERE"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download Message Attachment",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/cases/CASE_ID_HERE/messages/MESSAGE_ID_HERE/attachments/ATTACHMENT_ID_HERE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "cases",
+                "CASE_ID_HERE",
+                "messages",
+                "MESSAGE_ID_HERE",
+                "attachments",
+                "ATTACHMENT_ID_HERE"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Internal \u2014 Dashboard (Staff)",
+      "item": [
+        {
+          "name": "Get Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/dashboard/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "dashboard",
+                "stats"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cases Needing Attention",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/dashboard/attention?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "dashboard",
+                "attention"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Internal \u2014 Audit (Staff)",
+      "item": [
+        {
+          "name": "List Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/audit?page=1&size=20&search=&actionType=&outcome=&subjectId=&from=&to=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "audit"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "actionType",
+                  "value": ""
+                },
+                {
+                  "key": "outcome",
+                  "value": ""
+                },
+                {
+                  "key": "subjectId",
+                  "value": ""
+                },
+                {
+                  "key": "from",
+                  "value": ""
+                },
+                {
+                  "key": "to",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Audit Chain",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/audit/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "audit",
+                "verify"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Internal \u2014 Crypto (Staff)",
+      "item": [
+        {
+          "name": "Get Data Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/crypto/data-key",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "crypto",
+                "data-key"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Case Keys",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/crypto/case-keys/CASE_ID_HERE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "crypto",
+                "case-keys",
+                "CASE_ID_HERE"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

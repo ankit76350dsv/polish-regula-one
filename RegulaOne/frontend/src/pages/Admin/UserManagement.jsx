@@ -6,6 +6,7 @@
 //   PATCH /api/admin/users/{userId}/status → suspend / reactivate
 
 import { useState, useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,6 +50,10 @@ function formatDate(iso) {
 }
 
 export default function UserManagement() {
+  // Router — used to open the per-user permissions editor (platform-operator only).
+  const navigate = useNavigate();
+  const { tenantId } = useParams();
+
   // ── Server state ──────────────────────────────────────────────────────────
   const { data: stats,   isLoading: statsLoading,   error: statsError   } = useSuperAdminStats();
   const { data: users,   isLoading: usersLoading,   error: usersError   } = useSuperAdminUsers();
@@ -364,27 +369,38 @@ export default function UserManagement() {
                         {formatDate(u.createdAt)}
                       </TableCell>
 
-                      {/* Action button — opens confirmation modal */}
+                      {/* Action buttons — manage permissions + suspend/reactivate */}
                       <TableCell className="text-right px-6 py-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`text-xs font-bold h-7 px-3 ${
-                            isActive
-                              ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                              : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
-                          }`}
-                          onClick={() => handleStatusClick(u)}
-                          disabled={isPendingThis}
-                        >
-                          {isPendingThis ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : isActive ? (
-                            <><UserX     className="h-3.5 w-3.5 mr-1" />Suspend</>
-                          ) : (
-                            <><UserCheck className="h-3.5 w-3.5 mr-1" />Reactivate</>
-                          )}
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          {/* Opens the permissions editor — only the operator can grant platform codes. */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs font-bold h-7 px-3 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => navigate(`/company/${tenantId}/users/${u.id}`)}
+                          >
+                            <ShieldCheck className="h-3.5 w-3.5 mr-1" />Permissions
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`text-xs font-bold h-7 px-3 ${
+                              isActive
+                                ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                                : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                            }`}
+                            onClick={() => handleStatusClick(u)}
+                            disabled={isPendingThis}
+                          >
+                            {isPendingThis ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : isActive ? (
+                              <><UserX     className="h-3.5 w-3.5 mr-1" />Suspend</>
+                            ) : (
+                              <><UserCheck className="h-3.5 w-3.5 mr-1" />Reactivate</>
+                            )}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

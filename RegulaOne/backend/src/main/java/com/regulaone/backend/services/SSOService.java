@@ -64,6 +64,7 @@ public class SSOService {
      * otherwise the browser will not match and delete it.
      */
     public void clearCookie(HttpServletResponse response, String name) {
+        // Build base cookie configuration to expire the cookie (MaxAge=0)
         ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, "")
                 .httpOnly(true)
                 .secure(ssoConfig.isCookieSecure())
@@ -71,11 +72,13 @@ public class SSOService {
                 .maxAge(0)
                 .sameSite(ssoConfig.getCookieSameSite());
 
-        if (ssoConfig.hasSharedDomain()) {
-            builder.domain(ssoConfig.getCookieDomain());
-        }
-
+        // Clear host-only cookie (no domain attribute)
         response.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
+
+        // Clear domain-scoped cookie (if shared domain is enabled)
+        if (ssoConfig.hasSharedDomain()) {
+            response.addHeader(HttpHeaders.SET_COOKIE, builder.domain(ssoConfig.getCookieDomain()).build().toString());
+        }
     }
 
     // ── Central login redirect ────────────────────────────────────────────────

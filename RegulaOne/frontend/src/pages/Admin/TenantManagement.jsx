@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   Building2, Search, Plus, Pencil, Trash2, ChevronLeft, ChevronRight,
-  Loader2, AlertTriangle,
+  Loader2, AlertTriangle, CreditCard,
 } from 'lucide-react';
 import { useTenants, useCreateTenant, useUpdateTenant, useDeleteTenant, useChangeTenantStatus } from '../../hooks/useTenant';
 
@@ -106,6 +106,7 @@ function TenantForm({ defaultValues, onSubmit, isPending, submitLabel }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function TenantManagement() {
   const navigate = useNavigate();
+  const { tenantId } = useParams();          // current company context (e.g. "platform")
   const [search, setSearch]               = useState('');
   const [debouncedSearch, setDebounced]   = useState('');
   const [statusFilter, setStatusFilter]   = useState('');
@@ -209,6 +210,7 @@ export default function TenantManagement() {
                   <TableHead className="px-6 py-4 text-[10px] uppercase font-bold text-slate-400 tracking-wider">City</TableHead>
                   <TableHead className="px-6 py-4 text-[10px] uppercase font-bold text-slate-400 tracking-wider">Status</TableHead>
                   <TableHead className="px-6 py-4 text-[10px] uppercase font-bold text-slate-400 tracking-wider">Package</TableHead>
+                  <TableHead className="px-6 py-4 text-[10px] uppercase font-bold text-slate-400 tracking-wider">Plan</TableHead>
                   <TableHead className="text-right px-6 py-4 text-[10px] uppercase font-bold text-slate-400 tracking-wider">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -260,6 +262,17 @@ export default function TenantManagement() {
                       ) : (
                         <span className="text-[10px] text-slate-400 font-medium">No package</span>
                       )}
+                    </TableCell>
+                    <TableCell className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-[10px] font-bold border-slate-200 text-slate-600 hover:text-red-600 hover:border-red-200"
+                        onClick={() => navigate(`/company/${tenantId}/tenants/${tenant.id}/package`, { state: { tenant } })}
+                        title="Renew or upgrade this tenant's plan"
+                      >
+                        <CreditCard className="h-3 w-3 mr-1" /> Manage
+                      </Button>
                     </TableCell>
                     <TableCell className="text-right px-6 py-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">

@@ -1,0 +1,2045 @@
+{
+  "info": {
+    "name": "KSeFFlow",
+    "description": "KSeFFlow (e-invoicing) API \u2014 one folder per controller. Base path /api/v1 on port 8081. Auth is the httpOnly idToken cookie set by the RegulaOne backend: log in via RegulaOne SSO first (Postman cookie jar carries it), or paste a token into {{token}} for the Bearer fallback header.\n\nAlso includes the KSeF 2.0 government API (Ministry of Finance) calls the backend makes \u2014 base {{ksefGovUrl}} (sandbox https://api-test.ksef.mf.gov.pl/v2). Those use KSeF tokens ({{ksefAuthToken}} / {{ksefAccessToken}} / {{ksefRefreshToken}}), NOT the RegulaOne session \u2014 obtain them via the Auth flow (challenge \u2192 XAdES \u2192 redeem).\n\nAlso includes the internal Notification Hub call KSeFFlow makes server-to-server \u2014 base {{hubUrl}} (RegulaOne backend, http://localhost:8080). KSeFFlow does NOT store notifications itself; it publishes business events to the Hub, which resolves recipients and delivery. That call is NOT user-authenticated \u2014 it is gated by the shared {{serviceToken}} in the X-Service-Token header (must match RegulaOne's NOTIFICATION_INTERNAL_TOKEN).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "ksefGovUrl",
+      "value": "https://api-test.ksef.mf.gov.pl/v2"
+    },
+    {
+      "key": "ksefAuthToken",
+      "value": ""
+    },
+    {
+      "key": "ksefAccessToken",
+      "value": ""
+    },
+    {
+      "key": "ksefRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "hubUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "serviceToken",
+      "value": "e111d59e3c4e3ad852f0db4ae8251864ed625f52547c47bf655ffe834d548a8c"
+    }
+  ],
+  "item": [
+    {
+      "name": "Invoices",
+      "item": [
+        {
+          "name": "Create Draft Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/draft",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "draft"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceNumber\": \"FV/2026/05/0001\",\n  \"issueDate\": \"2026-05-01\",\n  \"dueDate\": \"2026-05-15\",\n  \"sellerName\": \"Acme Sp. z o.o.\",\n  \"sellerNip\": \"1234567890\",\n  \"sellerAddress\": \"ul. Przykladowa 1\",\n  \"sellerPostalCode\": \"00-001\",\n  \"sellerCity\": \"Warszawa\",\n  \"buyerName\": \"Klient S.A.\",\n  \"buyerNip\": \"9876543210\",\n  \"buyerAddress\": \"ul. Klienta 2\",\n  \"buyerPostalCode\": \"31-000\",\n  \"buyerCity\": \"Krakow\",\n  \"currency\": \"PLN\",\n  \"totalNet\": 1000.0,\n  \"totalVat\": 230.0,\n  \"totalGross\": 1230.0,\n  \"paymentMethod\": \"TRANSFER\",\n  \"bankAccount\": \"PL61109010140000071219812874\",\n  \"notes\": \"Thank you for your business\",\n  \"items\": [\n    {\n      \"productName\": \"Consulting services\",\n      \"unit\": \"hour\",\n      \"quantity\": 10,\n      \"unitPrice\": 100.0,\n      \"vatRate\": \"VAT_23\",\n      \"netAmount\": 1000.0,\n      \"vatAmount\": 230.0,\n      \"grossAmount\": 1230.0,\n      \"pkwiuCode\": \"62.01\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Invoice To KSeF",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE/submit?nip=1234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE",
+                "submit"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Correct Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE/correct?reason=Wrong buyer address&correctionType=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE",
+                "correct"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Wrong buyer address"
+                },
+                {
+                  "key": "correctionType",
+                  "value": "1"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceNumber\": \"FV/2026/05/0001\",\n  \"issueDate\": \"2026-05-01\",\n  \"dueDate\": \"2026-05-15\",\n  \"sellerName\": \"Acme Sp. z o.o.\",\n  \"sellerNip\": \"1234567890\",\n  \"sellerAddress\": \"ul. Przykladowa 1\",\n  \"sellerPostalCode\": \"00-001\",\n  \"sellerCity\": \"Warszawa\",\n  \"buyerName\": \"Klient S.A.\",\n  \"buyerNip\": \"9876543210\",\n  \"buyerAddress\": \"ul. Klienta 2\",\n  \"buyerPostalCode\": \"31-000\",\n  \"buyerCity\": \"Krakow\",\n  \"currency\": \"PLN\",\n  \"totalNet\": 1000.0,\n  \"totalVat\": 230.0,\n  \"totalGross\": 1230.0,\n  \"paymentMethod\": \"TRANSFER\",\n  \"bankAccount\": \"PL61109010140000071219812874\",\n  \"notes\": \"Thank you for your business\",\n  \"items\": [\n    {\n      \"productName\": \"Consulting services\",\n      \"unit\": \"hour\",\n      \"quantity\": 10,\n      \"unitPrice\": 100.0,\n      \"vatRate\": \"VAT_23\",\n      \"netAmount\": 1000.0,\n      \"vatAmount\": 230.0,\n      \"grossAmount\": 1230.0,\n      \"pkwiuCode\": \"62.01\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Retry Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE/retry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE",
+                "retry"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE",
+                "status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice XML",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices/INVOICE_ID_HERE/xml",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices",
+                "INVOICE_ID_HERE",
+                "xml"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Invoices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invoices?status=SENT&search=&page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "invoices"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "SENT"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Received Invoices",
+      "item": [
+        {
+          "name": "Sync Received Invoices",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/received-invoices/sync?nip=1234567890&from=2026-05-01T00:00:00&to=2026-05-31T23:59:59",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "received-invoices",
+                "sync"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-05-01T00:00:00"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-05-31T23:59:59"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Received Invoices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/received-invoices?page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "received-invoices"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Received Invoice XML",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/received-invoices/KSEF_NUMBER_HERE/xml?nip=1234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "received-invoices",
+                "KSEF_NUMBER_HERE",
+                "xml"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Certificates",
+      "item": [
+        {
+          "name": "Enroll Certificate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/certificates/enroll?nip=1234567890&purpose=AUTHENTICATION&name=Primary auth cert",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "certificates",
+                "enroll"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                },
+                {
+                  "key": "purpose",
+                  "value": "AUTHENTICATION"
+                },
+                {
+                  "key": "name",
+                  "value": "Primary auth cert"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Certificate (.p12/.pfx)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/certificates/upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "certificates",
+                "upload"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "password",
+                  "value": "cert-password",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Certificates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/certificates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "certificates"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download Public Certificate (PEM)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/certificates/CERT_ID_HERE/public",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "certificates",
+                "CERT_ID_HERE",
+                "public"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Certificate",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/certificates/CERT_ID_HERE/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "certificates",
+                "CERT_ID_HERE",
+                "deactivate"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Permissions",
+      "item": [
+        {
+          "name": "Grant Person Permissions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions/persons/grants?nip=1234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions",
+                "persons",
+                "grants"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subjectType\": \"Nip\",\n  \"subjectValue\": \"9876543210\",\n  \"permissions\": [\n    \"InvoiceWrite\",\n    \"InvoiceRead\"\n  ],\n  \"description\": \"Grant invoicing rights\",\n  \"subjectDetailsType\": \"PersonByIdentifier\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Query Permissions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions/query?nip=1234567890&pageOffset=0&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions",
+                "query"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                },
+                {
+                  "key": "pageOffset",
+                  "value": "0"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"queryType\": \"PermissionsGrantedToOtherEntity\",\n  \"permissionTypes\": [\n    \"InvoiceRead\",\n    \"InvoiceWrite\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Permission",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions/PERMISSION_ID_HERE?nip=1234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions",
+                "PERMISSION_ID_HERE"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Permission Operation Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/permissions/operations/REFERENCE_NUMBER_HERE?nip=1234567890",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "permissions",
+                "operations",
+                "REFERENCE_NUMBER_HERE"
+              ],
+              "query": [
+                {
+                  "key": "nip",
+                  "value": "1234567890"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Audit Logs",
+      "item": [
+        {
+          "name": "List Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit-logs?from=&to=&role=&search=&page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": ""
+                },
+                {
+                  "key": "to",
+                  "value": ""
+                },
+                {
+                  "key": "role",
+                  "value": ""
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Get Dashboard Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/dashboard/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dashboard",
+                "summary"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "KSeF Status",
+      "item": [
+        {
+          "name": "Get KSeF Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ksef-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ksef-status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Connection Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ksef-status/connection",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ksef-status",
+                "connection"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Declare Emergency (tryb awaryjny)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ksef-status/emergency",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ksef-status",
+                "emergency"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Ministry-declared emergency mode\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Declare Unavailability",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ksef-status/unavailability",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ksef-status",
+                "unavailability"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"KSeF platform maintenance window\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Declare Online (clear status)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ksef-status/online",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ksef-status",
+                "online"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Service restored\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "KSeF Government API (Ministry of Finance)",
+      "item": [
+        {
+          "name": "Auth",
+          "item": [
+            {
+              "name": "1. Get Auth Challenge",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/auth/challenge",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "challenge"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "2. Submit XAdES Signature",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/xml"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/auth/xades-signature",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "xades-signature"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "<!-- signed XAdES XML document goes here -->",
+                  "options": {
+                    "raw": {
+                      "language": "xml"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "3. Get Auth Status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAuthToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/auth/REFERENCE_NUMBER_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "REFERENCE_NUMBER_HERE"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "4. Redeem Tokens (access + refresh)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAuthToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/auth/token/redeem",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "token",
+                    "redeem"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "5. Refresh Access Token",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefRefreshToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/auth/token/refresh",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "token",
+                    "refresh"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Security",
+          "item": [
+            {
+              "name": "Get Public Key Certificates (MF keys)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/security/public-key-certificates",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "security",
+                    "public-key-certificates"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Sessions",
+          "item": [
+            {
+              "name": "Open Online Session",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/sessions/online",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "online"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"formCode\": {\n    \"systemCode\": \"FA (2)\",\n    \"schemaVersion\": \"1-0E\",\n    \"value\": \"FA\"\n  },\n  \"encryption\": {\n    \"encryptedSymmetricKey\": \"BASE64_RSA_ENCRYPTED_AES_KEY\",\n    \"initializationVector\": \"BASE64_IV\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Send Invoice",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/sessions/online/SESSION_REF_HERE/invoices",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "online",
+                    "SESSION_REF_HERE",
+                    "invoices"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"invoiceHash\": \"BASE64_SHA256_OF_PLAINTEXT_XML\",\n  \"invoiceSize\": 3456,\n  \"encryptedInvoiceHash\": \"BASE64_SHA256_OF_ENCRYPTED_XML\",\n  \"encryptedInvoiceSize\": 3472,\n  \"encryptedInvoiceContent\": \"BASE64_AES_ENCRYPTED_INVOICE_XML\",\n  \"offlineMode\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Session Invoice Status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/sessions/SESSION_REF_HERE/invoices/INVOICE_REF_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "SESSION_REF_HERE",
+                    "invoices",
+                    "INVOICE_REF_HERE"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Invoice UPO (XML)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/sessions/SESSION_REF_HERE/invoices/INVOICE_REF_HERE/upo",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "SESSION_REF_HERE",
+                    "invoices",
+                    "INVOICE_REF_HERE",
+                    "upo"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Close Online Session",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/sessions/online/SESSION_REF_HERE/close",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "sessions",
+                    "online",
+                    "SESSION_REF_HERE",
+                    "close"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Invoices",
+          "item": [
+            {
+              "name": "Query Invoice Metadata",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/invoices/query/metadata?pageOffset=0&pageSize=20",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "invoices",
+                    "query",
+                    "metadata"
+                  ],
+                  "query": [
+                    {
+                      "key": "pageOffset",
+                      "value": "0"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"subjectType\": \"Subject1\",\n  \"dateRange\": {\n    \"from\": \"2026-05-01T00:00:00Z\",\n    \"to\": \"2026-05-31T23:59:59Z\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Invoice By KSeF Number (XML)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/invoices/ksef/KSEF_NUMBER_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "invoices",
+                    "ksef",
+                    "KSEF_NUMBER_HERE"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Certificates",
+          "item": [
+            {
+              "name": "Get Certificate Enrollment Data",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/certificates/enrollments/data",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "certificates",
+                    "enrollments",
+                    "data"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Enroll Certificate",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/certificates/enrollments",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "certificates",
+                    "enrollments"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"certificateName\": \"Primary authentication certificate\",\n  \"certificateType\": \"Authentication\",\n  \"csr\": \"BASE64_DER_CSR\",\n  \"validFrom\": \"2026-05-01T00:00:00Z\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Certificate Enrollment Status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/certificates/enrollments/REFERENCE_NUMBER_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "certificates",
+                    "enrollments",
+                    "REFERENCE_NUMBER_HERE"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Retrieve Certificates",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/certificates/retrieve",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "certificates",
+                    "retrieve"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"certificateSerialNumbers\": [\n    \"SERIAL_NUMBER_HERE\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Permissions",
+          "item": [
+            {
+              "name": "Grant Person Permissions",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/permissions/persons/grants",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "permissions",
+                    "persons",
+                    "grants"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"subjectIdentifier\": {\n    \"type\": \"Nip\",\n    \"value\": \"9876543210\"\n  },\n  \"permissions\": [\n    \"InvoiceWrite\",\n    \"InvoiceRead\"\n  ],\n  \"description\": \"Grant invoicing rights\",\n  \"subjectDetails\": {\n    \"subjectType\": \"PersonByIdentifier\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Query Person Permissions",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/permissions/query/persons/grants?pageOffset=0&pageSize=20",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "permissions",
+                    "query",
+                    "persons",
+                    "grants"
+                  ],
+                  "query": [
+                    {
+                      "key": "pageOffset",
+                      "value": "0"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"queryType\": \"PermissionsGrantedToOtherEntity\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Revoke Permission",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/permissions/common/grants/PERMISSION_ID_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "permissions",
+                    "common",
+                    "grants",
+                    "PERMISSION_ID_HERE"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Permissions Operation Status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{ksefAccessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ksefGovUrl}}/permissions/operations/REFERENCE_NUMBER_HERE",
+                  "host": [
+                    "{{ksefGovUrl}}"
+                  ],
+                  "path": [
+                    "permissions",
+                    "operations",
+                    "REFERENCE_NUMBER_HERE"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Notification Hub (RegulaOne — internal)",
+      "description": "Server-to-server events KSeFFlow publishes to the centralized RegulaOne Notification Hub (POST /api/internal/notifications/events on {{hubUrl}}). NOT user-authenticated — gated by the shared X-Service-Token ({{serviceToken}}). Best-effort: a failed publish never breaks the invoice/retry flow. The Hub resolves WHO receives each event (explicit recipientUserIds, else tenant users holding any audiencePermissions, else the event type's default audience) and applies category/severity defaults for null fields. dedupeKey makes re-publishing idempotent.",
+      "item": [
+        {
+          "name": "Publish Invoice Event (audience-resolved)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/internal/notifications/events",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "internal",
+                "notifications",
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"INVOICE_SENT_TO_KSEF\",\n  \"tenantId\": \"TENANT_ID_HERE\",\n  \"sourceModule\": \"KSEFFLOW\",\n  \"title\": \"Invoice accepted by KSeF\",\n  \"body\": \"Invoice FV/2026/05/0001 received KSeF number and UPO.\",\n  \"relatedEntityType\": \"INVOICE\",\n  \"relatedEntityId\": \"INVOICE_ID_HERE\",\n  \"dedupeKey\": \"INVOICE_SENT_TO_KSEF:INVOICE_ID_HERE\",\n  \"occurredAt\": \"2026-05-01T10:15:30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Publish Failure Event (person-targeted)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/internal/notifications/events",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "internal",
+                "notifications",
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"INVOICE_RETRY_FAILED\",\n  \"tenantId\": \"TENANT_ID_HERE\",\n  \"sourceModule\": \"KSEFFLOW\",\n  \"title\": \"Invoice submission keeps failing\",\n  \"body\": \"Automatic retries for invoice FV/2026/05/0001 have been exhausted. Manual review needed.\",\n  \"severity\": \"HIGH\",\n  \"relatedEntityType\": \"INVOICE\",\n  \"relatedEntityId\": \"INVOICE_ID_HERE\",\n  \"recipientUserIds\": [\n    \"USER_ID_HERE\"\n  ],\n  \"audiencePermissions\": [\n    \"InvoiceWrite\"\n  ],\n  \"dedupeKey\": \"INVOICE_RETRY_FAILED:INVOICE_ID_HERE\",\n  \"occurredAt\": \"2026-05-01T11:00:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications (read — RegulaOne, module=KSEFFLOW)",
+      "description": "How the KSeFFlow UI GETS its notifications. These are the USER-facing endpoints served by RegulaOne (base {{hubUrl}}, http://localhost:8080), NOT KSeFFlow's own backend — KSeFFlow has no notification store. Auth is the RegulaOne idToken cookie (log in via SSO so the cookie jar carries it) or the {{token}} Bearer fallback; every endpoint is forced server-side to the caller's own tenant + user. The 'module' query param is MANDATORY and scopes results to this app — always module=KSEFFLOW here, so KSeFFlow never sees another app's notifications. A missing/unknown module returns 400. (Preferences are account-wide and take no module.)",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications?module=KSEFFLOW&status=&page=0&size=20",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                },
+                {
+                  "key": "status",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Unread Count",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/unread-count?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "unread-count"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Notification",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/NOTIFICATION_ID_HERE?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "NOTIFICATION_ID_HERE"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/NOTIFICATION_ID_HERE/read?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "NOTIFICATION_ID_HERE",
+                "read"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/read-all?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read-all"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Notification",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/NOTIFICATION_ID_HERE/archive?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "NOTIFICATION_ID_HERE",
+                "archive"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/NOTIFICATION_ID_HERE?module=KSEFFLOW",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "NOTIFICATION_ID_HERE"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "KSEFFLOW"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Preferences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/preferences",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "preferences"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/preferences",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "preferences"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channelDefaults\": {\n    \"IN_APP\": true,\n    \"EMAIL\": true,\n    \"PUSH\": false\n  },\n  \"perCategory\": {\n    \"INVOICE\": {\n      \"EMAIL\": true,\n      \"IN_APP\": true\n    }\n  },\n  \"quietHoursEnabled\": true,\n  \"quietHoursFromHour\": 22,\n  \"quietHoursToHour\": 7,\n  \"timezone\": \"Europe/Warsaw\",\n  \"digestFrequency\": \"IMMEDIATE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Self-Test Notifications (dev/QA only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{hubUrl}}/api/notifications/test",
+              "host": [
+                "{{hubUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "test"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

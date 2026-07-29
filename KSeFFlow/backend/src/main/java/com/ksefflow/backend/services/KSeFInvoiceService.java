@@ -19,6 +19,7 @@ import com.ksefflow.backend.exceptions.KsefCertificateException;
 import com.ksefflow.backend.exceptions.KsefSubmissionException;
 import com.ksefflow.backend.exceptions.KsefXmlGenerationException;
 import com.ksefflow.backend.models.KsefInvoice;
+import com.ksefflow.backend.notification.HubNotificationPublisher;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
 import com.ksefflow.backend.models.utils.KsefOfflineMode;
 import com.ksefflow.backend.models.utils.KsefUpoStatus;
@@ -27,8 +28,16 @@ import com.ksefflow.backend.services.ksefauth.KsefApiClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -70,6 +79,10 @@ public class KSeFInvoiceService {
 
     private final KsefInvoiceRepository ksef_invoices_repository;
 
+    // Used for the flexible list query (optional status + optional text search + pagination),
+    // following the same MongoTemplate pattern as KSeFAuditLogService.
+    private final MongoTemplate mongoTemplate;
+
     private final FA3XmlGeneratorService xmlGeneratorService;
     private final Fa3ValidationGate fa3ValidationGate;
     private final KSeFAuthService authService;
@@ -81,6 +94,10 @@ public class KSeFInvoiceService {
     // Tells us the current KSeF state (online / unavailable / Ministry-declared emergency) so
     // a parked invoice gets the legally correct deadline. See KsefAvailabilityService (C7).
     private final KsefAvailabilityService availabilityService;
+    // Publishes problems during the submission pipeline to the centralized notification Hub.
+    private final HubNotificationPublisher hubPublisher;
+    // Computes the next automatic-retry time shown to the user (shared with the retry job).
+    private final com.ksefflow.backend.services.retry.KsefRetryScheduleCalculator retryScheduleCalculator;
 
     // KSeF 2.0 usage flag identifying the MF public key that wraps the session AES key.
     private static final String SYMMETRIC_KEY_ENCRYPTION_USAGE = "SymmetricKeyEncryption";
@@ -125,6 +142,10 @@ public class KSeFInvoiceService {
             invoice.setCreatedAt(existing.getCreatedAt());
             invoice.setUpdatedAt(LocalDateTime.now());
             invoice.setStatus(KsefInvoiceStatus.DRAFT);
+            // Preserve the existing status timeline — re-saving a draft is NOT a status change
+            // (it stays DRAFT), so we carry the prior history over rather than appending or
+            // wiping it (the incoming object was rebuilt from the request and has none).
+            invoice.setStatusHistory(existing.getStatusHistory());
             invoice.setKsefEnvironment(apiProperties.getEnvironment());
 
             KsefInvoice updated = ksef_invoices_repository.save(invoice);
@@ -143,9 +164,9 @@ public class KSeFInvoiceService {
             return updated;
         }
 
-        // No existing invoice → create a fresh DRAFT.
-        invoice.setStatus(KsefInvoiceStatus.DRAFT);
+        // No existing invoice → create a fresh DRAFT and seed the status timeline.
         invoice.setCreatedAt(LocalDateTime.now());
+        invoice.recordStatus(KsefInvoiceStatus.DRAFT, "Invoice created as draft", userEmail);
         invoice.setKsefEnvironment(apiProperties.getEnvironment());
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
@@ -237,10 +258,9 @@ public class KSeFInvoiceService {
         KsefInvoice invoice = loadAndGuardDraft(tenantId, invoiceId);
 
         // ! Step 2 — Move invoice to PENDING state
-        invoice.setStatus(KsefInvoiceStatus.PENDING);
-        invoice.setUpdatedAt(LocalDateTime.now());
         int nextAttempt = invoice.getSubmissionAttempts() + 1;
         invoice.setSubmissionAttempts(nextAttempt);
+        invoice.recordStatus(KsefInvoiceStatus.PENDING, "Submitted to KSeF (attempt " + nextAttempt + ")", userEmail);
 
         log.info("[submitInvoice]:2 Submission attempt count updated to [{}] and saving PENDING invoice state into database for invoice [{}]", nextAttempt, invoice.getInvoiceNumber());
 
@@ -251,23 +271,58 @@ public class KSeFInvoiceService {
 
         KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_SUBMISSION_STARTED", invoiceId, null, "attempt=" + invoice.getSubmissionAttempts(), userEmail, ipAddress);
 
-        // ! Step 3 — Generate FA(3) XML
-        // ! return two thiing XML and hashof XML
-        FA3XmlGeneratorService.FA3XmlResult xmlResult = xmlGeneratorService.generateXml(invoice);
-
-        // Step 4 — Validate XML against the official FA(3) schema, but ONLY if the
-        // local XSD check is turned on (see ksef.validation.xsd.enabled). When it is off,
-        // KSeF checks the invoice on its side. Business rules already ran during XML build.
-        fa3ValidationGate.validateBeforeSubmission(xmlResult.xmlContent());
+        // ! Step 3 + 4 — Generate FA(3) XML and validate it against the official schema (when
+        // ksef.validation.xsd.enabled). A failure here is a VALIDATION error (bad/missing fields,
+        // invalid VAT, malformed XML) — notify the issuer via the Hub, then rethrow so the API
+        // still returns the error to the caller.
+        FA3XmlGeneratorService.FA3XmlResult xmlResult;
+        try {
+            xmlResult = xmlGeneratorService.generateXml(invoice);
+            fa3ValidationGate.validateBeforeSubmission(xmlResult.xmlContent());
+        } catch (KsefXmlGenerationException e) {
+            hubPublisher.publishInvoiceEvent("INVOICE_VALIDATION_ERROR", tenantId,
+                    "Invoice failed validation",
+                    "Invoice " + invoice.getInvoiceNumber() + " did not pass FA(3) validation: " + e.getMessage(),
+                    invoiceId, "INVOICE_VALIDATION_ERROR:" + invoiceId + ":" + nextAttempt);
+            throw e;
+        }
         // Save XML hash
         invoice.setFa3XmlHash(xmlResult.sha256Hash());
         ksef_invoices_repository.save(invoice);
+
+        // ! Government rule — special modes must NOT use the online submission flow.
+        // The Ministry of Finance KSeF 2.0 rules say that during a declared EMERGENCY ("tryb
+        // awaryjny") or UNAVAILABILITY ("niedostępność") invoices are issued OFFLINE (FA(3) + QR
+        // code) and only later transmitted to KSeF — within the next business day, or within
+        // 7 business days for an emergency. So when KSeF is NOT in the ONLINE state we do not even
+        // attempt the live call; we route the invoice straight to offline issuance. The legal
+        // deadline, QR sealing and the background retry queue are all handled by handleOfflineMode.
+        // (Sources: ksef.podatki.gov.pl — "Tryby szczególne wystawiania faktur" / "Tryb offline".)
+        if (!availabilityService.isOnline()) {
+            KsefAvailabilityService.Status state = availabilityService.getStatus();
+            KsefOfflineMode offlineMode = availabilityService.currentOfflineMode();
+            String reason = "KSeF is in " + state.mode() + " mode (" + state.reason()
+                    + ") — invoice issued offline per the declared state";
+            log.warn("[submitInvoice]:3b KSeF not ONLINE (mode={}) — skipping the online flow and "
+                    + "issuing invoice [{}] offline. Reason=[{}]",
+                    state.mode(), invoice.getInvoiceNumber(), state.reason());
+            return handleOfflineMode(invoice, offlineMode, reason, userEmail, ipAddress);
+        }
 
         // Step 5–8 — Submit invoice to KSeF
         try {
 
             KsefInvoice submittedInvoice = executeKsefSubmission(invoice, xmlResult.xmlContent(), nip, userEmail, ipAddress);
             log.info("[submitInvoice]:4 Invoice [{}] submitted successfully to KSeF", invoice.getInvoiceNumber());
+
+            // Notify the issuer of the successful direct submission. (Retry-queue successes are
+            // notified separately by KsefRetryQueueService, so this covers the DIRECT path only.)
+            hubPublisher.publishInvoiceEvent("INVOICE_SENT", tenantId,
+                    "Invoice accepted by KSeF",
+                    "Invoice " + submittedInvoice.getInvoiceNumber() + " was submitted successfully (ksefId "
+                            + submittedInvoice.getKsefId() + ").",
+                    invoiceId, "INVOICE_SENT:" + invoiceId);
+
             return submittedInvoice;
 
         } catch (KsefSubmissionException | KsefAuthException e) {
@@ -279,8 +334,50 @@ public class KSeFInvoiceService {
             KsefOfflineMode mode = availabilityService.currentOfflineMode();
             log.warn("[submitInvoice]:5 KSeF submission failed for invoice [{}]. Reason=[{}]. Switching to OFFLINE_MODE (mode={})",
                     invoice.getInvoiceNumber(), e.getMessage(), mode);
+
+            // Notify the issuer that this submission could not reach KSeF and was parked offline
+            // (the background retry queue will keep trying until the legal deadline).
+            hubPublisher.publishInvoiceEvent("INVOICE_SUBMISSION_FAILED", tenantId,
+                    "Invoice could not be sent to KSeF",
+                    "Invoice " + invoice.getInvoiceNumber() + " could not be submitted ("
+                            + e.getMessage() + ") and was queued offline for automatic retry.",
+                    invoiceId, "INVOICE_SUBMISSION_FAILED:" + invoiceId + ":" + nextAttempt);
+
             return handleOfflineMode(invoice, mode, e.getMessage(), userEmail, ipAddress);
         }
+    }
+
+    //! ── Manual retry of an offline invoice (user-triggered from the Offline Queue UI) ──
+
+    /**
+     * Retry NOW an invoice that is parked OFFLINE_MODE (or already RETRYING), instead of waiting
+     * for the scheduled background job. Really re-attempts the KSeF submission and notifies the
+     * outcome to the Hub. Returns the updated invoice (SENT on success, else still OFFLINE_MODE).
+     */
+    public KsefInvoice retryOfflineInvoice(String tenantId, String invoiceId, String userEmail, String ipAddress) {
+        KsefInvoice invoice = getInvoice(tenantId, invoiceId);
+        if (invoice.getStatus() != KsefInvoiceStatus.OFFLINE_MODE
+                && invoice.getStatus() != KsefInvoiceStatus.RETRYING) {
+            throw new IllegalStateException("Invoice [" + invoiceId
+                    + "] is not awaiting retry (status " + invoice.getStatus() + ")");
+        }
+
+        KsefInvoice result = resubmitOffline(invoice, userEmail, ipAddress);
+
+        if (result.getStatus() == KsefInvoiceStatus.SENT) {
+            hubPublisher.publishInvoiceEvent("INVOICE_SENT", result.getTenantId(),
+                    "Invoice accepted by KSeF",
+                    "Invoice " + result.getInvoiceNumber() + " was sent to KSeF (ksefId "
+                            + result.getKsefId() + ") on a manual retry.",
+                    result.getId(), "INVOICE_SENT:" + result.getId());
+        } else {
+            hubPublisher.publishInvoiceEvent("INVOICE_SUBMISSION_FAILED", result.getTenantId(),
+                    "Invoice still could not be sent to KSeF",
+                    "Manual retry of invoice " + result.getInvoiceNumber() + " failed ("
+                            + result.getLastErrorMessage() + "). It remains queued.",
+                    result.getId(), "INVOICE_RETRY_ATTEMPT_FAILED:" + result.getId() + ":" + result.getSubmissionAttempts());
+        }
+        return result;
     }
 
     //! ── Retry an offline-parked invoice ─────────────────────────────────────────
@@ -312,11 +409,10 @@ public class KSeFInvoiceService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        invoice.setStatus(KsefInvoiceStatus.RETRYING);
         int nextAttempt = invoice.getSubmissionAttempts() + 1;
         invoice.setSubmissionAttempts(nextAttempt);
         invoice.setLastRetryAt(now);
-        invoice.setUpdatedAt(now);
+        invoice.recordStatus(KsefInvoiceStatus.RETRYING, "Automatic retry attempt " + nextAttempt, userEmail);
         ksef_invoices_repository.save(invoice);
 
         KSeFAuditLogService.writeAuditLog(tenantId, "INVOICE_RETRY_STARTED", invoiceId, null,
@@ -354,19 +450,75 @@ public class KSeFInvoiceService {
 
     public KsefInvoice getInvoice(String tenantId, String invoiceId) {
         log.info("[getInvoice]:1 Loading invoice [{}] for tenant [{}]", invoiceId, tenantId);
-        return ksef_invoices_repository.findById(invoiceId)
+        KsefInvoice invoice = ksef_invoices_repository.findById(invoiceId)
                 .filter(inv -> tenantId.equals(inv.getTenantId()))
                 .filter(inv -> !inv.isSoftDeleted())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Invoice [" + invoiceId + "] not found for tenant [" + tenantId + "]"));
+        applyNextRetryAt(invoice);
+        return invoice;
     }
 
-    public Page<KsefInvoice> listInvoices(String tenantId, KsefInvoiceStatus status, Pageable pageable) {
-        log.info("[listInvoices]:1 Listing invoices for tenant [{}] status [{}]", tenantId, status);
+    /**
+     * Generates the official FA(3) XML for one invoice — the EXACT document the KSeF submission
+     * pipeline produces (same FA3XmlGeneratorService / schema), so the UI can preview/download the
+     * real thing instead of a hand-rolled approximation. Tenant-scoped via getInvoice().
+     */
+    public String generateInvoiceXml(String tenantId, String invoiceId) {
+        KsefInvoice invoice = getInvoice(tenantId, invoiceId);
+        return xmlGeneratorService.generateXml(invoice).xmlContent();
+    }
+
+    /**
+     * Server-side paginated list of a tenant's invoices, with an optional status filter and an
+     * optional text search (matches invoice number, buyer name, or buyer NIP — case-insensitive).
+     * Always newest-first. Built with MongoTemplate so every filter is optional and combined in
+     * ONE query, and the database does the paging (no loading everything into memory).
+     *
+     * @param tenantId the tenant (always applied — tenant isolation)
+     * @param status   optional status filter (null = any status)
+     * @param search   optional text to look for in invoice number / buyer name / buyer NIP
+     * @param pageable the page number and size (sort is forced to createdAt DESC)
+     */
+    public Page<KsefInvoice> listInvoices(String tenantId, KsefInvoiceStatus status, String search, Pageable pageable) {
+        log.info("[listInvoices]:1 Listing invoices for tenant [{}] status [{}] search [{}] page [{}] size [{}]",
+                tenantId, status, search, pageable.getPageNumber(), pageable.getPageSize());
+
+        // Build the filter: tenant is mandatory; status and search are added only if provided.
+        List<Criteria> filters = new ArrayList<>();
+        filters.add(Criteria.where("tenantId").is(tenantId));
         if (status != null) {
-            return ksef_invoices_repository.findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status, pageable);
+            filters.add(Criteria.where("status").is(status));
         }
-        return ksef_invoices_repository.findByTenantIdOrderByCreatedAtDesc(tenantId, pageable);
+        if (search != null && !search.isBlank()) {
+            // Quote the user input so characters like "." are treated literally, not as regex.
+            String safe = java.util.regex.Pattern.quote(search.trim());
+            filters.add(new Criteria().orOperator(
+                    Criteria.where("invoiceNumber").regex(safe, "i"),
+                    Criteria.where("buyerName").regex(safe, "i"),
+                    Criteria.where("buyerNip").regex(safe, "i")));
+        }
+        Criteria finalCriteria = new Criteria().andOperator(filters.toArray(new Criteria[0]));
+
+        // Count first (for the total page count), then fetch just the requested page, newest first.
+        long total = mongoTemplate.count(new Query(finalCriteria), KsefInvoice.class);
+        Query dataQuery = new Query(finalCriteria)
+                .with(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .skip((long) pageable.getPageNumber() * pageable.getPageSize())
+                .limit(pageable.getPageSize());
+        List<KsefInvoice> content = mongoTemplate.find(dataQuery, KsefInvoice.class);
+
+        content.forEach(this::applyNextRetryAt);
+        return new PageImpl<>(content, pageable, total);
+    }
+
+    // For invoices still awaiting KSeF (offline/retrying), compute the earliest time the
+    // automatic retry job will next try to send them, so the UI can show the real time.
+    private void applyNextRetryAt(KsefInvoice invoice) {
+        if (invoice.getStatus() == KsefInvoiceStatus.OFFLINE_MODE
+                || invoice.getStatus() == KsefInvoiceStatus.RETRYING) {
+            invoice.setNextRetryAt(retryScheduleCalculator.nextEligibleAt(invoice));
+        }
     }
 
     // ! ── Private: KSeF network pipeline ─────────────────────────────────────────
@@ -438,7 +590,7 @@ public class KSeFInvoiceService {
         //! invoce update...
         log.info("[executeKsefSubmission]:7 Updating invoice status to SENT for invoice [{}]",
                 invoice.getInvoiceNumber());
-        invoice.setStatus(KsefInvoiceStatus.SENT);
+        invoice.recordStatus(KsefInvoiceStatus.SENT, "Accepted by KSeF (ksefId " + ksefId + ")", userEmail);
         invoice.setKsefId(ksefId); // ! ksefReferenceNumber
         invoice.setUpoDocumentId(upoDocumentId); // ! mongodb _id of the invoice
         invoice.setUpoStatus(KsefUpoStatus.RECEIVED);
@@ -569,10 +721,10 @@ public class KSeFInvoiceService {
                     invoice.getInvoiceNumber(), qrEx.getMessage(), qrEx);
         }
 
-        invoice.setStatus(KsefInvoiceStatus.OFFLINE_MODE);
         invoice.setLastErrorMessage(complianceNote != null ? errorMessage + " | " + complianceNote : errorMessage);
         invoice.setLastRetryAt(now);
-        invoice.setUpdatedAt(now);
+        invoice.recordStatus(KsefInvoiceStatus.OFFLINE_MODE,
+                "KSeF unavailable — queued offline (deadline " + invoice.getKsefSubmissionDeadline() + ")", userEmail);
         KsefInvoice saved = ksef_invoices_repository.save(invoice);
 
         KSeFAuditLogService.writeAuditLog(invoice.getTenantId(), "INVOICE_OFFLINE_MODE", invoice.getId(),

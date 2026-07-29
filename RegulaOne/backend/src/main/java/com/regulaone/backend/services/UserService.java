@@ -9,6 +9,8 @@ import com.regulaone.backend.dto.Auth.LoginRequest;
 import com.regulaone.backend.dto.Auth.LoginResponse;
 import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
 import com.regulaone.backend.dto.Auth.SignupRequest;
+import com.regulaone.backend.dto.Auth.UpdateEmailNotificationRequest;
+import com.regulaone.backend.dto.Auth.UpdatePermissionsRequest;
 import com.regulaone.backend.dto.Auth.UpdateProfileRequest;
 import com.regulaone.backend.dto.Auth.UpdateModulesRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
@@ -27,7 +29,10 @@ import com.regulaone.backend.models.User;
 import com.regulaone.backend.repository.PackageRepository;
 import com.regulaone.backend.repository.TenantRepository;
 import com.regulaone.backend.repository.UserRepository;
+import com.regulaone.backend.utils.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +41,7 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeTy
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UserType;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -43,8 +49,16 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class UserService {
+
+    // Permission codes that are PLATFORM-LEVEL: only the SaaS operator (ROLE_SUPER_ADMIN) may
+    // grant or revoke them. A company admin (ROLE_ADMIN) edits the same user permission list, so
+    // we must stop them changing these — e.g. KSEF_PLATFORM_ADMIN lets a user declare the GLOBAL
+    // KSeF emergency/unavailability state for ALL tenants, which is never a tenant-level decision.
+    private static final java.util.Set<String> PROTECTED_PERMISSIONS =
+            java.util.Set.of("KSEF_PLATFORM_ADMIN");
 
     private final CognitoService cognitoService;
     private final UserRepository userRepository;
@@ -265,6 +279,12 @@ public class UserService {
         // Module access: admin explicitly passes the moduleIds during invite.
         List<TenantModule> moduleIds = request.getModuleIds();
 
+        // Cross-app permission codes the admin chose for this user (e.g. KSEF_AUDITOR).
+        // Never null — fall back to an empty list so the builder default stays clean.
+        List<String> permissions = request.getPermissions() != null
+                ? request.getPermissions()
+                : new ArrayList<>();
+
         // Link the invited user to the tenant so that their /me response
         // returns the correct tenantId and they are not shown the
         // "Organisation not found" modal on first login.
@@ -276,6 +296,7 @@ public class UserService {
                 .enabled(true)
                 .tenant(tenant)
                 .moduleIds(moduleIds)
+                .permissions(permissions)
                 .build();
 
         userRepository.save(user);
@@ -298,6 +319,26 @@ public class UserService {
     // ! list all users for superadmin
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
+                .map(UserResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * List ALL users of one tenant. Each returned user carries its enabled modules and
+     * permission codes, so a module app can show the whole team and highlight who has
+     * access to that module.
+     *
+     * Tenant-scoped, so one organisation can never see another's users. A blank tenant
+     * (a user with no organisation yet) simply yields an empty list rather than an error.
+     *
+     * @param tenantId the organisation whose users to list (required)
+     */
+    public List<UserResponse> getTenantUsers(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return List.of();
+        }
+        return userRepository.findByTenant_Id(tenantId)
+                .stream()
                 .map(UserResponse::from)
                 .collect(Collectors.toList());
     }
@@ -380,20 +421,316 @@ public class UserService {
         return UserResponse.from(user);
     }
 
-    // ! enable / disable user
-    public UserResponse updateUserStatus(
-            String userId,
-            UpdateUserStatusRequest request) {
+    // ! update user cross-app permissions
+    // Replaces the user's entire permissions list with the one supplied by the admin.
+    // Mirrors updateUserModules — same pattern, but for app permission codes such as
+    // KSEF_ADMIN / KSEF_AUDITOR. Uses the MongoDB document id (not cognitoSub).
+    //
+    // SECURITY: some codes are PLATFORM-LEVEL (see PROTECTED_PERMISSIONS). Only a ROLE_SUPER_ADMIN
+    // may grant/revoke those. A company admin (ROLE_ADMIN) calls the same method, so here we make
+    // sure a non-super-admin can neither add nor remove a protected code — we keep whatever the
+    // user already had. This stops a tenant admin handing themselves platform powers.
+    public UserResponse updateUserPermissions(String userId, UpdatePermissionsRequest request) {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        user.setEnabled(request.isEnabled());
+        // What the caller asked us to save (null → empty so we never store null in MongoDB).
+        List<String> requested = request.getPermissions() != null
+                ? new ArrayList<>(request.getPermissions())
+                : new ArrayList<>();
+
+        // What the user currently has (used to protect platform-level codes from tenant admins).
+        List<String> current = user.getPermissions() != null
+                ? user.getPermissions()
+                : new ArrayList<>();
+
+        List<String> effective;
+        if (callerIsSuperAdmin()) {
+            // The platform operator may set anything, including the protected codes.
+            effective = requested;
+        } else {
+            // Keep every NON-protected code the caller chose...
+            effective = new ArrayList<>();
+            for (String code : requested) {
+                if (!PROTECTED_PERMISSIONS.contains(code)) {
+                    effective.add(code);
+                }
+            }
+            // ...then carry over any protected codes the user ALREADY had (caller can't remove them).
+            for (String code : current) {
+                if (PROTECTED_PERMISSIONS.contains(code) && !effective.contains(code)) {
+                    effective.add(code);
+                }
+            }
+            // Log any blocked attempt so it is visible in the audit/log trail.
+            for (String code : PROTECTED_PERMISSIONS) {
+                boolean wanted = requested.contains(code);
+                boolean had = current.contains(code);
+                if (wanted != had) {
+                    log.warn("[updateUserPermissions] Non-super-admin attempt to {} protected permission [{}] "
+                            + "on user [{}] was IGNORED", wanted ? "grant" : "revoke", code, userId);
+                }
+            }
+        }
+
+        user.setPermissions(effective);
         user.setUpdatedAt(LocalDateTime.now());
 
         userRepository.save(user);
 
         return UserResponse.from(user);
+    }
+
+    // True only when the current request is made by a platform operator (ROLE_SUPER_ADMIN).
+    // Reads the role straight from the security context, so it works for any endpoint that
+    // routes here (both /api/admin/** and /api/superadmin/**).
+    private boolean callerIsSuperAdmin() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
+    }
+
+    /**
+     * Enables or disables a tenant user.
+     *
+     * Edge cases handled:
+     *  - Blank user id or missing body/enabled value → 400.
+     *  - Unknown target user → 404.
+     *  - Admins can update only users inside their own tenant (unless the caller is a
+     *    platform super-admin routed through another admin-capable endpoint).
+     *  - The tenant primary-contact account (user email == tenant email) cannot have its
+     *    status changed, matching the delete-user protection.
+     *  - Admins cannot disable their own account or the last enabled admin in a tenant.
+     *  - Re-sending the current status is a no-op and does not touch updatedAt.
+     */
+    @Transactional
+    public UserResponse updateUserStatus(
+            String userId,
+            UpdateUserStatusRequest request,
+            String actorCognitoSub) {
+
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("A user id is required to update status");
+        }
+        if (request == null || request.getEnabled() == null) {
+            throw new IllegalArgumentException("enabled is required");
+        }
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        User actor = requireStatusActor(actorCognitoSub);
+        assertStatusChangeIsTenantScoped(actor, targetUser);
+
+        boolean desiredEnabled = request.getEnabled();
+        if (targetUser.isEnabled() == desiredEnabled) {
+            return UserResponse.from(targetUser);
+        }
+
+        assertStatusChangeAllowed(actor, targetUser, desiredEnabled);
+
+        applyStatusChange(targetUser, desiredEnabled);
+
+        userRepository.save(targetUser);
+
+        return UserResponse.from(targetUser);
+    }
+
+    // Backward-compatible service entry point for existing internal callers. It still
+    // applies all non-actor-specific safety rules.
+    @Transactional
+    public UserResponse updateUserStatus(
+            String userId,
+            UpdateUserStatusRequest request) {
+
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("A user id is required to update status");
+        }
+        if (request == null || request.getEnabled() == null) {
+            throw new IllegalArgumentException("enabled is required");
+        }
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        boolean desiredEnabled = request.getEnabled();
+        if (targetUser.isEnabled() == desiredEnabled) {
+            return UserResponse.from(targetUser);
+        }
+
+        assertStatusChangeAllowed(null, targetUser, desiredEnabled);
+
+        applyStatusChange(targetUser, desiredEnabled);
+
+        userRepository.save(targetUser);
+
+        return UserResponse.from(targetUser);
+    }
+
+    private void applyStatusChange(User targetUser, boolean desiredEnabled) {
+        targetUser.setEnabled(desiredEnabled);
+        if (!desiredEnabled) {
+            targetUser.setEmailNotification(false);
+        }
+        targetUser.setUpdatedAt(LocalDateTime.now());
+    }
+
+    @Transactional
+    public UserResponse updateEmailNotification(
+            String userId,
+            UpdateEmailNotificationRequest request,
+            String actorCognitoSub) {
+
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("A user id is required to update email notifications");
+        }
+        if (request == null || request.getEmailNotification() == null) {
+            throw new IllegalArgumentException("emailNotification is required");
+        }
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        User actor = requireStatusActor(actorCognitoSub);
+        assertStatusChangeIsTenantScoped(actor, targetUser);
+
+        return applyEmailNotificationChange(targetUser, request.getEmailNotification());
+    }
+
+    @Transactional
+    public UserResponse updateEmailNotification(
+            String userId,
+            UpdateEmailNotificationRequest request) {
+
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("A user id is required to update email notifications");
+        }
+        if (request == null || request.getEmailNotification() == null) {
+            throw new IllegalArgumentException("emailNotification is required");
+        }
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        return applyEmailNotificationChange(targetUser, request.getEmailNotification());
+    }
+
+    private UserResponse applyEmailNotificationChange(User targetUser, boolean emailNotification) {
+        if (emailNotification && !targetUser.isEnabled()) {
+            throw new IllegalStateException("Email notifications cannot be enabled for a disabled user.");
+        }
+        if (emailNotificationEnabled(targetUser) == emailNotification) {
+            return UserResponse.from(targetUser);
+        }
+
+        targetUser.setEmailNotification(emailNotification);
+        targetUser.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(targetUser);
+
+        return UserResponse.from(targetUser);
+    }
+
+    private boolean emailNotificationEnabled(User user) {
+        return user.getEmailNotification() == null || user.getEmailNotification();
+    }
+
+    private User requireStatusActor(String actorCognitoSub) {
+        if (actorCognitoSub == null || actorCognitoSub.isBlank()) {
+            throw new IllegalStateException("Authenticated admin could not be resolved");
+        }
+        return userRepository.findByCognitoSub(actorCognitoSub)
+                .orElseThrow(() -> new IllegalStateException("Authenticated admin account was not found"));
+    }
+
+    private void assertStatusChangeIsTenantScoped(User actor, User targetUser) {
+        if (callerIsSuperAdmin()) {
+            return;
+        }
+
+        String actorTenantId = tenantIdOf(actor);
+        String targetTenantId = tenantIdOf(targetUser);
+        if (actorTenantId == null || targetTenantId == null) {
+            throw new IllegalStateException("Both admin and target user must belong to an organisation");
+        }
+        if (!actorTenantId.equals(targetTenantId)) {
+            throw new IllegalStateException("Cannot update a user from another organisation");
+        }
+    }
+
+    private void assertStatusChangeAllowed(User actor, User targetUser, boolean desiredEnabled) {
+        if (isTenantPrimaryContact(targetUser)) {
+            throw new IllegalStateException(
+                    "This account is the organisation's primary contact and its status cannot be changed.");
+        }
+
+        if (actor != null && !desiredEnabled && sameUser(actor, targetUser)) {
+            throw new IllegalStateException("You cannot disable your own account.");
+        }
+
+        if (!desiredEnabled && targetUser.getRole() == Role.ROLE_ADMIN) {
+            String tenantId = tenantIdOf(targetUser);
+            if (tenantId != null) {
+                long enabledAdminCount = userRepository.findByTenant_IdAndEnabledTrue(tenantId).stream()
+                        .filter(user -> user.getRole() == Role.ROLE_ADMIN)
+                        .count();
+                if (enabledAdminCount <= 1) {
+                    throw new IllegalStateException(
+                            "Cannot disable the last active admin in this organisation.");
+                }
+            }
+        }
+    }
+
+    private boolean sameUser(User left, User right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        if (left.getId() != null && left.getId().equals(right.getId())) {
+            return true;
+        }
+        return left.getCognitoSub() != null && left.getCognitoSub().equals(right.getCognitoSub());
+    }
+
+    private String tenantIdOf(User user) {
+        if (user == null || user.getTenant() == null || user.getTenant().getId() == null
+                || user.getTenant().getId().isBlank()) {
+            return null;
+        }
+        return user.getTenant().getId();
+    }
+
+    private boolean isTenantPrimaryContact(User user) {
+        if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+            return false;
+        }
+
+        Tenant tenant = user.getTenant();
+        if (tenant == null) {
+            return false;
+        }
+
+        if (sameEmail(user.getEmail(), tenant.getEmail())) {
+            return true;
+        }
+
+        String tenantId = tenant.getId();
+        if (tenantId == null || tenantId.isBlank()) {
+            return false;
+        }
+
+        return tenantRepository.findById(tenantId)
+                .map(Tenant::getEmail)
+                .filter(email -> sameEmail(user.getEmail(), email))
+                .isPresent();
+    }
+
+    private boolean sameEmail(String left, String right) {
+        return left != null
+                && right != null
+                && !left.isBlank()
+                && !right.isBlank()
+                && left.trim().equalsIgnoreCase(right.trim());
     }
 
     
@@ -494,10 +831,72 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
-    // ! delete
-    public void deleteUser(String username) {
-        cognitoService.adminDeleteUser(username);
-        userRepository.findByCognitoSub(username).ifPresent(userRepository::delete);
+    /**
+     * Permanently delete a user from BOTH our database and Cognito.
+     *
+     * The {@code identifier} may be the user's database id, their Cognito sub, or their
+     * email — we resolve whichever it is, so every caller (team management, module apps,
+     * the admin console) works without caring which key it holds.
+     *
+     * Rules and edge cases handled:
+     *  - Blank identifier → rejected (400).
+     *  - No matching user → 404 (we never pretend a delete happened).
+     *  - The organisation's PRIMARY CONTACT (the user whose email equals their tenant's
+     *    email) can NEVER be deleted — that account owns the organisation. Blocked (400).
+     *  - Cognito is removed using the email (Cognito's username). If the Cognito account
+     *    is already gone we still clean up our database, so no orphan record is left.
+     *  - A user with no email/Cognito link (edge data) is still removed from our database.
+     *
+     * @param identifier the user's id, Cognito sub, or email
+     * @param actorCognitoSub the authenticated administrator's Cognito subject
+     */
+    //! delete user
+    @Transactional
+    public void deleteUser(String identifier, String actorCognitoSub) {
+        if (identifier == null || identifier.isBlank()) {
+            throw new IllegalArgumentException("A user identifier is required to delete a user");
+        }
+
+        // Resolve the user by whichever key we were given.
+        User user = userRepository.findById(identifier)
+                .or(() -> userRepository.findByCognitoSub(identifier))
+                .or(() -> userRepository.findByEmail(identifier))
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        User actor = requireStatusActor(actorCognitoSub);
+        assertStatusChangeIsTenantScoped(actor, user);
+
+        if (sameUser(actor, user)) {
+            throw new IllegalStateException("You cannot delete your own account.");
+        }
+
+        // Protect the organisation's owner and its last enabled admin. Removing either
+        // would make the tenant unmanageable.
+        if (isTenantPrimaryContact(user)) {
+            throw new IllegalStateException(
+                    "This account is the organisation's primary contact and cannot be deleted.");
+        }
+        if (user.isEnabled() && user.getRole() == Role.ROLE_ADMIN) {
+            String tenantId = tenantIdOf(user);
+            long enabledAdminCount = userRepository.findByTenant_IdAndEnabledTrue(tenantId).stream()
+                    .filter(candidate -> candidate.getRole() == Role.ROLE_ADMIN)
+                    .count();
+            if (enabledAdminCount <= 1) {
+                throw new IllegalStateException(
+                        "Cannot delete the last active admin in this organisation.");
+            }
+        }
+
+        // Remove from Cognito by email (its username), tolerating an already-removed account
+        // so our database is always cleaned up.
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            cognitoService.adminDeleteUserIfExists(user.getEmail());
+        }
+
+        // Remove from our database.
+        userRepository.delete(user);
+        log.info("[deleteUser] Admin [{}] deleted user [{}] from tenant [{}]",
+                actor.getId(), user.getId(), tenantIdOf(user));
     }
 
     private Role parseRole(String roleStr) {

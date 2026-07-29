@@ -1,6 +1,7 @@
 package com.ksefflow.backend.controllers;
 
 import com.ksefflow.backend.security.AuthenticatedUser;
+import com.ksefflow.backend.security.KsefPermission;
 import com.ksefflow.backend.services.KSeFAuditLogService;
 import com.ksefflow.backend.services.KsefAvailabilityService;
 import lombok.RequiredArgsConstructor;
@@ -13,9 +14,11 @@ import org.springframework.web.server.ResponseStatusException;
 // REST API for the KSeF availability / failure-mode state (C7).
 //
 // Anyone signed in can READ the current state (the UI shows a banner when KSeF is down).
-// Only an ADMIN can CHANGE it, because declaring an emergency is a legal decision based on
-// the official Ministry of Finance announcement — it changes the deadline by which offline
-// invoices must reach KSeF.
+// Only a PLATFORM OPERATOR (KSEF_PLATFORM_ADMIN) can CHANGE it. This state is GLOBAL — one
+// value shared by every tenant — because KSeF emergency/unavailability is a NATIONAL fact
+// declared by the Ministry of Finance, not a per-company setting. A tenant admin must NOT be
+// able to flip a switch that changes how every other tenant issues invoices (cross-tenant
+// isolation), so declaring is restricted to the SaaS operator's own account.
 @RestController
 @RequestMapping("/api/v1/ksef-status")
 @RequiredArgsConstructor
@@ -23,47 +26,69 @@ import org.springframework.web.server.ResponseStatusException;
 public class KsefAvailabilityController {
 
     private final KsefAvailabilityService availabilityService;
+    private final com.ksefflow.backend.config.KsefApiProperties apiProperties;
 
     // Body for the "declare a state" calls. reason is required so the decision is documented.
     public record DeclareRequest(String reason) {}
 
+    // Read-only connection info shown on the Integration page: which KSeF environment we target,
+    // the actual base URL, and the invoice schema. Non-sensitive (no keys/tokens) — real config.
+    public record ConnectionInfo(String environment, String baseUrl, String invoiceSchema) {}
+
     // ── Read (any authenticated user) ────────────────────────────────────────────
 
+    // Permissions: any KSeF role (KSEF_ADMIN, KSEF_CASE_MANAGER,
+    //              KSEF_COMPLIANCE_OFFICER, KSEF_AUDITOR, KSEF_EMPLOYEE) — read-only status.
     @GetMapping
     public ResponseEntity<KsefAvailabilityService.Status> getStatus(AuthenticatedUser caller) {
         log.info("[getStatus]:1 GET /ksef-status — tenant={}", caller.tenantId());
         return ResponseEntity.ok(availabilityService.getStatus());
     }
 
+    // The real KSeF connection the backend uses (environment + active base URL + schema).
+    @GetMapping("/connection")
+    public ResponseEntity<ConnectionInfo> getConnection(AuthenticatedUser caller) {
+        String schema = apiProperties.getFormCode().getSystemCode()
+                + " " + apiProperties.getFormCode().getSchemaVersion();
+        return ResponseEntity.ok(new ConnectionInfo(
+                apiProperties.getEnvironment().name(),
+                apiProperties.getActiveBaseUrl(),
+                schema));
+    }
+
     // ── Declare (admin only) ──────────────────────────────────────────────────────
 
+    // Permissions: KSEF_PLATFORM_ADMIN only — declaring an emergency is a platform-level legal
+    //              decision that changes invoice deadlines for ALL tenants, so no tenant role may do it.
     // Declare a Ministry-announced emergency ("tryb awaryjny") — 7-business-day window.
     @PostMapping("/emergency")
     public ResponseEntity<KsefAvailabilityService.Status> declareEmergency(
             AuthenticatedUser caller, @RequestBody DeclareRequest request) {
-        requireAdmin(caller);
+        caller.requireAnyPermission(KsefPermission.KSEF_PLATFORM_ADMIN);
         String reason = safeReason(request);
         KsefAvailabilityService.Status status = availabilityService.declareEmergency(reason, caller.email());
         audit(caller, "KSEF_EMERGENCY_DECLARED", reason);
         return ResponseEntity.ok(status);
     }
 
+    // Permissions: KSEF_PLATFORM_ADMIN only — same reason as /emergency.
     // Manually declare unavailability (e.g. a known maintenance window) — next-business-day window.
     @PostMapping("/unavailability")
     public ResponseEntity<KsefAvailabilityService.Status> declareUnavailability(
             AuthenticatedUser caller, @RequestBody DeclareRequest request) {
-        requireAdmin(caller);
+        caller.requireAnyPermission(KsefPermission.KSEF_PLATFORM_ADMIN);
         String reason = safeReason(request);
         KsefAvailabilityService.Status status = availabilityService.declareUnavailability(reason, caller.email());
         audit(caller, "KSEF_UNAVAILABILITY_DECLARED", reason);
         return ResponseEntity.ok(status);
     }
 
+    // Permissions: KSEF_PLATFORM_ADMIN only — clearing a declaration is also operator-only.
     // Clear any manual declaration and let the automatic monitor take over again.
     @PostMapping("/online")
     public ResponseEntity<KsefAvailabilityService.Status> declareOnline(
             AuthenticatedUser caller, @RequestBody(required = false) DeclareRequest request) {
-        requireAdmin(caller);
+        caller.requireAnyPermission(KsefPermission.KSEF_PLATFORM_ADMIN);
         String reason = request != null ? safeReason(request) : "Cleared by admin";
         KsefAvailabilityService.Status status = availabilityService.declareOnline(reason, caller.email());
         audit(caller, "KSEF_ONLINE_DECLARED", reason);
@@ -71,18 +96,6 @@ public class KsefAvailabilityController {
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────────
-
-    // Only ROLE_ADMIN (or higher) may change the KSeF state. Everyone else gets 403 Forbidden.
-    private void requireAdmin(AuthenticatedUser caller) {
-        String role = caller.role();
-        boolean isAdmin = role != null && (role.contains("ADMIN") || role.contains("SUPER"));
-        if (!isAdmin) {
-            log.warn("[requireAdmin]:1 User [{}] (role [{}]) tried to change KSeF availability — denied",
-                    caller.email(), role);
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Only an administrator can change the KSeF availability state");
-        }
-    }
 
     private static String safeReason(DeclareRequest request) {
         if (request == null || request.reason() == null || request.reason().isBlank()) {

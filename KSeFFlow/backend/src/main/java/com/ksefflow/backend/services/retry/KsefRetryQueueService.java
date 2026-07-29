@@ -2,11 +2,10 @@ package com.ksefflow.backend.services.retry;
 
 import com.ksefflow.backend.models.KsefInvoice;
 import com.ksefflow.backend.models.utils.KsefInvoiceStatus;
-import com.ksefflow.backend.models.utils.KsefNotificationType;
+import com.ksefflow.backend.notification.HubNotificationPublisher;
 import com.ksefflow.backend.repository.KsefInvoiceRepository;
 import com.ksefflow.backend.services.KSeFAuditLogService;
 import com.ksefflow.backend.services.KSeFInvoiceService;
-import com.ksefflow.backend.services.KsefNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,7 +53,10 @@ public class KsefRetryQueueService {
 
     private final KsefInvoiceRepository invoiceRepository;
     private final KSeFInvoiceService invoiceService;
-    private final KsefNotificationService notificationService;
+    // Notifications go to the centralized Hub (RegulaOne), not a local store.
+    private final HubNotificationPublisher hubPublisher;
+    // Shared backoff schedule — owns the base/max-backoff config and the "next retry" maths.
+    private final KsefRetryScheduleCalculator scheduleCalculator;
 
     // The "user" recorded in audit logs for actions taken by this automatic job (no real person).
     private static final String SYSTEM_ACTOR = "system@ksefflow";
@@ -70,13 +72,7 @@ public class KsefRetryQueueService {
     @Value("${ksef.retry.max-attempts:10}")
     private int maxAttempts;
 
-    // Backoff: wait this many seconds before the FIRST retry, then double each time…
-    @Value("${ksef.retry.base-backoff-seconds:60}")
-    private long baseBackoffSeconds;
-
-    // …but never wait longer than this between retries.
-    @Value("${ksef.retry.max-backoff-seconds:3600}")
-    private long maxBackoffSeconds;
+    // (Backoff timing lives in KsefRetryScheduleCalculator so it can be reused on the read path.)
 
     // ── The scheduled job ────────────────────────────────────────────────────────
 
@@ -137,19 +133,32 @@ public class KsefRetryQueueService {
                 KsefInvoice result = invoiceService.resubmitOffline(invoice, SYSTEM_ACTOR, SYSTEM_IP);
                 if (result.getStatus() == KsefInvoiceStatus.SENT) {
                     sent++;
-                    notificationService.notifyTenant(result.getTenantId(), KsefNotificationType.SUCCESS,
+                    hubPublisher.publishInvoiceEvent("INVOICE_SENT", result.getTenantId(),
                             "Offline invoice submitted to KSeF",
                             "Invoice " + result.getInvoiceNumber() + " was successfully sent to KSeF (ksefId "
                                     + result.getKsefId() + ").",
-                            "INVOICE", result.getId());
+                            result.getId(), "INVOICE_SENT:" + result.getId());
                 } else {
                     requeued++; // still offline — will be tried again next round
+                    // Notify that this retry attempt to the government system failed (the invoice
+                    // stays queued). Deduped per attempt so each round notifies at most once.
+                    hubPublisher.publishInvoiceEvent("INVOICE_SUBMISSION_FAILED", result.getTenantId(),
+                            "Invoice still could not be sent to KSeF",
+                            "Invoice " + result.getInvoiceNumber() + " retry attempt " + result.getSubmissionAttempts()
+                                    + " failed (" + result.getLastErrorMessage() + "). It remains queued and will be retried before "
+                                    + result.getKsefSubmissionDeadline() + ".",
+                            result.getId(), "INVOICE_RETRY_ATTEMPT_FAILED:" + result.getId() + ":" + result.getSubmissionAttempts());
                 }
             } catch (Exception e) {
                 // Never let one invoice's problem stop the rest of the queue.
                 requeued++;
                 log.error("[processOfflineQueue]:3 Retry failed unexpectedly for invoice [{}] (tenant [{}]): {}",
                         invoice.getId(), invoice.getTenantId(), e.getMessage(), e);
+                // Surface the unexpected error to the user as a failure outcome too.
+                hubPublisher.publishInvoiceEvent("INVOICE_SUBMISSION_FAILED", invoice.getTenantId(),
+                        "Invoice retry error",
+                        "Invoice " + invoice.getInvoiceNumber() + " hit an unexpected error during a retry: " + e.getMessage(),
+                        invoice.getId(), "INVOICE_RETRY_ATTEMPT_ERROR:" + invoice.getId() + ":" + invoice.getSubmissionAttempts());
             }
         }
 
@@ -166,35 +175,27 @@ public class KsefRetryQueueService {
     }
 
     // Exponential backoff: wait longer after each failed attempt so we do not hammer KSeF.
-    // attempt 1 → base, attempt 2 → base×2, attempt 3 → base×4 … capped at max-backoff.
-    // An invoice that has never been retried (lastRetryAt == null) is due immediately.
+    // Delegates to the shared schedule calculator so the "is it due?" rule used here and the
+    // "when is the next retry?" time shown in the UI always match.
     private boolean isDueForRetry(KsefInvoice invoice, LocalDateTime now) {
-        if (invoice.getLastRetryAt() == null) {
-            return true;
-        }
-        int attempts = Math.max(invoice.getSubmissionAttempts(), 1);
-        // Use a bounded shift to compute base × 2^(attempts-1) without overflowing.
-        long multiplier = 1L << Math.min(attempts - 1, 16); // cap exponent so the shift stays safe
-        long delaySeconds = Math.min(baseBackoffSeconds * multiplier, maxBackoffSeconds);
-        LocalDateTime nextEligible = invoice.getLastRetryAt().plusSeconds(delaySeconds);
-        return !now.isBefore(nextEligible);
+        return scheduleCalculator.isDue(invoice, now);
     }
 
     // Marks an invoice FAILED, writes an immutable audit entry, and alerts the tenant so a
     // human can submit/correct it manually (FAILED → DRAFT → submit is the existing recovery path).
     private void failQueueItem(KsefInvoice invoice, String reason) {
-        invoice.setStatus(KsefInvoiceStatus.FAILED);
         invoice.setLastErrorMessage(reason);
-        invoice.setUpdatedAt(LocalDateTime.now());
+        // SYSTEM actor — this transition is made by the automated retry job, not a user.
+        invoice.recordStatus(KsefInvoiceStatus.FAILED, reason, SYSTEM_ACTOR);
         invoiceRepository.save(invoice);
 
         KSeFAuditLogService.writeAuditLog(invoice.getTenantId(), "INVOICE_RETRY_FAILED", invoice.getId(),
                 null, reason, SYSTEM_ACTOR, SYSTEM_IP);
 
-        notificationService.notifyTenant(invoice.getTenantId(), KsefNotificationType.ERROR,
+        hubPublisher.publishInvoiceEvent("INVOICE_RETRY_FAILED", invoice.getTenantId(),
                 "Invoice could not be sent to KSeF",
                 "Invoice " + invoice.getInvoiceNumber() + " was moved to FAILED. " + reason,
-                "INVOICE", invoice.getId());
+                invoice.getId(), "INVOICE_RETRY_FAILED:" + invoice.getId());
 
         log.error("[failQueueItem]:1 Invoice [{}] (tenant [{}]) marked FAILED — {}",
                 invoice.getInvoiceNumber(), invoice.getTenantId(), reason);

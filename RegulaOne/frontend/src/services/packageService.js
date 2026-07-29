@@ -48,6 +48,22 @@ export const packageService = {
     return api.get(`/api/superadmin/packages${qs ? `?${qs}` : ''}`);
   },
 
+  // POST /api/superadmin/tenants/{tenantId}/package/renew
+  // Renews the tenant's CURRENT package for another billing period.
+  // Body is optional: { reason? }. Returns PackageRenewalResponse:
+  //   { tenantId, tenantName, packageName, planStarted, planExpiring,
+  //     invoiceNumber, amount, currency, reason }
+  renewPackage: (tenantId, body = {}) =>
+    api.post(`/api/superadmin/tenants/${tenantId}/package/renew`, body),
+
+  // POST /api/superadmin/tenants/{tenantId}/package/upgrade
+  // Switches the tenant to a DIFFERENT package tier (upgrade or downgrade).
+  // Body: { packageId, reason? }. Returns PackageChangeResponse:
+  //   { tenantId, tenantName, fromPackage, toPackage, planStarted, planExpiring,
+  //     invoiceNumber, amount, currency, reason }
+  upgradePackage: (tenantId, body) =>
+    api.post(`/api/superadmin/tenants/${tenantId}/package/upgrade`, body),
+
   // GET /api/admin/packages
   // Returns all ACTIVE packages sorted by price ascending.
   // Used by ROLE_ADMIN on the My Plan page to compare available tiers.

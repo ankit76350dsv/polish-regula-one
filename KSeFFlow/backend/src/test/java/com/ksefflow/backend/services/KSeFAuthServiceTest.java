@@ -11,7 +11,6 @@ import com.ksefflow.backend.dto.ksefapi.TokenInfo;
 import com.ksefflow.backend.exceptions.KsefAuthException;
 import com.ksefflow.backend.exceptions.KsefCertificateException;
 import com.ksefflow.backend.models.utils.KsefEnvironment;
-import com.ksefflow.backend.repository.KsefAuditLogRepository;
 import com.ksefflow.backend.services.certificate.CertificateService;
 import com.ksefflow.backend.services.ksefauth.KSeFAuthService;
 import com.ksefflow.backend.services.ksefauth.KsefApiClient;
@@ -22,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
@@ -47,7 +47,6 @@ class KSeFAuthServiceTest {
     @Mock private KsefApiClient apiClient;
     @Mock private KsefSessionStore sessionStore;
     @Mock private XAdESSigner xadesSigner;
-    @Mock private KsefAuditLogRepository auditLogRepository;
     @Mock private KsefApiProperties apiProperties;
 
     @InjectMocks
@@ -76,7 +75,16 @@ class KSeFAuthServiceTest {
                 new TokenInfo(REFRESH_TOKEN, "2026-06-15T12:00:00Z")));
         when(apiProperties.getEnvironment()).thenReturn(KsefEnvironment.SANDBOX);
 
-        String token = authService.openSession(TENANT_ID, NIP);
+        // Audit writes now go through the shared static KSeFAuditLogService, so we
+        // mock that static call and check it was made with the right values.
+        String token;
+        try (MockedStatic<KSeFAuditLogService> auditMock = mockStatic(KSeFAuditLogService.class)) {
+            token = authService.openSession(TENANT_ID, NIP);
+
+            auditMock.verify(() -> KSeFAuditLogService.writeAuditLog(
+                    eq(TENANT_ID), eq("KSEF_SESSION_OPENED"), eq("SESSION"),
+                    isNull(), isNull(), anyString(), isNull(), isNull()));
+        }
 
         assertThat(token).isEqualTo(ACCESS_TOKEN);
         verify(apiClient).getAuthChallenge();
@@ -85,8 +93,6 @@ class KSeFAuthServiceTest {
         verify(apiClient).redeemTokens(AUTH_TOKEN);
         verify(sessionStore).saveSession(eq(TENANT_ID), any(), any());
         verify(certificateService).recordAuthSuccess(TENANT_ID);
-        verify(auditLogRepository).save(argThat(l ->
-                "KSEF_SESSION_OPENED".equals(l.getAction()) && TENANT_ID.equals(l.getTenantId())));
     }
 
     @Test
@@ -150,13 +156,19 @@ class KSeFAuthServiceTest {
                 .thenReturn(new AuthStatusResponse("2026-06-08T12:00:01Z", "QualifiedSignature", "info",
                         new StatusInfo(401, "Brak uprawnień", null), false, null, null));
 
-        assertThatThrownBy(() -> authService.openSession(TENANT_ID, NIP))
-                .isInstanceOf(KsefAuthException.class)
-                .hasMessageContaining("401");
+        try (MockedStatic<KSeFAuditLogService> auditMock = mockStatic(KSeFAuditLogService.class)) {
+            assertThatThrownBy(() -> authService.openSession(TENANT_ID, NIP))
+                    .isInstanceOf(KsefAuthException.class)
+                    .hasMessageContaining("401");
+
+            // A failed login must still be recorded in the audit trail.
+            auditMock.verify(() -> KSeFAuditLogService.writeAuditLog(
+                    eq(TENANT_ID), eq("KSEF_SESSION_FAILED"), eq("SESSION"),
+                    isNull(), isNull(), anyString(), isNull(), isNull()));
+        }
 
         verify(certificateService).recordAuthFailure(TENANT_ID);
         verify(apiClient, never()).redeemTokens(any());
-        verify(auditLogRepository).save(argThat(l -> "KSEF_SESSION_FAILED".equals(l.getAction())));
     }
 
     // ── isSessionActive ───────────────────────────────────────────────────────────
@@ -180,9 +192,14 @@ class KSeFAuthServiceTest {
     @Test
     @DisplayName("closeSession: deactivates the local token session and writes an audit entry")
     void closeSession_deactivatesAndAudits() {
-        authService.closeSession(TENANT_ID);
+        try (MockedStatic<KSeFAuditLogService> auditMock = mockStatic(KSeFAuditLogService.class)) {
+            authService.closeSession(TENANT_ID);
+
+            auditMock.verify(() -> KSeFAuditLogService.writeAuditLog(
+                    eq(TENANT_ID), eq("KSEF_SESSION_CLOSED"), eq("SESSION"),
+                    isNull(), isNull(), anyString(), isNull(), isNull()));
+        }
 
         verify(sessionStore).deactivateSession(TENANT_ID);
-        verify(auditLogRepository).save(argThat(l -> "KSEF_SESSION_CLOSED".equals(l.getAction())));
     }
 }

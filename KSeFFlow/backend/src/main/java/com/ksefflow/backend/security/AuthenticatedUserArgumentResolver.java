@@ -46,6 +46,7 @@ public class AuthenticatedUserArgumentResolver implements HandlerMethodArgumentR
         log.info("[resolveArgument]:2 → Resolving AuthenticatedUser for {} {}",
                 request.getMethod(), request.getRequestURI());
 
+        //! calling /api/auth/me api
         AuthenticatedUser caller = authClient.resolve(request);
 
         log.info("[resolveArgument]:3 ← Authenticated: userId={} tenantId={} role={}",

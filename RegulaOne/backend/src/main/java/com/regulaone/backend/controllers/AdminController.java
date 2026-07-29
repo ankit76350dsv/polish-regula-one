@@ -5,6 +5,8 @@ import com.regulaone.backend.dto.Admin.AdminPackageResponse;
 import com.regulaone.backend.dto.Admin.InvoiceResponse;
 import com.regulaone.backend.dto.Auth.InviteUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateModulesRequest;
+import com.regulaone.backend.dto.Auth.UpdateEmailNotificationRequest;
+import com.regulaone.backend.dto.Auth.UpdatePermissionsRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserRequest;
 import com.regulaone.backend.dto.Auth.UpdateUserStatusRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
@@ -75,13 +77,35 @@ public class AdminController {
                 userService.updateUserModules(userId, request)));
     }
 
+    // Lets an admin replace a user's cross-app permission codes (e.g. KSEF_AUDITOR).
+    // Same shape as the modules endpoint above — the whole list is replaced at once.
+    @PatchMapping("/users/{userId}/permissions")
+    public ResponseEntity<AppResponse<UserResponse>> updateUserPermissions(
+            @PathVariable String userId,
+            @RequestBody UpdatePermissionsRequest request) {
+        return ResponseEntity.ok(AppResponse.success(
+                "User permissions updated successfully",
+                userService.updateUserPermissions(userId, request)));
+    }
+
+    @PatchMapping("/users/{userId}/email-notification")
+    public ResponseEntity<AppResponse<UserResponse>> updateUserEmailNotification(
+            @PathVariable String userId,
+            @Valid @RequestBody UpdateEmailNotificationRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(AppResponse.success(
+                "User email notification preference updated successfully",
+                userService.updateEmailNotification(userId, request, jwt != null ? jwt.getSubject() : null)));
+    }
+
     @PatchMapping("/users/{userId}/status")
     public ResponseEntity<AppResponse<UserResponse>> updateUserStatus(
             @PathVariable String userId,
-            @RequestBody UpdateUserStatusRequest request) {
+            @Valid @RequestBody UpdateUserStatusRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.ok(AppResponse.success(
                 "User status updated successfully",
-                userService.updateUserStatus(userId, request)));
+                userService.updateUserStatus(userId, request, jwt != null ? jwt.getSubject() : null)));
     }
 
     @GetMapping("/packages")
@@ -118,9 +142,17 @@ public class AdminController {
                 userService.updateUser(subId, request)));
     }
 
-    @DeleteMapping("/users/{username}")
-    public ResponseEntity<AppResponse<Void>> deleteUser(@PathVariable String username) {
-        userService.deleteUser(username);
+    /**
+     * Permanently delete a user from both the database and Cognito. The path value may be
+     * the user's id, Cognito sub, or email. Deletion is limited to the authenticated
+     * admin's tenant and protects the admin's own account, the primary contact, and the
+     * tenant's last active administrator.
+     */
+    @DeleteMapping("/users/{identifier}")
+    public ResponseEntity<AppResponse<Void>> deleteUser(
+            @PathVariable String identifier,
+            @AuthenticationPrincipal Jwt jwt) {
+        userService.deleteUser(identifier, jwt != null ? jwt.getSubject() : null);
         return ResponseEntity.ok(AppResponse.success("User deleted successfully."));
     }
 }

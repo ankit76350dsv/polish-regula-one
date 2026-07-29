@@ -43,6 +43,24 @@ const ALL_MODULE_KEYS = Object.keys(MODULE_LABELS);
 // Border colour applied to each tier card — cycles by index when there are >3 tiers.
 const TIER_COLORS = ['border-slate-200', 'border-red-400', 'border-slate-900'];
 
+// Billing-cycle label shown next to a price. Driven by the package's real
+// durationType from the API — no longer assumed to be monthly.
+const DURATION_SUFFIX = { MONTHLY: '/ mo', YEARLY: '/ yr', DAYS: '', LIFETIME: 'one-time' };
+
+// Formats an amount in the package's OWN currency (USD, PLN, EUR…), not a
+// hardcoded symbol, so each tier shows the money it is actually priced in.
+function fmtMoney(amount, currency) {
+  const n = Number(amount ?? 0);
+  try {
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency', currency: currency || 'EUR', maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    // Fallback if an unknown/invalid currency code is stored.
+    return `${currency ?? ''} ${n.toLocaleString()}`.trim();
+  }
+}
+
 function formatDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-GB', {
@@ -326,10 +344,11 @@ export default function PackageTiers() {
                       {/* Price */}
                       <div className="flex items-baseline gap-1">
                         <span className="text-4xl font-black text-slate-900">
-                          {tier.currency === 'EUR' ? '€' : tier.currency}
-                          {Number(tier.price).toLocaleString()}
+                          {fmtMoney(tier.price, tier.currency)}
                         </span>
-                        <span className="text-sm text-slate-400 font-medium">/ mo</span>
+                        <span className="text-sm text-slate-400 font-medium">
+                          {DURATION_SUFFIX[tier.durationType] ?? ''}
+                        </span>
                       </div>
 
                       {/* Users limit — Storage and API Calls removed per product decision */}
@@ -371,7 +390,7 @@ export default function PackageTiers() {
                           Tier MRR
                         </span>
                         <span className="text-sm font-black text-slate-900">
-                          €{Number(tier.tierMrr).toLocaleString()}
+                          {fmtMoney(tier.tierMrr, tier.currency)}
                         </span>
                       </div>
                     </CardContent>

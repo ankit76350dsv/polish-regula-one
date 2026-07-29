@@ -28,11 +28,28 @@ export const userService = {
   updateUserStatus: (userId, data) =>
     api.patch(`/api/admin/users/${userId}/status`, data),
 
+  // PATCH /api/admin/users/{userId}/email-notification
+  // Body: { emailNotification: boolean } — toggles email notification delivery for a user.
+  updateUserEmailNotification: (userId, emailNotification) =>
+    api.patch(`/api/admin/users/${userId}/email-notification`, { emailNotification }),
+
   // PATCH /api/superadmin/users/{userId}/status
   // Same logic as updateUserStatus but under the superadmin route namespace so
   // ROLE_SUPER_ADMIN is authorised to call it.
   updateUserStatusSuperAdmin: (userId, data) =>
     api.patch(`/api/superadmin/users/${userId}/status`, data),
+
+  // PATCH /api/superadmin/users/{userId}/email-notification
+  // Same toggle as updateUserEmailNotification, under the superadmin namespace.
+  updateUserEmailNotificationSuperAdmin: (userId, emailNotification) =>
+    api.patch(`/api/superadmin/users/${userId}/email-notification`, { emailNotification }),
+
+  // PATCH /api/superadmin/users/{userId}/permissions
+  // Body: { permissions: string[] } — same as updateUserPermissions but under the superadmin
+  // namespace. This is the ONLY path allowed to grant/revoke platform-level codes such as
+  // KSEF_PLATFORM_ADMIN (the company-admin route silently preserves those).
+  updateUserPermissionsSuperAdmin: (userId, permissions) =>
+    api.patch(`/api/superadmin/users/${userId}/permissions`, { permissions }),
 
   // PUT /api/admin/users/{subId}
   // Body: { name, email, role } — kept here for future use (change role flow).
@@ -45,10 +62,17 @@ export const userService = {
   updateUserModules: (userId, moduleIds) =>
     api.patch(`/api/admin/users/${userId}/modules`, { moduleIds }),
 
-  // DELETE /api/admin/users/{username}
-  // Kept here for future delete-user flow.
-  deleteUser: (username) =>
-    api.del(`/api/admin/users/${username}`),
+  // PATCH /api/admin/users/{userId}/permissions
+  // Body: { permissions: string[] } — replaces the user's cross-app permission codes
+  // (e.g. KSEF_AUDITOR). Uses MongoDB document id (same field as updateUserModules).
+  updateUserPermissions: (userId, permissions) =>
+    api.patch(`/api/admin/users/${userId}/permissions`, { permissions }),
+
+  // DELETE /api/admin/users/{identifier}
+  // Permanently deletes the user from the database and Cognito. The identifier may be the
+  // user's id, Cognito sub, or email; the backend blocks deleting the org's primary contact.
+  deleteUser: (identifier) =>
+    api.del(`/api/admin/users/${identifier}`),
 
   // ── Superadmin endpoints (no tenantId — platform-wide scope) ──────────────
 

@@ -6,6 +6,7 @@
 //   useTeamMembers()             — GET /api/admin/users/{tenantId}
 //   useInviteUser()              — POST /api/admin/users/invite
 //   useUpdateUserStatus()        — PATCH /api/admin/users/{userId}/status
+//   useUpdateUserEmailNotification() — PATCH /api/admin/users/{userId}/email-notification
 //
 // ROLE_SUPER_ADMIN (platform-wide) hooks:
 //   useSuperAdminStats()         — GET /api/superadmin/team-management
@@ -85,6 +86,40 @@ export function useUpdateUserModules() {
   });
 }
 
+// Replaces a user's cross-app permission codes and refreshes the members list.
+// Caller passes { userId, permissions } — permissions is an array of strings
+// such as ['KSEF_AUDITOR', 'KSEF_CASE_MANAGER'].
+export function useUpdateUserPermissions() {
+  const tenantId = useAuthStore((s) => s.user?.tenantId);
+  const qc       = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, permissions }) => userService.updateUserPermissions(userId, permissions),
+    onSuccess: () => {
+      toast.success('Permissions updated');
+      qc.invalidateQueries({ queryKey: TEAM_KEYS.members(tenantId) });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to update permissions'),
+  });
+}
+
+// Toggles user email notification delivery and refreshes the members list.
+// Caller passes { userId, emailNotification }.
+export function useUpdateUserEmailNotification() {
+  const tenantId = useAuthStore((s) => s.user?.tenantId);
+  const qc       = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, emailNotification }) =>
+      userService.updateUserEmailNotification(userId, emailNotification),
+    onSuccess: (_, { emailNotification }) => {
+      toast.success(emailNotification ? 'Email notifications enabled' : 'Email notifications disabled');
+      qc.invalidateQueries({ queryKey: TEAM_KEYS.members(tenantId) });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to update email notifications'),
+  });
+}
+
 // Enables or disables a user and refreshes both members and stats on success.
 // Caller passes { userId, enabled } — where enabled: true = ACTIVE, false = SUSPENDED.
 export function useUpdateUserStatus() {
@@ -100,6 +135,24 @@ export function useUpdateUserStatus() {
       qc.invalidateQueries({ queryKey: TEAM_KEYS.stats(tenantId) });
     },
     onError: (err) => toast.error(err.message ?? 'Failed to update user status'),
+  });
+}
+
+// Permanently deletes a user (from the database and Cognito) and refreshes both members
+// and stats on success. Caller passes the userId. The backend blocks deleting the
+// organisation's primary-contact account; that reason is surfaced via the error toast.
+export function useDeleteUser() {
+  const tenantId = useAuthStore((s) => s.user?.tenantId);
+  const qc       = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId) => userService.deleteUser(userId),
+    onSuccess: () => {
+      toast.success('User deleted successfully');
+      qc.invalidateQueries({ queryKey: TEAM_KEYS.members(tenantId) });
+      qc.invalidateQueries({ queryKey: TEAM_KEYS.stats(tenantId) });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to delete user'),
   });
 }
 
@@ -128,10 +181,13 @@ export function useSuperAdminStats() {
 }
 
 // Fetches every user across all tenants for the platform users table.
-export function useSuperAdminUsers() {
+// Accepts { enabled } so callers that are not super-admin can switch the query off and avoid a
+// pointless 403 against the superadmin namespace (defaults to enabled for existing callers).
+export function useSuperAdminUsers({ enabled = true } = {}) {
   return useQuery({
     queryKey: SUPERADMIN_KEYS.users,
     queryFn:  () => userService.getAllUsersGlobal(),
+    enabled,
   });
 }
 
@@ -151,5 +207,37 @@ export function useUpdateSuperAdminUserStatus() {
       qc.invalidateQueries({ queryKey: SUPERADMIN_KEYS.stats });
     },
     onError: (err) => toast.error(err.message ?? 'Failed to update user status'),
+  });
+}
+
+// Replaces a user's cross-app permission codes from the superadmin context.
+// Uses /api/superadmin/users/{userId}/permissions — the only path allowed to grant the
+// platform-level KSEF_PLATFORM_ADMIN code. Invalidates the platform-wide users list.
+export function useUpdateSuperAdminUserPermissions() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, permissions }) =>
+      userService.updateUserPermissionsSuperAdmin(userId, permissions),
+    onSuccess: () => {
+      toast.success('Permissions updated');
+      qc.invalidateQueries({ queryKey: SUPERADMIN_KEYS.users });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to update permissions'),
+  });
+}
+
+// Toggles email notification delivery from the superadmin context.
+export function useUpdateSuperAdminUserEmailNotification() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, emailNotification }) =>
+      userService.updateUserEmailNotificationSuperAdmin(userId, emailNotification),
+    onSuccess: (_, { emailNotification }) => {
+      toast.success(emailNotification ? 'Email notifications enabled' : 'Email notifications disabled');
+      qc.invalidateQueries({ queryKey: SUPERADMIN_KEYS.users });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to update email notifications'),
   });
 }

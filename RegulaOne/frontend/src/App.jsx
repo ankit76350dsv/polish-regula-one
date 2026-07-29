@@ -10,17 +10,25 @@ import ResendCodePage       from './pages/Auth/ResendCodePage';
 import RespondChallengePage from './pages/Auth/RespondChallengePage';
 import ChangePasswordPage   from './pages/Auth/ChangePasswordPage';
 import SSOCallbackPage      from './pages/Auth/SSOCallbackPage';
+import LandingPage          from './pages/Landing/LandingPage';
+import NotFoundPage         from './pages/NotFoundPage';
 
 // Dashboard pages
 import Overview    from './pages/Dashboard/Overview';
 import ProfilePage from './pages/Dashboard/ProfilePage';
 
+// Notifications
+import NotificationCenter      from './pages/Notifications/NotificationCenter';
+import NotificationPreferences from './pages/Notifications/NotificationPreferences';
+
 // Admin pages
 import TenantManagement from './pages/Admin/TenantManagement';
 import TenantDetailPage from './pages/Admin/TenantDetailPage';
+import TenantPackagePage from './pages/Admin/TenantPackagePage';
 import UserManagement   from './pages/Admin/UserManagement';
 import PackageTiers     from './pages/Admin/PackageTiers';
 import AdminTeam        from './pages/Admin/AdminTeam';
+import UserPermissionsPage from './pages/Admin/UserPermissionsPage';
 import AdminPlan        from './pages/Admin/AdminPlan';
 
 // Module pages
@@ -100,6 +108,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* ── Default public entry route ── */}
+        <Route path="/" element={<LandingPage user={user} />} />
+
         {/* ── Public auth routes ── */}
         <Route path="/login"          element={<LoginRoute />} />
         <Route path="/register"       element={!user ? <SignupPage />         : <Navigate to="/" />} />
@@ -115,19 +126,26 @@ export default function App() {
           <Route path="/company/:tenantId/profile"         element={<ProfilePage />} />
           <Route path="/company/:tenantId/change-password" element={<ChangePasswordPage />} />
 
+          {/* Notifications — available to every authenticated role */}
+          <Route path="/company/:tenantId/notifications"             element={<NotificationCenter />} />
+          <Route path="/company/:tenantId/notifications/preferences" element={<NotificationPreferences />} />
+
           {user?.role === 'ROLE_SUPER_ADMIN' && (
             <>
               <Route path="/company/:tenantId/tenants"       element={<TenantManagement />} />
               <Route path="/company/:tenantId/tenants/:id"   element={<TenantDetailPage />} />
+              <Route path="/company/:tenantId/tenants/:id/package" element={<TenantPackagePage />} />
               <Route path="/company/:tenantId/users"         element={<UserManagement />} />
+              <Route path="/company/:tenantId/users/:userId" element={<UserPermissionsPage />} />
               <Route path="/company/:tenantId/package-tiers" element={<PackageTiers />} />
             </>
           )}
 
           {user?.role === 'ROLE_ADMIN' && (
             <>
-              <Route path="/company/:tenantId/team"    element={<AdminTeam />} />
-              <Route path="/company/:tenantId/my-plan" element={<AdminPlan />} />
+              <Route path="/company/:tenantId/team"          element={<AdminTeam />} />
+              <Route path="/company/:tenantId/team/:userId"  element={<UserPermissionsPage />} />
+              <Route path="/company/:tenantId/my-plan"       element={<AdminPlan />} />
             </>
           )}
 
@@ -139,7 +157,7 @@ export default function App() {
           <Route path="/company/:tenantId/modules/privacypilot"  element={<ModulePlaceholder />} />
         </Route>
 
-        <Route path="*" element={<Navigate to={user ? dashboardPath(user.tenantId) : '/login'} replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   );

@@ -29,6 +29,7 @@ public class CognitoService {
     @Value("${aws.cognito.client-secret:}")
     private String clientSecret;
 
+    @SuppressWarnings("deprecation")
     public CognitoService(@Value("${aws.cognito.region}") String region) {
         this.cognitoClient = CognitoIdentityProviderClient.builder()
                 .region(Region.of(region))
@@ -197,7 +198,7 @@ public class CognitoService {
         }
     }
 
-    //! delete user 
+    //! delete user
     public void adminDeleteUser(String username) {
         try {
             cognitoClient.adminDeleteUser(
@@ -208,6 +209,31 @@ public class CognitoService {
             );
         } catch (UserNotFoundException e) {
             throw new IllegalArgumentException("User not found");
+        }
+    }
+
+    /**
+     * Delete a Cognito user but TOLERATE the case where they no longer exist there.
+     *
+     * Cognito's username is the user's email (that is what adminCreateUser uses). When we
+     * remove a user we still want to clean up our own database even if Cognito has already
+     * lost the account (e.g. it was deleted directly in AWS, or was never provisioned).
+     * So instead of throwing on "not found", we just report whether a delete happened.
+     *
+     * @param username the Cognito username (the user's email)
+     * @return true if a Cognito user was deleted, false if there was nothing to delete
+     */
+    public boolean adminDeleteUserIfExists(String username) {
+        try {
+            cognitoClient.adminDeleteUser(
+                    AdminDeleteUserRequest.builder()
+                            .userPoolId(userPoolId)
+                            .username(username)
+                            .build()
+            );
+            return true;
+        } catch (UserNotFoundException e) {
+            return false;
         }
     }
 

@@ -1,0 +1,850 @@
+package com.safevoice.backend.service.report;
+
+import com.safevoice.backend.dto.CaseKeysResponse;
+import com.safevoice.backend.dto.CaseSubmissionRequest;
+import com.safevoice.backend.dto.CaseSubmissionResponse;
+import com.safevoice.backend.dto.CaseSummaryResponse;
+import com.safevoice.backend.dto.CaseUpdateEvent;
+import com.safevoice.backend.dto.DataKeyResponse;
+import com.safevoice.backend.dto.EncryptedPayloadDto;
+import com.safevoice.backend.dto.PageResponse;
+import com.safevoice.backend.exception.CaseNotFoundException;
+import com.safevoice.backend.exception.CaseReferenceConflictException;
+import com.safevoice.backend.exception.TenantNotFoundException;
+import com.safevoice.backend.model.document.CaseMessage;
+import com.safevoice.backend.model.document.CaseReport;
+import com.safevoice.backend.model.document.RegulaOneUser;
+import com.safevoice.backend.model.document.Tenant;
+import com.safevoice.backend.model.embedded.EncryptedPayload;
+import com.safevoice.backend.model.embedded.EvidenceAttachment;
+import com.safevoice.backend.model.embedded.RetentionPolicy;
+import com.safevoice.backend.model.embedded.TimelineEvent;
+import com.safevoice.backend.service.crypto.EnvelopeEncryptionService;
+import com.safevoice.backend.model.enums.audit.AuditActionType;
+import com.safevoice.backend.model.enums.audit.AuditOutcome;
+import com.safevoice.backend.model.enums.case_report.CaseSeverity;
+import com.safevoice.backend.model.enums.case_report.CaseStatus;
+import com.safevoice.backend.model.enums.case_report.DisclosureMode;
+import com.safevoice.backend.model.enums.case_report.IntakeChannel;
+import com.safevoice.backend.model.enums.case_report.ReportCategory;
+import com.safevoice.backend.model.enums.retention.RetentionState;
+import com.safevoice.backend.repository.CaseMessageRepository;
+import com.safevoice.backend.repository.CaseReportRepository;
+import com.safevoice.backend.repository.RegulaOneUserRepository;
+import com.safevoice.backend.repository.TenantRepository;
+import com.safevoice.backend.service.AttachmentService;
+import com.safevoice.backend.service.AuditLogService;
+import com.safevoice.backend.service.notification.SafeVoiceEmailNotificationService;
+import com.safevoice.backend.service.report.utils.CaseReportUtils;
+import com.safevoice.backend.websocket.CaseEventPublisher;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.bson.Document;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+
+/**
+ * Service orchestrating operations on CaseReport documents.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class CaseReportService {
+
+    private final CaseReportRepository caseReportRepository;
+    private final CaseMessageRepository caseMessageRepository;
+    private final TenantRepository tenantRepository;
+    private final AuditLogService auditLogService;
+    // Used for the case-register list, which needs flexible search/filter/sort/paging
+    // that fixed repository methods cannot express. MongoTemplate lets us build the
+    // query dynamically and safely (user text is escaped before it reaches the DB).
+    private final MongoTemplate mongoTemplate;
+    // Announces new cases live to the tenant's staff over WebSocket.
+    private final CaseEventPublisher caseEventPublisher;
+    // Stores uploaded evidence files (S3). Used to save files sent WITH the report.
+    private final AttachmentService attachmentService;
+    // Sends content-free staff email alerts through RegulaOne's internal email relay.
+    private final SafeVoiceEmailNotificationService emailNotificationService;
+    // Talks to AWS KMS to unwrap (unlock) the one-time data keys so a reader's browser can
+    // decrypt a case. We never decrypt the report text on the server — only the small keys.
+    private final EnvelopeEncryptionService envelopeEncryptionService;
+
+    // Read-only lookup of RegulaOne users, used ONLY to turn an assigned investigator's
+    // id into a readable name for timeline/audit text. The case still stores the id.
+    private final RegulaOneUserRepository regulaOneUserRepository;
+
+    // Hard ceiling on page size, so a caller can never ask for a giant page that would
+    // strain the database or the browser. Requests above this are clamped down to it.
+    private static final int MAX_PAGE_SIZE = 200;
+    private static final int DEFAULT_PAGE_SIZE = 20;
+
+    // How long a whistleblower case is kept before the retention job destroys it. This MUST be
+    // set to the legally verified period for whistleblower data under the Polish Act — keep it
+    // configurable and confirm the exact value against the statute (see CLAUDE.md §16/§24).
+    @Value("${safevoice.retention.years:5}")
+    private int retentionYears;
+    // Deadline by which staff should review and remove personal data that is manifestly not
+    // relevant to the report (EU Directive Art. 18(1) / Polish Act). A review marker, not an
+    // auto-delete — surfaced to staff on the case page.
+    @Value("${safevoice.retention.irrelevant-review-days:30}")
+    private int irrelevantReviewDays;
+    // Temporary only for local testing while client-side encryption is being integrated.
+    // Keep false in production so normal whistleblower plaintext is never accepted by default.
+    @Value("${safevoice.allow-plaintext-intake-for-local-testing:false}")
+    private boolean allowPlaintextIntakeForLocalTesting;
+
+    /**
+     * Submit a new whistleblower report.
+     *
+     * What happens here, in plain steps:
+     *  1. Work out the category (from the label the form sent) and whether this is an
+     *     HR grievance — HR grievances are routed to HR and get NO anonymous key.
+     *  2. Fail closed for normal whistleblower reports until client-side encryption is
+     *     wired, unless the local testing plaintext flag is explicitly enabled.
+     *  3. Save accepted cases with compliance deadlines, timeline, and evidence metadata.
+     *  4. Write an immutable audit log entry (with no reporter-identifying data).
+     *  5. Return the one-time access key for normal test reports, or no key for HR grievances.
+     */
+    public CaseSubmissionResponse submit(CaseSubmissionRequest request) {
+        // The organisation the report is for. It is required and MUST already exist in
+        // the tenant registry — we never accept a report for an unknown organisation.
+        if (request.getTenantId() == null || request.getTenantId().isBlank()) {
+            throw new IllegalArgumentException("Tenant info/context is required");
+        }
+        String tenantId = request.getTenantId().trim();
+        // Look the organisation up in the shared "tenants" collection and make sure it is
+        // present and ACTIVE. We never accept a report for an unknown or switched-off tenant.
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new TenantNotFoundException("Unknown tenant: " + tenantId));
+        if (!"ACTIVE".equalsIgnoreCase(tenant.getStatus())) {
+            throw new TenantNotFoundException("Tenant is not active: " + tenantId);
+        }
+
+        Instant now = Instant.now();
+
+        // Translate the visible category label (e.g. "Fraud") into our strong enum type.
+        ReportCategory category = ReportCategory.fromLabel(request.getCategory());
+        boolean isHrOnly = category == ReportCategory.LABOUR_DISPUTE;
+
+        // Decide how the report narrative is stored. EVERY report — including HR grievances
+        // (LABOUR_DISPUTE) — must arrive already locked (encrypted) in the reporter's browser.
+        // (This is stricter than CLAUDE.md Module 4's original "do not encrypt labour disputes"
+        // rule; it was changed on request so ALL report content is encrypted at rest.)
+        // The local-testing flag is the ONLY way to accept plain text, and it defaults to false
+        // so production always requires real client-side encryption.
+        EncryptedPayload encryptedContent = null;
+        boolean hasEncrypted = request.getEncryptedContent() != null
+                && request.getEncryptedContent().getCiphertext() != null
+                && !request.getEncryptedContent().getCiphertext().isBlank();
+        boolean hasPlainFacts = request.getFacts() != null && !request.getFacts().isBlank();
+
+        if (hasEncrypted) {
+            // Done the right way: store the browser-locked payload, no plain text.
+            encryptedContent = toEncryptedPayload(request.getEncryptedContent());
+        } else if (allowPlaintextIntakeForLocalTesting && hasPlainFacts) {
+            // Local dev only: allow plain text so the flow can be tested without AWS KMS.
+            log.warn("[submit] Accepting PLAINTEXT report narrative — local-testing flag is ON. "
+                    + "This must never happen in production.");
+        } else {
+            // Neither an encrypted payload nor a dev bypass → reject clearly.
+            throw new IllegalArgumentException(
+                    "This report must be sent as client-side encrypted content.");
+        }
+
+        String accessKey = null;
+        String keyHash = null;
+        if (!isHrOnly) {
+            accessKey = CaseReportUtils.generateAccessKey();
+            keyHash = CaseReportUtils.sha256Hex(accessKey);
+        }
+
+        // Build the readable, non-secret case reference from WHEN the report arrived,
+        // e.g. "SV/2026/0629/1408" (or "HR/..." for an HR grievance). Staff use this to
+        // talk about the case; it carries no personal data and is not the database id.
+        String caseRef = CaseReportUtils.buildCaseReference(isHrOnly ? "HR" : "SV", now);
+
+        // The reference must be unique within the organisation. Because it is built down
+        // to the minute, two reports filed in the same minute for the same tenant would
+        // share one. If that happens we do NOT silently alter the reference — we stop and
+        // ask the reporter to wait a minute and submit again (a new minute → a new, unique
+        // reference). This keeps every reference a clean, one-to-one handle for a case.
+        if (caseReportRepository.existsByTenantIdAndCaseReference(tenantId, caseRef)) {
+            throw new CaseReferenceConflictException(
+                    "Another report was just received this minute. Please wait one minute and submit again.");
+        }
+
+        // "oral" means the reporter wants a phone/voice channel; otherwise it is written.
+        boolean oral = "oral".equalsIgnoreCase(request.getChannel());
+
+        CaseReport caseReport = new CaseReport();
+        // Do NOT set the id by hand — leaving it null lets MongoDB generate a real
+        // ObjectId for _id. The readable "SV-..."/"HR-..." code is kept separately.
+        caseReport.setCaseReference(caseRef);
+        caseReport.setTenantId(tenantId);
+        caseReport.setKeyHash(keyHash); //! Hashed of genarated...
+        caseReport.setCategory(category);
+        // Store the narrative the RIGHT way for this category: HR grievances (and the dev-only
+        // plaintext bypass) keep plain text; every normal report keeps only the browser-locked
+        // payload and NO plain text. See the branching above where these were worked out.
+        if (encryptedContent != null) {
+            caseReport.setEncryptedContent(encryptedContent);
+            caseReport.setDescription(null);
+        } else {
+            caseReport.setDescription(request.getFacts());
+        }
+        caseReport.setIncidentDate(CaseReportUtils.parseIncidentDate(request.getIncidentDate()));
+        caseReport.setDepartment(request.getArea());
+        caseReport.setDisclosureMode(isHrOnly ? DisclosureMode.HR_HANDOFF : DisclosureMode.ANONYMOUS);
+        caseReport.setIntakeChannel(isHrOnly ? IntakeChannel.HR_GRIEVANCE_HANDOFF : IntakeChannel.ANONYMOUS_WEB_PORTAL);
+        caseReport.setStatus(CaseStatus.RECEIVED);
+        caseReport.setSeverity(CaseSeverity.MEDIUM);
+        caseReport.setSubmissionDate(now);
+
+        // Legal context shown to the reporter on the tracking page.
+        caseReport.setLawfulBasis("Legal obligation and protected follow-up under the Polish Whistleblower Protection Act 2024");
+        caseReport.setController("DSV Corporation Pty Ltd - RegulaOne Poland");
+        caseReport.setProcessor("SafeVoice EEA Processing Cluster");
+
+        // Compliance SLAs: 7-day acknowledgement, 90-day (3-month) feedback deadline.
+        caseReport.setAcknowledgementDue(now.plus(7, ChronoUnit.DAYS));
+        caseReport.setFeedbackDue(now.plus(90, ChronoUnit.DAYS));
+
+        // Retention lifecycle (GDPR storage limitation, Art. 5(1)(e) + Directive Art. 18).
+        // Set the clock NOW so the scheduled retention job can destroy the case once it expires.
+        // deleteAfter uses ~365-day years (approximate is fine for a multi-year window).
+        RetentionPolicy retention = caseReport.getRetention();
+        retention.setState(RetentionState.ACTIVE);
+        retention.setRetentionYears(retentionYears);
+        retention.setDeleteAfter(now.plus(retentionYears * 365L, ChronoUnit.DAYS));
+        retention.setIrrelevantPersonalDataDeletionDue(now.plus(irrelevantReviewDays, ChronoUnit.DAYS));
+
+        // Record the reporter's communication choices as risk flags so staff can act on them.
+        if (request.isRequestMeeting()) {
+            caseReport.getRiskFlags().add("Meeting requested");
+        }
+        if (oral) {
+            caseReport.getRiskFlags().add("Oral reporting requested");
+        }
+
+        // Store any evidence files that came with the report. The form sends each file's bytes
+        // Base64-encoded in `content`; we decode it and save it to S3 (encrypted, UUID key) via
+        // the same AttachmentService the case thread uses. We keep the anonymised display label
+        // the portal already chose (e.g. "Evidence 1 (PDF)") instead of the raw filename, so a
+        // reporter's original filename is never shown to staff.
+        if (request.getAttachments() != null) {
+            for (CaseSubmissionRequest.AttachmentMetadata meta : request.getAttachments()) {
+                if (meta.getContent() != null && !meta.getContent().isBlank()) {
+                    byte[] fileBytes = Base64.getDecoder().decode(meta.getContent());
+                    EvidenceAttachment stored =
+                            attachmentService.uploadBytes(fileBytes, meta.getFileName(), meta.getMimeType());
+                    // Hide the raw filename: show the portal's anonymised label instead.
+                    if (meta.getDisplayName() != null && !meta.getDisplayName().isBlank()) {
+                        stored.setDisplayName(meta.getDisplayName());
+                        stored.setOriginalNameStored(false);
+                    }
+                    caseReport.getAttachments().add(stored);
+                } else {
+                    // Backward-compatible fallback: no bytes sent, keep the lightweight metadata.
+                    EvidenceAttachment attachment = new EvidenceAttachment();
+                    attachment.setDisplayName(meta.getDisplayName());
+                    attachment.setSizeLabel(meta.getSizeLabel());
+                    attachment.setMetadataStripped(true);
+                    attachment.setOriginalNameStored(false);
+                    caseReport.getAttachments().add(attachment);
+                }
+            }
+        }
+
+        // Setup timeline (first event = intake).
+        List<TimelineEvent> timeline = new ArrayList<>();
+        timeline.add(new TimelineEvent(
+                new org.bson.types.ObjectId().toHexString(),
+                "Report Submitted",
+                "Case intake completed via " + caseReport.getIntakeChannel().getLabel()
+                        + ". Intake accepted without IP, device, browser, or geolocation storage.",
+                now,
+                "system",
+                "Reporter"
+        ));
+        caseReport.setTimeline(timeline);
+
+        CaseReport saved = caseReportRepository.save(caseReport);
+
+        // Record compliance audit log (no reporter-identifying data is ever logged).
+        auditLogService.log(
+                tenantId,
+                "Anonymous Whistleblower",
+                AuditActionType.REPORT_RECEIVED,
+                saved.getId(),
+                AuditOutcome.RECORDED,
+                null,
+                "Report category: " + saved.getCategory().name(),
+                "Metadata stripped automatically on intake. Access key stored as a hash only."
+        );
+
+        // Tell the tenant's staff, live, that a new case has arrived — so their Cases list
+        // and Inbox update without a refresh. Best-effort: never blocks the submission.
+        caseEventPublisher.publishNewCase(tenantId, toSummary(saved));
+        emailNotificationService.notifyNewReport(tenantId);
+
+        // Return the plain key ONCE for display (null for HR grievances). It is now forgotten.
+        return CaseSubmissionResponse.builder()
+                .accessKey(accessKey)
+                .hrOnly(isHrOnly)
+                .build();
+    }
+
+    /**
+     * Look a case up using ONLY the access key.
+     *
+     * We hash the key the reporter typed and match it against the stored fingerprint —
+     * the plain key is never stored or compared directly. If nothing matches we answer
+     * with a single "not found" (we never reveal whether a key "almost" matched), which
+     * protects anonymity. A successful lookup is recorded in the audit trail.
+     */
+    public CaseReport retrieveByAccessKey(String accessKey) {
+        if (accessKey == null || accessKey.isBlank()) {
+            throw new IllegalArgumentException("Access key is required");
+        }
+
+        String keyHash = CaseReportUtils.sha256Hex(accessKey.trim());
+        CaseReport report = caseReportRepository.findByKeyHash(keyHash)
+                .orElseThrow(() -> new CaseNotFoundException("No case found for the provided access key"));
+
+        if (report.isDeleted()) {
+            throw new CaseNotFoundException("No case found for the provided access key");
+        }
+
+        auditLogService.log(
+                report.getTenantId(),
+                "Anonymous Whistleblower",
+                AuditActionType.ACCESS_REVIEW,
+                report.getId(),
+                AuditOutcome.RECORDED,
+                null,
+                "Case viewed via access key",
+                "Reporter accessed their own case using a valid access key."
+        );
+
+        return report;
+    }
+
+    /**
+     * AUTHENTICATE a reporter write action (posting a message / uploading a file) and return
+     * their case. The reporter proves ownership with their access key — exactly like the
+     * tracking page — and the key MUST belong to the case id in the request path.
+     *
+     * This replaces the old unauthenticated {@code getByCaseRef(id)} lookup: a case id (a Mongo
+     * ObjectId) is NOT a secret — it is disclosed in /track responses and WebSocket topics — so
+     * resolving a case by id alone let anyone who learned an id post into a confidential thread.
+     * Now the secret access key is the credential.
+     *
+     * Throws a single, non-revealing {@link CaseNotFoundException} for a missing/invalid/deleted
+     * case OR when the key belongs to a DIFFERENT case than the path id, so nothing about other
+     * cases (existence, ownership) can be probed.
+     */
+    public CaseReport resolveOwnedCase(String accessKey, String caseId) {
+        if (accessKey == null || accessKey.isBlank()) {
+            throw new IllegalArgumentException("Access key is required");
+        }
+        String keyHash = CaseReportUtils.sha256Hex(accessKey.trim());
+        CaseReport report = caseReportRepository.findByKeyHash(keyHash)
+                .orElseThrow(() -> new CaseNotFoundException("No case found for the provided access key"));
+        // Same neutral error whether the key is wrong, the case is deleted, or the key is valid
+        // but for another case — never confirm anything about a case the caller can't prove.
+        if (report.isDeleted() || !report.getId().equals(caseId)) {
+            throw new CaseNotFoundException("No case found for the provided access key");
+        }
+        return report;
+    }
+
+    /**
+     * Internal lookup by ID.
+     */
+    public CaseReport getById(String id, String tenantId) {
+        return caseReportRepository.findById(id)
+                .filter(r -> r.getTenantId().equals(tenantId) && !r.isDeleted())
+                .orElseThrow(() -> new IllegalArgumentException("Case report not found"));
+    }
+
+    /**
+     * Lists active cases for a tenant (full documents). Kept for internal callers that
+     * genuinely need the whole case; the staff register uses {@link #listSummaries} instead.
+     */
+    public List<CaseReport> list(String tenantId) {
+        return caseReportRepository.findAllByTenantIdAndDeletedFalse(tenantId);
+    }
+
+    /**
+     * Build ONE PAGE of the staff "case register", with optional search and a filter.
+     *
+     * For each case on the page we return only the columns the table shows, plus how many
+     * of the reporter's messages staff have not read yet (for the unread badge). We never
+     * include the description, access-key hash, timeline, or attachments here — the list
+     * does not need them, and leaving them out keeps that sensitive data off the wire
+     * (data minimisation). The full case is loaded only when a staff member opens one.
+     *
+     * Every input is treated as untrusted and made safe:
+     *  - tenantId is required (we never list across organisations).
+     *  - page below 1 becomes 1; size is clamped to a sane default and a hard maximum.
+     *  - a blank search is ignored; a non-blank one is escaped before it touches the DB
+     *    (so characters like "(" or "*" can never act as a regex or break the query).
+     *  - an unknown filter is treated as "all".
+     *
+     * @param tenantId the organisation whose cases to list (required)
+     * @param search   free text matched against the case reference and category (optional)
+     * @param filter   one of: all, critical, unassigned, feedbackDue (optional)
+     * @param page     1-based page number
+     * @param size     rows per page
+     */
+    public PageResponse<CaseSummaryResponse> listSummaries(String tenantId, String search,
+                                                           String filter, int page, int size) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("Tenant info/context is required");
+        }
+
+        // Clamp paging inputs so a bad/missing value can never break the query.
+        int safePage = page < 1 ? 1 : page;
+        int safeSize = size < 1 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
+
+        // Always scope to this tenant and skip soft-deleted cases.
+        List<Criteria> conditions = new ArrayList<>();
+        conditions.add(Criteria.where("tenantId").is(tenantId));
+        conditions.add(Criteria.where("deleted").is(false));
+
+        // The quick filter buttons in the register. Anything unrecognised means "all".
+        String activeFilter = filter == null ? "" : filter.trim().toLowerCase();
+        switch (activeFilter) {
+            case "critical" -> conditions.add(Criteria.where("severity").is(CaseSeverity.CRITICAL));
+            case "unassigned" -> conditions.add(new Criteria().orOperator(
+                    Criteria.where("assignedInvestigator").is(null),
+                    Criteria.where("assignedInvestigator").is("Unassigned"),
+                    Criteria.where("assignedInvestigator").exists(false)));
+            case "feedbackdue" -> conditions.add(Criteria.where("status").ne(CaseStatus.CLOSED));
+            default -> { /* "all" or unknown → no extra condition */ }
+        }
+
+        // Free-text search across the readable reference and the category. The user's
+        // text is quoted so it is matched literally (no regex injection), case-insensitive.
+        if (search != null && !search.isBlank()) {
+            String literal = Pattern.quote(search.trim());
+            conditions.add(new Criteria().orOperator(
+                    Criteria.where("caseReference").regex(literal, "i"),
+                    Criteria.where("category").regex(literal, "i")));
+        }
+
+        Criteria all = new Criteria().andOperator(conditions.toArray(new Criteria[0]));
+
+        // Count the full match set first (for the pager). Counting does not need the
+        // activity computation, so a plain count query is enough and cheap.
+        long total = mongoTemplate.count(Query.query(all), CaseReport.class);
+
+        // Order the cases WhatsApp-style: the one with the most RECENT activity first.
+        // Every activity (the report being submitted, a reporter message, an admin reply,
+        // a status change…) appends a timeline event, so the NEWEST timeline timestamp is
+        // the case's last activity. We compute that per case as:
+        //     lastActivityAt = max( max(timeline.timestamp), submissionDate )
+        // — the submissionDate is a floor, so a case can never sort below its own creation
+        // even if its timeline were ever empty. We then sort on it and take this page.
+        // (A page past the end simply yields an empty list — a valid, non-error outcome.)
+        AggregationOperation addLastActivity = context -> new Document("$addFields",
+                new Document("lastActivityAt", new Document("$max", List.of(
+                        new Document("$max", "$timeline.timestamp"),
+                        "$submissionDate"))));
+
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(all),
+                addLastActivity,
+                Aggregation.sort(Sort.by(Sort.Direction.DESC, "lastActivityAt")),
+                Aggregation.skip((long) (safePage - 1) * safeSize),
+                Aggregation.limit(safeSize));
+
+        List<CaseReport> reports = mongoTemplate
+                .aggregate(aggregation, CaseReport.class, CaseReport.class)
+                .getMappedResults();
+
+        List<CaseSummaryResponse> items = new ArrayList<>();
+        for (CaseReport report : reports) {
+            items.add(toSummary(report));
+        }
+
+        int totalPages = (int) Math.ceil((double) total / safeSize);
+        return PageResponse.<CaseSummaryResponse>builder()
+                .items(items)
+                .page(safePage)
+                .size(safeSize)
+                .total(total)
+                .totalPages(totalPages)
+                .build();
+    }
+
+    /**
+     * The dashboard "cases needing attention" queue: active cases that have NO investigator
+     * assigned yet. These are the cases waiting for someone to pick them up, so we surface
+     * them so staff can triage. Closed cases are excluded (they need no attention). Returned
+     * as slim summaries (with the unread-message count), newest first, capped at {@code limit}.
+     *
+     * @param tenantId the organisation (required)
+     * @param limit    the most rows to return
+     */
+    public List<CaseSummaryResponse> attentionCases(String tenantId, int limit) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("Tenant info/context is required");
+        }
+        int safeLimit = limit < 1 ? DEFAULT_PAGE_SIZE : Math.min(limit, MAX_PAGE_SIZE);
+
+        // "Unassigned" means the field is null, missing, or the literal "Unassigned".
+        Criteria unassigned = new Criteria().orOperator(
+                Criteria.where("assignedInvestigator").is(null),
+                Criteria.where("assignedInvestigator").is("Unassigned"),
+                Criteria.where("assignedInvestigator").exists(false));
+
+        Criteria all = new Criteria().andOperator(
+                Criteria.where("tenantId").is(tenantId),
+                Criteria.where("deleted").is(false),
+                Criteria.where("status").ne(CaseStatus.CLOSED),
+                unassigned);
+
+        Query query = Query.query(all)
+                .with(Sort.by(Sort.Direction.DESC, "submissionDate"))
+                .limit(safeLimit);
+
+        List<CaseSummaryResponse> items = new ArrayList<>();
+        for (CaseReport report : mongoTemplate.find(query, CaseReport.class)) {
+            items.add(toSummary(report));
+        }
+        return items;
+    }
+
+    /**
+     * Map one case document to the slim summary the lists use, including its current
+     * unread (by staff) message count for the badge. Shared by the register and the
+     * dashboard so both build summaries the exact same way.
+     */
+    private CaseSummaryResponse toSummary(CaseReport report) {
+        long unread = caseMessageRepository
+                .countByTenantIdAndCaseIdAndReadByStaffFalse(report.getTenantId(), report.getId());
+        return CaseSummaryResponse.builder()
+                .id(report.getId())
+                .caseReference(report.getCaseReference())
+                .disclosureMode(report.getDisclosureMode())
+                .category(report.getCategory())
+                .status(report.getStatus())
+                .severity(report.getSeverity())
+                .assignedInvestigator(report.getAssignedInvestigator())
+                .feedbackDue(report.getFeedbackDue())
+                .unreadCount(unread)
+                .build();
+    }
+
+    /**
+     * Update Case status.
+     */
+    public CaseReport updateStatus(String caseId, CaseStatus newStatus, String reason,
+                                   String tenantId, String actorRole, String actorId) {
+        CaseReport report = getById(caseId, tenantId);
+        CaseStatus oldStatus = report.getStatus();
+        if (oldStatus == newStatus) {
+            return report; // no-op change
+        }
+
+        boolean closing = newStatus == CaseStatus.CLOSED;
+        boolean reopening = oldStatus == CaseStatus.CLOSED; // any move away from CLOSED
+
+        // Reopening a closed case is a significant, audited action — it must be justified.
+        String trimmedReason = reason == null ? "" : reason.trim();
+        if (reopening && trimmedReason.isEmpty()) {
+            throw new IllegalArgumentException("A reason is required to reopen a closed case.");
+        }
+
+        report.setStatus(newStatus);
+        // Maintain closedAt: stamp it on close (starts the reporter's grace window), clear it on
+        // reopen (an active case has no grace window — the reporter can message normally again).
+        if (closing) {
+            report.setClosedAt(Instant.now());
+        } else if (reopening) {
+            report.setClosedAt(null);
+        }
+
+        report.getTimeline().add(new TimelineEvent(
+                new org.bson.types.ObjectId().toHexString(),
+                reopening ? "Case Reopened" : "Status Changed",
+                reopening
+                        ? "Case reopened from CLOSED to " + newStatus + ". Reason: " + trimmedReason
+                        : "Case status updated from " + oldStatus + " to " + newStatus,
+                Instant.now(),
+                "status",
+                actorDisplayName(actorId, actorRole)
+        ));
+
+        CaseReport saved = caseReportRepository.save(report);
+
+        // Push the new status live to everyone viewing this case (the reporter's tracking page
+        // and any staff with it open) so the status badge updates instantly, with no refresh.
+        // Best-effort — the change is already saved; a failed broadcast must not undo it.
+        caseEventPublisher.publishCaseUpdate(caseId, CaseUpdateEvent.builder()
+                .type("CASE_UPDATE")
+                .caseId(caseId)
+                .status(saved.getStatus().name())
+                .closedAt(saved.getClosedAt() != null ? saved.getClosedAt().toString() : null)
+                .at(Instant.now())
+                .build());
+
+        auditLogService.log(
+                tenantId,
+                actorDisplayName(actorId, actorRole),
+                AuditActionType.CASE_STATUS_CHANGED,
+                caseId,
+                AuditOutcome.RECORDED,
+                oldStatus.name(),
+                newStatus.name(),
+                reopening ? ("Case reopened from CLOSED. Reason: " + trimmedReason) : "Case status updated."
+        );
+
+        return saved;
+    }
+
+    /**
+     * Update Case severity.
+     */
+    public CaseReport updateSeverity(String caseId, CaseSeverity newSeverity, String tenantId, String actorRole, String actorId) {
+        CaseReport report = getById(caseId, tenantId);
+        CaseSeverity oldSeverity = report.getSeverity();
+        if (oldSeverity == newSeverity) {
+            return report;
+        }
+
+        report.setSeverity(newSeverity);
+        report.getTimeline().add(new TimelineEvent(
+                new org.bson.types.ObjectId().toHexString(),
+                "Severity Changed",
+                "Case severity updated from " + oldSeverity + " to " + newSeverity,
+                Instant.now(),
+                "status",
+                actorDisplayName(actorId, actorRole)
+        ));
+
+        CaseReport saved = caseReportRepository.save(report);
+
+        auditLogService.log(
+                tenantId,
+                actorDisplayName(actorId, actorRole),
+                AuditActionType.SEVERITY_CHANGED,
+                caseId,
+                AuditOutcome.RECORDED,
+                oldSeverity.name(),
+                newSeverity.name(),
+                "Severity re-assessed."
+        );
+
+        return saved;
+    }
+
+    /**
+     * Assign investigator.
+     */
+    public CaseReport assignInvestigator(String caseId, String investigator, String tenantId, String actorRole, String actorId) {
+        CaseReport report = getById(caseId, tenantId);
+        String oldInvestigator = report.getAssignedInvestigator();
+
+        // The FIELD stores the user's id (stable link). The human-readable timeline and
+        // audit text show the NAME, resolved from the shared users collection, so staff
+        // read "Case assigned to investigator: ANKIT KUMAR" instead of a raw id.
+        report.setAssignedInvestigator(investigator);
+        report.getTimeline().add(new TimelineEvent(
+                new org.bson.types.ObjectId().toHexString(),
+                "Investigator Assigned",
+                "Case assigned to investigator: " + investigatorDisplayName(investigator),
+                Instant.now(),
+                "system",
+                actorDisplayName(actorId, actorRole)
+        ));
+
+        CaseReport saved = caseReportRepository.save(report);
+
+        // Tell the newly-assigned investigator by email (content-free, async, best-effort).
+        // Skip the "Unassigned"/blank sentinel and no-op re-assignments to the same person,
+        // so we only email on a real, changed assignment.
+        if (investigator != null && !investigator.isBlank()
+                && !"Unassigned".equals(investigator)
+                && !investigator.equals(oldInvestigator)) {
+            emailNotificationService.notifyInvestigatorAssigned(investigator);
+        }
+
+        auditLogService.log(
+                tenantId,
+                actorDisplayName(actorId, actorRole),
+                AuditActionType.INVESTIGATOR_ASSIGNED,
+                caseId,
+                AuditOutcome.RECORDED,
+                investigatorDisplayName(oldInvestigator),
+                investigatorDisplayName(investigator),
+                "Case investigator assignment updated."
+        );
+
+        return saved;
+    }
+
+    // The human-readable name of the STAFF member performing an action, for timeline attribution.
+    // Looked up from the shared RegulaOne users collection by the actor's id; falls back to the
+    // role code (and finally "System") so a timeline entry is never left without a "performed by".
+    private String actorDisplayName(String actorId, String actorRole) {
+        if (actorId != null && !actorId.isBlank()) {
+            String name = regulaOneUserRepository.findById(actorId)
+                    .map(RegulaOneUser::getName)
+                    .filter(n -> n != null && !n.isBlank())
+                    .orElse(null);
+            if (name != null) {
+                return name;
+            }
+        }
+        return actorRole != null && !actorRole.isBlank() ? actorRole : "System";
+    }
+
+    // Turn an assigned-investigator value into a readable name for timeline/audit text.
+    // The stored value is normally a user id; we look up that user's name. If it is blank,
+    // the "Unassigned" sentinel, or an id we cannot resolve (e.g. legacy name or removed
+    // user), we return it unchanged so the text is never empty or misleading.
+    private String investigatorDisplayName(String investigator) {
+        if (investigator == null || investigator.isBlank() || "Unassigned".equals(investigator)) {
+            return "Unassigned";
+        }
+        return regulaOneUserRepository.findById(investigator)
+                .map(RegulaOneUser::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .orElse(investigator);
+    }
+
+    /**
+     * Helper to add file attachments to CaseReport.
+     */
+    public CaseReport addAttachment(String caseId, com.safevoice.backend.model.embedded.EvidenceAttachment attachment, String tenantId) {
+        CaseReport report = getById(caseId, tenantId);
+        report.getAttachments().add(attachment);
+        report.getTimeline().add(new TimelineEvent(
+                new org.bson.types.ObjectId().toHexString(),
+                "Evidence Attachment Uploaded",
+                "File " + attachment.getDisplayName() + " successfully attached.",
+                Instant.now(),
+                "attachment",
+                "Reporter"
+        ));
+
+        CaseReport saved = caseReportRepository.save(report);
+
+        auditLogService.log(
+                tenantId,
+                "Anonymous Whistleblower",
+                AuditActionType.EVIDENCE_ADDED,
+                caseId,
+                AuditOutcome.RECORDED,
+                null,
+                attachment.getId(),
+                "New evidence file hash verified: " + attachment.getSha256Checksum()
+        );
+
+        return saved;
+    }
+
+    // ── Client-side encryption support (envelope encryption via AWS KMS) ──────────────────────
+
+    /**
+     * Give the browser a brand-new, one-time key to LOCK (encrypt) a report before sending it.
+     *
+     * We first make sure the organisation is real and active — this stops strangers from making
+     * the server call AWS KMS (which costs money) for organisations that do not exist. The key is
+     * tied to this exact organisation, so it can never be reused to unlock another company's data.
+     *
+     * @param tenantId the organisation the report is for
+     * @return the plain key (used once in the browser) and the wrapped key (safe to store)
+     */
+    public DataKeyResponse issueDataKey(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("Tenant info/context is required");
+        }
+        String id = tenantId.trim();
+        Tenant tenant = tenantRepository.findById(id)
+                .orElseThrow(() -> new TenantNotFoundException("Unknown tenant: " + id));
+        if (!"ACTIVE".equalsIgnoreCase(tenant.getStatus())) {
+            throw new TenantNotFoundException("Tenant is not active: " + id);
+        }
+        return envelopeEncryptionService.generateDataKey(id);
+    }
+
+    /**
+     * Give the REPORTER the keys to READ their own case in the browser.
+     *
+     * The reporter proves ownership with their access key (same as the tracking page). We resolve
+     * their case and unwrap ONLY the keys that belong to THAT case — the main report and each
+     * message in its thread. We never unwrap a key the caller supplies, so a stolen wrapped key
+     * cannot be brought here to be unlocked.
+     */
+    public CaseKeysResponse buildReporterCaseKeys(String accessKey) {
+        CaseReport report = retrieveByAccessKey(accessKey);
+        return decryptCaseKeys(report);
+    }
+
+    /**
+     * Give authorised STAFF the keys to READ one case in the browser. The case must belong to the
+     * staff member's own organisation (tenant isolation), which {@link #getById} enforces.
+     */
+    public CaseKeysResponse buildStaffCaseKeys(String caseId, String tenantId) {
+        CaseReport report = getById(caseId, tenantId);
+        return decryptCaseKeys(report);
+    }
+
+    // Unwrap every data key that belongs to ONE case (its report + all its messages) so the
+    // browser can unlock the whole case. Each unwrap is bound to the case's own tenant, so KMS
+    // will only unlock keys that were made for this same organisation.
+    private CaseKeysResponse decryptCaseKeys(CaseReport report) {
+        String tenantId = report.getTenantId();
+
+        String contentKey = null; //! plaintext (unlocked) KEY (For report)
+        //! EncryptedPayload == report.getEncryptedContent()
+        // WrappedKey = report.getEncryptedContent().getWrappedKey() 
+        if (report.getEncryptedContent() != null && report.getEncryptedContent().getWrappedKey() != null) {
+            contentKey = envelopeEncryptionService.unwrapDataKey(tenantId, report.getEncryptedContent().getWrappedKey());
+        }
+
+        Map<String, String> messageKeys = new HashMap<>(); // keys for the message threads
+        List<CaseMessage> messages = caseMessageRepository.findAllByTenantIdAndCaseIdOrderByTimestampAsc(tenantId, report.getId());
+        for (CaseMessage message : messages) {
+            EncryptedPayload enc = message.getEncryptedText();
+            if (enc != null && enc.getWrappedKey() != null) {
+                messageKeys.put(message.getId(), envelopeEncryptionService.unwrapDataKey(tenantId, enc.getWrappedKey()));
+            }
+        }
+
+        return CaseKeysResponse.builder()
+                .contentKey(contentKey)
+                .messageKeys(messageKeys)
+                .build();
+    }
+
+    // Copy the browser-sent encrypted payload into the shape we store in the database, and stamp
+    // it with the algorithm label so future readers know how it was locked.
+    private EncryptedPayload toEncryptedPayload(EncryptedPayloadDto dto) {
+        EncryptedPayload payload = new EncryptedPayload();
+        payload.setCiphertext(dto.getCiphertext());
+        payload.setIv(dto.getIv());
+        payload.setWrappedKey(dto.getWrappedKey());
+        payload.setAlgorithm(dto.getAlgorithm() != null ? dto.getAlgorithm() : "AES-256-GCM");
+        return payload;
+    }
+}

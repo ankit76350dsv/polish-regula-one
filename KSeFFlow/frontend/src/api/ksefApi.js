@@ -16,6 +16,8 @@
  */
 
 import { apiFetch, ksefFetch } from '../lib/api';
+// Runtime-resolved host (localhost or LAN IP) — see lib/serviceHosts.js.
+import { REGULA_ONE_API_URL } from '../lib/serviceHosts';
 
 // ── Response mapper ────────────────────────────────────────────────────────────
 // Maps the backend KsefInvoice entity shape onto what this frontend expects.
@@ -77,6 +79,9 @@ export const mapBackendInvoice = (b) => ({
   offlineMode:            b.offlineMode            ?? null,
   offlineIssuedAt:        b.offlineIssuedAt        ?? null,
   ksefSubmissionDeadline: b.ksefSubmissionDeadline ?? null,
+  lastRetryAt:            b.lastRetryAt            ?? null,
+  // Computed server-side: earliest time the automatic retry job will next try KSeF.
+  nextRetryAt:            b.nextRetryAt            ?? null,
   qrCodeInvoice:          b.qrCodeInvoice          ?? null,
   qrCodeCertificate:      b.qrCodeCertificate      ?? null,
 
@@ -84,6 +89,8 @@ export const mapBackendInvoice = (b) => ({
   submissionAttempts: b.submissionAttempts ?? 0,
   lastErrorMessage:  b.lastErrorMessage   ?? b.rejectionReason ?? null,
   createdAt:         b.createdAt          ?? null,
+  // Full ordered status timeline (DRAFT → PENDING → SENT → ...) — see getInvoiceStatus.
+  statusHistory:     Array.isArray(b.statusHistory) ? b.statusHistory : [],
   // Extra fields used by this app's UI
   canSubmit:         b.canSubmit,
   hasXml:            b.hasXml,
@@ -115,18 +122,85 @@ const toCurrencyEnum = (currency) => {
 };
 
 /**
- * List the caller's invoices. The backend scopes to the session tenant and returns a
- * Spring Data Page, so we read `.content`; a bare array is tolerated for compatibility.
- * (Any leading tenantId arg from older call sites is ignored — see the file header.)
+ * Load a generous slice of the tenant's invoices as a flat array (newest first). This feeds the
+ * SHARED app state used by widgets that need the whole picture (the sidebar offline-mode badge,
+ * the invoice-detail lookup, the offline queue). The invoice LIST page does NOT use this — it uses
+ * listInvoicesPage() for true server-side pagination. The backend returns a Spring Data Page; we
+ * read `.content` (a bare array is tolerated for compatibility).
  */
 export const listInvoices = async () => {
-  const page = await ksefFetch(INVOICE_PATH);
+  const params = new URLSearchParams({ page: '0', size: '500', sort: 'createdAt,desc' });
+  const page = await ksefFetch(`${INVOICE_PATH}?${params.toString()}`);
   const content = Array.isArray(page) ? page : (page?.content ?? []);
   return content.map(mapBackendInvoice);
 };
 
+/**
+ * Server-side paginated + filtered invoice list for the Invoice Repository page.
+ * GET /api/v1/invoices?page=&size=&status=&search=&sort=createdAt,desc
+ * The database does the paging/filtering/search, so we only ever fetch one page at a time.
+ *
+ * @param {object}  opts
+ * @param {number}  [opts.page=0]    zero-based page index
+ * @param {number}  [opts.size=10]   rows per page
+ * @param {string}  [opts.status]    KsefInvoiceStatus (e.g. SENT, OFFLINE_MODE, DRAFT) — omit for all
+ * @param {string}  [opts.search]    text matched against invoice number / buyer name / buyer NIP
+ * @returns {Promise<{content:object[], totalElements:number, totalPages:number, number:number, size:number}>}
+ */
+export const listInvoicesPage = async (opts = {}) => {
+  const { page = 0, size = 10, status, search } = opts;
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('size', String(size));
+  params.set('sort', 'createdAt,desc');
+  if (status) params.set('status', status);
+  if (search) params.set('search', search);
+  const json = await ksefFetch(`${INVOICE_PATH}?${params.toString()}`);
+  const content = Array.isArray(json) ? json : (json?.content ?? []);
+  return {
+    content:       content.map(mapBackendInvoice),
+    totalElements: json?.totalElements ?? content.length,
+    totalPages:    json?.totalPages    ?? 1,
+    number:        json?.number         ?? page,
+    size:          json?.size           ?? size,
+  };
+};
+
 export const getInvoice = async (_tenantId, invoiceId) => {
   return mapBackendInvoice(await ksefFetch(`${INVOICE_PATH}/${invoiceId}`));
+};
+
+/**
+ * The EXACT official FA(3) XML for one invoice — generated server-side by the same builder used
+ * for KSeF submission (namespace http://crd.gov.pl/wzor/2025/06/25/13775/). Returns the raw XML
+ * string (ksefFetch returns text when the body isn't JSON). GET /api/v1/invoices/{id}/xml.
+ */
+export const getInvoiceXml = async (invoiceId) => {
+  return ksefFetch(`${INVOICE_PATH}/${encodeURIComponent(invoiceId)}/xml`);
+};
+
+// ── Dashboard (KSeFFlow backend :8081) ──────────────────────────────────────────
+/**
+ * All dashboard figures in one call: invoice counts, money totals per currency, certificate
+ * health, KSeF status, and recent activity. GET /api/v1/dashboard/summary.
+ * @returns {Promise<object>} DashboardSummaryResponse
+ */
+export const getDashboardSummary = async () => ksefFetch('/api/v1/dashboard/summary');
+
+/**
+ * Fetch an invoice's status timeline: current status, the "what to do next" hint, and the
+ * full ordered history of status changes (DRAFT → PENDING → SENT → ...) with timestamps.
+ * GET /api/v1/invoices/{invoiceId}/status. Returns the backend InvoiceStatusResponse shape:
+ *   { invoiceId, invoiceNumber, currentStatus, currentStatusLabel, nextStep,
+ *     lastErrorMessage, ksefSubmissionDeadline, ksefId,
+ *     history: [{ status, statusLabel, timestamp, note, changedBy }] }
+ */
+export const getInvoiceStatus = async (invoiceId) => {
+  const res = await ksefFetch(`${INVOICE_PATH}/${invoiceId}/status`);
+  return {
+    ...res,
+    history: Array.isArray(res?.history) ? res.history : [],
+  };
 };
 
 /**
@@ -220,6 +294,15 @@ export const submitInvoice = async (_tenantId, invoiceId, nip) => {
 };
 
 /**
+ * Manually retry an OFFLINE_MODE invoice NOW (POST /api/v1/invoices/{id}/retry).
+ * Really re-attempts submission to KSeF server-side and returns the updated invoice
+ * (SENT on success, or still OFFLINE_MODE on failure).
+ */
+export const retryOfflineInvoice = async (invoiceId) => {
+  return mapBackendInvoice(await ksefFetch(`${INVOICE_PATH}/${invoiceId}/retry`, { method: 'POST' }));
+};
+
+/**
  * Get dashboard stats (gateway status, queue length, UPO count etc).
  */
 export const getStats = async () => {
@@ -230,7 +313,7 @@ export const getStats = async () => {
  * Download the raw FA(3) XML for an accepted invoice.
  */
 export const downloadInvoiceXml = async (invoiceId) => {
-  const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+  const API_URL = REGULA_ONE_API_URL;
   const res = await fetch(`${API_URL}/api/ksef/invoices/${invoiceId}/xml`, {
     credentials: 'include',
   });
@@ -279,6 +362,81 @@ export const listAuditLogs = async (_tenantId, opts = {}) => {
   };
 };
 
+// ── Centralized notifications (RegulaOne Hub, :8080 via apiFetch) ───────────────
+// KSeFFlow doesn't store notifications itself — it reads the user's notifications from
+// the central Hub, which already scoped them to this user + tenant by permission.
+
+// Maps the Hub's severity to this app's notification "type" (drives the bell colour).
+const HUB_SEVERITY_TO_TYPE = {
+  CRITICAL: 'error', ERROR: 'error', WARNING: 'warn', SUCCESS: 'success', INFO: 'info',
+};
+
+// Maps a Hub NotificationResponse onto the shape the KSeFFlow UI renders. Keeps the legacy
+// bell fields (message/type/read/timestamp) AND the richer fields the center uses.
+const mapHubNotification = (n) => ({
+  id:        n.id,
+  title:     n.title,
+  message:   n.body,
+  severity:  n.severity,
+  category:  n.category,
+  status:    n.status,
+  type:      HUB_SEVERITY_TO_TYPE[n.severity] ?? 'info',
+  timestamp: n.createdAt,
+  read:      n.status !== 'UNREAD',
+  hub:       true,
+});
+
+// This app only shows its OWN notifications. The Hub stores a sourceModule per notification;
+// `module=KSEFFLOW` is MANDATORY on every call — the backend returns/acts on only KSeFFlow's.
+const HUB_MODULE = 'KSEFFLOW';
+const withModule = (extra = '') => `module=${HUB_MODULE}${extra ? '&' + extra : ''}`;
+
+/** Recent KSeFFlow notifications for the signed-in user (newest first) — used by the bell. */
+export const getHubNotifications = async ({ size = 20 } = {}) => {
+  const page = await apiFetch(`/api/notifications?${withModule(`page=0&size=${size}`)}`);
+  const content = Array.isArray(page?.content) ? page.content : (Array.isArray(page) ? page : []);
+  return content.map(mapHubNotification);
+};
+
+/**
+ * Paginated, optionally status-filtered list for the Notification Center.
+ * Mirrors the RegulaOne hub center: returns mapped content + page metadata.
+ */
+export const listHubNotifications = async ({ status, page = 0, size = 20 } = {}) => {
+  const statusQs = (status && status !== 'ALL') ? `status=${status}&` : '';
+  const json = await apiFetch(`/api/notifications?${withModule(`${statusQs}page=${page}&size=${size}`)}`);
+  return {
+    content:       (Array.isArray(json?.content) ? json.content : []).map(mapHubNotification),
+    totalElements: json?.totalElements ?? 0,
+    totalPages:    json?.totalPages    ?? 0,
+    number:        json?.number        ?? page,
+  };
+};
+
+/** Unread KSeFFlow badge count → number. */
+export const getHubUnreadCount = async () => {
+  const res = await apiFetch(`/api/notifications/unread-count?${withModule()}`);
+  return res?.unread ?? 0;
+};
+
+/** Mark a single notification read. */
+export const markHubNotificationRead = async (id) =>
+  apiFetch(`/api/notifications/${id}/read?${withModule()}`, { method: 'PATCH' });
+
+/** Mark every KSeFFlow notification read; returns how many were updated. */
+export const markAllHubNotificationsRead = async () => {
+  const res = await apiFetch(`/api/notifications/read-all?${withModule()}`, { method: 'PATCH' });
+  return res?.updated ?? 0;
+};
+
+/** Archive a notification (kept in history, hidden from the active list). */
+export const archiveHubNotification = async (id) =>
+  apiFetch(`/api/notifications/${id}/archive?${withModule()}`, { method: 'PATCH' });
+
+/** Soft-delete a notification for this user. */
+export const deleteHubNotification = async (id) =>
+  apiFetch(`/api/notifications/${id}?${withModule()}`, { method: 'DELETE' });
+
 /**
  * Fetch the current user's own tenant/organisation from the RegulaOne backend.
  *
@@ -288,6 +446,14 @@ export const listAuditLogs = async (_tenantId, opts = {}) => {
  * currentPackage, ... }.
  */
 export const getMyTenant = async () => apiFetch('/api/tenant/info');
+
+/**
+ * Fetch the signed-in user's full profile from the RegulaOne backend.
+ * Calls GET /api/auth/me (identity from the idToken cookie; the client never sends an id).
+ * apiFetch unwraps the AppResponse envelope, so this resolves to the UserResponse object
+ * (name, email, role, enabled, tenantId/Name/Status, plan fields, moduleIds, permissions, …).
+ */
+export const getMe = async () => apiFetch('/api/auth/me');
 
 // ── Certificate API (KSeFFlow backend :8081) ──────────────────────────────────
 
@@ -323,6 +489,14 @@ export const listCertificates = async () => {
  */
 export const deactivateCertificate = async (_tenantId, certId) => {
   return ksefFetch(`/api/v1/certificates/${certId}/deactivate`, { method: 'PATCH' });
+};
+
+/**
+ * Download the PUBLIC certificate (X.509, PEM) for a stored certificate.
+ * Returns PEM text — the backend never returns the private key or password.
+ */
+export const getCertificatePublicPem = async (certId) => {
+  return ksefFetch(`/api/v1/certificates/${certId}/public`);
 };
 
 /**
@@ -465,6 +639,12 @@ const KSEF_STATUS_PATH = '/api/v1/ksef-status';
  *   mode = 'ONLINE' | 'OFFLINE_UNAVAILABILITY' | 'EMERGENCY'
  */
 export const getKsefStatus = async () => ksefFetch(KSEF_STATUS_PATH);
+
+/**
+ * Read the REAL KSeF connection the backend uses (non-sensitive config).
+ * GET /api/v1/ksef-status/connection → { environment, baseUrl, invoiceSchema }
+ */
+export const getKsefConnection = async () => ksefFetch(`${KSEF_STATUS_PATH}/connection`);
 
 /**
  * Declare a Ministry-announced emergency ("tryb awaryjny", 7-business-day window) — admin only.

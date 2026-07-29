@@ -19,6 +19,8 @@ public interface UserRepository extends MongoRepository<User, String> {
 
     long countByTenant_Id(String tenantId);
     List<User> findByTenant_Id(String tenantId);
+    // Active members of a tenant — used by the notification recipient resolver.
+    List<User> findByTenant_IdAndEnabledTrue(String tenantId);
         long countByTenant_IdAndEnabledTrue(String tenantId);
 
     long countByTenant_IdAndEnabledFalse(String tenantId);

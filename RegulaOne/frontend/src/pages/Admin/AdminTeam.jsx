@@ -2,14 +2,15 @@
 // Replaces the mock-data implementation that was used during UI development.
 
 import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Users, UserCheck, UserX, UserPlus, X, AlertTriangle, Loader2, LayoutGrid } from 'lucide-react';
+import { Users, UserCheck, UserX, UserPlus, X, AlertTriangle, Loader2, LayoutGrid, ShieldCheck, Trash2 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import { useTeamStats, useTeamMembers, useInviteUser, useUpdateUserStatus, useUpdateUserModules } from '../../hooks/useTeam';
+import { useTeamStats, useTeamMembers, useInviteUser, useUpdateUserStatus, useUpdateUserModules, useDeleteUser } from '../../hooks/useTeam';
 
 // OLD MOCK DATA — commented out in favour of real API data from /api/admin/*
 // const MOCK_TENANT_USERS = [
@@ -45,6 +46,12 @@ function formatDate(iso) {
 export default function AdminTeam() {
   const tenantName = useAuthStore((s) => s.user?.tenantName ?? 'your organisation');
 
+  // Used to open a member's permissions page when their name is clicked.
+  const navigate   = useNavigate();
+  const { tenantId } = useParams();
+  const openPermissions = (user) =>
+    navigate(`/company/${tenantId}/team/${user.id}`);
+
   // Server state — fetched from backend
   const { data: stats,   isLoading: statsLoading,   error: statsError   } = useTeamStats();
   const { data: members, isLoading: membersLoading, error: membersError } = useTeamMembers();
@@ -53,6 +60,7 @@ export default function AdminTeam() {
   const inviteUser        = useInviteUser();
   const updateUserStatus  = useUpdateUserStatus();
   const updateUserModules = useUpdateUserModules();
+  const deleteUser        = useDeleteUser();
 
   // Edit-modules modal state — holds the user whose modules are being edited
   const [editModulesUser, setEditModulesUser] = useState(null); // full user object
@@ -104,6 +112,8 @@ export default function AdminTeam() {
 
   // Confirmation modal state — holds the user pending a status change
   const [confirmUser, setConfirmUser] = useState(null); // { id, name, enabled }
+  // Confirmation modal state — holds the user pending permanent deletion
+  const [confirmDelete, setConfirmDelete] = useState(null); // { id, name }
 
   // ── Invite handler ──────────────────────────────────────────────────────────
   const handleInvite = (e) => {
@@ -135,6 +145,19 @@ export default function AdminTeam() {
       { userId: confirmUser.id, enabled: !confirmUser.enabled },
       { onSettled: () => setConfirmUser(null) },
     );
+  };
+
+  // ── Delete handler ─────────────────────────────────────────────────────────
+  // Opens a confirmation modal; the actual delete removes the user from the database
+  // AND Cognito. The backend refuses to delete the organisation's primary-contact
+  // account and returns a clear reason (shown via the mutation's error toast).
+  const handleDeleteClick = (user) => {
+    setConfirmDelete({ id: user.id, name: user.name });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!confirmDelete) return;
+    deleteUser.mutate(confirmDelete.id, { onSettled: () => setConfirmDelete(null) });
   };
 
   // ── Derived values from stats response ────────────────────────────────────
@@ -406,6 +429,49 @@ export default function AdminTeam() {
         </div>
       )}
 
+      {/* ── Delete confirmation modal ─────────────────────────────────────── */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
+          <Card className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border-slate-200">
+            <CardHeader className="border-b border-slate-100 py-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-rose-50">
+                  <Trash2 className="h-5 w-5 text-rose-500" />
+                </div>
+                <CardTitle className="text-base font-bold text-slate-900">Delete User</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-5 pb-6 space-y-5">
+              <p className="text-sm text-slate-600">
+                Are you sure you want to permanently delete <strong>{confirmDelete.name}</strong>?
+                This removes their account from the platform and cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setConfirmDelete(null)}
+                  className="flex-1 text-slate-400 font-bold"
+                  disabled={deleteUser.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  disabled={deleteUser.isPending}
+                  className="flex-1 font-bold text-white bg-rose-600 hover:bg-rose-700"
+                >
+                  {deleteUser.isPending ? (
+                    <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Deleting…</>
+                  ) : 'Yes, Delete'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* ── Edit modules modal ────────────────────────────────────────────── */}
       {editModulesUser && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
@@ -536,14 +602,21 @@ export default function AdminTeam() {
                   return (
                     <TableRow key={u.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
 
-                      {/* Avatar + full name */}
+                      {/* Avatar + full name — clicking opens the user's permissions page */}
                       <TableCell className="px-6 py-4">
-                        <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => openPermissions(u)}
+                          className="flex items-center gap-3 text-left group"
+                          title="Manage permissions"
+                        >
                           <div className="h-8 w-8 rounded-full bg-red-50 border border-red-100 flex items-center justify-center text-xs font-bold text-red-600 flex-shrink-0">
                             {initials(u.name)}
                           </div>
-                          <span className="font-semibold text-sm text-slate-700">{u.name}</span>
-                        </div>
+                          <span className="font-semibold text-sm text-slate-700 group-hover:text-red-600 group-hover:underline transition-colors">
+                            {u.name}
+                          </span>
+                        </button>
                       </TableCell>
 
                       <TableCell className="px-6 py-4 text-xs text-slate-500 font-mono">{u.email}</TableCell>
@@ -577,6 +650,14 @@ export default function AdminTeam() {
                             variant="ghost"
                             size="sm"
                             className="text-xs font-bold h-7 px-3 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => openPermissions(u)}
+                          >
+                            <ShieldCheck className="h-3.5 w-3.5 mr-1" />Permissions
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs font-bold h-7 px-3 text-slate-400 hover:text-red-600 hover:bg-red-50"
                             onClick={() => openEditModules(u)}
                             disabled={updateUserModules.isPending}
                           >
@@ -600,6 +681,15 @@ export default function AdminTeam() {
                             ) : (
                               <><UserCheck className="h-3.5 w-3.5 mr-1" />Reactivate</>
                             )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs font-bold h-7 px-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                            onClick={() => handleDeleteClick(u)}
+                            disabled={deleteUser.isPending}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
                           </Button>
                         </div>
                       </TableCell>

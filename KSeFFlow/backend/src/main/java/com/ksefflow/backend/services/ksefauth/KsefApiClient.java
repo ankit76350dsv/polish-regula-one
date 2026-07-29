@@ -62,7 +62,7 @@ public class KsefApiClient {
     }
 
     /**
-     * POST /auth/xades-signature — submits the XAdES-signed AuthTokenRequest XML.
+     * ! POST /auth/xades-signature — submits the XAdES-signed AuthTokenRequest XML.
      * Returns the temporary {@code authenticationToken} + {@code referenceNumber} (202, async).
      */
     public AuthInitResponse submitXadesSignature(String signedXml) {
@@ -87,7 +87,7 @@ public class KsefApiClient {
         }
     }
 
-    /** GET /auth/{referenceNumber} — status of the async auth operation (Bearer authenticationToken). */
+    /**TODO: GET /auth/{referenceNumber} — status of the async auth operation (Bearer authenticationToken). */
     public AuthStatusResponse getAuthStatus(String referenceNumber, String authenticationToken) {
         String url = base() + "/auth/" + referenceNumber;
         log.info("[getAuthStatus]:1 GET {} — checking auth status for ref [{}]", url, referenceNumber);
@@ -127,6 +127,7 @@ public class KsefApiClient {
     }
 
     /** POST /auth/token/refresh — mints a fresh accessToken (Bearer refreshToken). */
+    //! Using the refreshToken it will return the accessToken
     public AuthTokenRefreshResponse refreshAccessToken(String refreshToken) {
         String url = base() + "/auth/token/refresh";
         log.info("[refreshAccessToken]:1 POST {} — refreshing accessToken", url);

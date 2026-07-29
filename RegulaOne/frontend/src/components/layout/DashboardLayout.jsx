@@ -12,13 +12,14 @@ import {
   SidebarInset, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarGroupContent
 } from '@/components/ui/sidebar';
 import {
-  LayoutDashboard, Building2, ReceiptText, Clock, ShieldAlert, LogOut, Search, Bell, Settings,
+  LayoutDashboard, Building2, ReceiptText, Clock, ShieldAlert, LogOut, Search, Settings,
   MessageSquare, Trash2, ShieldCheck, Users, Package
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Toaster } from '@/components/ui/sonner';
+import NotificationBell from '../notifications/NotificationBell';
 
 export default function DashboardLayout() {
   const { user } = useAuthStore();
@@ -84,11 +85,11 @@ export default function DashboardLayout() {
   // ROLE_ADMIN and ROLE_USER only see the modules listed in user.moduleIds.
   const ALL_MODULES = [
     { title: 'KSeFFlow',    icon: ReceiptText,   path: `/company/${tid}/modules/ksef`,         moduleKey: 'KSEFFLOW',     dotColor: 'bg-blue-300' },
-    { title: 'WorkPulse',   icon: Clock,         path: `/company/${tid}/modules/workpulse`,    moduleKey: 'WORKPULSE',    dotColor: 'bg-green-300' },
-    { title: 'SafeWork',    icon: ShieldCheck,   path: `/company/${tid}/modules/safework`,     moduleKey: 'SAFEWORK',     dotColor: 'bg-amber-300' },
     { title: 'SafeVoice',   icon: MessageSquare, path: `/company/${tid}/modules/safevoice`,    moduleKey: 'SAFEVOICE',    dotColor: 'bg-orange-300' },
-    { title: 'WasteSync',   icon: Trash2,        path: `/company/${tid}/modules/wastesync`,    moduleKey: 'WASTESYNC',    dotColor: 'bg-red-300' },
     { title: 'PrivacyPilot',icon: ShieldAlert,   path: `/company/${tid}/modules/privacypilot`, moduleKey: 'PRIVACYPILOT', dotColor: 'bg-emerald-300' },
+    { title: 'SafeWork',    icon: ShieldCheck,   path: `/company/${tid}/modules/safework`,     moduleKey: 'SAFEWORK',     dotColor: 'bg-amber-300' },
+    { title: 'WasteSync',   icon: Trash2,        path: `/company/${tid}/modules/wastesync`,    moduleKey: 'WASTESYNC',    dotColor: 'bg-red-300' },
+    { title: 'WorkPulse',   icon: Clock,         path: `/company/${tid}/modules/workpulse`,    moduleKey: 'WORKPULSE',    dotColor: 'bg-green-300' },
   ];
 
   const visibleModules = user?.role === 'ROLE_SUPER_ADMIN'
@@ -181,7 +182,7 @@ export default function DashboardLayout() {
           </SidebarFooter>
         </Sidebar>
 
-        <SidebarInset className="flex flex-col bg-slate-50">
+        <SidebarInset className="flex flex-col bg-slate-50 min-w-0">
           <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20">
             <div className="flex items-center gap-6 flex-1">
               <SidebarTrigger className="text-slate-400 hover:text-slate-600" />
@@ -199,10 +200,7 @@ export default function DashboardLayout() {
                 <span className="text-[11px] font-bold uppercase tracking-wider">EU-CENTRAL-1 ACTIVE</span>
               </div>
               <div className="h-4 w-[1px] bg-slate-200"></div>
-              <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-700 relative">
-                <Bell className="h-5 w-5" />
-                <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-              </Button>
+              <NotificationBell />
               <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-700">
                 <Settings className="h-5 w-5" />
               </Button>
