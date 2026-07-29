@@ -18,6 +18,9 @@ const adminRoutes = require('./src/routes/adminRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const authRoutes = require('./src/routes/authRoutes');
 
+// Scheduled jobs (daily certificate-expiry refresh).
+const { registerJobs } = require('./src/jobs');
+
 const app = express();
 
 // ─── Security middleware ───────────────────────────────────────────────────────
@@ -72,6 +75,8 @@ app.use(errorHandler);
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 const start = async () => {
   await connectDB();
+  // Start the scheduled jobs once the DB is connected.
+  registerJobs();
   app.listen(config.port, () => {
     console.log(`[APP] SafeWork backend running on port ${config.port} (${config.nodeEnv})`);
     console.log(`[APP] Health: http://localhost:${config.port}/health`);

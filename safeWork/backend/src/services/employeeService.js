@@ -542,4 +542,8 @@ module.exports = {
   updateDocumentReference,
   upsertEmployeeProfile,
   updateEmployeeCompliance,
+  // Exported so the daily certificate-expiry cron job reuses the SAME rules the
+  // upload flow uses — one source of truth for status + block/compliance state.
+  calculateDocumentStatus,
+  recalculateComplianceState,
 };
