@@ -68,8 +68,9 @@ public class User {
     //   KSEF_AUDITOR, KSEF_EMPLOYEE
     // Other apps define their own codes the same way, for example:
     //   SAFEWORK_ADMIN, SAFEWORK_HR_MANAGER, SAFEWORK_AUDITOR
+    //   WORKPULSE_ADMIN, WORKPULSE_HR_ADMIN, WORKPULSE_AUDITOR, WORKPULSE_EMPLOYEE
     //   SAFEVOICE_*, PRIVACYPILOT_*
-    // When a new app is added later it can define new codes (e.g. WORKPULSE_*)
+    // When a new app is added later it can define new codes (e.g. WASTESYNC_*)
     // and simply store them here — no change to this model is needed.
     //
     // Why a list of strings instead of an enum?

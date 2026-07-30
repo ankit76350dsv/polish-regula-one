@@ -60,28 +60,7 @@ const PERMISSION_GROUPS = [
       },
     ],
   },
-  {
-    app: 'SafeWork',
-    description: 'HR/BHP workplace safety compliance (medical certificates, BHP training) permissions',
-    // Codes MUST match SafeWorkPermission on the SafeWork backend.
-    permissions: [
-      {
-        code: 'SAFEWORK_ADMIN',
-        label: 'SafeWork Admin',
-        desc: 'Full control: manage employee compliance records, medical certificates, BHP training, expiry rules and SafeWork settings.',
-      },
-      {
-        code: 'SAFEWORK_HR_MANAGER',
-        label: 'HR Manager',
-        desc: 'Day-to-day HR compliance: add employees, upload certificates and training records, and act on expiry alerts.',
-      },
-      {
-        code: 'SAFEWORK_AUDITOR',
-        label: 'Auditor',
-        desc: 'Read-only access to compliance records, documents and audit logs, plus export.',
-      },
-    ],
-  },
+
   {
     app: 'SafeVoice',
     description: 'Whistleblower case-management (EU Directive 2019/1937) permissions',
@@ -143,6 +122,57 @@ const PERMISSION_GROUPS = [
         code: 'PRIVACYPILOT_EMPLOYEE',
         label: 'Employee',
         desc: 'Baseline member access; no privacy-management rights.',
+      },
+    ],
+  },
+ 
+  {
+    app: 'SafeWork',
+    description: 'HR/BHP workplace safety compliance (medical certificates, BHP training) permissions',
+    // Codes MUST match SafeWorkPermission on the SafeWork backend.
+    permissions: [
+      {
+        code: 'SAFEWORK_ADMIN',
+        label: 'SafeWork Admin',
+        desc: 'Full control: manage employee compliance records, medical certificates, BHP training, expiry rules and SafeWork settings.',
+      },
+      {
+        code: 'SAFEWORK_HR_MANAGER',
+        label: 'HR Manager',
+        desc: 'Day-to-day HR compliance: add employees, upload certificates and training records, and act on expiry alerts.',
+      },
+      {
+        code: 'SAFEWORK_AUDITOR',
+        label: 'Auditor',
+        desc: 'Read-only access to compliance records, documents and audit logs, plus export.',
+      },
+    ],
+  },
+
+     {
+    app: 'WorkPulse',
+    description: 'Employee time tracking (Polish Labour Code) permissions',
+    // Codes MUST match WorkPulsePermission on the WorkPulse backend.
+    permissions: [
+      {
+        code: 'WORKPULSE_ADMIN',
+        label: 'WorkPulse Admin',
+        desc: 'Full control: manage work schedules, shifts, break and overtime rules, approve corrections and change WorkPulse settings.',
+      },
+      {
+        code: 'WORKPULSE_HR_ADMIN',
+        label: 'HR Admin',
+        desc: 'Day-to-day time-tracking administration: manage employee attendance, absences and overtime, and run payroll exports.',
+      },
+      {
+        code: 'WORKPULSE_AUDITOR',
+        label: 'Auditor',
+        desc: 'Read-only access to attendance records, overtime reports and audit logs, plus export.',
+      },
+      {
+        code: 'WORKPULSE_EMPLOYEE',
+        label: 'Employee',
+        desc: 'Baseline member access: clock in and out, record breaks and view own attendance only.',
       },
     ],
   },
