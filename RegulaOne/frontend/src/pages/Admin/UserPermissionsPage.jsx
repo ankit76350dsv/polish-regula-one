@@ -61,6 +61,35 @@ const PERMISSION_GROUPS = [
     ],
   },
   {
+    app: 'WorkPulse',
+    description: 'Employee time tracking (Polish Labour Code) permissions',
+    // Codes MUST match ROLE_CAPABILITIES in WorkPulse/backend/src/config/permissions.js.
+    // WorkPulse turns each code below into a list of single allowed actions, so the
+    // wording here explains what the person can really do.
+    permissions: [
+      {
+        code: 'WORKPULSE_ADMIN',
+        label: 'WorkPulse Admin',
+        desc: 'Full control: read and correct every time record, decide overtime and leave, manage protected-status flags, change the working-time policy, and read the audit trail.',
+      },
+      {
+        code: 'WORKPULSE_HR_ADMIN',
+        label: 'HR Admin',
+        desc: 'Day-to-day HR: read and correct time records, decide overtime and leave, and manage protected-status flags. Cannot change the working-time policy (an employer-level decision, art. 150) or read the audit trail.',
+      },
+      {
+        code: 'WORKPULSE_AUDITOR',
+        label: 'Auditor',
+        desc: 'Read-only oversight: every time record, absence, settlement report and the audit trail. Changes nothing, cannot clock in, and cannot see health-related protected-status flags (GDPR art. 9).',
+      },
+      {
+        code: 'WORKPULSE_EMPLOYEE',
+        label: 'Employee',
+        desc: 'Own working time only: clock in and out, take breaks, view own timesheet and settlement balance, request leave, and read the working-time policy. Never sees another person’s records.',
+      },
+    ],
+  },
+  {
     app: 'SafeVoice',
     description: 'Whistleblower case-management (EU Directive 2019/1937) permissions',
     // Codes MUST match SafeVoicePermission on the SafeVoice backend.
