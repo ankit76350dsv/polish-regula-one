@@ -103,6 +103,7 @@ export default {
   'common.export': 'Eksportuj',
   'common.loading': 'Ładowanie…',
   'common.error': 'Coś poszło nie tak',
+  'common.saveFailed': 'Nie udało się zapisać zmian. Spróbuj ponownie.',
   'common.rateLimited': 'Zbyt wiele żądań — zwolnij i spróbuj ponownie za chwilę.',
   'common.rateLimitedWait': 'Zbyt wiele żądań — odczekaj {seconds} s i spróbuj ponownie.',
   'common.retry': 'Spróbuj ponownie',
@@ -336,6 +337,25 @@ export default {
   'vendors.dpa.missing': 'Brak umowy',
   'vendors.subprocessors': 'Podpowierzenie',
   'vendors.country': 'Kraj',
+  'vendors.processor': 'Podmiot przetwarzający',
+  'vendors.name': 'Nazwa podmiotu przetwarzającego',
+  'vendors.hosting': 'Gdzie przechowywane są dane',
+  'vendors.subprocessorsHint': 'Rozdziel nazwy przecinkami.',
+  'vendors.lastReview': 'Ostatni przegląd',
+  'vendors.edit': 'Edytuj podmiot przetwarzający',
+  'vendors.nameRequired': 'Podaj nazwę podmiotu przetwarzającego.',
+  'vendors.emptyTitle': 'Brak podmiotów przetwarzających',
+  'vendors.empty': 'Art. 28 RODO wymaga pisemnej umowy z każdym podmiotem, który przetwarza dane osobowe w imieniu administratora.',
+  'vendors.archiveTitle': 'Zarchiwizować ten podmiot?',
+  'vendors.archiveBody': 'Zniknie z tej listy, ale pozostanie w dzienniku zdarzeń, jak wymagają tego zasady dokumentowania zgodności.',
+  'vendors.archived': 'Podmiot zarchiwizowany',
+  'vendors.inUse': 'Ten podmiot jest nadal powiązany z czynnością przetwarzania lub transferem. Najpierw usuń te powiązania, potem zarchiwizuj podmiot.',
+
+  // Poziomy ryzyka — wspólne nazwy wszędzie, gdzie rekord ma ocenę niskie/średnie/wysokie.
+  'risk.level': 'Poziom ryzyka',
+  'risk.low': 'Niskie',
+  'risk.medium': 'Średnie',
+  'risk.high': 'Wysokie',
 
   // Transfery
   'transfers.title': 'Transfery międzynarodowe',

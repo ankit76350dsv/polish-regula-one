@@ -1,10 +1,13 @@
-// Processors & DPAs (Art. 28) — inventory with DPA status; a missing DPA is a
-// visible red finding, not a decoration. Managers can add, edit and archive
-// processors; a processor still linked to an activity/transfer cannot be archived.
+// Processors & DPAs (Art. 28) — the list of suppliers that handle personal data on the
+// company's behalf, each with the state of its Data Processing Agreement. A missing DPA
+// shows in red because it is a real finding, not decoration.
+//
+// Archiving (never hard delete) is Admin-only and is refused while an activity or a
+// transfer still points at the processor, so no Art. 28 link is ever left dangling.
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Archive, Plus, Pencil } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,7 +33,25 @@ const DPA_STYLES = {
   missing: 'border-(--status-risk)/50 text-(--status-risk)',
 };
 
-const EMPTY_FORM = { name: '', country: 'Poland', region: '', dpaStatus: 'missing', riskLevel: 'medium', subprocessors: [] };
+// A blank form. The country is pre-filled for the home market (and in the reader's own
+// language — it used to be the English literal "Poland" even in the Polish interface).
+const emptyForm = (lang) => ({
+  name: '', country: lang === 'pl' ? 'Polska' : 'Poland', region: '',
+  dpaStatus: 'missing', riskLevel: 'medium', subprocessors: [],
+});
+
+/**
+ * Turn a failed request into something a person can act on.
+ *
+ * Every failure on this page used to say "Your role does not permit this action" — so a
+ * network glitch or a server error told the user they lacked permission, sending them to
+ * their administrator for a problem that had nothing to do with access.
+ */
+const failureMessage = (error, t) => {
+  if (error?.message === 'FORBIDDEN') return t('common.notAuthorized');
+  if (error?.message === 'CONFLICT') return t('vendors.inUse');
+  return t('common.saveFailed');
+};
 
 export default function VendorsPage() {
   const { t, lang } = useT();
@@ -38,14 +59,20 @@ export default function VendorsPage() {
   const user = useSelector((s) => s.auth.user);
   const { items, status, error, refetch } = useSliceData('vendors', fetchVendors);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(() => emptyForm(lang));
+  const [formError, setFormError] = useState(null);
   const [editingId, setEditingId] = useState(null); // null = create mode
-  const [confirmId, setConfirmId] = useState(null);  // vendor id pending delete
+  const [confirmId, setConfirmId] = useState(null);  // processor awaiting archive confirmation
   const canManage = can(user, ACTIONS.MANAGE_VENDORS);
-  // Deleting is destructive, so the backend restricts it to Admins — mirror that here.
+  // Archiving is destructive, so the backend restricts it to Admins — mirror that here.
   const canDelete = canManage && (hasRole(user, ROLES.PRIVACYPILOT_ADMIN) || user?.role === 'ROLE_SUPER_ADMIN');
 
-  const openCreate = () => { setForm(EMPTY_FORM); setEditingId(null); setOpen(true); };
+  const openCreate = () => {
+    setForm(emptyForm(lang));
+    setFormError(null);
+    setEditingId(null);
+    setOpen(true);
+  };
 
   const openEdit = (v) => {
     setForm({
@@ -54,24 +81,39 @@ export default function VendorsPage() {
       subprocessors: v.subprocessors ?? [],
     });
     setEditingId(v.id);
+    setFormError(null);
     setOpen(true);
   };
 
-  const closeDialog = () => { setOpen(false); setEditingId(null); setForm(EMPTY_FORM); };
+  const closeDialog = () => {
+    setOpen(false);
+    setEditingId(null);
+    setFormError(null);
+    setForm(emptyForm(lang));
+  };
 
   const submit = async () => {
-    // Edit sends the full form as the patch (the slice merges it onto the current
-    // record); create stamps a fresh "last reviewed" time like before.
+    // Check first and say what is wrong, next to the field. The Save button used to be
+    // silently disabled, which leaves the user guessing what is missing.
+    if (!form.name.trim()) {
+      setFormError(t('vendors.nameRequired'));
+      return;
+    }
+    setFormError(null);
+    // Saving the form counts as reviewing the processor, so the "last reviewed" date is
+    // stamped on create AND on edit — otherwise that column showed the date the record was
+    // added and never changed again, which is worse than showing nothing.
+    const patch = { ...form, lastReviewAt: new Date().toISOString() };
     const action = editingId
-      ? await dispatch(updateVendor({ id: editingId, patch: form }))
-      : await dispatch(createVendor({ ...form, lastReviewAt: new Date().toISOString() }));
-    if (action.error) toast.error(t('common.notAuthorized'));
+      ? await dispatch(updateVendor({ id: editingId, patch }))
+      : await dispatch(createVendor(patch));
+    if (action.error) toast.error(failureMessage(action.error, t));
     else { toast.success(t('common.save')); closeDialog(); }
   };
 
   const setDpa = async (id, dpaStatus) => {
     const action = await dispatch(updateVendor({ id, patch: { dpaStatus } }));
-    if (action.error) toast.error(t('common.notAuthorized'));
+    if (action.error) toast.error(failureMessage(action.error, t));
   };
 
   const remove = async () => {
@@ -79,18 +121,8 @@ export default function VendorsPage() {
     setConfirmId(null);
     if (!id) return;
     const action = await dispatch(archiveVendor(id));
-    if (action.error) {
-      // 409 CONFLICT = still referenced by an activity/transfer; 403 = not allowed.
-      toast.error(
-        action.error.message === 'CONFLICT'
-          ? (lang === 'pl'
-              ? 'Nie można usunąć — podmiot jest nadal powiązany z czynnością lub transferem. Najpierw usuń powiązanie.'
-              : 'Cannot delete — this processor is still linked to an activity or transfer. Unlink it there first.')
-          : t('common.notAuthorized'),
-      );
-    } else {
-      toast.success(lang === 'pl' ? 'Usunięto' : 'Deleted');
-    }
+    if (action.error) toast.error(failureMessage(action.error, t));
+    else toast.success(t('vendors.archived'));
   };
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={4} />;
@@ -105,19 +137,25 @@ export default function VendorsPage() {
       </PageHeader>
 
       {items.length === 0 ? (
-        <EmptyState />
+        <EmptyState
+          title={t('vendors.emptyTitle')}
+          hint={t('vendors.empty')}
+          action={canManage && (
+            <Button size="sm" onClick={openCreate}><Plus /> {t('vendors.add')}</Button>
+          )}
+        />
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{lang === 'pl' ? 'Podmiot' : 'Processor'}</TableHead>
+                <TableHead>{t('vendors.processor')}</TableHead>
                 <TableHead>{t('vendors.country')}</TableHead>
-                <TableHead>{t('common.region')}</TableHead>
+                <TableHead>{t('vendors.hosting')}</TableHead>
                 <TableHead>{t('vendors.dpaStatus')}</TableHead>
                 <TableHead>{t('vendors.subprocessors')}</TableHead>
-                <TableHead>{lang === 'pl' ? 'Ostatni przegląd' : 'Last review'}</TableHead>
-                {canManage && <TableHead className="w-20 text-right">{lang === 'pl' ? 'Akcje' : 'Actions'}</TableHead>}
+                <TableHead>{t('vendors.lastReview')}</TableHead>
+                {canManage && <TableHead className="w-20 text-right">{t('common.actions')}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -129,7 +167,8 @@ export default function VendorsPage() {
                   <TableCell>
                     {canManage ? (
                       <Select value={v.dpaStatus} onChange={(e) => setDpa(v.id, e.target.value)}
-                        aria-label={t('vendors.dpaStatus')} className={cn('w-44 text-xs', v.dpaStatus === 'missing' && 'border-(--status-risk)/60')}>
+                        aria-label={t('vendors.dpaStatus')}
+                        className={cn('w-44', v.dpaStatus === 'missing' && 'border-(--status-risk)/60')}>
                         <option value="signed">{t('vendors.dpa.signed')}</option>
                         <option value="in_negotiation">{t('vendors.dpa.in_negotiation')}</option>
                         <option value="missing">{t('vendors.dpa.missing')}</option>
@@ -140,7 +179,12 @@ export default function VendorsPage() {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="max-w-48 truncate text-muted-foreground">
+                  {/* Truncated for layout, but the full list is in the tooltip — these are
+                      Art. 28(2)/(4) sub-processors, so they must stay retrievable. */}
+                  <TableCell
+                    className="max-w-48 truncate text-muted-foreground"
+                    title={v.subprocessors?.join(', ') || undefined}
+                  >
                     {v.subprocessors?.join(', ') || '—'}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
@@ -152,9 +196,12 @@ export default function VendorsPage() {
                         <Button variant="ghost" size="icon-sm" aria-label={t('common.edit')} onClick={() => openEdit(v)}>
                           <Pencil />
                         </Button>
+                        {/* Archive, not delete — the record is kept for the retention
+                            rules. Same wording and icon as archiving an activity. */}
                         {canDelete && (
-                          <Button variant="ghost" size="icon-sm" aria-label={t('common.delete')} onClick={() => setConfirmId(v.id)}>
-                            <Trash2 />
+                          <Button variant="ghost" size="icon-sm" aria-label={t('status.archived')}
+                            onClick={() => setConfirmId(v.id)}>
+                            <Archive />
                           </Button>
                         )}
                       </div>
@@ -170,30 +217,51 @@ export default function VendorsPage() {
       <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : closeDialog())}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingId ? (lang === 'pl' ? 'Edytuj podmiot' : 'Edit processor') : t('vendors.add')}</DialogTitle>
+            <DialogTitle>{editingId ? t('vendors.edit') : t('vendors.add')}</DialogTitle>
           </DialogHeader>
+          {/* One column on a phone, two where there is room — the two short fields used to
+              sit in a fixed 2-up grid that squeezed them on narrow screens. */}
           <div className="grid gap-3">
-            <FormField label={lang === 'pl' ? 'Nazwa podmiotu' : 'Processor name'} required>
-              {(fid) => <Input id={fid} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />}
+            <FormField label={t('vendors.name')} required error={formError}>
+              {(fid) => (
+                <Input id={fid} value={form.name}
+                  onChange={(e) => {
+                    setForm({ ...form, name: e.target.value });
+                    if (formError) setFormError(null); // clear as soon as they start fixing it
+                  }} />
+              )}
             </FormField>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <FormField label={t('vendors.country')}>
                 {(fid) => <Input id={fid} value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />}
               </FormField>
-              <FormField label="Region / hosting">
+              <FormField label={t('vendors.hosting')}>
                 {(fid) => <Input id={fid} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} />}
               </FormField>
             </div>
-            <FormField label={t('vendors.dpaStatus')}>
-              {(fid) => (
-                <Select id={fid} value={form.dpaStatus} onChange={(e) => setForm({ ...form, dpaStatus: e.target.value })}>
-                  <option value="signed">{t('vendors.dpa.signed')}</option>
-                  <option value="in_negotiation">{t('vendors.dpa.in_negotiation')}</option>
-                  <option value="missing">{t('vendors.dpa.missing')}</option>
-                </Select>
-              )}
-            </FormField>
-            <FormField label={t('vendors.subprocessors')} hint={lang === 'pl' ? 'Rozdziel przecinkami.' : 'Separate with commas.'}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label={t('vendors.dpaStatus')}>
+                {(fid) => (
+                  <Select id={fid} value={form.dpaStatus} onChange={(e) => setForm({ ...form, dpaStatus: e.target.value })}>
+                    <option value="signed">{t('vendors.dpa.signed')}</option>
+                    <option value="in_negotiation">{t('vendors.dpa.in_negotiation')}</option>
+                    <option value="missing">{t('vendors.dpa.missing')}</option>
+                  </Select>
+                )}
+              </FormField>
+              {/* The risk rating was already stored on every processor but was never shown
+                  or editable, so it silently stayed "Medium" forever. */}
+              <FormField label={t('risk.level')}>
+                {(fid) => (
+                  <Select id={fid} value={form.riskLevel} onChange={(e) => setForm({ ...form, riskLevel: e.target.value })}>
+                    <option value="low">{t('risk.low')}</option>
+                    <option value="medium">{t('risk.medium')}</option>
+                    <option value="high">{t('risk.high')}</option>
+                  </Select>
+                )}
+              </FormField>
+            </div>
+            <FormField label={t('vendors.subprocessors')} hint={t('vendors.subprocessorsHint')}>
               {(fid) => (
                 <Input id={fid} value={form.subprocessors.join(', ')}
                   onChange={(e) => setForm({ ...form, subprocessors: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
@@ -202,7 +270,9 @@ export default function VendorsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>{t('common.cancel')}</Button>
-            <Button onClick={submit} disabled={!form.name.trim()}>{t('common.save')}</Button>
+            {/* Deliberately NOT disabled — pressing Save on an incomplete form now explains
+                what is missing instead of leaving the user with a dead button. */}
+            <Button onClick={submit}>{t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -210,9 +280,9 @@ export default function VendorsPage() {
       <ConfirmDialog
         open={Boolean(confirmId)}
         onOpenChange={(o) => !o && setConfirmId(null)}
-        title={lang === 'pl' ? 'Usunąć podmiot?' : 'Delete processor?'}
-        description={t('common.confirmDelete')}
-        confirmLabel={t('common.delete')}
+        title={t('vendors.archiveTitle')}
+        description={t('vendors.archiveBody')}
+        confirmLabel={t('status.archived')}
         onConfirm={remove}
       />
     </div>

@@ -103,6 +103,7 @@ export default {
   'common.export': 'Export',
   'common.loading': 'Loading…',
   'common.error': 'Something went wrong',
+  'common.saveFailed': 'Could not save your changes. Please try again.',
   'common.rateLimited': 'Too many requests — please slow down and try again in a moment.',
   'common.rateLimitedWait': 'Too many requests — please wait {seconds} s and try again.',
   'common.retry': 'Retry',
@@ -336,6 +337,25 @@ export default {
   'vendors.dpa.missing': 'DPA missing',
   'vendors.subprocessors': 'Sub-processors',
   'vendors.country': 'Country',
+  'vendors.processor': 'Processor',
+  'vendors.name': 'Processor name',
+  'vendors.hosting': 'Where the data is hosted',
+  'vendors.subprocessorsHint': 'Separate names with commas.',
+  'vendors.lastReview': 'Last reviewed',
+  'vendors.edit': 'Edit processor',
+  'vendors.nameRequired': 'Enter the processor\u2019s name.',
+  'vendors.emptyTitle': 'No processors recorded',
+  'vendors.empty': 'Art. 28 GDPR requires a written agreement with every processor that handles personal data on your behalf.',
+  'vendors.archiveTitle': 'Archive this processor?',
+  'vendors.archiveBody': 'It will be removed from this list but kept in the audit trail, as compliance records require.',
+  'vendors.archived': 'Processor archived',
+  'vendors.inUse': 'This processor is still linked to a processing activity or a transfer. Remove those links first, then archive it.',
+
+  // Risk levels — shared wording wherever a record carries a low/medium/high rating.
+  'risk.level': 'Risk level',
+  'risk.low': 'Low',
+  'risk.medium': 'Medium',
+  'risk.high': 'High',
 
   // Transfers
   'transfers.title': 'International Transfers',
