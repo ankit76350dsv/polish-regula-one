@@ -38,9 +38,12 @@ function Section({ title, children }) {
   );
 }
 
+// One label/value line. Stacks on narrow screens — a fixed 11rem label column beside the
+// value is unreadable on a phone. Same column width as the wizard's review step so the two
+// views of the same record line up.
 function Row({ label, children }) {
   return (
-    <div className="grid grid-cols-[11rem_1fr] gap-3 border-b border-border/40 py-1.5 last:border-0">
+    <div className="grid gap-0.5 border-b border-border/40 py-1.5 last:border-0 sm:grid-cols-[11rem_1fr] sm:gap-3">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span>{children ?? '—'}</span>
     </div>
@@ -106,7 +109,10 @@ export default function ActivityDetailPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <PageHeader title={activity.name} subtitle={`${labelOf(DEPARTMENTS, activity.department, lang)} · ${activity.ownerName}`}>
+      <PageHeader
+        title={activity.name}
+        subtitle={`${labelOf(DEPARTMENTS, activity.department, lang)} · ${t('ropa.owner')}: ${activity.ownerName}`}
+      >
         {can(user, ACTIONS.EDIT_ACTIVITY) && (
           <Button variant="outline" onClick={() => navigate(`${base}/register/${activity.id}/edit`)}>
             <Pencil /> {t('common.edit')}
@@ -140,45 +146,46 @@ export default function ActivityDetailPage() {
         <Section title={`${t('ropa.purpose')} — Art. 30(1)(b)`}>
           <p>{activity.purpose}</p>
           {activity.role === 'processor' && (
-            <Row label="Art. 30(2)(a)">{activity.controllersServed}</Row>
+            <Row label={`${t('ropa.controllersServed')} (Art. 30(2)(a))`}>{activity.controllersServed}</Row>
           )}
           {isController && (
             <>
-              <Row label={`${t('ropa.lawfulBasis')} (Art. 6)`}>
+              <Row label={`${t('ropa.lawfulBasis')} (Art. 6(1))`}>
                 {activity.lawfulBasis ? `${labelOf(ART6_BASES, activity.lawfulBasis, lang)} (${byId(ART6_BASES, activity.lawfulBasis)?.ref})` : '—'}
               </Row>
               {activity.legitimateInterestDetail && (
-                <Row label="Art. 6(1)(f)">{activity.legitimateInterestDetail}</Row>
-              )}
-              {activity.art9Condition && (
-                <Row label="Art. 9(2)">
-                  {byId(ART9_CONDITIONS, activity.art9Condition)?.ref} — {labelOf(ART9_CONDITIONS, activity.art9Condition, lang)}
+                <Row label={`${t('ropa.legitimateInterest')} (Art. 6(1)(f))`}>
+                  {activity.legitimateInterestDetail}
                 </Row>
               )}
-              {activity.art10 && <Row label="Art. 10">{t('common.yes')}</Row>}
+              {activity.art9Condition && (
+                <Row label={`${t('ropa.art9Condition')} (Art. 9(2))`}>
+                  {labelOf(ART9_CONDITIONS, activity.art9Condition, lang)}
+                  {' '}({byId(ART9_CONDITIONS, activity.art9Condition)?.ref})
+                </Row>
+              )}
             </>
           )}
         </Section>
 
-        <Section title={`${lang === 'pl' ? 'Dane i osoby' : 'Data & subjects'} — Art. 30(1)(c)`}>
-          <Row label={lang === 'pl' ? 'Kategorie osób' : 'Data subjects'}>
+        <Section title={`${t('ropa.dataAndSubjects')} — Art. 30(1)(c)`}>
+          <Row label={t('ropa.dataSubjects')}>
             {activity.dataSubjects?.map((s) => labelOf(DATA_SUBJECT_CATEGORIES, s, lang)).join(', ')}
           </Row>
-          <Row label={lang === 'pl' ? 'Kategorie danych' : 'Data categories'}>
+          <Row label={t('ropa.dataCategories')}>
             {activity.dataCategories?.map((c) => labelOf(DATA_CATEGORIES, c, lang)).join(', ')}
           </Row>
-          <Row label={lang === 'pl' ? 'Źródła' : 'Sources'}>
-            {activity.dataSources?.join('; ')}
-          </Row>
+          {activity.art10 && <Row label={`${t('ropa.art10')} (Art. 10)`}>{t('common.yes')}</Row>}
+          <Row label={t('ropa.dataSources')}>{activity.dataSources?.join('; ')}</Row>
         </Section>
 
-        <Section title={`${lang === 'pl' ? 'Odbiorcy i podmioty przetwarzające' : 'Recipients & processors'} — Art. 30(1)(d) / Art. 28`}>
-          <Row label="Art. 30(1)(d)">
+        <Section title={t('ropa.recipientsAndProcessors')}>
+          <Row label={`${t('ropa.recipients')} (Art. 30(1)(d))`}>
             {activity.recipients?.length
               ? activity.recipients.map((r) => labelOf(RECIPIENT_CATEGORIES, r, lang)).join(', ')
               : t('common.none')}
           </Row>
-          <Row label="Art. 28">
+          <Row label={`${t('ropa.processors')} (Art. 28)`}>
             {activity.vendorIds?.length
               ? activity.vendorIds.map((vid) => vendors.find((v) => v.id === vid)?.name ?? vid).join(', ')
               : t('common.none')}
@@ -201,19 +208,26 @@ export default function ActivityDetailPage() {
                 );
               })
             ) : (
-              <p className="text-(--status-warn)">{t('transfers.tiaMissing')} — <Link className="underline" to={`${base}/transfers`}>{t('nav.transfers')}</Link></p>
+              // Previously this reused the "TIA missing" wording, which says something else
+              // entirely. The problem here is that no transfer record is linked at all.
+              <p className="text-(--status-warn)">
+                {t('ropa.transferNoneLinked')}{' '}
+                <Link className="underline underline-offset-2" to={`${base}/transfers`}>
+                  {t('nav.transfers')}
+                </Link>
+              </p>
             )
           ) : (
-            <p className="text-muted-foreground">{t('common.no')} — EEA only</p>
+            <p className="text-muted-foreground">{t('ropa.eeaOnly')}</p>
           )}
         </Section>
 
         <Section title={`${t('ropa.retention')} — Art. 30(1)(f)`}>
           <Row label={t('ropa.retention')}>{activity.retentionPeriod}</Row>
-          <Row label={lang === 'pl' ? 'Podstawa' : 'Basis'}>{activity.retentionBasis}</Row>
+          <Row label={t('ropa.retentionBasis')}>{activity.retentionBasis}</Row>
         </Section>
 
-        <Section title={`TOMs — Art. 32 / Art. 30(1)(g)`}>
+        <Section title={`${t('ropa.toms')} — Art. 32 / Art. 30(1)(g)`}>
           <ul className="grid list-disc gap-1 pl-4 sm:grid-cols-2">
             {activity.toms?.map((tm) => <li key={tm}>{labelOf(TOMS, tm, lang)}</li>)}
           </ul>

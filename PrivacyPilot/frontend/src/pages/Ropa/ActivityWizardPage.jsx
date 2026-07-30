@@ -302,7 +302,7 @@ export default function ActivityWizardPage() {
       </ol>
 
       <Card>
-        <CardContent className="grid gap-5 p-5">
+        <CardContent className="grid gap-4">
           {step === 0 && (
             <>
               {!id && (
@@ -325,26 +325,21 @@ export default function ActivityWizardPage() {
                     </Select>
                   )}
                 </FormField>
-                <FormField
-                  label="Rola / Role (Art. 30)"
-                  hint={lang === 'pl'
-                    ? 'Administrator prowadzi rejestr z art. 30 ust. 1; podmiot przetwarzający — z art. 30 ust. 2.'
-                    : 'Controllers keep the Art. 30(1) record; processors the Art. 30(2) record of categories.'}
-                >
+                <FormField label={`${t('ropa.role')} (Art. 30)`} hint={t('ropa.roleHint')}>
                   {(fid) => (
                     <Select id={fid} value={form.role} onChange={(e) => set({ role: e.target.value })}>
                       {/* Only the two roles the backend register supports (Art. 30(1)/(2)).
                           "Joint controller" was removed: the ProcessingRole enum has no such
                           value, so saving it would fail, and the register has no tab for it. */}
-                      <option value="controller">{lang === 'pl' ? 'Administrator (ADO)' : 'Controller'}</option>
-                      <option value="processor">{lang === 'pl' ? 'Podmiot przetwarzający' : 'Processor'}</option>
+                      <option value="controller">{t('ropa.roleController')}</option>
+                      <option value="processor">{t('ropa.roleProcessor')}</option>
                     </Select>
                   )}
                 </FormField>
               </div>
               {form.role === 'processor' && (
                 <FormField
-                  label={lang === 'pl' ? 'Administratorzy, na rzecz których przetwarzasz (art. 30 ust. 2 lit. a)' : 'Controllers you process for (Art. 30(2)(a))'}
+                  label={`${t('ropa.controllersServed')} (Art. 30(2)(a))`}
                   required error={errors.controllersServed}
                 >
                   {(fid) => (
@@ -369,7 +364,7 @@ export default function ActivityWizardPage() {
                         'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm',
                         form.lawfulBasis === b.id ? 'border-primary bg-primary/10' : 'border-border hover:bg-accent',
                       )}>
-                        <input type="radio" name="basis" className="accent-[#c5a059]"
+                        <input type="radio" name="basis" className="accent-primary"
                           checked={form.lawfulBasis === b.id}
                           onChange={() => set({ lawfulBasis: b.id })} />
                         <span className="text-foreground">{b[lang]}</span>
@@ -381,9 +376,9 @@ export default function ActivityWizardPage() {
               )}
               {form.lawfulBasis === 'legitimate_interest' && (
                 <FormField
-                  label={lang === 'pl' ? 'Opis prawnie uzasadnionego interesu' : 'Description of the legitimate interest'}
+                  label={t('ropa.legitimateInterest')}
                   required error={errors.legitimateInterestDetail}
-                  hint={lang === 'pl' ? 'Wymagane w klauzuli informacyjnej — art. 13(1)(d).' : 'Required in the privacy notice — Art. 13(1)(d).'}
+                  hint={t('ropa.legitimateInterestHint')}
                 >
                   {(fid) => (
                     <Textarea id={fid} value={form.legitimateInterestDetail}
@@ -392,8 +387,8 @@ export default function ActivityWizardPage() {
                 </FormField>
               )}
               <FormField
-                label={lang === 'pl' ? 'Czy podanie danych jest wymogiem? (art. 13(2)(e))' : 'Is providing data required? (Art. 13(2)(e))'}
-                hint={lang === 'pl' ? 'Np. wymóg ustawowy / umowny i konsekwencje niepodania.' : 'E.g. statutory/contractual requirement and consequences of not providing.'}
+                label={`${t('ropa.provision')} (Art. 13(2)(e))`}
+                hint={t('ropa.provisionHint')}
               >
                 {(fid) => (
                   <Textarea id={fid} value={form.provisionStatement}
@@ -405,17 +400,17 @@ export default function ActivityWizardPage() {
 
           {step === 2 && (
             <>
-              <FormField label={`${lang === 'pl' ? 'Kategorie osób' : 'Categories of data subjects'} (Art. 30(1)(c))`} required error={errors.dataSubjects}>
+              <FormField label={`${t('ropa.dataSubjects')} (Art. 30(1)(c))`} required error={errors.dataSubjects}>
                 <ChipGroup options={DATA_SUBJECT_CATEGORIES} selected={form.dataSubjects}
                   onToggle={(v) => set({ dataSubjects: toggle(form.dataSubjects, v) })} lang={lang} />
               </FormField>
-              <FormField label={`${lang === 'pl' ? 'Kategorie danych' : 'Categories of personal data'} (Art. 30(1)(c))`} required error={errors.dataCategories}>
+              <FormField label={`${t('ropa.dataCategories')} (Art. 30(1)(c))`} required error={errors.dataCategories}>
                 <ChipGroup options={DATA_CATEGORIES} selected={form.dataCategories}
                   onToggle={(v) => set({ dataCategories: toggle(form.dataCategories, v) })} lang={lang} flagKey="special" />
               </FormField>
               {hasSpecial && (
                 <FormField
-                  label={lang === 'pl' ? 'Warunek przetwarzania danych szczególnych — art. 9(2)' : 'Special-category condition — Art. 9(2)'}
+                  label={`${t('ropa.art9Condition')} (Art. 9(2))`}
                   required error={errors.art9Condition}
                 >
                   {(fid) => (
@@ -429,8 +424,8 @@ export default function ActivityWizardPage() {
                 </FormField>
               )}
               <FormField
-                label={lang === 'pl' ? 'Źródła danych (art. 14)' : 'Data sources (Art. 14)'}
-                hint={lang === 'pl' ? 'Rozdziel średnikiem.' : 'Separate with semicolons.'}
+                label={`${t('ropa.dataSources')} (Art. 14)`}
+                hint={t('ropa.dataSourcesHint')}
               >
                 {(fid) => (
                   <Input id={fid} value={form.dataSources.join('; ')}
@@ -443,19 +438,17 @@ export default function ActivityWizardPage() {
           {step === 3 && (
             <>
               <FormField
-                label={`${lang === 'pl' ? 'Kategorie odbiorców' : 'Categories of recipients'} (Art. 30(1)(d))`}
-                hint={lang === 'pl'
-                  ? 'Odbiorcy to nie to samo co podmioty przetwarzające — te wybierz poniżej.'
-                  : 'Recipients are not the same as processors — pick processors separately below.'}
+                label={`${t('ropa.recipients')} (Art. 30(1)(d))`}
+                hint={t('ropa.recipientsHint')}
               >
                 <ChipGroup options={RECIPIENT_CATEGORIES} selected={form.recipients}
                   onToggle={(v) => set({ recipients: toggle(form.recipients, v) })} lang={lang} />
               </FormField>
-              <FormField label={`${lang === 'pl' ? 'Podmioty przetwarzające (art. 28)' : 'Processors (Art. 28)'}`}>
+              <FormField label={`${t('ropa.processors')} (Art. 28)`}>
                 <div className="grid gap-1.5">
                   {vendors.map((v) => (
                     <label key={v.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-accent">
-                      <input type="checkbox" className="accent-[#c5a059]"
+                      <input type="checkbox" className="accent-primary"
                         checked={form.vendorIds.includes(v.id)}
                         onChange={() => set({ vendorIds: toggle(form.vendorIds, v.id) })} />
                       <span className="text-foreground">{v.name}</span>
@@ -481,22 +474,20 @@ export default function ActivityWizardPage() {
                         'rounded-lg border px-4 py-2 text-sm',
                         form.transfer === val ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent',
                       )}>
-                      {val ? t('common.yes') : `${t('common.no')} (EEA only)`}
+                      {val ? t('common.yes') : t('ropa.noTransfer')}
                     </button>
                   ))}
                 </div>
               </FormField>
               {form.transfer && (
                 <FormField
-                  label={lang === 'pl' ? 'Powiązane transfery' : 'Linked transfers'}
-                  hint={lang === 'pl'
-                    ? 'Brakujący transfer dodasz w module Transfery międzynarodowe po zapisaniu.'
-                    : 'Add missing transfers in the International Transfers module after saving.'}
+                  label={t('ropa.transfersLinked')}
+                  hint={t('ropa.transfersLinkedHint')}
                 >
                   <div className="grid gap-1.5">
                     {transfers.map((tr) => (
                       <label key={tr.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-accent">
-                        <input type="checkbox" className="accent-[#c5a059]"
+                        <input type="checkbox" className="accent-primary"
                           checked={form.transferIds.includes(tr.id)}
                           onChange={() => set({ transferIds: toggle(form.transferIds, tr.id) })} />
                         <span className="text-foreground">{tr.recipient}</span>
@@ -515,22 +506,22 @@ export default function ActivityWizardPage() {
           {step === 5 && (
             <>
               <FormField label={`${t('ropa.retention')} (Art. 30(1)(f))`} required error={errors.retentionPeriod}
-                hint={lang === 'pl' ? 'Np. „10 lat od ustania zatrudnienia" albo „do wycofania zgody".' : 'E.g. "10 years after employment ends" or "until consent is withdrawn".'}>
+                hint={t('ropa.retentionHint')}>
                 {(fid) => <Input id={fid} value={form.retentionPeriod} onChange={(e) => set({ retentionPeriod: e.target.value })} />}
               </FormField>
-              <FormField label={lang === 'pl' ? 'Podstawa okresu retencji' : 'Legal basis for the retention period'}>
+              <FormField label={t('ropa.retentionBasis')}>
                 {(fid) => <Input id={fid} value={form.retentionBasis} onChange={(e) => set({ retentionBasis: e.target.value })} />}
               </FormField>
             </>
           )}
 
           {step === 6 && (
-            <FormField label={`${lang === 'pl' ? 'Środki techniczne i organizacyjne' : 'Technical and organisational measures'} (Art. 32 / 30(1)(g))`}
+            <FormField label={`${t('ropa.toms')} (Art. 32 / 30(1)(g))`}
               required error={errors.toms}>
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {TOMS.map((tm) => (
                   <label key={tm.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs hover:bg-accent">
-                    <input type="checkbox" className="accent-[#c5a059]"
+                    <input type="checkbox" className="accent-primary"
                       checked={form.toms.includes(tm.id)}
                       onChange={() => set({ toms: toggle(form.toms, tm.id) })} />
                     <span className="text-foreground">{tm[lang]}</span>
@@ -542,24 +533,22 @@ export default function ActivityWizardPage() {
 
           {step === 7 && (
             <>
-              <div className="rounded-lg border border-primary/30 bg-accent p-3 text-xs text-accent-foreground">
-                {lang === 'pl'
-                  ? 'Analiza wstępna wg wykazu Prezesa UODO (M.P. 2019 poz. 666). Kryteria sugerowane na podstawie wprowadzonych danych — możesz je zmienić.'
-                  : 'Screening against the UODO list (M.P. 2019 poz. 666). Criteria are pre-suggested from your answers — adjust as needed.'}
-              </div>
+              <p className="rounded-lg border border-primary/30 bg-accent p-3 text-xs text-accent-foreground">
+                {t('wizard.dpiaIntro')}
+              </p>
               <div className="grid gap-1.5">
                 {DPIA_CRITERIA.map((c) => (
                   <label key={c.id} className={cn(
                     'flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-xs',
                     form.dpiaCriteria.includes(c.id) ? 'border-(--status-warn)/50 bg-(--status-warn)/5' : 'border-border hover:bg-accent',
                   )}>
-                    <input type="checkbox" className="mt-0.5 accent-[#c5a059]"
+                    <input type="checkbox" className="mt-0.5 accent-primary"
                       checked={form.dpiaCriteria.includes(c.id)}
                       onChange={() => set({ dpiaCriteria: toggle(form.dpiaCriteria, c.id) })} />
                     <span>
                       <span className="font-medium text-foreground">{c[lang]}</span>
                       {suggested.includes(c.id) && !form.dpiaCriteria.includes(c.id) && (
-                        <span className="ml-1.5 text-primary">({lang === 'pl' ? 'sugerowane' : 'suggested'})</span>
+                        <span className="ml-1.5 text-primary">({t('wizard.suggested')})</span>
                       )}
                       <br />
                       <span className="text-muted-foreground">{lang === 'pl' ? c.examplePl : c.exampleEn}</span>
@@ -576,21 +565,24 @@ export default function ActivityWizardPage() {
 
           {step === 8 && (
             <div className="grid gap-2 text-sm">
+              {/* Every value is a LABEL, never a stored code: this is the last thing the
+                  user checks before the record becomes the company's Art. 30 evidence, so
+                  it has to read the way the saved record will. */}
               {[
                 [t('ropa.name'), form.name],
-                ['Rola / Role', form.role],
+                [t('ropa.role'), isController ? t('ropa.roleController') : t('ropa.roleProcessor')],
                 [t('common.department'), labelOf(DEPARTMENTS, form.department, lang)],
                 [t('ropa.purpose'), form.purpose],
-                [t('ropa.lawfulBasis'), form.lawfulBasis ? labelOf(ART6_BASES, form.lawfulBasis, lang) : '—'],
-                ['Art. 9(2)', form.art9Condition ? `Art. 9(2)(${form.art9Condition})` : '—'],
-                [lang === 'pl' ? 'Osoby' : 'Subjects', form.dataSubjects.map((s) => labelOf(DATA_SUBJECT_CATEGORIES, s, lang)).join(', ')],
-                [lang === 'pl' ? 'Dane' : 'Data', form.dataCategories.map((c) => labelOf(DATA_CATEGORIES, c, lang)).join(', ')],
-                [lang === 'pl' ? 'Odbiorcy' : 'Recipients', form.recipients.map((r) => labelOf(RECIPIENT_CATEGORIES, r, lang)).join(', ') || '—'],
+                [t('ropa.lawfulBasis'), form.lawfulBasis ? labelOf(ART6_BASES, form.lawfulBasis, lang) : null],
+                [t('ropa.art9Condition'), form.art9Condition ? labelOf(ART9_CONDITIONS, form.art9Condition, lang) : null],
+                [t('ropa.dataSubjects'), form.dataSubjects.map((s) => labelOf(DATA_SUBJECT_CATEGORIES, s, lang)).join(', ')],
+                [t('ropa.dataCategories'), form.dataCategories.map((c) => labelOf(DATA_CATEGORIES, c, lang)).join(', ')],
+                [t('ropa.recipients'), form.recipients.map((r) => labelOf(RECIPIENT_CATEGORIES, r, lang)).join(', ')],
                 [t('ropa.retention'), form.retentionPeriod],
-                ['TOMs', form.toms.map((tm) => labelOf(TOMS, tm, lang)).join(', ')],
+                [t('ropa.toms'), form.toms.map((tm) => labelOf(TOMS, tm, lang)).join(', ')],
                 [t('ropa.dpia'), t(`dpia.verdict.${verdict.verdict}`)],
               ].map(([label, value]) => (
-                <div key={label} className="grid grid-cols-[10rem_1fr] gap-3 border-b border-border/50 pb-2">
+                <div key={label} className="grid gap-0.5 border-b border-border/50 pb-2 sm:grid-cols-[11rem_1fr] sm:gap-3">
                   <span className="text-xs text-muted-foreground">{label}</span>
                   <span className="text-foreground">{value || '—'}</span>
                 </div>
