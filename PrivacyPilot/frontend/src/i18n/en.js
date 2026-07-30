@@ -316,9 +316,15 @@ export default {
   'notices.audience': 'Audience',
   'notices.checklist': 'Art. 13/14 completeness checklist',
   'notices.blocked': 'Generation blocked — mandatory information is missing:',
-  'notices.download': 'Download (Markdown)',
   'notices.print': 'Print / save as PDF',
   'notices.language': 'Document language',
+  'notices.versions': 'Versions',
+  'notices.preview': 'Preview',
+  'notices.previewEmpty': 'Generate a notice to preview it here.',
+  'notices.checklistOk': 'Provided',
+  'notices.checklistMissing': 'Missing',
+  'notices.blockedShort': 'Generation is blocked until the missing items above are provided.',
+  'notices.docKind': 'Privacy-notice',
 
   // Vendors
   'vendors.title': 'Processors & DPAs',

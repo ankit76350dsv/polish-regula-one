@@ -1,6 +1,10 @@
-// Privacy Notice Generator — per-audience Art. 13/14 documents compiled from
-// live register data. Generation is BLOCKED until the completeness checklist
-// passes; the missing items are listed with where to fix them.
+// Privacy Notice Generator — per-audience Art. 13/14 documents compiled from live register
+// data. Generation is BLOCKED until the completeness checklist passes, so a notice can never
+// claim something the register cannot back up.
+//
+// The finished document can leave as Word (what a DPO finalises in), as raw Markdown, or via
+// the print dialog for a PDF — all three through lib/documentDownload.js, and all three
+// recorded in the audit trail first (GDPR Art. 5(2)).
 import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
@@ -14,45 +18,19 @@ import DraftsDisclaimer from '../../components/common/DraftsDisclaimer';
 import { Select, FormField } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchNotices, fetchChecklist, generateNotice } from '../../store/slices/noticesSlice';
-// The notice TEXT is compiled on the client from live data, so the page makes sure
-// the activities (real backend) and the settings/transfers/vendors (still mock) are
-// loaded before "Generate" runs. See noticesSlice.generateNotice.
+// The notice TEXT is compiled on the client, so the page makes sure everything it is built
+// from — activities, company/DPO settings, transfers and processors — is loaded before
+// "Generate" runs. See noticesSlice.generateNotice.
 import { fetchActivities } from '../../store/slices/activitiesSlice';
 import { fetchSettings } from '../../store/slices/settingsSlice';
 import { fetchTransfers } from '../../store/slices/transfersSlice';
 import { fetchVendors } from '../../store/slices/vendorsSlice';
 import { recordExport } from '../../store/slices/exportsSlice';
 import { useT } from '../../i18n';
-import { NOTICE_AUDIENCES, NOTICE_REQUIRED_ITEMS, byId } from '../../lib/gdpr';
-
-function download(filename, content) {
-  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-// Turn any text into something safe to drop inside HTML. The notice TITLE is typed by a
-// user and stored, so writing it into the print window unescaped would let one colleague's
-// title run code in another colleague's browser. Escape both title and body.
-function escapeHtml(s) {
-  return String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
-function printContent(title, markdown) {
-  // Simple print view — the browser's own print-to-PDF is the export path.
-  const win = window.open('', '_blank');
-  if (!win) return;
-  win.document.write(`<!doctype html><title>${escapeHtml(title)}</title>
-    <pre style="font-family: Georgia, serif; white-space: pre-wrap; max-width: 48rem; margin: 2rem auto;">${
-      escapeHtml(markdown)
-    }</pre>`);
-  win.document.close();
-  win.print();
-}
+import { NOTICE_AUDIENCES, NOTICE_REQUIRED_ITEMS, byId, labelOf } from '../../lib/gdpr';
+import {
+  documentFilename, downloadMarkdown, downloadWord, printDocument,
+} from '../../lib/documentDownload';
 
 export default function NoticesPage() {
   const { t, lang } = useT();
@@ -108,11 +86,14 @@ export default function NoticesPage() {
       toast.error(action.error.message === 'FORBIDDEN' ? t('common.notAuthorized') : t('export.failed'));
       return;
     }
-    if (format === 'print') {
-      printContent(selected.title, selected.content);
-    } else {
-      download(`${selected.audience}_notice_v${selected.version}.md`, selected.content);
-    }
+    // A readable name: "Klauzula-informacyjna-Pracownicy-v3.docx-ish" rather than
+    // "employees_notice_v3.md" — the audience is spelled out, not its stored code.
+    const audienceLabel = labelOf(NOTICE_AUDIENCES, selected.audience, lang);
+    const name = (ext) => documentFilename(t('notices.docKind'), audienceLabel, selected.version, ext);
+
+    if (format === 'print') printDocument(selected.title, selected.content);
+    else if (format === 'word') downloadWord(name('doc'), selected.title, selected.content);
+    else downloadMarkdown(name('md'), selected.content);
   };
 
   const generate = async () => {
@@ -165,11 +146,13 @@ export default function NoticesPage() {
                     return (
                       <li key={item.id} className="flex items-start gap-2 text-xs">
                         {item.ok
-                          ? <Check className="mt-0.5 size-3.5 shrink-0 text-(--status-ok)" aria-label="OK" />
-                          : <X className="mt-0.5 size-3.5 shrink-0 text-(--status-risk)" aria-label="Missing" />}
+                          ? <Check className="mt-0.5 size-3.5 shrink-0 text-(--status-ok)" aria-label={t('notices.checklistOk')} />
+                          : <X className="mt-0.5 size-3.5 shrink-0 text-(--status-risk)" aria-label={t('notices.checklistMissing')} />}
                         <span>
+                          {/* Fall back to the article reference, never to the stored id —
+                              "provision_requirement" is not something to show a user. */}
                           <span className={item.ok ? 'text-foreground' : 'text-(--status-risk)'}>
-                            {meta?.[lang] ?? item.id}
+                            {meta?.[lang] ?? item.ref ?? item.id}
                           </span>
                           <span className="ml-1 text-muted-foreground">({item.ref})</span>
                           {!item.ok && item.details && (
@@ -185,7 +168,7 @@ export default function NoticesPage() {
           </Card>
 
           <Card>
-            <CardContent className="grid gap-3 p-4">
+            <CardContent className="grid gap-3">
               <FormField label={t('notices.language')}>
                 {(fid) => (
                   <Select id={fid} value={docLang} onChange={(e) => setDocLang(e.target.value)}>
@@ -199,14 +182,16 @@ export default function NoticesPage() {
                 <FileText /> {t('notices.generate')}
               </Button>
               {check?.blocked && (
-                <p className="text-xs text-(--status-risk)">{t('notices.blocked')}</p>
+                <p className="text-xs text-(--status-risk)">{t('notices.blockedShort')}</p>
               )}
             </CardContent>
           </Card>
 
           {history.length > 0 && (
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">v{history[0]?.version ?? 1}</CardTitle></CardHeader>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">{t('notices.versions')}</CardTitle>
+              </CardHeader>
               <CardContent>
                 <ul className="grid gap-1">
                   {history.map((n) => (
@@ -230,11 +215,14 @@ export default function NoticesPage() {
         {/* Preview */}
         <Card>
           <CardHeader className="flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm">{selected?.title ?? '—'}</CardTitle>
+            <CardTitle className="text-sm">{selected?.title ?? t('notices.preview')}</CardTitle>
             {selected?.content && (
               <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => exportNotice('word')}>
+                  <Download /> Word
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => exportNotice('markdown')}>
-                  <Download /> {t('notices.download')}
+                  <Download /> Markdown
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => exportNotice('print')}>
                   <Printer /> {t('notices.print')}
@@ -248,7 +236,7 @@ export default function NoticesPage() {
                 {selected.content}
               </pre>
             ) : (
-              <p className="text-sm text-muted-foreground">{t('common.emptyTitle')}</p>
+              <p className="text-sm text-muted-foreground">{t('notices.previewEmpty')}</p>
             )}
           </CardContent>
         </Card>

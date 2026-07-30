@@ -24,6 +24,9 @@ import {
 import { fetchSettings } from '../../store/slices/settingsSlice';
 import { recordExport } from '../../store/slices/exportsSlice';
 import DraftsDisclaimer from '../../components/common/DraftsDisclaimer';
+// Shared with the privacy-notice screen: one copy of the download/print/escaping logic
+// instead of a private copy per page (see lib/documentDownload.js).
+import { downloadMarkdown, downloadWord, printDocument } from '../../lib/documentDownload';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { UODO_WINDOW_MS } from '../../services/breachService';
@@ -36,33 +39,6 @@ import { aiDraftBreachNotification } from '../../store/slices/aiSlice';
 // A reminder fires once the 72h window is inside this much time (or already gone).
 const REMIND_THRESHOLD_MS = 12 * 60 * 60 * 1000; // 12 hours
 
-// ── Export helpers (browser downloads / print) ───────────────────────────────
-function escapeHtml(s) {
-  return String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-function downloadBlob(filename, content, mime) {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-// A .doc that Microsoft Word opens: HTML wrapped and served as msword.
-function downloadWord(filename, title, content) {
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head>`
-    + `<body><pre style="font-family: Georgia, serif; white-space: pre-wrap; font-size: 12pt;">${escapeHtml(content)}</pre></body></html>`;
-  downloadBlob(filename, html, 'application/msword');
-}
-function printDoc(title, content) {
-  const win = window.open('', '_blank');
-  if (!win) return;
-  win.document.write(`<!doctype html><title>${escapeHtml(title)}</title>`
-    + `<pre style="font-family: Georgia, serif; white-space: pre-wrap; max-width: 46rem; margin: 2rem auto;">${escapeHtml(content)}</pre>`);
-  win.document.close();
-  win.print();
-}
 
 export default function BreachDetailPage() {
   const { id } = useParams();
@@ -383,7 +359,7 @@ export default function BreachDetailPage() {
             <Button variant="outline" size="sm" onClick={copyReport}><Copy /> {t('ai.copy')}</Button>
             <Button variant="outline" size="sm" onClick={async () => {
               if (await recordReportExport('markdown')) {
-                downloadBlob(`${reportFilename}.md`, report, 'text/markdown;charset=utf-8');
+                downloadMarkdown(`${reportFilename}.md`, report);
               }
             }}>
               <Download /> Markdown
@@ -396,7 +372,7 @@ export default function BreachDetailPage() {
               <Download /> Word
             </Button>
             <Button variant="outline" size="sm" onClick={async () => {
-              if (await recordReportExport('print')) printDoc(breach.title, report);
+              if (await recordReportExport('print')) printDocument(breach.title, report);
             }}>
               <Printer /> {lang === 'pl' ? 'Drukuj / PDF' : 'Print / PDF'}
             </Button>

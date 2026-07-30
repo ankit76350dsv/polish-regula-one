@@ -316,9 +316,15 @@ export default {
   'notices.audience': 'Grupa odbiorców',
   'notices.checklist': 'Lista kontrolna art. 13/14',
   'notices.blocked': 'Generowanie zablokowane — brakuje obowiązkowych informacji:',
-  'notices.download': 'Pobierz (Markdown)',
   'notices.print': 'Drukuj / zapisz jako PDF',
   'notices.language': 'Język dokumentu',
+  'notices.versions': 'Wersje',
+  'notices.preview': 'Podgląd',
+  'notices.previewEmpty': 'Wygeneruj klauzulę, aby zobaczyć jej podgląd.',
+  'notices.checklistOk': 'Uzupełnione',
+  'notices.checklistMissing': 'Brakuje',
+  'notices.blockedShort': 'Generowanie jest zablokowane do czasu uzupełnienia brakujących pozycji powyżej.',
+  'notices.docKind': 'Klauzula-informacyjna',
 
   // Podmioty
   'vendors.title': 'Podmioty przetwarzające i umowy powierzenia',
