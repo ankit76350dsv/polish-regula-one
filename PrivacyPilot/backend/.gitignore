@@ -33,7 +33,19 @@ build/
 .vscode/
 
 ### Secrets / local config ###
-# Do not commit application.properties. It holds secrets like DB
-# credentials and AWS keys. Keeping it out of git protects those secrets.
+# ONLY the files that hold real credentials are ignored.
+#
+# Previously application.properties was ignored too, which meant a fresh clone had NO
+# configuration at all — no port, no active profile, no CORS list — and could not be
+# started or deployed. Configuration everyone needs belongs in git; only the secrets do
+# not. So these two stay out:
 src/main/resources/application.properties
 src/main/resources/application-dev.properties
+src/main/resources/application-prod.properties
+src/main/resources/application-local.properties
+#
+# …and these ARE tracked, because they contain only ${ENV_VAR} placeholders and
+# comments, never a credential:
+#   application.properties                  (base config, local defaults)
+#   application-prod.properties             (production, env vars with no fallbacks)
+#   application-dev.properties.example      (template to copy for local development)

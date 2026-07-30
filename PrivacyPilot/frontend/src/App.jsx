@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'sonner';
 import { initSession, ssoLoopDetected, selectAuthStatus } from './store/slices/authSlice';
 import { can } from './lib/permissions';
+import { useT } from './i18n';
 import { orgPath } from './lib/paths';
 
 import AuthGate from './components/auth/AuthGate';
@@ -52,6 +54,7 @@ function RootRedirect() {
 
 export default function App() {
   const dispatch = useDispatch();
+  const { t } = useT();
 
   // Verify the RegulaOne SSO session once on mount (RegulaOne is the single source
   // of truth for who is signed in). AuthGate renders the right screen off the result.
@@ -66,6 +69,22 @@ export default function App() {
     window.addEventListener('privacypilot:sso-loop', onLoop);
     return () => window.removeEventListener('privacypilot:sso-loop', onLoop);
   }, [dispatch]);
+
+  // client.js fires this when the server's flood protection returns 429. Shown once here
+  // rather than per page: the request itself was fine, it just arrived too fast, and every
+  // page's generic "something went wrong" would send the user looking for the wrong problem.
+  useEffect(() => {
+    const onRateLimited = (event) => {
+      const wait = event.detail?.retryAfterSeconds;
+      toast.warning(
+        wait
+          ? t('common.rateLimitedWait').replace('{seconds}', wait)
+          : t('common.rateLimited'),
+      );
+    };
+    window.addEventListener('privacypilot:rate-limited', onRateLimited);
+    return () => window.removeEventListener('privacypilot:rate-limited', onRateLimited);
+  }, [t]);
 
   return (
     <BrowserRouter>

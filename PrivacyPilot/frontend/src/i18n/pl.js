@@ -104,6 +104,8 @@ export default {
   'common.export': 'Eksportuj',
   'common.loading': 'Ładowanie…',
   'common.error': 'Coś poszło nie tak',
+  'common.rateLimited': 'Zbyt wiele żądań — zwolnij i spróbuj ponownie za chwilę.',
+  'common.rateLimitedWait': 'Zbyt wiele żądań — odczekaj {seconds} s i spróbuj ponownie.',
   'common.retry': 'Spróbuj ponownie',
   'common.status': 'Status',
   'common.actions': 'Akcje',

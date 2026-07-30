@@ -70,6 +70,17 @@ export async function apiRequest(
     // human message, then the HTTP status text.
     const code = json?.errorCode ?? `HTTP_${res.status}`;
     const message = json?.message ?? res.statusText ?? 'Request failed';
+
+    // 429 = the server's flood protection turned us away (see RateLimitFilter). This is
+    // handled HERE, once, rather than in every page: it can happen on ANY call, and every
+    // page's generic "something went wrong" would be actively misleading — the request was
+    // fine, it just arrived too fast. Retry-After says how long to wait.
+    if (res.status === 429) {
+      const retryAfter = Number(res.headers.get('Retry-After')) || null;
+      notifyRateLimited(retryAfter);
+      throw makeError(code, code, res.status, message, { retryAfter });
+    }
+
     throw makeError(code, code, res.status, message);
   }
 
@@ -85,10 +96,32 @@ export const del = (path) => apiRequest(path, { method: 'DELETE' });
 
 // Build an Error that carries both the machine code (as .message AND .code, so it
 // survives Redux Toolkit's error serialisation) and the human-readable server text.
-function makeError(messageForUi, code, status, serverMessage) {
+function makeError(messageForUi, code, status, serverMessage, extra) {
   const err = new Error(messageForUi);
   err.code = code;
   err.status = status;
   if (serverMessage) err.serverMessage = serverMessage;
+  if (extra) Object.assign(err, extra);
   return err;
+}
+
+// Tell the user, once, that they are going too fast. Announced through a browser event
+// rather than importing the toast library here, so the transport layer stays free of UI
+// dependencies and App.jsx decides how it is shown.
+// Repeats inside a short window are swallowed: a burst of blocked calls is ONE problem,
+// not ten notifications.
+let lastRateLimitNoticeAt = 0;
+const RATE_LIMIT_NOTICE_GAP_MS = 5000;
+
+function notifyRateLimited(retryAfterSeconds) {
+  const now = Date.now();
+  if (now - lastRateLimitNoticeAt < RATE_LIMIT_NOTICE_GAP_MS) return;
+  lastRateLimitNoticeAt = now;
+  try {
+    window.dispatchEvent(new CustomEvent('privacypilot:rate-limited', {
+      detail: { retryAfterSeconds },
+    }));
+  } catch {
+    /* not in a browser (tests) — nothing to announce */
+  }
 }

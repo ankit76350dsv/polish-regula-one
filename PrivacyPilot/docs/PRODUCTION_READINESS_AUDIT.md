@@ -53,11 +53,13 @@ It is **not production-ready**, for three distinct classes of reason:
    defaults to off, so every `@Indexed`/`@CompoundIndex` annotation in this module was
    inert. Indexes are now created explicitly at start-up.
 
-3. **The operational layer does not exist yet.** No production profile, no container, no
-   CI/CD, no health/metrics, no rate limiting, no TLS configuration, no field-level
-   encryption, no runnable test suite, no retention or erasure job. Additionally
-   **nothing in `backend/src/main/resources/` is version-controlled** (both properties
-   files are gitignored), so a clean clone cannot be configured or built reproducibly.
+3. **The operational layer is still thin, though no longer absent.** *Fixed since the first
+   pass (§17):* rate limiting, a fail-fast production profile, and configuration that is
+   actually in version control — previously **nothing** under
+   `backend/src/main/resources/` was tracked, so a clean clone could not be configured at
+   all. *Still missing:* no container, no CI/CD, no health checks or metrics, no field-level
+   encryption, no TLS configuration, no retention or erasure job, and a test suite that
+   covers a fraction of the product.
 
 The good news: almost every gap is **additive**. None of them requires rewriting the
 working domain code.
@@ -66,20 +68,20 @@ working domain code.
 
 ## 2. Overall Production Readiness Score
 
-### **66 / 100 — ❌ Not Production Ready**
+### **73 / 100 — ❌ Not Production Ready**
 
-*(54 at first assessment; +3 for H1, +4 for H2, +5 for H3 — all fixed 2026-07-29, see §17.)*
+*(54 at first assessment; +3 H1, +4 H2, +5 H3 — 2026-07-29; +4 H4 and +3 for H7's config half — 2026-07-30. See §17.)*
 
 | Layer | Score | Basis |
 |---|---:|---|
 | Domain code & architecture | 80% | Clean layering, tenant scoping and audit verified end-to-end |
 | Feature completeness | 85% | 10/11 domains real; AI assistant mock; no erasure/export paths |
 | Authentication & authorization | 80% | Auth + RBAC solid; **entitlement gate now enforced server-side (H1 fixed)**; residual: 30 s cache window, frontend/backend matrix drift (M6) |
-| Security hardening | 40% | No rate limiting, no field encryption, no TLS config, weak DTO limits |
+| Security hardening | 60% | **Rate limiting added (H4)**; still no field encryption (H5), no TLS config (H9), weak write-side DTO limits (M2) |
 | Compliance (GDPR/Polish mapping) | 75% | Feature-to-article mapping is accurate; **export accountability now recorded (H2 fixed)**; retention/erasure gaps remain |
 | Database & performance | 65% | **Audit queries and indexes fixed (H3)**; remaining: no pagination on the other list endpoints, no transactions, no migrations |
-| Ops / infra / deploy | 15% | No prod profile, Docker, CI/CD, observability; config not in git |
-| Testing | 35% | Still far from the 80% target, but **55 hermetic tests** now exist (access policy, export accountability, audit query + paging, index shapes — §17); the original context-load test still needs the live Atlas cluster |
+| Ops / infra / deploy | 40% | **Config now in git + fail-fast production profile (H7 half)**; still no Docker, CI/CD or observability |
+| Testing | 40% | Still far from the 80% target, but **67 hermetic tests** now exist (access policy, export accountability, audit query + paging, index shapes, rate limiting — §17); the original context-load test still needs the live Atlas cluster |
 
 ---
 
@@ -221,11 +223,22 @@ by another module) — no database access from this environment. `MongoIndexConf
 idempotent, so it is safe either way.
 
 **H4 · No rate limiting or brute-force protection anywhere.**
-No bucket4j / resilience4j / Spring Security rate limiter in `pom.xml` or `src`; no
-gateway config in the repo. Combined with H3 and M2 (no payload size limits) this leaves
+**✅ FIXED 2026-07-30 — see §17.**
+*As found:* no bucket4j / resilience4j / Spring Security rate limiter in `pom.xml` or `src`,
+and no gateway config in the repo. Combined with H3 and M2 (no payload size limits) this left
 the API trivially floodable. Contravenes CLAUDE.md §6; OWASP API4:2023.
-*Fix:* per-identity and per-IP limits at the edge, stricter on writes and on
-`/audit`, `/dashboard`.
+*Failure scenario:* every request that reaches a controller triggers a call to RegulaOne's
+`/api/auth/me`, so flooding this service also floods the platform's login service; and
+repeated guessing against any endpoint was completely unthrottled.
+*Resolution:* `security/RateLimitFilter.java` — a token-bucket filter on every `/api/**`
+request, with separate allowances for reads (60 burst, 120/min) and writes (20 burst,
+30/min), all configurable. Keyed on the session (an irreversible fingerprint of the cookie,
+never the cookie itself) or the client address when there is none. Refusals return 429 with
+`Retry-After` in the standard `AppResponse` envelope. 12 hermetic tests.
+*Residual — read before scaling out:* the counters are **per-instance, in memory**. With one
+instance that is exact; behind a load balancer each instance keeps its own counters, so the
+effective limit becomes (instances x configured limit) — weaker, never broken. For a cluster,
+enforce at the ingress or move the buckets to shared Redis. Documented in the class.
 
 **H5 · No field-level encryption, no KMS, no per-tenant keys.**
 `grep -r "Cipher\|KMS\|Vault\|@Encrypted" backend/src/main/java` → nothing but enum
@@ -257,6 +270,8 @@ PII fields from H5, keeping the audit skeleton); (c) document the Art. 17(3)(b)/
 retention basis for what remains.
 
 **H7 · No production configuration, and the configuration that exists is not in git.**
+**⚠️ PARTIALLY FIXED 2026-07-30 — config-in-git and the production profile are done (§17);
+Docker, CI/CD and observability remain OPEN.**
 `spring.profiles.active` defaults to `dev` (`application.properties:4`) and there is **no
 `application-prod.properties`**. Both `application.properties` and
 `application-dev.properties` are gitignored (`backend/.gitignore:38-39`) and
@@ -266,10 +281,18 @@ reproducibly. `application-dev.properties:2` holds a live Atlas connection strin
 embedded password in plaintext on disk. No Dockerfile, no compose file, no
 `.github/workflows` anywhere in the repository. No Actuator / Micrometer / OpenTelemetry
 — so no health, readiness, metrics or tracing (CLAUDE.md §12, §14, §15).
-*Fix:* commit an `application.properties` and `application-prod.properties` that contain
-only `${ENV_VAR}` placeholders; keep secrets exclusively in the deployment secret store;
-add a multi-stage non-root Dockerfile, a pipeline with SAST + Trivy + OWASP
-Dependency-Check, and Actuator health/readiness plus metrics.
+*Resolution (config half):* `application.properties` is now **tracked** — it holds only
+`${ENV_VAR:local-default}` placeholders and no secret, so a clean clone is configurable and
+runnable. New tracked `application-prod.properties` requires `MONGODB_URI`,
+`REGULAONE_API_BASE_URL` and `PRIVACYPILOT_CORS_ORIGINS` **with no fallback**, so a
+deployment that forgets one refuses to start rather than silently pointing at localhost; it
+also switches off error detail leakage, caps request bodies and sets non-debug logging. New
+tracked `application-dev.properties.example` documents what to copy locally.
+`application-dev.properties` (the only file with a real password) stays gitignored, and
+`.gitignore` now explains which files are tracked and why.
+*Still OPEN:* no Dockerfile, no CI/CD pipeline (SAST + Trivy + OWASP Dependency-Check), no
+Actuator health/readiness or metrics. `application-prod.properties` lists these explicitly as
+prerequisites that live outside it, so the gap is documented rather than forgotten.
 
 **H8 · There is effectively no test suite, and the one test cannot run.**
 `backend/src/test` contains a single `contextLoads()` test. The stored surefire report
@@ -449,16 +472,16 @@ or require an explicit `X-Acting-Tenant` that is validated and audited.
 | A02 Cryptographic Failures | ❌ **H5** (no field encryption/KMS), **H9** (no TLS configured, `secure=false` default) |
 | A03 Injection | ✅ Low — derived queries only, no XML, no eval; ⚠️ **M1** DOM-XSS sink |
 | A04 Insecure Design | ⚠️ ~~H2~~ (fixed), **H6** (no erasure path) |
-| A05 Security Misconfiguration | ❌ **H4** (no rate limiting), **H7** (no prod profile, config not in git), **M4** (headers) |
+| A05 Security Misconfiguration | ⚠️ ~~H4~~ and ~~H7 config/prod profile~~ fixed; remaining: **H7** (no Docker/CI/observability), **M4** (headers) |
 | A06 Vulnerable Components | ⚠️ **M10** (one patch behind), **L1/L2** (advisories present, exposure build-time only). Backend CVE scan **unable to verify** |
 | A07 Auth Failures | ⚠️ Delegated and sound; **H1** and **L3** are the residual gaps |
 | A08 Integrity Failures | ✅ Audit immutability enforced at DB layer; server owns lifecycle state |
 | A09 Logging & Monitoring | ⚠️ Domain audit trail is strong and exports are now logged (H2 fixed), but **H7** (no metrics/alerting) means nothing is *monitored* |
 | A10 SSRF | ✅ Not applicable — config-fixed single outbound target |
 
-**OWASP ASVS L2:** fails at minimum on V2 (rate limiting), V6 (data-at-rest encryption),
-V9 (TLS configuration), V14 (build/CI hardening, security headers). **Unable to verify**
-V1/V13 items requiring a running deployment.
+**OWASP ASVS L2:** V2 (rate limiting) now addressed. Still fails at minimum on V6
+(data-at-rest encryption), V9 (TLS configuration) and V14 (build/CI hardening, security
+headers). **Unable to verify** V1/V13 items requiring a running deployment.
 
 ---
 
@@ -543,7 +566,7 @@ does database work in Java (H3). No pagination (M3), no transactions (M8), no ve
 | Error envelope | ✅ consistent `AppResponse{success,message,data,errorCode,status}`, no leakage |
 | Idempotency | ⚠️ `notify-uodo` / `notify-subjects` overwrite the timestamp on repeat calls (`BreachService.java:113-125`) — a second click rewrites the recorded notification moment |
 | Versioning | ❌ none (L5) |
-| Rate limiting | ❌ none (H4) |
+| Rate limiting | ✅ token-bucket per session/address, stricter on writes, 429 + `Retry-After` (§17) |
 | Pagination | ⚠️ **audit trail paginated** (`page`/`size`, default 25, max 1000 — §17); the other list endpoints still return whole collections (M3) |
 | Documentation | ⚠️ Postman collection complete and current (50 requests, incl. the new Exports folder); no OpenAPI served (L5) |
 
@@ -553,11 +576,11 @@ does database work in Java (H3). No pagination (M3), no transactions (M8), no ve
 
 | Area | Status | Evidence |
 |---|---|---|
-| Env config | ⚠️ Env-var driven with dev defaults | `application.properties` uses `${VAR:default}` |
-| Config in version control | ❌ **Nothing** under `src/main/resources` is tracked | `git ls-files` empty; `.gitignore:38-39` |
+| Env config | ✅ Env-var driven, **tracked in git**, placeholders only | `application.properties`, `application-prod.properties`, `application-dev.properties.example` (§17) |
+| Config in version control | ✅ **Fixed** — base, prod and dev-template tracked; only the credential-bearing dev file ignored | `git check-ignore` verified per file (§17) |
 | Secrets committed | ✅ None | verified across backend props, `.env`, Postman |
 | Secret management | ⚠️ No vault/KMS; live Atlas password sits plaintext in a local file | `application-dev.properties:2` |
-| Production profile | ❌ Missing | no `application-prod.properties`; default profile `dev` |
+| Production profile | ✅ **Added** — required env vars have no fallback, so a mis-deployed service refuses to start | `application-prod.properties` (§17) |
 | Docker / orchestration | ❌ None | no Dockerfile or compose anywhere |
 | CI/CD | ❌ None | no `.github/workflows`, GitLab CI or Jenkinsfile in the repo |
 | Health / metrics / tracing | ❌ None | no Actuator, Micrometer, Prometheus or OpenTelemetry |
@@ -660,7 +683,7 @@ against the live EUR-Lex text before sign-off.
 | Processor obligations / DPA | Art. 28 | ✅ | Vendor register + DPA-status guard |
 | Transfers outside the EEA | Ch. V (44–49) | ✅ | Transfer register, mechanisms + adequacy list verified (§10.1) |
 | Accountability | Art. 5(2) | ✅ | Immutable trail with actor/IP/UA/old/new, **and every export/print/copy now recorded (H2 fixed, §17)** |
-| Security of processing | Art. 32 | ❌ **gap** | No field-level encryption (H5), no TLS configured (H9), no rate limiting (H4) |
+| Security of processing | Art. 32 | ⚠️ Partial | Rate limiting now in place (H4 fixed); **still** no field-level encryption (H5) and no TLS configured (H9) |
 | Storage limitation | Art. 5(1)(e) | ❌ **gap** | Soft-delete keeps everything forever; no retention schedule (M9) |
 | Right to erasure | Art. 17 | ❌ **gap** | No erasure path, and subject PII is frozen in the immutable trail (H6) |
 | Data minimisation | Art. 5(1)(c) | ⚠️ | Subject names and free-text notes copied into audit values (H6) |
@@ -696,13 +719,13 @@ unverified: the Art. 28 data processing agreement with MongoDB Inc. as sub-proce
 | No hardcoded credentials | ✅ none committed anywhere (backend props, `.env`, Postman all clean) |
 | No development endpoints exposed | ✅ no dev-only routes; DevTools excluded from the jar |
 | No mock data remaining | ❌ AI assistant mock, and it seeds fake tenant data into browser storage (M5) |
-| Production configuration enabled | ❌ no `application-prod.properties`; default profile is `dev`; config not in git (H7) |
-| Secrets stored securely | ⚠️ not committed, but no vault/KMS; live Atlas password plaintext on disk |
+| Production configuration enabled | ✅ `application-prod.properties` tracked; required env vars fail fast; base config in git (§17) |
+| Secrets stored securely | ⚠️ not committed, required vars now documented and fail-fast; still no vault/KMS, and the local dev password sits plaintext on disk |
 | Dependencies current | ⚠️ Spring Boot one patch behind (M10); 7 npm advisories, all build-time or non-applicable (L1/L2) |
-| No known critical vulnerabilities | ⚠️ no *critical* advisory applies to shipped code; but H1/H2/H5 are self-inflicted equivalents |
-| Monitoring & logging production-ready | ❌ no health, metrics, tracing or alerting |
+| No known critical vulnerabilities | ⚠️ no *critical* advisory applies to shipped code; H1/H2 fixed, but **H5** (no encryption at rest) and **H6** (no erasure) remain self-inflicted equivalents |
+| Monitoring & logging production-ready | ❌ no health, metrics, tracing or alerting; logging levels are at least pinned away from DEBUG in prod (§17) |
 | Backup & recovery in place | ⚠️ **Unable to verify** |
-| Automated tests | ❌ one test, and it cannot run without the production database (H8) |
+| Automated tests | ⚠️ 67 hermetic tests on the fixed areas (§17), but coverage of the product as a whole is still far below the 80% target, and the original context-load test still needs the live database (H8) |
 | Can safely operate in production | ❌ |
 
 ---
@@ -716,10 +739,10 @@ unverified: the Art. 28 data processing agreement with MongoDB Inc. as sub-proce
 | ~~H1~~ | ~~Account status / plan / module entitlement enforced only in the browser~~ | **✅ FIXED** — `PrivacyPilotAccessPolicy` enforced in `RegulaOneAuthClient.resolve()`; 15 tests (§17) |
 | ~~H2~~ | ~~`AuditAction.EXPORT` never written; all exports client-side~~ | **✅ FIXED** — `POST /api/privacypilot/exports` recorded before all 8 export paths; 10 tests (§17) |
 | ~~H3~~ | ~~Audit query loads and sorts the whole tenant collection in memory, unindexed~~ | **✅ FIXED** — query pushed into Mongo + compound indexes actually created at start-up; 19 tests (§17) |
-| H4 | No rate limiting or brute-force protection | Edge + app limits, stricter on writes and `/audit` |
+| ~~H4~~ | ~~No rate limiting or brute-force protection~~ | **✅ FIXED** — token-bucket filter on all `/api/**`, reads/writes separate, 429 + `Retry-After`; 12 tests (§17) |
 | H5 | No field-level encryption / KMS / per-tenant keys for PII | Mongo CSFLE or app-layer AES-GCM via KMS |
 | H6 | No erasure path; subject PII frozen in the immutable audit trail | Stop auditing subject identifiers; add crypto-shred erasure; document the retention basis |
-| H7 | No production profile, no Docker, no CI/CD, no observability; config not in git | Commit placeholder-only prod config; Dockerfile; pipeline with SAST/Trivy/Dependency-Check; Actuator |
+| H7 | ~~config not in git, no production profile~~ **✅ fixed (§17)**; Docker, CI/CD and observability **still open** | Add a multi-stage non-root Dockerfile, a pipeline with SAST/Trivy/Dependency-Check, and Actuator health + metrics |
 | H8 | No usable test suite (sole test needs the production Atlas cluster) | Hermetic tests: tenant isolation, RBAC matrix, deadline maths, 72 h clock, DPIA thresholds |
 | H9 | No HTTPS anywhere in configuration; `cookie.secure` defaults false; CSP built from `http://` origins | TLS 1.3 + HSTS at the edge; force `secure`; `https://` `VITE_*` values |
 
@@ -788,20 +811,155 @@ enforced server-side (**H1**), every export is recorded in the audit trail (**H2
 audit query no longer loads a ten-year collection into memory — with the indexes it needs
 now actually created (**H3**).
 
-**Six remain.** The most consequential is **H6**: there is still no erasure path, and data
-subjects' names sit permanently in an immutable audit collection, which is a live GDPR
-Art. 17 problem rather than an operational one. The other five are the missing operational
-floor — field-level encryption (**H5**), TLS (**H9**), rate limiting (**H4**), a production
-profile and container/pipeline/observability (**H7**), and a test suite that meaningfully
-covers the product (**H8**, now at 44 hermetic tests rather than none).
+**Four and a half remain.** The most consequential is **H6**: there is still no erasure path,
+and data subjects' names sit permanently in an immutable audit collection, which is a live GDPR
+Art. 17 problem rather than an operational one. The rest are the missing operational floor —
+field-level encryption (**H5**), TLS (**H9**), the unfinished part of **H7** (no container, no
+CI/CD pipeline, no health checks or metrics), and a test suite that meaningfully covers the
+product (**H8**, now at 67 hermetic tests rather than none).
 
-Resolve **H4–H9** (H1, H2 and H3 are now fixed — §17), and settle the **EEA data-residency and
+Resolve **H5, H6, H8, H9** and the rest of **H7** (H1–H4 are now fixed, H7 half — §17), and settle the **EEA data-residency and
 backup/DR questions** — which cannot be answered from this repository at all — before any
 regulated EU/Poland production deployment.
 
 ---
 
 ## 17. Remediation Log
+
+### 2026-07-30 — H4 fixed (rate limiting) and H7 half fixed (config in git + prod profile)
+
+**1. Files modified**
+
+| File | Change |
+|---|---|
+| `backend/src/main/resources/application.properties` | **now tracked in git** — rewritten as placeholders-only base config (no secret), plus the auth-client timeouts and rate-limit settings that were previously undocumented |
+| `backend/src/main/resources/application-prod.properties` | **new, tracked** — production profile; required variables have **no fallback**, so a mis-deployed service refuses to start |
+| `backend/src/main/resources/application-dev.properties.example` | **new, tracked** — template a developer copies to create their gitignored local file |
+| `backend/.gitignore` | ignores only the two files that hold real credentials, and says which files are tracked and why |
+| `backend/.../security/RateLimitFilter.java` | **new** — token-bucket flood protection on every `/api/**` request |
+| `backend/src/test/.../security/RateLimitFilterTest.java` | **new** — 12 hermetic tests |
+| `frontend/src/services/client.js` | recognises 429, announces it once via a window event, carries `retryAfter` on the error |
+| `frontend/src/App.jsx` | shows the "slow down" notice once, centrally |
+| `frontend/src/i18n/en.js`, `pl.js` | 2 new keys (parity 359 = 359) |
+
+**2. Old behaviour**
+
+*Config:* `.gitignore` excluded **both** `application.properties` and
+`application-dev.properties`, and `git ls-files src/main/resources/` returned nothing. A clean
+clone therefore had no port, no active profile, no CORS list and no database URI — it could
+not be started or deployed without someone privately sharing their own copy. There was no
+production profile at all; `spring.profiles.active` defaulted to `dev`, so a production
+deployment silently ran dev configuration and depended entirely on undocumented environment
+variables.
+
+*Rate limiting:* none. No limiter dependency, no filter, no gateway config.
+
+**3. New behaviour — configuration**
+
+Three tracked files, none containing a secret:
+
+- **`application.properties`** — base config with `${ENV_VAR:local-default}` throughout, so a
+  clean clone runs against a local MongoDB with no extra steps. It now also carries the
+  RegulaOne timeout/cache settings and the rate-limit settings, which previously existed only
+  as hard-coded annotation defaults.
+- **`application-prod.properties`** — activated with `SPRING_PROFILES_ACTIVE=prod`. The three
+  values that must never be guessed — `MONGODB_URI`, `REGULAONE_API_BASE_URL`,
+  `PRIVACYPILOT_CORS_ORIGINS` — are declared **without a fallback**, so Spring refuses to
+  start if the deployment omits one. It also disables error-detail leakage, caps request
+  bodies at 256 KB, sets `forward-headers-strategy` (needed for correct client addresses
+  behind a proxy, which the rate limiter relies on), and pins logging away from DEBUG because
+  request payloads here contain personal data.
+- **`application-dev.properties.example`** — the template, with a comment for every value.
+
+`application-dev.properties`, the only file holding a real password, stays gitignored.
+
+**4. New behaviour — rate limiting**
+
+`RateLimitFilter` gives each caller a token bucket: requests spend tokens, tokens trickle back
+at a fixed rate, and an empty bucket means 429 until it refills. Because a bucket starts full,
+normal use — including a screen that legitimately fires six requests at once — never notices.
+
+- **Reads and writes have separate buckets** (default 60 burst / 120 per minute for reads,
+  20 / 30 for writes), so a heavy reader can never consume the allowance protecting the
+  database from writes. All four write verbs count.
+- **A caller is a session, not just an address:** the key is an irreversible SHA-256
+  fingerprint of the `idToken` cookie when present, else the client address. The cookie itself
+  is never stored or logged.
+- It runs **before** the auth resolver, so a flood is stopped before it turns into a call to
+  RegulaOne's `/api/auth/me` — this protects the platform's login service too.
+- CORS pre-flight (`OPTIONS`) is exempt: refusing it would surface as a confusing CORS error
+  instead of an honest 429 on the real request.
+- The bucket map is bounded (50 000 callers) and sweeps idle entries, so the limiter cannot
+  become a memory leak of its own. Eviction is safe by construction — a dropped bucket starts
+  full, which can only ever be more generous.
+- 429 responses use the same `AppResponse` envelope as every other error plus `Retry-After`,
+  so the frontend needed no per-page handling. `client.js` recognises 429 once, centrally, and
+  `App.jsx` shows one "slow down" notice (repeats within 5 s are swallowed — a burst of
+  blocked calls is one problem, not ten toasts).
+
+**5. Why the old code was changed**
+
+No behaviour was removed. Un-ignoring `application.properties` was safe to do *because* it was
+rewritten first to hold nothing but placeholders — the file's previous contents were already
+secret-free, but the rewrite makes that a property of the file rather than a coincidence.
+Un-ignoring is also not retroactive: the file was never committed, so no credential has ever
+been in history. The rate limiter is purely additive.
+
+A note on the implementation choice: bucket4j and resilience4j are the usual libraries, and
+neither is available in this environment's Maven cache (no network access), so adding one could
+not be verified to build. A hand-rolled token bucket avoids an unverifiable dependency, is ~60
+lines of logic, and allows the session-aware keying a generic library would not give for free.
+The trade-off is that it is per-instance rather than distributed, which is stated in the class
+and in §4.2.
+
+**6. Security & compliance impact**
+
+Closes H4 and the OWASP API4:2023 ("Unrestricted Resource Consumption") gap; combined with the
+H3 fix, the two endpoints that could previously be used to exhaust the server are now both
+bounded and throttled. Brute-force attempts against any endpoint are now throttled per session
+and per address. Supports GDPR Art. 32(1)(b) — resilience of processing systems.
+
+On the configuration side: production can no longer be brought up pointing at a development
+database or with a permissive CORS list, because those cases now fail at start-up instead of
+booting quietly. `server.error.include-*=never` adds a second layer behind the global exception
+handler against internal detail leaking to clients.
+
+**7. Testing performed**
+
+`./mvnw -o test` on the hermetic suites → **67 tests, 0 failures, 0 errors** (12 rate limit +
+7 audit service + 18 audit repository + 5 index + 10 export + 15 access policy). The rate-limit
+tests assert: traffic within the allowance passes; 429 once exhausted; the refusal carries
+`Retry-After` and the standard envelope with `errorCode: RATE_LIMITED`; reads cannot starve
+writes and writes are stricter; all four write verbs count; two addresses and two sessions are
+counted separately; `OPTIONS` and non-API paths are exempt; the limiter can be switched off;
+and a blocked caller recovers once tokens refill.
+
+Configuration was verified by `git check-ignore` on each file (base/prod/example tracked,
+dev ignored) and a credential grep over the three tracked files. Frontend `npm run build`
+succeeds; i18n parity 359 = 359.
+
+**8. Potential risks / side effects**
+
+- **Not verified against a running app.** No database access here, so the app was never
+  started: the prod profile's fail-fast behaviour and the filter's real HTTP path are reasoned
+  and unit-tested, not executed. **Before deploying, start once with `SPRING_PROFILES_ACTIVE=prod`
+  and a deliberately missing `MONGODB_URI` to confirm it refuses to boot**, and once with all
+  three set to confirm it does.
+- *The default limits may be too tight for some real usage.* They were chosen against the
+  heaviest screen in the app (a page loading four slices at once), but a bulk import or an
+  unusually chatty client could trip them. Every number is a property, so raising them needs no
+  code change — and `RATE_LIMIT_ENABLED=false` is an escape hatch.
+- **Per-instance counters.** Running more than one instance multiplies the effective limit.
+  Move to ingress-level or Redis-backed limiting before scaling horizontally.
+- *`getRemoteAddr()` must be correct.* The prod profile sets
+  `server.forward-headers-strategy=framework` so Spring reads the proxy headers; if the app is
+  deployed behind a proxy that does **not** set `X-Forwarded-For`, every unauthenticated caller
+  will share one bucket. Authenticated callers are unaffected (they key on the session).
+- *Existing developers must act:* anyone with a local `application.properties` should re-pull —
+  the tracked version now supplies the base values, and a stale local copy of the old file will
+  simply be overwritten by git. Their `application-dev.properties` is untouched.
+
+---
 
 ### 2026-07-30 — Audit trail paginated (closes M12, completes H3)
 

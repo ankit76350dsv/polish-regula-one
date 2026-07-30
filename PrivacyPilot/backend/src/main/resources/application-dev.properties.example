@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────────────────────────
+# PrivacyPilot backend — LOCAL DEVELOPMENT template.
+#
+# HOW TO USE:
+#   cp application-dev.properties.example application-dev.properties
+#   …then put your real values in the copy.
+#
+# The copy (application-dev.properties) is GITIGNORED because it holds a real database
+# password. This template IS in git so that a fresh clone knows exactly what to create.
+#
+# Everything not listed here already has a working local default in
+# application.properties — you only need to override what differs on your machine.
+# ─────────────────────────────────────────────────────────────────────────────────
+
+# ── MongoDB ──────────────────────────────────────────────────────────────────────
+# The shared RegulaOne Atlas cluster. Ask the team for the username and password;
+# never commit them, and never paste them into application.properties.
+# Local alternative (no credentials needed): leave this line out entirely and the
+# base file's mongodb://localhost:27017/RegulaOne default applies.
+spring.mongodb.uri=mongodb+srv://USERNAME:PASSWORD@YOUR-CLUSTER.mongodb.net/RegulaOne?appName=MongoDBCluster
+
+# ── RegulaOne (the authentication authority) ─────────────────────────────────────
+# Where your local RegulaOne backend is running. PrivacyPilot forwards the browser's
+# idToken cookie here to find out who the caller is, so nothing works without it.
+regulaone.api.base-url=http://localhost:8080
+
+# ── CORS ─────────────────────────────────────────────────────────────────────────
+# Origins allowed to call this API with the shared session cookie. Add your machine's
+# LAN IP when testing from a phone or another computer on the same Wi-Fi — the cookie
+# is host-specific, so the frontend, RegulaOne and this API must all be reached by the
+# SAME host name or IP.
+privacypilot.cors.allowed-origins=http://localhost:3006,http://192.168.1.10:3006
+
+# ── Rate limiting ────────────────────────────────────────────────────────────────
+# Left ON in development on purpose, so a runaway loop in the UI is caught here
+# rather than in production. Raise the numbers if normal clicking trips it, or set
+# privacypilot.rate-limit.enabled=false while debugging something unrelated.
+#privacypilot.rate-limit.enabled=false
