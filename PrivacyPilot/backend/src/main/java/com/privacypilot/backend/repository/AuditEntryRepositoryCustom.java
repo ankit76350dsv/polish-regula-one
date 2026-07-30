@@ -3,6 +3,8 @@ package com.privacypilot.backend.repository;
 import com.privacypilot.backend.model.document.AuditEntry;
 import com.privacypilot.backend.model.enums.audit.AuditAction;
 import com.privacypilot.backend.model.enums.audit.AuditEntityType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
 import java.util.List;
@@ -32,8 +34,13 @@ import java.util.List;
 public interface AuditEntryRepositoryCustom {
 
     /**
-     * Search one company's audit trail, newest first, with every filter applied BY THE
-     * DATABASE. Any filter may be null, meaning "do not narrow on this".
+     * Search one company's audit trail, newest first, ONE PAGE at a time, with every filter
+     * applied BY THE DATABASE. Any filter may be null, meaning "do not narrow on this".
+     *
+     * Paging is what makes a ten-year trail usable: the screen asks for 25 rows and gets 25
+     * rows, no matter how many million match. The page count comes from a separate COUNT that
+     * uses the same filters — and is skipped entirely when the answer is already obvious (a
+     * first page that is not full is the whole result), so the common case costs one query.
      *
      * @param tenantId   the company whose trail to read — REQUIRED, this is what keeps one
      *                   company from ever seeing another's log
@@ -45,12 +52,14 @@ public interface AuditEntryRepositoryCustom {
      *                   search pattern, so a user cannot inject one.
      * @param from       only lines at or after this moment, or null
      * @param to         only lines at or before this moment, or null
-     * @param limit      the MAXIMUM number of rows to return — must be a positive number,
-     *                   because an unbounded read is exactly the problem being fixed
-     * @return at most {@code limit} entries, newest first
+     * @param pageable   which page and how big — REQUIRED, because an unbounded read is
+     *                   exactly the problem being fixed. Sorting is always newest-first and
+     *                   is NOT taken from here, so a caller cannot ask for an unindexed sort.
+     * @return the requested page, newest first, with the total row count
      */
-    List<AuditEntry> search(String tenantId, AuditEntityType entityType, String entityId,
-                            AuditAction action, String text, Instant from, Instant to, int limit);
+    Page<AuditEntry> search(String tenantId, AuditEntityType entityType, String entityId,
+                            AuditAction action, String text, Instant from, Instant to,
+                            Pageable pageable);
 
     /**
      * The newest few lines for one company — what the dashboard shows. Same reason as

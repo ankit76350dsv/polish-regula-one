@@ -333,6 +333,12 @@ export default {
   'audit.oldValue': 'Wartość poprzednia',
   'audit.newValue': 'Wartość nowa',
   'audit.exportCsv': 'Eksport (CSV)',
+  'audit.matchCount': 'Pasujące wpisy: {count}',
+  'audit.pagination': 'Strony dziennika zdarzeń',
+  'audit.pageOf': 'Strona {page} z {total}',
+  'audit.previousPage': 'Poprzednia',
+  'audit.nextPage': 'Następna',
+  'audit.exportTruncated': 'Wyeksportowano {shown} najnowszych z {total} pasujących wpisów. Zawęź filtry, aby wyeksportować pozostałe.',
 
   // Użytkownicy
   'users.title': 'Użytkownicy i role',

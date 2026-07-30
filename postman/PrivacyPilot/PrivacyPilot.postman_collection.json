@@ -230,7 +230,7 @@
       "name": "Audit Trail",
       "item": [
         {
-          "name": "List audit entries",
+          "name": "List audit trail (first page)",
           "request": {
             "method": "GET",
             "header": [
@@ -240,7 +240,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/privacypilot/audit",
+              "raw": "{{baseUrl}}/api/privacypilot/audit?page=0&size=25",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -248,14 +248,26 @@
                 "api",
                 "privacypilot",
                 "audit"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "description": "Page number, counting from 0."
+                },
+                {
+                  "key": "size",
+                  "value": "25",
+                  "description": "Rows per page. Default 25, maximum 1000."
+                }
               ]
             },
-            "description": "Get the whole history for your company, newest first. The server sends back only a limited number at a time so the answer never gets too big.\n\nAllowed roles: Admin, Compliance Officer, DPO, Auditor."
+            "description": "List ONE PAGE of the audit trail, newest first. The trail is append-only and kept for ten years, so it is never returned whole.\n\nPaging: page (from 0, default 0), size (default 25, hard maximum 1000).\nFilters (all optional, all applied by the database): entityType, entityId, action, q (free text over actor name / record label / action), from / to (ISO-8601).\n\nResponse `data` is a PAGE OBJECT, not a bare array:\n{ items: [...], page, size, totalElements, totalPages, hasNext, hasPrevious }.\n\nAllowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
         },
         {
-          "name": "List audit entries (filtered)",
+          "name": "List audit trail (filtered + paged)",
           "request": {
             "method": "GET",
             "header": [
@@ -265,7 +277,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/privacypilot/audit?entityType=activity&action=UPDATE&q=payroll&from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z&limit=100",
+              "raw": "{{baseUrl}}/api/privacypilot/audit?entityType=activity&action=UPDATE&q=payroll&from=2026-01-01T00:00:00Z&to=2026-12-31T23:59:59Z&page=0&size=50",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -278,42 +290,41 @@
                 {
                   "key": "entityType",
                   "value": "activity",
-                  "description": "Show only one kind of record: activity, dpia, vendor, transfer, breach, dsar, notice, user, or settings."
-                },
-                {
-                  "key": "entityId",
-                  "value": "",
-                  "description": "Show the whole history of ONE record, by its id. If you set this, it wins over entityType.",
-                  "disabled": true
+                  "description": "Only entries about this kind of record."
                 },
                 {
                   "key": "action",
                   "value": "UPDATE",
-                  "description": "Show only one kind of action: CREATE, UPDATE, DELETE, APPROVE, SIGN, GENERATE, EXPORT, and so on."
+                  "description": "Only this action."
                 },
                 {
                   "key": "q",
                   "value": "payroll",
-                  "description": "Search words. Matches the person's name, the record's label, or the action."
+                  "description": "Free text over actor name / record label / action. Matched literally, case-insensitively."
                 },
                 {
                   "key": "from",
                   "value": "2026-01-01T00:00:00Z",
-                  "description": "Only show entries on or after this date/time. Use the format 2026-01-01T00:00:00Z."
+                  "description": "ISO-8601 lower bound."
                 },
                 {
                   "key": "to",
                   "value": "2026-12-31T23:59:59Z",
-                  "description": "Only show entries on or before this date/time. Same format as 'from'."
+                  "description": "ISO-8601 upper bound."
                 },
                 {
-                  "key": "limit",
-                  "value": "100",
-                  "description": "How many rows to return at most (the server allows up to 1000)."
+                  "key": "page",
+                  "value": "0",
+                  "description": "Page number, counting from 0."
+                },
+                {
+                  "key": "size",
+                  "value": "50",
+                  "description": "Rows per page. Maximum 1000."
                 }
               ]
             },
-            "description": "The same history list, but you can narrow it down. Every filter below is optional — leave one out and it is simply ignored.\n\nIf you type a value the server does not understand (a wrong type name or a badly-written date), you get a 400.\n\nAllowed roles: Admin, Compliance Officer, DPO, Auditor."
+            "description": "Same endpoint with every filter set. All filtering, ordering and paging happen in the database, so a search covers the WHOLE trail — not just a loaded batch.\n\nList ONE PAGE of the audit trail, newest first. The trail is append-only and kept for ten years, so it is never returned whole.\n\nPaging: page (from 0, default 0), size (default 25, hard maximum 1000).\nFilters (all optional, all applied by the database): entityType, entityId, action, q (free text over actor name / record label / action), from / to (ISO-8601).\n\nResponse `data` is a PAGE OBJECT, not a bare array:\n{ items: [...], page, size, totalElements, totalPages, hasNext, hasPrevious }.\n\nAllowed roles: Admin, Compliance Officer, DPO, Auditor."
           },
           "response": []
         },

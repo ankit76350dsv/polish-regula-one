@@ -14,9 +14,14 @@ const BASE = '/api/privacypilot/audit';
 
 export const auditService = {
   /**
-   * List audit entries for the caller's tenant, newest first.
-   * @param {object} [filters] optional { entityType, entityId, action, q, from, to, limit }.
-   *   Any field may be omitted; omitted fields are simply not sent.
+   * List ONE PAGE of audit entries for the caller's tenant, newest first.
+   *
+   * @param {object} [filters] optional { entityType, entityId, action, q, from, to, page, size }.
+   *   Any field may be omitted; omitted fields are simply not sent. `page` counts from 0;
+   *   `size` defaults to 25 server-side and is capped at 1000 there.
+   * @returns {Promise<{items: object[], page: number, size: number, totalElements: number,
+   *   totalPages: number, hasNext: boolean, hasPrevious: boolean}>} one page plus its counters
+   *   — NOT a bare array. The trail is kept for ten years, so it is never returned whole.
    */
   list: (filters = {}) => {
     // Build the query string from only the filters that were actually provided,

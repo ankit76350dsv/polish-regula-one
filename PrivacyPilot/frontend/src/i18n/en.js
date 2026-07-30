@@ -333,6 +333,12 @@ export default {
   'audit.oldValue': 'Old value',
   'audit.newValue': 'New value',
   'audit.exportCsv': 'Export (CSV)',
+  'audit.matchCount': '{count} matching entries',
+  'audit.pagination': 'Audit trail pages',
+  'audit.pageOf': 'Page {page} of {total}',
+  'audit.previousPage': 'Previous',
+  'audit.nextPage': 'Next',
+  'audit.exportTruncated': 'Exported the {shown} newest of {total} matching entries. Narrow the filters to export the rest.',
 
   // Users
   'users.title': 'Users & Roles',

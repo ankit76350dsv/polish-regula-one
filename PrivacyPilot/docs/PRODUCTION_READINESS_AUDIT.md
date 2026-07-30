@@ -79,7 +79,7 @@ working domain code.
 | Compliance (GDPR/Polish mapping) | 75% | Feature-to-article mapping is accurate; **export accountability now recorded (H2 fixed)**; retention/erasure gaps remain |
 | Database & performance | 65% | **Audit queries and indexes fixed (H3)**; remaining: no pagination on the other list endpoints, no transactions, no migrations |
 | Ops / infra / deploy | 15% | No prod profile, Docker, CI/CD, observability; config not in git |
-| Testing | 30% | Still far from the 80% target, but **44 hermetic tests** now exist (access policy, export accountability, audit query, index shapes — §17); the original context-load test still needs the live Atlas cluster |
+| Testing | 35% | Still far from the 80% target, but **55 hermetic tests** now exist (access policy, export accountability, audit query + paging, index shapes — §17); the original context-load test still needs the live Atlas cluster |
 
 ---
 
@@ -328,7 +328,7 @@ either (Tomcat's form-post limit does not apply to `application/json`).
 `DpoDetailsRequest`, and `server.max-http-request-header-size` + an explicit body cap at
 the edge.
 
-**M3 · No pagination on any list endpoint.**
+**M3 · No pagination on the remaining list endpoints.** (Audit trail now paged — §17.)
 `activities`, `dpias`, `breaches`, `dsars`, `vendors`, `transfers`, `notices` all return
 the tenant's entire collection (e.g. `ProcessingActivityService.java:54-56`); no finder
 accepts `Pageable` (`grep Pageable` → 0). `DashboardService` compounds this by loading
@@ -403,6 +403,9 @@ CVE database — OWASP Dependency-Check was not run (no network egress in this r
 
 **M12 · Audit-trail search only covers the newest 1000 entries. (NEW — found while fixing
 H3; pre-existing, not introduced by it.)**
+**✅ FIXED 2026-07-30 — see §17.** The endpoint is now paged (`page`/`size`), the screen sends
+its filters to the server and renders a pager, so a search runs across the whole trail.
+
 `auditService.list()` accepts `entityType`, `q`, `action`, `from`, `to` and `limit`
 (`services/auditService.js:21-32`), but the slice calls it with **no arguments**
 (`store/slices/auditSlice.js:6`), and `AuditTrailPage` filters the fetched array in the
@@ -487,7 +490,7 @@ does database work in Java (H3). No pagination (M3), no transactions (M8), no ve
 | Query shape | **Audit reads fixed (H3):** filters, sort and limit are pushed into MongoDB and backed by compound indexes that are now actually created. The other list endpoints are still unpaginated full-collection reads (M3), and until H3 no index existed at all, so they were full scans. |
 | Dashboard | Five collection reads plus in-Java aggregation per request. The audit scan — previously the part that would break first — now asks for only the 6 rows it displays (H3). |
 | Indexes | **Fixed for the audit trail (H3):** three compound indexes, each ending on `createdAt` so the newest-first sort is index-backed, created at start-up by `MongoIndexConfig`. Other collections still rely on the single-field `tenantId` index — which, note, only began to exist once index creation was wired up. |
-| Payloads | Unbounded — no `@Size`, no body cap (M2), no pagination, `limit` capped only *after* the full read. |
+| Payloads | Still unbounded on writes — no `@Size`, no body cap (M2). Reads: the audit trail is now paged and capped before the query runs; the other list endpoints remain unpaginated (M3). |
 | Caching | Only the 30 s identity cache, itself bounded to 10 000 entries with a best-effort sweep (`RegulaOneAuthClient.java:43,88-90`). |
 | Concurrency, memory, CPU, response times, scalability under load | **Unable to verify** — no load test, no profiling, no metrics endpoint exists to measure against (CLAUDE.md §18 requires load testing). |
 
@@ -541,7 +544,7 @@ does database work in Java (H3). No pagination (M3), no transactions (M8), no ve
 | Idempotency | ⚠️ `notify-uodo` / `notify-subjects` overwrite the timestamp on repeat calls (`BreachService.java:113-125`) — a second click rewrites the recorded notification moment |
 | Versioning | ❌ none (L5) |
 | Rate limiting | ❌ none (H4) |
-| Pagination | ❌ none (M3) |
+| Pagination | ⚠️ **audit trail paginated** (`page`/`size`, default 25, max 1000 — §17); the other list endpoints still return whole collections (M3) |
 | Documentation | ⚠️ Postman collection complete and current (50 requests, incl. the new Exports folder); no OpenAPI served (L5) |
 
 ---
@@ -728,8 +731,8 @@ ineffective), no security headers · M5 mock AI seeds fake data into browser sto
 logs nowhere auditable · M6 frontend/backend RBAC drift (DPO gets a DPIA editor the API
 refuses) · M7 no CSRF token + shared cookie domain widens blast radius · M8 no
 transactions · M9 no retention/deletion schedule · M10 Spring Boot 4.0.6 → 4.0.7 ·
-M11 tenant-less super-admin is undefined behaviour · **M12 audit-trail search only covers
-the newest 1000 entries (new, pre-existing — the UI never passes its filters to the API)**.
+M11 tenant-less super-admin is undefined behaviour · **~~M12 audit-trail search only covers
+the newest 1000 entries~~ (**✅ fixed** — endpoint paginated and the UI now filters server-side, §17).
 
 **Low**
 
@@ -799,6 +802,98 @@ regulated EU/Poland production deployment.
 ---
 
 ## 17. Remediation Log
+
+### 2026-07-30 — Audit trail paginated (closes M12, completes H3)
+
+**1. Files modified**
+
+| File | Change |
+|---|---|
+| `backend/.../dto/PageResponse.java` | **new** — reusable `{items, page, size, totalElements, totalPages, hasNext, hasPrevious}` envelope |
+| `backend/.../repository/AuditEntryRepositoryCustom.java` | `search(...)` now takes a `Pageable` and returns `Page<AuditEntry>` |
+| `backend/.../repository/AuditEntryRepositoryImpl.java` | filter-building extracted so the page query and the count query cannot diverge; skip/limit/sort pushed down; `PageableExecutionUtils` skips the count when it is not needed |
+| `backend/.../service/audit/AuditQueryService.java` | `page`/`size` normalised and capped; returns `PageResponse` |
+| `backend/.../controller/AuditController.java` | `page`/`size` query params replace `limit`; returns a page object |
+| `frontend/src/services/auditService.js` | documented paged contract |
+| `frontend/src/store/slices/auditSlice.js` | takes `{page, size, q, entityType}`, stores page counters; new `fetchAuditForExport` thunk |
+| `frontend/src/pages/Audit/AuditTrailPage.jsx` | server-side filtering with a 300 ms debounce, match count, Previous/Next pager, export fetches the full filtered set |
+| `frontend/src/i18n/en.js`, `pl.js` | 6 new keys (parity 357 = 357) |
+| `postman/PrivacyPilot/…` | both audit requests rewritten with `page`/`size` and documented |
+| `backend/src/test/.../service/AuditQueryServiceTest.java` | **new** — 7 tests on page/size normalisation |
+| `backend/src/test/.../repository/AuditEntryRepositoryImplTest.java` | +4 paging tests |
+
+**2. Old behaviour**
+
+The endpoint took a single `limit` (default and maximum 1000) and returned a bare JSON array.
+The screen fetched **one** unfiltered batch and then filtered it in the browser, so the
+sidebar's search and record-type filter only ever looked at the newest 1000 entries, with no
+indication that anything had been left out, and there was no way to reach older entries at all.
+
+**3. New behaviour**
+
+`GET /api/privacypilot/audit?page=0&size=25` returns one page plus the counters a pager needs.
+`size` defaults to 25 and is trimmed to 1000; a negative page becomes the first page. The
+screen sends its filters to the server (300 ms debounce on the text box, so typing is not one
+request per keystroke), resets to page 1 whenever a filter changes, shows how many entries
+match **across the whole trail**, and offers Previous/Next driven by the server's
+`hasPrevious`/`hasNext` — so it can never offer a page that does not exist.
+
+Export deliberately does **not** export the visible page: it re-queries with the same filters
+at the 1000-row ceiling, so the file still holds the whole filtered result as before. When more
+rows match than the ceiling allows, the user is told exactly how many were included and how
+many matched, rather than silently receiving a truncated file.
+
+**4. Why the old code was changed**
+
+`limit` was removed rather than kept as an alias for `size`: two ways to express the same
+bound invites the mistake that they disagree, and the module has no external API consumers
+(both callers — the frontend and the Postman collection — are in this repository and were
+updated in the same change). The client-side filtering was removed because it was the actual
+defect: filtering a capped batch produces confidently wrong answers, which for a legal
+evidence trail is worse than being slow.
+
+**Breaking change, stated plainly:** the response body changed from a bare array to a page
+object. There is no API versioning in this module yet (L5) and it is not deployed, so this is
+a change to an unreleased contract — but any client outside this repository would break.
+
+**5. Security & compliance impact**
+
+Completes the H3 hardening: `size` is capped in the service *and* the repository refuses an
+unpaged request, so there are now two independent barriers against a request that tries to read
+the whole trail. The count query reuses the page query's filters by construction, so a total can
+never be computed over a wider set than the caller is allowed to see — tenant scoping is the
+first criterion of both. For GDPR Art. 5(2), the material gain is correctness: an auditor
+searching the trail now searches all of it, so "no entries found" means what it says.
+
+**6. Testing performed**
+
+`./mvnw -o test` on the hermetic suites → **55 tests, 0 failures, 0 errors** (7 service + 18
+repository + 5 index + 10 export + 15 access policy). The new tests cover: default page size;
+a requested size honoured; an oversized `size` trimmed to the ceiling; zero/negative size
+falling back to the default; a negative page clamped to the first; counters mapped through to
+the response; an empty trail returning an empty page rather than an error; a later page issuing
+`skip` in the database rather than reading the earlier pages; a full page triggering the count;
+a short first page **skipping** the count query entirely; and the count query carrying the same
+filters with no skip/limit. Frontend `npm run build` succeeds, i18n parity 357 = 357, Postman
+collection re-parsed and valid (50 requests).
+
+**7. Potential risks / side effects**
+
+- **Not verified against a running app** — still no database access in this environment, so the
+  paging was proven by capturing the queries, not by executing them. Worth a manual pass over
+  the screen (type in the search box, change the dropdown, page forward and back, export) on
+  first deploy.
+- *Deep paging uses `skip`*, which MongoDB implements by walking the index to the offset. Fine
+  for the pages a human clicks through; if someone jumps to page 4000 it degrades. The
+  index-backed sort keeps it bounded, and the fix if it ever matters is keyset paging
+  ("everything older than this timestamp") rather than offsets.
+- *Two round trips on a full page* (rows + count). Deliberate, and skipped whenever the answer
+  is already known.
+- *The export ceiling is still 1000 rows.* Unchanged from before, but it is now surfaced to the
+  user instead of being invisible. A true full-trail export would need streaming — worth doing
+  before an auditor asks for ten years in one file.
+
+---
 
 ### 2026-07-29 — H3 fixed: the audit query runs in the database, and the indexes now exist
 

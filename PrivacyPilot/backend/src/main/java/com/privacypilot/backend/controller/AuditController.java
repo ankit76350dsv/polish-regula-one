@@ -1,6 +1,7 @@
 package com.privacypilot.backend.controller;
 
 import com.privacypilot.backend.dto.AppResponse;
+import com.privacypilot.backend.dto.PageResponse;
 import com.privacypilot.backend.dto.audit.AuditEntryResponse;
 import com.privacypilot.backend.model.enums.audit.AuditAction;
 import com.privacypilot.backend.model.enums.audit.AuditEntityType;
@@ -18,7 +19,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
-import java.util.List;
 
 /**
  * REST API for the immutable audit trail (WHO did WHAT, to WHICH record, WHEN, from
@@ -54,17 +54,26 @@ public class AuditController {
     };
 
     /**
-     * List audit entries for the caller's company, newest first. Every filter is
-     * OPTIONAL — with none, it returns the whole (capped) trail:
+     * List audit entries for the caller's company, newest first, ONE PAGE at a time.
+     *
+     * Every filter is OPTIONAL — with none, it returns the first page of the whole trail:
      *   - entityType : only one kind of record, e.g. "activity", "breach"
      *   - entityId   : the full history of one specific record
      *   - action     : only one action, e.g. "UPDATE", "APPROVE"
      *   - q          : free-text over actor name / record label / action
      *   - from / to  : an ISO-8601 time range (e.g. 2026-01-01T00:00:00Z)
-     *   - limit      : max rows (capped server-side)
+     *
+     * Paging (the trail is kept for ten years, so it is never returned whole):
+     *   - page : which page, counting from 0. Default 0.
+     *   - size : rows per page. Default {@value AuditQueryService#DEFAULT_PAGE_SIZE},
+     *            hard maximum {@value AuditQueryService#MAX_PAGE_SIZE}.
+     *
+     * The response body is a page object — {@code { items, page, size, totalElements,
+     * totalPages, hasNext, hasPrevious } } — not a bare array, so a client can render a pager
+     * and knows whether more rows exist.
      */
     @GetMapping
-    public AppResponse<List<AuditEntryResponse>> list(
+    public AppResponse<PageResponse<AuditEntryResponse>> list(
             AuthenticatedUser caller,
             @RequestParam(required = false) String entityType,
             @RequestParam(required = false) String entityId,
@@ -72,7 +81,8 @@ public class AuditController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
         caller.requireAnyPermission(CAN_VIEW_AUDIT);
 
         // Convert the string query params into typed filters. An unknown enum code or a
@@ -82,7 +92,8 @@ public class AuditController {
         Instant fromTs = parseInstant(from, "from");
         Instant toTs = parseInstant(to, "to");
 
-        return AppResponse.ok(service.list(caller, type, entityId, act, q, fromTs, toTs, limit));
+        return AppResponse.ok(
+                service.list(caller, type, entityId, act, q, fromTs, toTs, page, size));
     }
 
     /** One audit entry by id, only if it belongs to the caller's company (else 404). */

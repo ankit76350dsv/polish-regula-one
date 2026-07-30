@@ -9,6 +9,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
 
@@ -23,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -59,8 +63,9 @@ class AuditEntryRepositoryImplTest {
     }
 
     private Query searchAndCapture(AuditEntityType type, String entityId, AuditAction action,
-                                   String text, Instant from, Instant to, int limit) {
-        repository.search(TENANT, type, entityId, action, text, from, to, limit);
+                                   String text, Instant from, Instant to, int size) {
+        repository.search(TENANT, type, entityId, action, text, from, to,
+                PageRequest.of(0, size));
         return capture();
     }
 
@@ -73,10 +78,11 @@ class AuditEntryRepositoryImplTest {
     }
 
     @Test
-    @DisplayName("the row limit is part of the query, so the database stops early")
+    @DisplayName("the page size is part of the query, so the database stops early")
     void limitIsPushedToTheDatabase() {
         Query query = searchAndCapture(null, null, null, null, null, null, 250);
         assertEquals(250, query.getLimit());
+        assertEquals(0, query.getSkip(), "first page starts at row 0");
     }
 
     @Test
@@ -88,12 +94,12 @@ class AuditEntryRepositoryImplTest {
     }
 
     @Test
-    @DisplayName("refuses a non-positive limit rather than quietly loading everything")
+    @DisplayName("refuses an unpaged or missing request rather than quietly loading everything")
     void refusesUnboundedRead() {
         assertThrows(IllegalArgumentException.class,
-                () -> repository.search(TENANT, null, null, null, null, null, null, 0));
+                () -> repository.search(TENANT, null, null, null, null, null, null, Pageable.unpaged()));
         assertThrows(IllegalArgumentException.class,
-                () -> repository.search(TENANT, null, null, null, null, null, null, -5));
+                () -> repository.search(TENANT, null, null, null, null, null, null, null));
     }
 
     @Test
@@ -187,6 +193,71 @@ class AuditEntryRepositoryImplTest {
     void blankTextIsIgnored() {
         Document q = searchAndCapture(null, null, null, "   ", null, null, 100).getQueryObject();
         assertFalse(q.containsKey("$or"));
+    }
+
+    @Test
+    @DisplayName("a later page skips in the database — it does not read the earlier pages")
+    void laterPageSkipsInTheDatabase() {
+        repository.search(TENANT, null, null, null, null, null, null, PageRequest.of(3, 25));
+        Query query = capture();
+
+        assertEquals(75, query.getSkip(), "page 3 of 25 starts at row 75");
+        assertEquals(25, query.getLimit());
+    }
+
+    @Test
+    @DisplayName("a full page triggers a count so the pager knows the total")
+    void fullPageCountsTheTotal() {
+        // A page that comes back FULL might have more behind it, so the total is needed.
+        when(template.find(any(Query.class), eq(AuditEntry.class)))
+                .thenReturn(List.of(new AuditEntry(), new AuditEntry()));
+        when(template.count(any(Query.class), eq(AuditEntry.class))).thenReturn(57L);
+
+        Page<AuditEntry> page = repository.search(TENANT, null, null, null, null, null, null,
+                PageRequest.of(0, 2));
+
+        assertEquals(57L, page.getTotalElements());
+        assertEquals(29, page.getTotalPages());
+        assertTrue(page.hasNext());
+        assertFalse(page.hasPrevious());
+    }
+
+    @Test
+    @DisplayName("a first page that is not full needs no count query at all")
+    void shortFirstPageSkipsTheCountQuery() {
+        // The whole result is in hand, so a second round trip would be waste.
+        when(template.find(any(Query.class), eq(AuditEntry.class)))
+                .thenReturn(List.of(new AuditEntry()));
+
+        Page<AuditEntry> page = repository.search(TENANT, null, null, null, null, null, null,
+                PageRequest.of(0, 25));
+
+        assertEquals(1L, page.getTotalElements());
+        assertFalse(page.hasNext());
+        verify(template, never()).count(any(Query.class), eq(AuditEntry.class));
+    }
+
+    @Test
+    @DisplayName("the count uses the same filters as the page, without skip or limit")
+    void countUsesTheSameFiltersWithoutPaging() {
+        when(template.find(any(Query.class), eq(AuditEntry.class)))
+                .thenReturn(List.of(new AuditEntry(), new AuditEntry()));
+        when(template.count(any(Query.class), eq(AuditEntry.class))).thenReturn(9L);
+
+        repository.search(TENANT, AuditEntityType.DSAR, null, AuditAction.UPDATE, null,
+                null, null, PageRequest.of(1, 2));
+
+        ArgumentCaptor<Query> countQuery = ArgumentCaptor.forClass(Query.class);
+        verify(template).count(countQuery.capture(), eq(AuditEntry.class));
+        Document counted = countQuery.getValue().getQueryObject();
+
+        // Same narrowing as the page …
+        assertEquals(TENANT, counted.get("tenantId"));
+        assertEquals(AuditEntityType.DSAR, counted.get("entityType"));
+        assertEquals(AuditAction.UPDATE, counted.get("action"));
+        // … but counting a page instead of the whole result would give a wrong total.
+        assertEquals(0, countQuery.getValue().getSkip());
+        assertEquals(0, countQuery.getValue().getLimit());
     }
 
     @Test

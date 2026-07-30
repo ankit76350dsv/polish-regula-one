@@ -1,18 +1,18 @@
 package com.privacypilot.backend.service;
 
+import com.privacypilot.backend.dto.PageResponse;
 import com.privacypilot.backend.dto.audit.AuditEntryResponse;
-import com.privacypilot.backend.model.document.AuditEntry;
 import com.privacypilot.backend.model.enums.audit.AuditAction;
 import com.privacypilot.backend.model.enums.audit.AuditEntityType;
 import com.privacypilot.backend.repository.AuditEntryRepository;
 import com.privacypilot.backend.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
-import java.util.List;
 
 /**
  * READ side of the audit trail.
@@ -30,9 +30,15 @@ public class AuditQueryService {
 
     private final AuditEntryRepository repository;
 
-    // Never return an unbounded trail in one go — a 10-year log can be huge. Callers
-    // may ask for fewer with ?limit=, but never more than this hard ceiling.
-    private static final int MAX_LIMIT = 1000;
+    /** Rows per page when the caller does not say — a comfortable screenful. */
+    public static final int DEFAULT_PAGE_SIZE = 25;
+
+    /**
+     * The biggest page anyone may ask for. A screen never needs more than this, and the cap is
+     * what stops "?size=999999" from turning back into the unbounded read that used to break
+     * this endpoint. Export uses the same ceiling, deliberately: one export = one page.
+     */
+    public static final int MAX_PAGE_SIZE = 1000;
 
     /**
      * List the caller's audit entries, newest first, with optional filters.
@@ -50,22 +56,26 @@ public class AuditQueryService {
      * @param query      free-text match on actor name / entity label / action, or null
      * @param from       only entries at or after this time, or null
      * @param to         only entries at or before this time, or null
-     * @param limit      max rows to return (defaults to {@link #MAX_LIMIT}, capped there)
+     * @param page       which page to return, counting from 0; null or negative means the first
+     * @param size       rows per page; null or non-positive means {@link #DEFAULT_PAGE_SIZE},
+     *                   and anything above {@link #MAX_PAGE_SIZE} is trimmed to it
+     * @return one page of entries plus the totals the screen needs to draw its pager
      */
-    public List<AuditEntryResponse> list(AuthenticatedUser caller, AuditEntityType entityType,
-                                         String entityId, AuditAction action, String query,
-                                         Instant from, Instant to, Integer limit) {
-        // Work out the row cap first: a caller may ask for fewer, never for more, and
-        // never for "everything".
-        int cap = (limit == null || limit <= 0) ? MAX_LIMIT : Math.min(limit, MAX_LIMIT);
+    public PageResponse<AuditEntryResponse> list(AuthenticatedUser caller, AuditEntityType entityType,
+                                                 String entityId, AuditAction action, String query,
+                                                 Instant from, Instant to,
+                                                 Integer page, Integer size) {
+        // Normalise what the client asked for BEFORE it reaches the database: a sensible page
+        // size, never bigger than the ceiling, and never a negative page number.
+        int pageNumber = (page == null || page < 0) ? 0 : page;
+        int pageSize = (size == null || size <= 0) ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
 
-        // Hand the WHOLE question to the database — filters, newest-first order and the cap
-        // together — so it walks a matching index and stops as soon as it has enough rows.
-        return repository.search(caller.tenantId(), entityType, entityId, action, query,
-                        from, to, cap)
-                .stream()
-                .map(AuditEntryResponse::from)
-                .toList();
+        // Hand the WHOLE question to the database — filters, newest-first order and this one
+        // page — so it walks a matching index and reads only the rows being shown.
+        return PageResponse.of(
+                repository.search(caller.tenantId(), entityType, entityId, action, query, from, to,
+                        PageRequest.of(pageNumber, pageSize)),
+                AuditEntryResponse::from);
     }
 
     /** One audit entry, only if it belongs to the caller's company; otherwise 404. */
