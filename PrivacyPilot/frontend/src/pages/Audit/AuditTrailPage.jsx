@@ -27,6 +27,7 @@ import { recordExport } from '../../store/slices/exportsSlice';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { buildAuditCsv } from '../../lib/auditCsv';
+import { auditActionLabel, auditChangeRows, auditEntityLabel } from '../../lib/auditLabels';
 
 // Includes the two whole-list kinds an EXPORT line can be about, so exports of the
 // register and of the trail itself are filterable here like any other entry.
@@ -44,13 +45,42 @@ function downloadCsv(filename, content) {
   URL.revokeObjectURL(url);
 }
 
-function DiffPanel({ label, value, tone }) {
+/**
+ * What changed, one row per field: the field's name, then its value before and after.
+ *
+ * This used to be two blocks of `JSON.stringify` in a monospace font — the raw stored maps,
+ * braces and quotes included — leaving the reader to compare them by eye. An auditor's
+ * question is "what did this value used to be?", which is a per-field question.
+ */
+function ChangeList({ entry, lang, t }) {
+  const rows = auditChangeRows(entry, lang, t);
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">{t('audit.noChanges')}</p>;
+  }
+  // A create or an export has no "before" at all, so pairing every value with an empty
+  // "Before —" column would be noise. Those entries list their values plainly.
+  const hasBefore = Boolean(entry.oldValue);
   return (
-    <div className={`rounded-lg border p-3 ${tone === 'old' ? 'border-(--status-risk)/40' : 'border-(--status-ok)/40'}`}>
-      <p className={`mb-1 text-xs font-medium ${tone === 'old' ? 'text-(--status-risk)' : 'text-(--status-ok)'}`}>{label}</p>
-      <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-mono text-xs text-foreground">
-        {value == null ? '—' : JSON.stringify(value, null, 2)}
-      </pre>
+    <div className="grid gap-2">
+      {rows.map((row) => (
+        <div key={row.field} className="grid gap-1 rounded-lg border p-3 sm:grid-cols-[11rem_1fr]">
+          <span className="text-xs text-muted-foreground">{row.label}</span>
+          {hasBefore ? (
+            <div className="grid gap-1 text-sm sm:grid-cols-2 sm:gap-3">
+              <span className="text-(--status-risk)">
+                <span className="mr-1.5 text-[11px] text-muted-foreground">{t('audit.before')}</span>
+                {row.before ?? '—'}
+              </span>
+              <span className="text-(--status-ok)">
+                <span className="mr-1.5 text-[11px] text-muted-foreground">{t('audit.after')}</span>
+                {row.after ?? '—'}
+              </span>
+            </div>
+          ) : (
+            <span className="text-sm text-foreground">{row.after ?? '—'}</span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -169,7 +199,9 @@ export default function AuditTrailPage() {
         <Select value={entityType} onChange={(e) => setEntityType(e.target.value)} className="w-40"
           aria-label={t('audit.entity')}>
           <option value="all">{t('common.all')}</option>
-          {ENTITY_TYPES.map((et) => <option key={et} value={et}>{et}</option>)}
+          {ENTITY_TYPES.map((et) => (
+            <option key={et} value={et}>{auditEntityLabel(et, t)}</option>
+          ))}
         </Select>
         {/* The total says how many entries match across the WHOLE trail, not just this page. */}
         <span className="text-xs text-muted-foreground" aria-live="polite">
@@ -178,7 +210,10 @@ export default function AuditTrailPage() {
       </div>
 
       {items.length === 0 ? (
-        <EmptyState />
+        <EmptyState
+          title={t('audit.emptyTitle')}
+          hint={query || entityType !== 'all' ? t('audit.empty') : t('audit.emptyNoFilter')}
+        />
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <Table>
@@ -201,13 +236,16 @@ export default function AuditTrailPage() {
                     <span className="text-foreground">{e.actorName}</span>
                     <p className="text-xs text-muted-foreground">{e.actorRole}</p>
                   </TableCell>
-                  <TableCell><span className="font-mono text-xs text-primary">{e.action}</span></TableCell>
-                  <TableCell className="max-w-64 truncate text-muted-foreground">
-                    <span className="text-xs">{e.entityType}</span> · {e.entityLabel}
+                  <TableCell className="text-primary">{auditActionLabel(e.action, t)}</TableCell>
+                  <TableCell className="max-w-64 truncate text-muted-foreground"
+                    title={`${auditEntityLabel(e.entityType, t)} · ${e.entityLabel ?? ''}`}>
+                    <span className="text-xs">{auditEntityLabel(e.entityType, t)}</span>
+                    {e.entityLabel ? ` · ${e.entityLabel}` : ''}
                   </TableCell>
                   <TableCell>
                     {(e.oldValue || e.newValue) && (
-                      <Button variant="ghost" size="icon-sm" aria-label={t('audit.diff')} onClick={() => setSelected(e)}>
+                      <Button variant="ghost" size="icon-sm" aria-label={t('audit.viewChanges')}
+                        title={t('audit.viewChanges')} onClick={() => setSelected(e)}>
                         <Eye />
                       </Button>
                     )}
@@ -253,15 +291,19 @@ export default function AuditTrailPage() {
       <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{selected?.action} — {selected?.entityLabel}</DialogTitle>
+            <DialogTitle>
+              {selected && auditActionLabel(selected.action, t)}
+              {selected?.entityLabel ? ` — ${selected.entityLabel}` : ''}
+            </DialogTitle>
             <DialogDescription>
-              {selected && `${selected.actorName} (${selected.actorRole}) · ${new Date(selected.at).toLocaleString(lang === 'pl' ? 'pl-PL' : 'en-GB')}`}
+              {selected && [
+                selected.actorName,
+                selected.actorRole,
+                new Date(selected.at).toLocaleString(lang === 'pl' ? 'pl-PL' : 'en-GB'),
+              ].filter(Boolean).join(' · ')}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <DiffPanel label={t('audit.oldValue')} value={selected?.oldValue} tone="old" />
-            <DiffPanel label={t('audit.newValue')} value={selected?.newValue} tone="new" />
-          </div>
+          {selected && <ChangeList entry={selected} lang={lang} t={t} />}
         </DialogContent>
       </Dialog>
     </div>
