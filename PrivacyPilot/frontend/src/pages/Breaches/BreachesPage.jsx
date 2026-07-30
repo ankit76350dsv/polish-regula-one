@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
-import { Plus, Siren } from 'lucide-react';
+import { CheckCircle2, Clock, Plus, Siren } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +25,7 @@ import { can, ACTIONS } from '../../lib/permissions';
 import { UODO_WINDOW_MS } from '../../services/breachService';
 import { cn } from '@/lib/utils';
 import { DATA_CATEGORIES } from '../../lib/gdpr';
+import { failureMessage } from '../../lib/apiErrors';
 
 const EMPTY_FORM = {
   title: '', description: '', subjectsCount: 0, recordsCount: 0, riskLevel: 'medium',
@@ -34,25 +35,43 @@ const EMPTY_FORM = {
 
 const toggleId = (list, id) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
+/**
+ * The reporting state of one breach, at a glance.
+ *
+ * Every state used to be shorthand only a specialist could read: a bare "Art. 33(5)", and
+ * "UODO ✓" / "⏱" built from glyph characters that render in the text font and sit off the
+ * baseline. Each state now says what it means, in words, with a proper icon.
+ */
 export function BreachClockBadge({ breach, now }) {
   const { t } = useT();
   if (!breach.uodoNotificationRequired) {
-    return <Badge variant="outline" className="text-muted-foreground">Art. 33(5)</Badge>;
+    return (
+      <Badge variant="outline" className="text-muted-foreground">{t('breach.notNotifiable')}</Badge>
+    );
   }
   if (breach.uodoNotifiedAt) {
-    return <Badge variant="outline" className="border-(--status-ok)/50 text-(--status-ok)">UODO ✓</Badge>;
+    return (
+      <Badge variant="outline" className="gap-1 border-(--status-ok)/50 text-(--status-ok)">
+        <CheckCircle2 className="size-3" aria-hidden /> {t('breach.uodoNotified')}
+      </Badge>
+    );
   }
   const remaining = new Date(breach.discoveredAt).getTime() + UODO_WINDOW_MS - now;
   if (remaining <= 0) {
-    return <Badge variant="outline" className="border-(--status-risk)/50 text-(--status-risk)">{t('breach.expired')}</Badge>;
+    return (
+      <Badge variant="outline" className="border-(--status-risk)/50 text-(--status-risk)">
+        {t('breach.expired')}
+      </Badge>
+    );
   }
   return (
-    <Badge variant="outline" className={
+    <Badge variant="outline" className={cn(
+      'gap-1 font-mono',
       remaining < 12 * 3600 * 1000
-        ? 'border-(--status-risk)/50 font-mono text-(--status-risk)'
-        : 'border-(--status-warn)/50 font-mono text-(--status-warn)'
-    }>
-      ⏱ {formatCountdown(remaining)}
+        ? 'border-(--status-risk)/50 text-(--status-risk)'
+        : 'border-(--status-warn)/50 text-(--status-warn)',
+    )}>
+      <Clock className="size-3" aria-hidden /> {formatCountdown(remaining)}
     </Badge>
   );
 }
@@ -66,16 +85,39 @@ export default function BreachesPage() {
   const now = useNow(1000);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [errors, setErrors] = useState({});
+
+  const closeDialog = () => { setOpen(false); setForm(EMPTY_FORM); setErrors({}); };
+
+  // Update fields and clear each one's error as soon as the user starts fixing it.
+  const setField = (patch) => {
+    setForm((f) => ({ ...f, ...patch }));
+    setErrors((e) => {
+      const next = { ...e };
+      for (const key of Object.keys(patch)) delete next[key];
+      return next;
+    });
+  };
 
   const submit = async () => {
+    // Name what is missing, next to the field. The Save button used to be silently
+    // disabled on three separate conditions with no clue which one was unmet.
+    const found = {};
+    if (!form.title.trim()) found.title = t('breach.titleRequired');
+    if (!form.description.trim()) found.description = t('breach.descriptionRequired');
+    if (!form.riskRationale.trim()) found.riskRationale = t('breach.rationaleRequired');
+    if (Object.keys(found).length > 0) {
+      setErrors(found);
+      return;
+    }
     const action = await dispatch(createBreach({
       ...form,
       subjectsCount: Number(form.subjectsCount) || 0,
       recordsCount: Number(form.recordsCount) || 0,
       discoveredAt: new Date().toISOString(),
     }));
-    if (action.error) toast.error(t('common.notAuthorized'));
-    else { toast.success(t('common.save')); setOpen(false); setForm(EMPTY_FORM); }
+    if (action.error) toast.error(failureMessage(action.error, t));
+    else { toast.success(t('common.save')); closeDialog(); }
   };
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={4} />;
@@ -90,12 +132,18 @@ export default function BreachesPage() {
       </PageHeader>
 
       {items.length === 0 ? (
-        <EmptyState />
+        <EmptyState
+          title={t('breach.emptyTitle')}
+          hint={t('breach.empty')}
+          action={can(user, ACTIONS.MANAGE_BREACHES) && (
+            <Button size="sm" onClick={() => setOpen(true)}><Plus /> {t('breach.report')}</Button>
+          )}
+        />
       ) : (
         <div className="grid gap-3">
           {items.map((b) => (
             <Card key={b.id}>
-              <CardContent className="flex flex-wrap items-center gap-3 p-4">
+              <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <Siren className={b.status === 'open' ? 'size-4 shrink-0 text-(--status-risk)' : 'size-4 shrink-0 text-muted-foreground'} aria-hidden />
                 <div className="min-w-0 flex-1">
                   <Link to={`${base}/breaches/${b.id}`} className="font-medium text-foreground hover:text-primary">
@@ -103,7 +151,7 @@ export default function BreachesPage() {
                   </Link>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {t('breach.discovered')}: {new Date(b.discoveredAt).toLocaleString(lang === 'pl' ? 'pl-PL' : 'en-GB')}
-                    {' · '}{b.subjectsCount} {lang === 'pl' ? 'osób' : 'subjects'}
+                    {' · '}{t('breach.subjectsCount').replace('{count}', b.subjectsCount)}
                   </p>
                 </div>
                 <BreachClockBadge breach={b} now={now} />
@@ -114,43 +162,41 @@ export default function BreachesPage() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : closeDialog())}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{t('breach.report')}</DialogTitle>
-            <DialogDescription>
-              {lang === 'pl'
-                ? 'Zegar 72h liczy się od stwierdzenia naruszenia (art. 33(1)).'
-                : 'The 72h clock runs from when the breach was discovered (Art. 33(1)).'}
-            </DialogDescription>
+            <DialogDescription>{t('breach.clockNote')}</DialogDescription>
           </DialogHeader>
           {/* Two-column form: short fields pair up; wide fields (textareas, chips)
               span both columns. Collapses to one column on small screens. */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField label={lang === 'pl' ? 'Tytuł naruszenia' : 'Breach title'} required>
-              {(fid) => <Input id={fid} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />}
+            <FormField label={t('breach.breachTitle')} required error={errors.title}>
+              {(fid) => <Input id={fid} value={form.title} onChange={(e) => setField({ title: e.target.value })} />}
             </FormField>
-            <FormField label={lang === 'pl' ? 'Poziom ryzyka' : 'Risk level'}>
+            {/* The three risk labels are the shared ones, so they read the same here, on a
+                processor record and anywhere else a risk rating appears. */}
+            <FormField label={t('risk.level')}>
               {(fid) => (
-                <Select id={fid} value={form.riskLevel} onChange={(e) => setForm({ ...form, riskLevel: e.target.value })}>
-                  <option value="low">{lang === 'pl' ? 'Niskie' : 'Low'}</option>
-                  <option value="medium">{lang === 'pl' ? 'Średnie' : 'Medium'}</option>
-                  <option value="high">{lang === 'pl' ? 'Wysokie' : 'High'}</option>
+                <Select id={fid} value={form.riskLevel} onChange={(e) => setField({ riskLevel: e.target.value })}>
+                  <option value="low">{t('risk.low')}</option>
+                  <option value="medium">{t('risk.medium')}</option>
+                  <option value="high">{t('risk.high')}</option>
                 </Select>
               )}
             </FormField>
             <div className="sm:col-span-2">
-              <FormField label={lang === 'pl' ? 'Opis (charakter naruszenia — art. 33(3)(a))' : 'Description (nature of the breach — Art. 33(3)(a))'} required>
-                {(fid) => <Textarea id={fid} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />}
+              <FormField label={t('breach.description')} required error={errors.description}>
+                {(fid) => <Textarea id={fid} value={form.description} onChange={(e) => setField({ description: e.target.value })} />}
               </FormField>
             </div>
-            <FormField label={lang === 'pl' ? 'Liczba osób' : 'Subjects affected'}>
+            <FormField label={t('breach.subjects')}>
               {(fid) => <Input id={fid} type="number" min="0" value={form.subjectsCount}
-                onChange={(e) => setForm({ ...form, subjectsCount: e.target.value })} />}
+                onChange={(e) => setField({ subjectsCount: e.target.value })} />}
             </FormField>
             <FormField label={t('breach.recordsCount')}>
               {(fid) => <Input id={fid} type="number" min="0" value={form.recordsCount}
-                onChange={(e) => setForm({ ...form, recordsCount: e.target.value })} />}
+                onChange={(e) => setField({ recordsCount: e.target.value })} />}
             </FormField>
             <div className="sm:col-span-2">
               <FormField label={t('breach.dataCategories')}>
@@ -159,7 +205,7 @@ export default function BreachesPage() {
                     const active = form.dataCategories.includes(c.id);
                     return (
                       <button key={c.id} type="button" aria-pressed={active}
-                        onClick={() => setForm({ ...form, dataCategories: toggleId(form.dataCategories, c.id) })}
+                        onClick={() => setField({ dataCategories: toggleId(form.dataCategories, c.id) })}
                         className={cn(
                           'rounded-full border px-3 py-1 text-xs transition-colors',
                           active ? 'border-primary bg-primary/15 text-primary'
@@ -172,30 +218,28 @@ export default function BreachesPage() {
                 </div>
               </FormField>
             </div>
+            {/* accent-primary, not a raw hex — the brand gold lives in one token. */}
             <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input type="checkbox" className="accent-[#c5a059]" checked={form.uodoNotificationRequired}
-                onChange={(e) => setForm({ ...form, uodoNotificationRequired: e.target.checked })} />
+              <input type="checkbox" className="accent-primary" checked={form.uodoNotificationRequired}
+                onChange={(e) => setField({ uodoNotificationRequired: e.target.checked })} />
               {t('breach.notifyUodo')}
             </label>
             <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input type="checkbox" className="accent-[#c5a059]" checked={form.subjectsNotificationRequired}
-                onChange={(e) => setForm({ ...form, subjectsNotificationRequired: e.target.checked })} />
+              <input type="checkbox" className="accent-primary" checked={form.subjectsNotificationRequired}
+                onChange={(e) => setField({ subjectsNotificationRequired: e.target.checked })} />
               {t('breach.notifySubjects')}
             </label>
             <div className="sm:col-span-2">
               <FormField label={t('breach.riskRationale')} required
-                hint={lang === 'pl'
-                  ? 'Udokumentuj decyzję także gdy NIE zgłaszasz (art. 33(5)).'
-                  : 'Document the decision even when NOT notifying (Art. 33(5)).'}>
-                {(fid) => <Textarea id={fid} value={form.riskRationale} onChange={(e) => setForm({ ...form, riskRationale: e.target.value })} />}
+                error={errors.riskRationale} hint={t('breach.rationaleHint')}>
+                {(fid) => <Textarea id={fid} value={form.riskRationale} onChange={(e) => setField({ riskRationale: e.target.value })} />}
               </FormField>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={submit} disabled={!form.title.trim() || !form.description.trim() || !form.riskRationale.trim()}>
-              {t('common.save')}
-            </Button>
+            <Button variant="outline" onClick={closeDialog}>{t('common.cancel')}</Button>
+            {/* Deliberately NOT disabled — pressing Save explains what is missing. */}
+            <Button onClick={submit}>{t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
