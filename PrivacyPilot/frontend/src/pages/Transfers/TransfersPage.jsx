@@ -23,6 +23,18 @@ import { fetchVendors } from '../../store/slices/vendorsSlice';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { TRANSFER_MECHANISMS, ADEQUACY_COUNTRIES, labelOf } from '../../lib/gdpr';
+import { failureMessage } from '../../lib/apiErrors';
+
+// Does the typed country have an EU adequacy decision? Compared loosely so "japan" and
+// "Japan " both match, and partially so "USA (DPF participants only)" matches "USA".
+const hasAdequacyDecision = (country) => {
+  const typed = country.trim().toLowerCase();
+  if (!typed) return false;
+  return ADEQUACY_COUNTRIES.some((entry) => {
+    const known = entry.toLowerCase();
+    return known === typed || known.startsWith(`${typed} (`) || typed === known.split(' (')[0];
+  });
+};
 
 // vendorId '' means "no linked processor — type the recipient by hand".
 const EMPTY_FORM = { vendorId: '', recipient: '', destinationCountry: '', mechanism: 'scc', adequacyNote: '', tiaDocumented: false, tiaRef: '' };
@@ -36,13 +48,26 @@ export default function TransfersPage() {
   const { items: vendors } = useSliceData('vendors', fetchVendors);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [errors, setErrors] = useState({});
   const canManage = can(user, ACTIONS.MANAGE_TRANSFERS);
 
   // True when a processor is linked: the recipient is taken from the vendor's name,
   // so the free-text recipient box is filled automatically and locked.
   const vendorLinked = Boolean(form.vendorId);
+  // Whether the destination the user is typing is covered by an EU adequacy decision.
+  const adequacyCountry = hasAdequacyDecision(form.destinationCountry);
 
-  const closeDialog = () => { setOpen(false); setForm(EMPTY_FORM); };
+  const closeDialog = () => { setOpen(false); setForm(EMPTY_FORM); setErrors({}); };
+
+  // Update one field and clear its error as soon as the user starts fixing it.
+  const setField = (patch) => {
+    setForm((f) => ({ ...f, ...patch }));
+    setErrors((e) => {
+      const next = { ...e };
+      for (const key of Object.keys(patch)) delete next[key];
+      return next;
+    });
+  };
 
   // Picking a processor fills (and locks) the recipient from its name; picking
   // "None" clears it so the user types a recipient by hand.
@@ -52,10 +77,18 @@ export default function TransfersPage() {
   };
 
   const submit = async () => {
+    // Check first and name the problem next to the field.
+    const found = {};
+    if (!form.recipient.trim()) found.recipient = t('transfers.recipientRequired');
+    if (!form.destinationCountry.trim()) found.destinationCountry = t('transfers.destinationRequired');
+    if (Object.keys(found).length > 0) {
+      setErrors(found);
+      return;
+    }
     // Send vendorId only when a processor is linked (never an empty string). The
     // recipient always has a value: the vendor's name, or what the user typed.
     const action = await dispatch(createTransfer({ ...form, vendorId: form.vendorId || null }));
-    if (action.error) toast.error(t('common.notAuthorized'));
+    if (action.error) toast.error(failureMessage(action.error, t));
     else { toast.success(t('common.save')); closeDialog(); }
   };
 
@@ -64,7 +97,7 @@ export default function TransfersPage() {
       id: tr.id,
       patch: { tiaDocumented: !tr.tiaDocumented },
     }));
-    if (action.error) toast.error(t('common.notAuthorized'));
+    if (action.error) toast.error(failureMessage(action.error, t));
   };
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={4} />;
@@ -77,13 +110,19 @@ export default function TransfersPage() {
       </PageHeader>
 
       {items.length === 0 ? (
-        <EmptyState />
+        <EmptyState
+          title={t('transfers.emptyTitle')}
+          hint={t('transfers.empty')}
+          action={canManage && (
+            <Button size="sm" onClick={() => setOpen(true)}><Plus /> {t('transfers.add')}</Button>
+          )}
+        />
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{lang === 'pl' ? 'Odbiorca' : 'Recipient'}</TableHead>
+                <TableHead>{t('transfers.recipient')}</TableHead>
                 <TableHead>{t('transfers.destination')}</TableHead>
                 <TableHead>{t('transfers.mechanism')}</TableHead>
                 <TableHead>{t('transfers.tia')}</TableHead>
@@ -104,10 +143,14 @@ export default function TransfersPage() {
                     </TableCell>
                     <TableCell>
                       {!needsTia ? (
-                        <span className="text-xs text-muted-foreground">n/a (Art. 45)</span>
+                        <span className="text-xs text-muted-foreground">{t('transfers.tiaNotRequired')}</span>
                       ) : (
+                        // The badge is the control. The label says what CLICKING does, not
+                        // just what the column is, and the cursor shows it is clickable.
                         <button type="button" disabled={!canManage} onClick={() => toggleTia(tr)}
-                          className="disabled:cursor-not-allowed" aria-label={t('transfers.tia')}>
+                          title={canManage ? t('transfers.toggleTia') : undefined}
+                          aria-label={`${t('transfers.tia')} — ${t('transfers.toggleTia')}`}
+                          className="cursor-pointer disabled:cursor-default">
                           <Badge variant="outline" className={
                             tr.tiaDocumented
                               ? 'border-(--status-ok)/50 text-(--status-ok)'
@@ -132,15 +175,10 @@ export default function TransfersPage() {
           <DialogHeader><DialogTitle>{t('transfers.add')}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
             {/* Optional processor link: pick one and the recipient is filled from it. */}
-            <FormField
-              label={lang === 'pl' ? 'Podmiot przetwarzający (opcjonalnie)' : 'Processor (optional)'}
-              hint={lang === 'pl'
-                ? 'Wybierz podmiot, aby powiązać transfer i pobrać nazwę odbiorcy z jego danych.'
-                : 'Pick a processor to link the transfer and take the recipient name from it.'}
-            >
+            <FormField label={t('transfers.processorLink')} hint={t('transfers.processorLinkHint')}>
               {(fid) => (
                 <Select id={fid} value={form.vendorId} onChange={(e) => onVendorChange(e.target.value)}>
-                  <option value="">{lang === 'pl' ? '— Brak (wpisz odbiorcę ręcznie) —' : '— None (type recipient) —'}</option>
+                  <option value="">{t('transfers.processorNone')}</option>
                   {vendors.map((v) => (
                     <option key={v.id} value={v.id}>{v.name}</option>
                   ))}
@@ -148,39 +186,65 @@ export default function TransfersPage() {
               )}
             </FormField>
             <FormField
-              label={lang === 'pl' ? 'Odbiorca danych' : 'Data recipient'}
+              label={t('transfers.recipient')}
               required={!vendorLinked}
-              hint={vendorLinked
-                ? (lang === 'pl' ? 'Pobrano z wybranego podmiotu.' : 'Filled from the selected processor.')
-                : undefined}
+              error={errors.recipient}
+              hint={vendorLinked ? t('transfers.recipientFromProcessor') : undefined}
             >
               {(fid) => (
                 <Input id={fid} value={form.recipient} disabled={vendorLinked}
-                  onChange={(e) => setForm({ ...form, recipient: e.target.value })} />
+                  onChange={(e) => setField({ recipient: e.target.value })} />
               )}
             </FormField>
-            <FormField label={t('transfers.destination')} required
-              hint={`${lang === 'pl' ? 'Decyzje adekwatności' : 'Adequacy decisions'}: ${ADEQUACY_COUNTRIES.slice(0, 6).join(', ')}…`}>
-              {(fid) => <Input id={fid} value={form.destinationCountry} onChange={(e) => setForm({ ...form, destinationCountry: e.target.value })} />}
-            </FormField>
-            <FormField label={t('transfers.mechanism')}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {/* The hint used to list the first six adequacy countries followed by an
+                  ellipsis — an arbitrary slice of sixteen that told the user nothing about
+                  the one they were typing. It now answers the actual question: does THIS
+                  country have an adequacy decision? */}
+              <FormField
+                label={t('transfers.destination')}
+                required
+                error={errors.destinationCountry}
+                hint={adequacyCountry ? t('transfers.adequacyDetected') : undefined}
+              >
+                {(fid) => (
+                  <Input id={fid} value={form.destinationCountry}
+                    onChange={(e) => setField({ destinationCountry: e.target.value })} />
+                )}
+              </FormField>
+              <FormField label={t('transfers.mechanism')}>
+                {(fid) => (
+                  <Select id={fid} value={form.mechanism} onChange={(e) => setField({ mechanism: e.target.value })}>
+                    {TRANSFER_MECHANISMS.map((m) => (
+                      <option key={m.id} value={m.id}>{m[lang]} ({m.ref})</option>
+                    ))}
+                  </Select>
+                )}
+              </FormField>
+            </div>
+            {/* The assessment reference was stored and shown in the table but there was no
+                way to enter it — so it could never be filled. Only asked for when the
+                chosen mechanism actually requires an assessment. */}
+            {form.mechanism !== 'adequacy' && (
+              <FormField label={t('transfers.tiaRef')} hint={t('transfers.tiaRefHint')}>
+                {(fid) => (
+                  <Input id={fid} value={form.tiaRef}
+                    onChange={(e) => setField({ tiaRef: e.target.value })} />
+                )}
+              </FormField>
+            )}
+            <FormField label={t('transfers.note')} hint={t('transfers.noteHint')}>
               {(fid) => (
-                <Select id={fid} value={form.mechanism} onChange={(e) => setForm({ ...form, mechanism: e.target.value })}>
-                  {TRANSFER_MECHANISMS.map((m) => (
-                    <option key={m.id} value={m.id}>{m[lang]} ({m.ref})</option>
-                  ))}
-                </Select>
+                <Input id={fid} value={form.adequacyNote}
+                  onChange={(e) => setField({ adequacyNote: e.target.value })} />
               )}
-            </FormField>
-            <FormField label={lang === 'pl' ? 'Notatka' : 'Note'}>
-              {(fid) => <Input id={fid} value={form.adequacyNote} onChange={(e) => setForm({ ...form, adequacyNote: e.target.value })} />}
             </FormField>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>{t('common.cancel')}</Button>
-            <Button onClick={submit} disabled={!form.recipient.trim() || !form.destinationCountry.trim()}>
-              {t('common.save')}
-            </Button>
+            {/* Deliberately NOT disabled — pressing Save on an incomplete form explains what
+                is missing instead of leaving the user with a dead button. */}
+            <Button onClick={submit}>{t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

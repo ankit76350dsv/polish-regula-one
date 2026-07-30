@@ -26,6 +26,9 @@ import { fetchVendors, createVendor, updateVendor, archiveVendor } from '../../s
 import { useT } from '../../i18n';
 import { can, hasRole, ACTIONS, ROLES } from '../../lib/permissions';
 import { cn } from '@/lib/utils';
+// Shared with the transfers page: one place that turns a failed request into a message a
+// person can act on (see lib/apiErrors.js).
+import { failureMessage } from '../../lib/apiErrors';
 
 const DPA_STYLES = {
   signed: 'border-(--status-ok)/50 text-(--status-ok)',
@@ -39,19 +42,6 @@ const emptyForm = (lang) => ({
   name: '', country: lang === 'pl' ? 'Polska' : 'Poland', region: '',
   dpaStatus: 'missing', riskLevel: 'medium', subprocessors: [],
 });
-
-/**
- * Turn a failed request into something a person can act on.
- *
- * Every failure on this page used to say "Your role does not permit this action" — so a
- * network glitch or a server error told the user they lacked permission, sending them to
- * their administrator for a problem that had nothing to do with access.
- */
-const failureMessage = (error, t) => {
-  if (error?.message === 'FORBIDDEN') return t('common.notAuthorized');
-  if (error?.message === 'CONFLICT') return t('vendors.inUse');
-  return t('common.saveFailed');
-};
 
 export default function VendorsPage() {
   const { t, lang } = useT();
@@ -121,7 +111,7 @@ export default function VendorsPage() {
     setConfirmId(null);
     if (!id) return;
     const action = await dispatch(archiveVendor(id));
-    if (action.error) toast.error(failureMessage(action.error, t));
+    if (action.error) toast.error(failureMessage(action.error, t, t('vendors.inUse')));
     else toast.success(t('vendors.archived'));
   };
 
