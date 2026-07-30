@@ -170,7 +170,11 @@ export default function RegisterPage() {
 
   return (
     <div>
-      <PageHeader title={t('ropa.title')} subtitle="Rejestr Czynności Przetwarzania — Art. 30 RODO">
+      {/* The subtitle used to be a hardcoded Polish string, so in Polish the page printed
+          its own title twice in a row, and in English it printed an untranslated Polish
+          line. It is now translated like every other page's, and says something the title
+          does not: what this register is FOR. */}
+      <PageHeader title={t('ropa.title')} subtitle={t('ropa.subtitle')}>
         {can(user, ACTIONS.EXPORT_DATA) && (
           <Button variant="outline" onClick={exportCsv} disabled={!settings.data}>
             <Download /> {t('ropa.exportCsv')}
@@ -206,6 +210,12 @@ export default function RegisterPage() {
             <option value="all">{t('common.all')}</option>
             {ART6_BASES.map((b) => <option key={b.id} value={b.id}>{b[lang]}</option>)}
           </Select>
+          {/* How many rows the filters are showing — the same line, in the same style, as
+              the audit trail screen, so the two list pages read alike. It is also the
+              number the CSV export will contain. */}
+          <span className="self-center text-xs text-muted-foreground" aria-live="polite">
+            {t('ropa.matchCount').replace('{count}', filtered.length)}
+          </span>
         </div>
       </div>
 
@@ -213,6 +223,10 @@ export default function RegisterPage() {
         <LoadingState rows={5} />
       ) : filtered.length === 0 ? (
         <EmptyState
+          // Without an explicit title this fell back to the generic "Nothing here yet",
+          // and the hint then said "No processing activities recorded yet" as well — the
+          // same fact three times over. Title states the fact; hint gives the obligation.
+          title={t('ropa.emptyTitle')}
           hint={t('ropa.empty')}
           action={can(user, ACTIONS.CREATE_ACTIVITY) && (
             <Button size="sm" onClick={() => navigate(`${base}/register/new`)}>

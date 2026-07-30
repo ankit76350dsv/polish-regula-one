@@ -212,7 +212,7 @@ export default {
 
   // Rejestr
   'ropa.title': 'Rejestr Czynności Przetwarzania',
-  'ropa.titlePl': 'Rejestr Czynności Przetwarzania',
+  'ropa.subtitle': 'Art. 30 RODO — udostępniany organowi nadzorczemu na żądanie',
   'ropa.newActivity': 'Nowa czynność przetwarzania',
   'ropa.controllerTab': 'Jako administrator (art. 30 ust. 1)',
   'ropa.processorTab': 'Jako podmiot przetwarzający (art. 30 ust. 2)',
@@ -223,8 +223,9 @@ export default {
   'ropa.dpia': 'DPIA',
   'ropa.completeness': 'Kompletność',
   'ropa.exportCsv': 'Eksport rejestru (CSV)',
-  'ropa.exportPdf': 'Eksport rejestru (wydruk/PDF)',
-  'ropa.empty': 'Brak zarejestrowanych czynności. Każdy administrator musi prowadzić ten rejestr (art. 30 RODO).',
+  'ropa.emptyTitle': 'Brak zarejestrowanych czynności przetwarzania',
+  'ropa.empty': 'Art. 30 RODO wymaga prowadzenia tego rejestru.',
+  'ropa.matchCount': 'Czynności: {count}',
 
   // Kreator
   'wizard.title': 'Kreator czynności przetwarzania',

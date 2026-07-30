@@ -212,7 +212,7 @@ export default {
 
   // ROPA
   'ropa.title': 'Register of Processing Activities',
-  'ropa.titlePl': 'Rejestr Czynności Przetwarzania',
+  'ropa.subtitle': 'Art. 30 GDPR — produced for the supervisory authority on request',
   'ropa.newActivity': 'New processing activity',
   'ropa.controllerTab': 'As controller (Art. 30(1))',
   'ropa.processorTab': 'As processor (Art. 30(2))',
@@ -223,8 +223,9 @@ export default {
   'ropa.dpia': 'DPIA',
   'ropa.completeness': 'Completeness',
   'ropa.exportCsv': 'Export register (CSV)',
-  'ropa.exportPdf': 'Export register (print/PDF)',
-  'ropa.empty': 'No processing activities recorded yet. Every controller must maintain this register (Art. 30 GDPR).',
+  'ropa.emptyTitle': 'No processing activities recorded',
+  'ropa.empty': 'Art. 30 GDPR requires this register to be maintained.',
+  'ropa.matchCount': '{count} activities',
 
   // Wizard steps
   'wizard.title': 'Processing activity wizard',
