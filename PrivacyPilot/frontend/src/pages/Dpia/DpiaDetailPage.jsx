@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
-import { PenLine, Plus, Trash2, Sparkles } from 'lucide-react';
+import { CheckCircle2, PenLine, Plus, Trash2, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -166,13 +166,7 @@ export default function DpiaDetailPage() {
       // role or the DPIA is already approved; 403 (FORBIDDEN) when your role may not
       // sign at all. Show a helpful message for each.
       const code = action.error.message;
-      toast.error(
-        code === 'CONFLICT'
-          ? (lang === 'pl'
-              ? 'Nie można podpisać — brak linii do podpisu dla Twojej roli lub ocena jest już zatwierdzona.'
-              : 'Could not sign — there is no line waiting for your role, or the DPIA is already approved.')
-          : t('common.notAuthorized'),
-      );
+      toast.error(code === 'CONFLICT' ? t('dpia.signConflict') : t('common.notAuthorized'));
     } else {
       toast.success(t('dpia.sign'));
     }
@@ -191,14 +185,18 @@ export default function DpiaDetailPage() {
         <StatusBadge status={dpia.status} />
       </PageHeader>
 
-      {/* Screening criteria carried over from the wizard */}
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {dpia.criteriaMatched.map((c) => (
-          <Badge key={c} variant="outline" className="border-(--status-warn)/40 text-(--status-warn)">
-            {labelOf(DPIA_CRITERIA, c, lang)}
-          </Badge>
-        ))}
-      </div>
+      {/* The screening criteria carried over from the wizard — the reason this assessment
+          exists, so they stay in full here (the list view only counts them). Rendered only
+          when there are some, otherwise an empty row still left its margin behind. */}
+      {dpia.criteriaMatched.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          {dpia.criteriaMatched.map((c) => (
+            <Badge key={c} variant="outline" className="border-(--status-warn)/40 text-(--status-warn)">
+              {labelOf(DPIA_CRITERIA, c, lang)}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       {dpia.priorConsultation && (
         <div className="mb-4 rounded-lg border border-(--status-risk)/40 bg-(--status-risk)/5 p-3 text-sm text-(--status-risk)">
@@ -229,7 +227,7 @@ export default function DpiaDetailPage() {
                 <Button variant="outline" size="sm" onClick={() => setRiskDraft({
                   description: '', likelihood: 3, severity: 3, mitigation: '', residualLikelihood: 2, residualSeverity: 2,
                 })}>
-                  <Plus /> {lang === 'pl' ? 'Dodaj ryzyko' : 'Add risk'}
+                  <Plus /> {t('dpia.addRisk')}
                 </Button>
               )}
             </div>
@@ -242,8 +240,10 @@ export default function DpiaDetailPage() {
                 <div key={r.id} className="rounded-lg border p-3">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium text-foreground">{r.description}</p>
+                    {/* icon-sm to match every other icon button in the app (the edit
+                        pencil above uses the same size); icon-xs was a one-off. */}
                     {canEdit && (
-                      <Button variant="ghost" size="icon-xs" aria-label={t('common.delete')} onClick={() => removeRisk(r.id)}>
+                      <Button variant="ghost" size="icon-sm" aria-label={t('common.delete')} onClick={() => removeRisk(r.id)}>
                         <Trash2 />
                       </Button>
                     )}
@@ -251,35 +251,37 @@ export default function DpiaDetailPage() {
                   <p className="mt-1 text-xs text-muted-foreground">{r.mitigation}</p>
                   <div className="mt-2 flex gap-4 text-xs tabular-nums">
                     <span>
-                      {lang === 'pl' ? 'Ryzyko' : 'Risk'}:{' '}
+                      {t('dpia.risk')}:{' '}
                       <span className={riskTone(score)}>{r.likelihood}×{r.severity} = {score}</span>
                     </span>
                     <span>
-                      {lang === 'pl' ? 'Rezydualne' : 'Residual'}:{' '}
+                      {t('dpia.residualRisk')}:{' '}
                       <span className={riskTone(residual)}>{r.residualLikelihood}×{r.residualSeverity} = {residual}</span>
                     </span>
                   </div>
                 </div>
               );
             })}
-            {dpia.risks.length === 0 && <p className="text-sm text-muted-foreground">—</p>}
+            {dpia.risks.length === 0 && (
+              <p className="text-sm text-muted-foreground">{t('dpia.noRisks')}</p>
+            )}
 
             {riskDraft && (
               <div className="grid gap-3 rounded-lg border border-primary/40 p-3">
-                <FormField label={lang === 'pl' ? 'Opis ryzyka' : 'Risk description'} required>
+                <FormField label={t('dpia.riskDescription')} required>
                   {(fid) => <Input id={fid} value={riskDraft.description}
                     onChange={(e) => setRiskDraft({ ...riskDraft, description: e.target.value })} />}
                 </FormField>
-                <FormField label={lang === 'pl' ? 'Środki zaradcze' : 'Mitigation'}>
+                <FormField label={t('dpia.mitigation')}>
                   {(fid) => <Input id={fid} value={riskDraft.mitigation}
                     onChange={(e) => setRiskDraft({ ...riskDraft, mitigation: e.target.value })} />}
                 </FormField>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {[
-                    ['likelihood', lang === 'pl' ? 'Prawdopod.' : 'Likelihood'],
-                    ['severity', lang === 'pl' ? 'Waga' : 'Severity'],
-                    ['residualLikelihood', lang === 'pl' ? 'Rezyd. prawd.' : 'Res. likelihood'],
-                    ['residualSeverity', lang === 'pl' ? 'Rezyd. waga' : 'Res. severity'],
+                    ['likelihood', t('dpia.likelihood')],
+                    ['severity', t('dpia.severity')],
+                    ['residualLikelihood', t('dpia.residualLikelihood')],
+                    ['residualSeverity', t('dpia.residualSeverity')],
                   ].map(([key, label]) => (
                     <FormField key={key} label={`${label} (1–5)`}>
                       {(fid) => (
@@ -303,7 +305,7 @@ export default function DpiaDetailPage() {
         <EditableSection title={t('dpia.measures')} value={dpia.measures.join('\n')}
           canEdit={canEdit}
           onSave={(v) => save({ measures: v.split('\n').map((s) => s.trim()).filter(Boolean) })}
-          placeholder={lang === 'pl' ? 'Jeden środek na linię' : 'One measure per line'}
+          placeholder={t('dpia.measuresPlaceholder')}
           onAiDraft={aiEnabled ? aiSection('measures') : undefined} />
 
         <EditableSection title={t('dpia.dpoAdvice')} value={dpia.dpoAdvice}
@@ -314,11 +316,14 @@ export default function DpiaDetailPage() {
           <CardHeader className="pb-2"><CardTitle className="text-sm">{t('dpia.sign')}</CardTitle></CardHeader>
           <CardContent className="grid gap-2">
             {dpia.approvals.map((a) => (
-              <div key={a.role} className="flex items-center gap-3 rounded-lg border p-2.5 text-sm">
-                <span className="w-44 text-xs text-muted-foreground">{ROLE_LABELS[a.role]?.[lang] ?? a.role}</span>
+              <div key={a.role} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-2.5 text-sm">
+                <span className="w-full text-xs text-muted-foreground sm:w-44">
+                  {ROLE_LABELS[a.role]?.[lang] ?? a.role}
+                </span>
                 {a.approvedAt ? (
-                  <span className="text-(--status-ok)">
-                    ✓ {a.name} · {new Date(a.approvedAt).toLocaleDateString(lang === 'pl' ? 'pl-PL' : 'en-GB')}
+                  <span className="flex items-center gap-1.5 text-(--status-ok)">
+                    <CheckCircle2 className="size-3.5 shrink-0" aria-hidden />
+                    {a.name} · {new Date(a.approvedAt).toLocaleDateString(lang === 'pl' ? 'pl-PL' : 'en-GB')}
                   </span>
                 ) : hasRole(user, a.role) && can(user, ACTIONS.SIGN_DPIA) ? (
                   <Button size="sm" onClick={sign}>{t('dpia.sign')}</Button>
@@ -329,9 +334,10 @@ export default function DpiaDetailPage() {
             ))}
             {canEdit && (
               <label className="mt-1 flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                <input type="checkbox" className="accent-[#c5a059]" checked={dpia.priorConsultation}
+                {/* accent-primary, not a raw hex — the brand gold lives in one token. */}
+                <input type="checkbox" className="accent-primary" checked={dpia.priorConsultation}
                   onChange={(e) => save({ priorConsultation: e.target.checked })} />
-                Art. 36 — {lang === 'pl' ? 'wymagane uprzednie konsultacje z UODO' : 'prior consultation with UODO required'}
+                {t('dpia.art36')}
               </label>
             )}
           </CardContent>
