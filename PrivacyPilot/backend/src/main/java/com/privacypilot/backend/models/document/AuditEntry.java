@@ -34,9 +34,30 @@ import java.util.Map;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @Document(collection = "privacypilot_audit_log")
-// Lets us quickly pull "every action a given user took, newest first" — the
-// query the old standalone actorId index used to serve.
+// ── Indexes ──────────────────────────────────────────────────────────────────
+// WHY THESE EXACT SHAPES: the audit screen always wants entries NEWEST FIRST, and it
+// always narrows by company first. Each index below therefore lists the fields it matches
+// exactly (tenantId, deleted, and optionally the record type or record id) and finishes
+// with createdAt descending — the order the screen asks for. That lets MongoDB read the
+// rows straight out of the index in the right order and stop at the row limit, instead of
+// gathering everything and sorting it in memory (which it refuses to do past 32 MB — and
+// this collection is kept for ten years).
+//
+// IMPORTANT: annotations alone do NOT create indexes — Spring Data's automatic index
+// creation is OFF by default in this version. MongoIndexConfig creates them at start-up.
 @CompoundIndexes({
+    // The default screen: one company's trail, newest first. Also serves the "action"
+    // filter and any date range, which narrow the same index walk.
+    @CompoundIndex(name = "audit_tenant_time_idx",
+            def = "{'tenantId': 1, 'deleted': 1, 'createdAt': -1}"),
+    // Filtered to one kind of record, e.g. only DSAR lines.
+    @CompoundIndex(name = "audit_tenant_type_time_idx",
+            def = "{'tenantId': 1, 'deleted': 1, 'entityType': 1, 'createdAt': -1}"),
+    // The full history of ONE record — what "show me everything that happened to this
+    // activity" needs.
+    @CompoundIndex(name = "audit_tenant_entity_time_idx",
+            def = "{'tenantId': 1, 'deleted': 1, 'entityId': 1, 'createdAt': -1}"),
+    // "Every action a given user took, newest first" — for investigating one person.
     @CompoundIndex(name = "audit_actor_time_idx", def = "{'createdBy': 1, 'createdAt': -1}")
 })
 public class AuditEntry extends BaseDocument {
@@ -62,6 +83,11 @@ public class AuditEntry extends BaseDocument {
     private AuditEntityType entityType;
 
     // The id of the specific record that changed.
+    // NOTE on the index: every read of this collection is scoped to one company first, so
+    // "the history of record X" is served by the audit_tenant_entity_time_idx compound index
+    // above, not by this single-field one. It is kept because it is harmless and pre-dates
+    // the compound indexes, but if insert throughput on this collection ever needs tuning,
+    // this is the one index that can be dropped without slowing any current query down.
     @Indexed
     private String entityId;
 

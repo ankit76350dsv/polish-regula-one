@@ -1,39 +1,34 @@
 package com.privacypilot.backend.repository;
 
 import com.privacypilot.backend.model.document.AuditEntry;
-import com.privacypilot.backend.model.enums.audit.AuditEntityType;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
  * Database access for the immutable audit trail ({@link AuditEntry}).
  *
  * The audit trail is write-once evidence, so in practice the app only ever
- * INSERTS through here (see AuditService). The read methods below are for the
- * audit-trail screen and for future tamper-evidence checks — they never change
- * a record.
+ * INSERTS through here (see AuditService). The read methods are for the audit-trail
+ * screen and for future tamper-evidence checks — they never change a record.
+ *
+ * Multi-row reads are declared in {@link AuditEntryRepositoryCustom} and always carry a
+ * row limit, because this collection grows for ten years and never shrinks.
  */
 @Repository
-public interface AuditEntryRepository extends MongoRepository<AuditEntry, String> {
+public interface AuditEntryRepository extends MongoRepository<AuditEntry, String>,
+        AuditEntryRepositoryCustom {
 
-    // All audit entries for one company, so a tenant only ever sees its own trail.
-    List<AuditEntry> findAllByTenantId(String tenantId);
-
-    // The audit-trail screen: every entry for one company, NEWEST FIRST. The
-    // `deletedFalse` guard is defensive — audit lines are never soft-deleted, but
-    // filtering on it keeps the query consistent with every other read in the app.
-    List<AuditEntry> findByTenantIdAndDeletedFalseOrderByCreatedAtDesc(String tenantId);
-
-    // Same, narrowed to one kind of record (e.g. only "activity" changes), newest first.
-    List<AuditEntry> findByTenantIdAndEntityTypeAndDeletedFalseOrderByCreatedAtDesc(
-            String tenantId, AuditEntityType entityType);
-
-    // The full history of ONE specific record (e.g. all changes to activity X), newest first.
-    List<AuditEntry> findByTenantIdAndEntityIdAndDeletedFalseOrderByCreatedAtDesc(
-            String tenantId, String entityId);
+    // READS OF MANY ENTRIES LIVE IN AuditEntryRepositoryCustom (search / findRecent).
+    //
+    // WHY: the trail is append-only and kept for ten years, so any method that returns
+    // "all entries for a company" is a time bomb — it gets bigger every day until the
+    // request runs out of memory or MongoDB refuses to sort it. The three unlimited
+    // finders that used to be here (all entries; all entries of one type; all entries for
+    // one record) have been REPLACED by the single search() above, which always applies
+    // the filters, the order and a row limit inside the database. Nothing was lost: every
+    // question those finders answered, search() answers with a cap.
 
     // One audit entry, but ONLY if it belongs to the caller's company (else empty → 404).
     Optional<AuditEntry> findByIdAndTenantIdAndDeletedFalse(String id, String tenantId);

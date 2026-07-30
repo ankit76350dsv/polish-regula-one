@@ -154,9 +154,10 @@ public class DashboardService {
 
         // ── Recent audit: newest few lines, mapped to the same read-only shape the
         //    audit screen already uses.
+        //    The LIMIT goes to the database: this used to fetch the company's entire
+        //    ten-year trail just to show six lines, which got slower every day.
         List<AuditEntryResponse> recentAudit =
-                auditRepo.findByTenantIdAndDeletedFalseOrderByCreatedAtDesc(tenantId).stream()
-                        .limit(RECENT_AUDIT_LIMIT)
+                auditRepo.findRecent(tenantId, RECENT_AUDIT_LIMIT).stream()
                         .map(AuditEntryResponse::from)
                         .toList();
 

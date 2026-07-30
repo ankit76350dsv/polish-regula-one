@@ -45,6 +45,14 @@ It is **not production-ready**, for three distinct classes of reason:
    (GDPR Art. 5(2)). All eight export paths now record an immutable EXPORT entry via
    `POST /api/privacypilot/exports` before any file, print view or clipboard copy is
    produced, and abandon the export if that record cannot be written.
+2b. ~~**The audit trail was on a timer to break.**~~ **✅ FIXED 2026-07-29 — see §17.** The
+   audit query loaded every entry a tenant had ever written and sorted it in Java, on a
+   collection that only grows and is kept for ten years; the dashboard did the same to show
+   six rows. Both now push filters, ordering and a row limit into MongoDB. It also emerged
+   that **no index had ever been created** — `spring.data.mongodb.auto-index-creation`
+   defaults to off, so every `@Indexed`/`@CompoundIndex` annotation in this module was
+   inert. Indexes are now created explicitly at start-up.
+
 3. **The operational layer does not exist yet.** No production profile, no container, no
    CI/CD, no health/metrics, no rate limiting, no TLS configuration, no field-level
    encryption, no runnable test suite, no retention or erasure job. Additionally
@@ -58,9 +66,9 @@ working domain code.
 
 ## 2. Overall Production Readiness Score
 
-### **61 / 100 — ❌ Not Production Ready**
+### **66 / 100 — ❌ Not Production Ready**
 
-*(54 at first assessment; +3 for H1 and +4 for H2, both fixed 2026-07-29 — see §17.)*
+*(54 at first assessment; +3 for H1, +4 for H2, +5 for H3 — all fixed 2026-07-29, see §17.)*
 
 | Layer | Score | Basis |
 |---|---:|---|
@@ -69,9 +77,9 @@ working domain code.
 | Authentication & authorization | 80% | Auth + RBAC solid; **entitlement gate now enforced server-side (H1 fixed)**; residual: 30 s cache window, frontend/backend matrix drift (M6) |
 | Security hardening | 40% | No rate limiting, no field encryption, no TLS config, weak DTO limits |
 | Compliance (GDPR/Polish mapping) | 75% | Feature-to-article mapping is accurate; **export accountability now recorded (H2 fixed)**; retention/erasure gaps remain |
-| Database & performance | 45% | No pagination, no compound indexes, no transactions, full-collection reads |
+| Database & performance | 65% | **Audit queries and indexes fixed (H3)**; remaining: no pagination on the other list endpoints, no transactions, no migrations |
 | Ops / infra / deploy | 15% | No prod profile, Docker, CI/CD, observability; config not in git |
-| Testing | 20% | Still far from the 80% target, but **25 hermetic tests** now exist (access policy + export accountability, §17); the original context-load test still needs the live Atlas cluster |
+| Testing | 30% | Still far from the 80% target, but **44 hermetic tests** now exist (access policy, export accountability, audit query, index shapes — §17); the original context-load test still needs the live Atlas cluster |
 
 ---
 
@@ -187,18 +195,30 @@ exist only in the frontend (`lib/gdpr.js`) — tracked as follow-up, not a regre
 
 **H3 · The audit-trail query loads the whole tenant collection into memory and sorts it
 without an index.**
-`AuditQueryService.list()` fetches every entry for the tenant
-(`AuditQueryService.java:66`), then filters by action/date/text and applies the 1000-row
-cap **in memory** (`:70-80`). The only index is `tenantId` (`BaseDocument.java:36-37`) —
-there is no `(tenantId, createdAt)` compound index, so MongoDB performs a blocking
-in-memory sort.
-*Failure scenario:* the trail is retained for 10 years and grows monotonically (entries
-can never be deleted, by design). Past MongoDB's 32 MB in-memory sort limit the endpoint
-starts returning server errors, and well before that a single request pulls hundreds of
-MB into the JVM. It is also a cheap DoS: repeat `GET /audit` with no filters.
-*Fix:* push filters and the limit into the query (`Pageable` + `Criteria`), and add
-compound indexes `(tenantId, createdAt)`, `(tenantId, entityType, createdAt)`,
-`(tenantId, entityId, createdAt)`.
+**✅ FIXED 2026-07-29 — see §17 for the change report.**
+*As found:* `AuditQueryService.list()` fetched every entry for the tenant, then filtered by
+action/date/text and applied the 1000-row cap **in memory**. `DashboardService` did the same
+to render six rows. The only declared index was `tenantId` — no `(tenantId, createdAt)`
+compound index, so MongoDB had to perform a blocking in-memory sort.
+*Failure scenario:* the trail is retained for 10 years and grows monotonically (entries can
+never be deleted, by design). Past MongoDB's 32 MB in-memory sort limit the endpoint starts
+returning server errors, and well before that a single request pulls hundreds of MB into the
+JVM. It was also a cheap DoS: repeat `GET /audit` with no filters.
+*Worse than first reported:* **no index existed at all.** Spring Data's
+`spring.data.mongodb.auto-index-creation` defaults to off and is set nowhere in this module
+(verified against the Boot 4.0.6 configuration metadata and both properties files), so the
+`@Indexed` on `BaseDocument.tenantId` and the `@CompoundIndex` on `AuditEntry` had **never
+produced an index**. Every list query in the module was a full collection scan.
+*Resolution:* filters, newest-first ordering and the row limit are now all built into one
+MongoDB query (`repository/AuditEntryRepositoryImpl.java`), so the database walks an index
+and stops at the cap; memory is bounded by the limit, not by the size of the trail. Three
+purpose-shaped compound indexes are declared on `AuditEntry` and **actually created** at
+start-up by `config/MongoIndexConfig.java`. The dashboard now asks for only the rows it
+shows. Unbounded multi-row finders were removed from the repository interface so the mistake
+cannot recur, and a non-positive limit is refused outright. 19 hermetic tests.
+*Unable to verify:* whether indexes already exist in the Atlas cluster (created by hand or
+by another module) — no database access from this environment. `MongoIndexConfig` is
+idempotent, so it is safe either way.
 
 **H4 · No rate limiting or brute-force protection anywhere.**
 No bucket4j / resilience4j / Spring Security rate limiter in `pom.xml` or `src`; no
@@ -381,6 +401,22 @@ documented purge after the period ends.
 on the supported patch line. **Unable to verify** the transitive dependency set against a
 CVE database — OWASP Dependency-Check was not run (no network egress in this run).
 
+**M12 · Audit-trail search only covers the newest 1000 entries. (NEW — found while fixing
+H3; pre-existing, not introduced by it.)**
+`auditService.list()` accepts `entityType`, `q`, `action`, `from`, `to` and `limit`
+(`services/auditService.js:21-32`), but the slice calls it with **no arguments**
+(`store/slices/auditSlice.js:6`), and `AuditTrailPage` filters the fetched array in the
+browser (`pages/Audit/AuditTrailPage.jsx` — `filtered`). Since the server caps any unfiltered
+read at `MAX_LIMIT = 1000`, the screen only ever searches within the newest 1000 entries.
+*Failure scenario:* an auditor searches for an actor's name to investigate an incident from
+last year, the screen shows "no entries", and they conclude nothing happened — when the
+entries exist but sit outside the window. For a legal-evidence trail, a silently incomplete
+search is worse than a slow one. The H3 fix makes this cheap to close because the server can
+now answer the real question: pass the on-screen filters into `fetchAudit` (debouncing the
+text box) so the search runs across the whole trail, and show the user when the cap is hit.
+*Not changed here:* wiring the UI to the server-side filters is a behaviour change to the
+screen, outside the scope of the H3 query fix.
+
 **M11 · Super-admins with no tenant are undefined behaviour rather than an explicit
 refusal.** `RegulaOneAuthClient.java:79-82` deliberately allows `ROLE_SUPER_ADMIN`
 through with a null `tenantId`. Reads then query `tenantId = null` (matching any
@@ -448,9 +484,9 @@ does database work in Java (H3). No pagination (M3), no transactions (M8), no ve
 
 | Aspect | Finding |
 |---|---|
-| Query shape | Every read is `tenantId`-indexed, but **all** list reads are full-collection with an unindexed sort — see H3, M3. |
-| Dashboard | Six collection scans plus in-Java aggregation per request (`DashboardService.java:76-80,158`). Fine for a small tenant; the audit scan is the part that will break first. |
-| Indexes | Only single-field `tenantId`. No compound index anywhere → MongoDB blocking sorts. |
+| Query shape | **Audit reads fixed (H3):** filters, sort and limit are pushed into MongoDB and backed by compound indexes that are now actually created. The other list endpoints are still unpaginated full-collection reads (M3), and until H3 no index existed at all, so they were full scans. |
+| Dashboard | Five collection reads plus in-Java aggregation per request. The audit scan — previously the part that would break first — now asks for only the 6 rows it displays (H3). |
+| Indexes | **Fixed for the audit trail (H3):** three compound indexes, each ending on `createdAt` so the newest-first sort is index-backed, created at start-up by `MongoIndexConfig`. Other collections still rely on the single-field `tenantId` index — which, note, only began to exist once index creation was wired up. |
 | Payloads | Unbounded — no `@Size`, no body cap (M2), no pagination, `limit` capped only *after* the full read. |
 | Caching | Only the 30 s identity cache, itself bounded to 10 000 entries with a best-effort sweep (`RegulaOneAuthClient.java:43,88-90`). |
 | Concurrency, memory, CPU, response times, scalability under load | **Unable to verify** — no load test, no profiling, no metrics endpoint exists to measure against (CLAUDE.md §18 requires load testing). |
@@ -467,6 +503,14 @@ does database work in Java (H3). No pagination (M3), no transactions (M8), no ve
   referenced (`existsByTenantIdAndVendorIdsAndDeletedFalse`).
 - **Keys.** Mongo `ObjectId` hex strings, not UUIDs. CLAUDE.md §13 says UUID primary keys;
   this is a documented deviation, not a defect, but note it.
+- **Indexes.** Audit trail: three compound indexes, each listing its equality fields then
+  ending on `createdAt` descending so the newest-first sort is index-backed, created at
+  start-up by `MongoIndexConfig` (H3 fixed, §17). Other collections: the inherited
+  single-field `tenantId` index only. **Note:** before the H3 fix *no index was created at
+  all* — Spring Data's `spring.data.mongodb.auto-index-creation` defaults to off and is set
+  nowhere here, so every `@Indexed`/`@CompoundIndex` annotation in the module was pure
+  documentation and every list query was a full collection scan. Adding
+  `(tenantId, deleted, updatedAt)` to the other collections is the natural follow-up.
 - **Constraints.** No unique indexes — e.g. nothing prevents two notices claiming the same
   `(tenantId, audience, version)`; the version is computed read-then-write
   (`NoticeService.java:214`) so a concurrent double-generate can collide.
@@ -668,7 +712,7 @@ unverified: the Art. 28 data processing agreement with MongoDB Inc. as sub-proce
 |---|---|---|
 | ~~H1~~ | ~~Account status / plan / module entitlement enforced only in the browser~~ | **✅ FIXED** — `PrivacyPilotAccessPolicy` enforced in `RegulaOneAuthClient.resolve()`; 15 tests (§17) |
 | ~~H2~~ | ~~`AuditAction.EXPORT` never written; all exports client-side~~ | **✅ FIXED** — `POST /api/privacypilot/exports` recorded before all 8 export paths; 10 tests (§17) |
-| H3 | Audit query loads and sorts the whole tenant collection in memory, unindexed | Push filters/limit into Mongo; add `(tenantId, createdAt)` compound indexes |
+| ~~H3~~ | ~~Audit query loads and sorts the whole tenant collection in memory, unindexed~~ | **✅ FIXED** — query pushed into Mongo + compound indexes actually created at start-up; 19 tests (§17) |
 | H4 | No rate limiting or brute-force protection | Edge + app limits, stricter on writes and `/audit` |
 | H5 | No field-level encryption / KMS / per-tenant keys for PII | Mongo CSFLE or app-layer AES-GCM via KMS |
 | H6 | No erasure path; subject PII frozen in the immutable audit trail | Stop auditing subject identifiers; add crypto-shred erasure; document the retention basis |
@@ -684,7 +728,8 @@ ineffective), no security headers · M5 mock AI seeds fake data into browser sto
 logs nowhere auditable · M6 frontend/backend RBAC drift (DPO gets a DPIA editor the API
 refuses) · M7 no CSRF token + shared cookie domain widens blast radius · M8 no
 transactions · M9 no retention/deletion schedule · M10 Spring Boot 4.0.6 → 4.0.7 ·
-M11 tenant-less super-admin is undefined behaviour.
+M11 tenant-less super-admin is undefined behaviour · **M12 audit-trail search only covers
+the newest 1000 entries (new, pre-existing — the UI never passes its filters to the API)**.
 
 **Low**
 
@@ -735,21 +780,141 @@ append-only audit trail, server-owned legal clocks and the DPIA threshold rule a
 under inspection, and the DPIA, DPO-notification, breach-deadline and adequacy-list logic
 were **verified correct against official UODO, Sejm and European Commission sources**.
 
-Deployment is nevertheless blocked by nine High findings. Three are substantive
-authorization and accountability defects in the application itself — entitlement enforced
-only in the browser (**H1**), exports invisible to the audit trail (**H2**), and no
-erasure path with subject PII permanently frozen in an immutable collection (**H6**).
-One will break in production as data accumulates (**H3**). The remainder are the missing
-operational floor: encryption at rest, TLS, rate limiting, a production profile, a
-container, a pipeline, observability, and a test suite that can actually run.
+Deployment was blocked by nine High findings; **three are now fixed** (§17): entitlement is
+enforced server-side (**H1**), every export is recorded in the audit trail (**H2**), and the
+audit query no longer loads a ten-year collection into memory — with the indexes it needs
+now actually created (**H3**).
 
-Resolve **H3–H9** (H1 and H2 are now fixed — §17), and settle the **EEA data-residency and
+**Six remain.** The most consequential is **H6**: there is still no erasure path, and data
+subjects' names sit permanently in an immutable audit collection, which is a live GDPR
+Art. 17 problem rather than an operational one. The other five are the missing operational
+floor — field-level encryption (**H5**), TLS (**H9**), rate limiting (**H4**), a production
+profile and container/pipeline/observability (**H7**), and a test suite that meaningfully
+covers the product (**H8**, now at 44 hermetic tests rather than none).
+
+Resolve **H4–H9** (H1, H2 and H3 are now fixed — §17), and settle the **EEA data-residency and
 backup/DR questions** — which cannot be answered from this repository at all — before any
 regulated EU/Poland production deployment.
 
 ---
 
 ## 17. Remediation Log
+
+### 2026-07-29 — H3 fixed: the audit query runs in the database, and the indexes now exist
+
+**1. Files modified**
+
+| File | Change |
+|---|---|
+| `backend/.../repository/AuditEntryRepositoryCustom.java` | **new** — declares `search(...)` and `findRecent(...)`, both requiring a row limit |
+| `backend/.../repository/AuditEntryRepositoryImpl.java` | **new** — builds ONE Mongo query: all filters + newest-first sort + limit |
+| `backend/.../repository/AuditEntryRepository.java` | extends the custom fragment; the three **unbounded** multi-row finders removed |
+| `backend/.../models/document/AuditEntry.java` | three purpose-shaped compound indexes declared; note on the now-redundant single-field `entityId` index |
+| `backend/.../config/MongoIndexConfig.java` | **new** — creates the declared indexes at start-up, idempotently, with logging |
+| `backend/.../service/audit/AuditQueryService.java` | delegates to the repository; in-memory filter/sort/limit code removed |
+| `backend/.../service/DashboardService.java` | asks for the 6 recent rows instead of the whole trail |
+| `backend/src/test/.../repository/AuditEntryRepositoryImplTest.java` | **new** — 14 tests capturing the generated query |
+| `backend/src/test/.../model/document/AuditEntryIndexesTest.java` | **new** — 5 tests pinning the index shapes |
+
+**2. Old behaviour**
+
+`AuditQueryService.list()` called `findByTenantIdAnd…OrderByCreatedAtDesc(tenantId)` — every
+audit line the company had ever written — then applied the action, date-range and free-text
+filters with Java streams and only then trimmed to 1000 rows. `DashboardService` called the
+same unbounded finder on every dashboard load to display six lines. Because the trail is
+append-only and kept for ten years, both grew without limit.
+
+**3. The index discovery**
+
+While fixing this it became clear that **no index existed at all**. Spring Data MongoDB has
+not created indexes from annotations by default for several versions;
+`spring.data.mongodb.auto-index-creation` (confirmed as the property name and default in the
+Boot 4.0.6 configuration metadata) is set in neither `application.properties` nor
+`application-dev.properties`. So `@Indexed` on `BaseDocument.tenantId` and the pre-existing
+`@CompoundIndex` on `AuditEntry` were pure documentation — every list query in the module was
+a full collection scan, and the audit sort had nothing to walk.
+
+**4. New behaviour**
+
+The database now receives the whole question at once. `AuditEntryRepositoryImpl.search()`
+builds a single `Query` with the tenant, the soft-delete guard, the record type or record id,
+the action, the `createdAt` range and the free-text `$or`, plus `Sort by createdAt DESC` and
+`.limit(cap)`. MongoDB walks a matching index in order and stops once it has enough rows, so
+memory is bounded by the limit rather than by the size of the trail. Three compound indexes
+support the three query shapes the screen produces — each listing its equality fields first
+and ending on `createdAt` descending, which is what makes the sort index-backed:
+
+```
+{tenantId: 1, deleted: 1, createdAt: -1}                    → default screen, action + date filters
+{tenantId: 1, deleted: 1, entityType: 1, createdAt: -1}     → filtered to one kind of record
+{tenantId: 1, deleted: 1, entityId: 1, createdAt: -1}        → one record's full history
+```
+
+`MongoIndexConfig` creates them on `ApplicationReadyEvent` using the same `IndexResolver` the
+framework uses, so the annotations remain the single declaration. It runs after start-up (a
+slow build cannot delay readiness), `createIndex` is a no-op when the index already exists,
+and a failure is logged at ERROR without killing the app — a missing index makes queries
+slow, whereas refusing to start takes the service down entirely.
+
+**5. Why the old code was changed / removed**
+
+The three unbounded finders were **deleted, not deprecated**: leaving them in place would let
+the next developer reintroduce exactly this outage, and every question they answered is
+answered by `search()` with a cap. The in-memory filter helpers in `AuditQueryService` went
+with them — *what* matches is unchanged (actor name, record label, action name,
+case-insensitive), only *where* the matching happens. Both `search()` and `findRecent()`
+throw on a non-positive limit rather than treating it as "unlimited", so the failure mode is
+a loud error in development instead of a silent full scan in production.
+
+One deliberate hardening: the free-text term is wrapped in `Pattern.quote(...)` before it
+becomes a MongoDB regex. Passing raw user input as a regex would have been both a correctness
+bug (`.` matching any character) and a cheap CPU-exhaustion vector.
+
+**6. Security & compliance impact**
+
+Removes the trivial denial-of-service (`GET /audit` with no filters, repeatedly) and the
+certain future outage of the endpoint that GDPR Art. 5(2) accountability depends on — an
+audit trail that cannot be read is not usable evidence. Regex quoting closes a
+pattern-injection/CPU-exhaustion path on an authenticated endpoint. Tenant scoping is
+unchanged and still the first criterion of every query; a test pins it. No data, retention
+period or lawful basis changed.
+
+**7. Testing performed**
+
+`./mvnw -o test` on the hermetic suites → **44 tests, 0 failures, 0 errors** (14 query +
+5 index + 10 export + 15 access policy). The query tests capture the `Query` object handed to
+`MongoTemplate` and assert: the tenant and soft-delete guard are always present; the limit
+and the `createdAt: -1` sort are in the query, not applied afterwards; entity id, entity type
+and action filters are pushed down; an entity id takes precedence over an entity type; open
+and closed date ranges map to `$gte`/`$lte`; free text produces a three-column `$or`; the
+search term is `\Q…\E`-quoted and case-insensitive (asserted with the input `.*(`); blank text
+adds no condition; `findRecent` is limited and sorted; and both methods refuse a non-positive
+limit. The index tests resolve the annotations through the framework's own `IndexResolver`
+and pin all four compound shapes plus the total index count.
+
+**8. Potential risks / side effects**
+
+- **Not verified at runtime.** This environment has no DNS or database access, so the app was
+  never started. The Spring Data fragment follows the required naming convention
+  (`AuditEntryRepositoryImpl` beside `AuditEntryRepository`, constructor-injected
+  `MongoTemplate`) and everything compiles, but *bean wiring and real index creation are
+  unverified* — **start the app once and confirm the `[MongoIndexConfig] index ready on
+  AuditEntry` lines appear** before trusting this in production.
+- *First start-up after deploy will build indexes* on the existing audit collection. On a
+  replica set this happens in the background and traffic keeps flowing, but on a large
+  collection expect elevated I/O for the duration.
+- *Index write cost:* the audit collection is the most write-heavy in the module and now
+  maintains five indexes per insert. If insert throughput ever becomes the constraint, the
+  redundant single-field `{entityId: 1}` index is the one to drop — noted in the model.
+- *Free-text search is a non-anchored regex*, so it cannot use an index for the match itself.
+  It is bounded by the index-ordered walk plus the row limit, which is what keeps it safe.
+  If it ever becomes slow, a MongoDB text index on `actorName`/`entityLabel` is the next step.
+- *API contract unchanged* — same query parameters, same response shape, so no frontend or
+  Postman change was needed.
+- **A limitation this fix exposed but did not change:** the audit screen never sends its
+  filters to the API, so search covers only the newest 1000 entries. Recorded as **M12**.
+
+---
 
 ### 2026-07-29 — H2 fixed: every export is recorded in the audit trail
 

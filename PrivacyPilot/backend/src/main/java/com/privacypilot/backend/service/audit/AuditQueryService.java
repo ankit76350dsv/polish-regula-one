@@ -37,10 +37,11 @@ public class AuditQueryService {
     /**
      * List the caller's audit entries, newest first, with optional filters.
      *
-     * The database narrows on the most selective filter it can (a single record's
-     * history, or one entity type); the remaining optional filters (action, date
-     * range and a free-text search) are applied in memory on that already-scoped,
-     * already-ordered list. Any argument may be null, meaning "do not filter on it".
+     * EVERY filter, the newest-first order and the row cap are applied BY THE DATABASE
+     * (see AuditEntryRepositoryCustom.search). This service only decides the cap and maps
+     * the result to the API shape. It used to load the company's whole trail and filter it
+     * in Java, which grew unbounded and eventually broke — see the repository for the full
+     * explanation. Any argument may be null, meaning "do not filter on it".
      *
      * @param caller     the signed-in user (tenant + identity come from here)
      * @param entityType only entries about this kind of record (e.g. ACTIVITY), or null
@@ -54,28 +55,15 @@ public class AuditQueryService {
     public List<AuditEntryResponse> list(AuthenticatedUser caller, AuditEntityType entityType,
                                          String entityId, AuditAction action, String query,
                                          Instant from, Instant to, Integer limit) {
-        String tenantId = caller.tenantId();
-
-        // 1) Pull the most tightly-scoped list the DB can give us, already newest-first.
-        List<AuditEntry> rows;
-        if (entityId != null && !entityId.isBlank()) {
-            rows = repository.findByTenantIdAndEntityIdAndDeletedFalseOrderByCreatedAtDesc(tenantId, entityId);
-        } else if (entityType != null) {
-            rows = repository.findByTenantIdAndEntityTypeAndDeletedFalseOrderByCreatedAtDesc(tenantId, entityType);
-        } else {
-            rows = repository.findByTenantIdAndDeletedFalseOrderByCreatedAtDesc(tenantId);
-        }
-
-        // 2) Apply the remaining optional filters in memory, then cap the size.
-        String needle = (query == null || query.isBlank()) ? null : query.trim().toLowerCase();
+        // Work out the row cap first: a caller may ask for fewer, never for more, and
+        // never for "everything".
         int cap = (limit == null || limit <= 0) ? MAX_LIMIT : Math.min(limit, MAX_LIMIT);
 
-        return rows.stream()
-                .filter(e -> action == null || e.getAction() == action)
-                .filter(e -> from == null || (e.getCreatedAt() != null && !e.getCreatedAt().isBefore(from)))
-                .filter(e -> to == null || (e.getCreatedAt() != null && !e.getCreatedAt().isAfter(to)))
-                .filter(e -> needle == null || matchesText(e, needle))
-                .limit(cap)
+        // Hand the WHOLE question to the database — filters, newest-first order and the cap
+        // together — so it walks a matching index and stops as soon as it has enough rows.
+        return repository.search(caller.tenantId(), entityType, entityId, action, query,
+                        from, to, cap)
+                .stream()
                 .map(AuditEntryResponse::from)
                 .toList();
     }
@@ -87,15 +75,9 @@ public class AuditQueryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Audit entry not found"));
     }
 
-    // Free-text search over the human-readable columns (case-insensitive), matching
-    // exactly what the audit-trail screen searches on.
-    private static boolean matchesText(AuditEntry e, String needle) {
-        return contains(e.getActorName(), needle)
-                || contains(e.getEntityLabel(), needle)
-                || (e.getAction() != null && e.getAction().getCode().toLowerCase().contains(needle));
-    }
-
-    private static boolean contains(String value, String needle) {
-        return value != null && value.toLowerCase().contains(needle);
-    }
+    // NOTE: the old in-memory text/date/action matching helpers that used to live here were
+    // removed — those filters are now part of the database query, so the same rows come back
+    // without ever loading the rest of the trail. Nothing about WHAT matches has changed:
+    // the search still looks at the actor name, the record label and the action name,
+    // case-insensitively (see AuditEntryRepositoryImpl.search).
 }
