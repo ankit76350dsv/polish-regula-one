@@ -51,11 +51,17 @@ export function Badge({ children, cls = "bg-slate-50 text-slate-600 border-slate
 }
 
 // A full-page centred spinner.
-export function Spinner({ label = "Loading…" }) {
+//
+// `label` is passed in already translated by the calling page (usually
+// t("common.loading") or a screen-specific message such as t("clock.loading")).
+// When no label is given we show the spinner on its own rather than a hard-coded
+// English word, so this shared component never puts untranslated text on a Polish
+// screen.
+export function Spinner({ label }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-3">
       <div className="w-9 h-9 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      <p className="text-slate-500 text-sm">{label}</p>
+      {label && <p className="text-slate-500 text-sm">{label}</p>}
     </div>
   );
 }

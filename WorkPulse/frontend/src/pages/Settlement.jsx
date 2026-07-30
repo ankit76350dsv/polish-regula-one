@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import * as api from "../api/workpulseApi";
 import { PageHeader, Card, Spinner, ErrorBanner, Badge } from "../components/ui";
-import { formatDuration, formatDate } from "../utils/format";
 import { useCapabilities } from "../hooks/useCapabilities";
+import { useTranslation } from "../hooks/useTranslation";
+import { useFormat } from "../hooks/useFormat";
 
 // The settlement period (okres rozliczeniowy) — how many hours were really worked
 // against the two limits Polish law sets:
@@ -50,6 +51,9 @@ export default function Settlement() {
 
 // ── View 1: the whole workforce (admins, HR, auditors) ────────────────────────
 function TenantSettlement({ canReadProtections, canWriteProtections }) {
+  const { t } = useTranslation();
+  const { formatDate } = useFormat();
+
   const [rows, setRows] = useState([]);
   const [period, setPeriod] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -81,8 +85,8 @@ function TenantSettlement({ canReadProtections, canWriteProtections }) {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <PageHeader
-        title="Settlement Reconciliation"
-        subtitle="Okres rozliczeniowy — 48h weekly average (art. 131) & 150h/year overtime (art. 151 §3)"
+        title={t("settlement.title")}
+        subtitle={t("settlement.subtitle")}
       >
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input
@@ -91,7 +95,7 @@ function TenantSettlement({ canReadProtections, canWriteProtections }) {
             onChange={(e) => setOnlyViolations(e.target.checked)}
             className="w-4 h-4 accent-indigo-600"
           />
-          Only breaches
+          {t("settlement.onlyBreaches")}
         </label>
       </PageHeader>
 
@@ -99,16 +103,17 @@ function TenantSettlement({ canReadProtections, canWriteProtections }) {
 
       {period && (
         <p className="text-sm text-slate-500 mb-4">
-          Current period: <span className="font-medium text-slate-700">{formatDate(period.start)}</span> →{" "}
+          {t("settlement.currentPeriod")}:{" "}
+          <span className="font-medium text-slate-700">{formatDate(period.start)}</span> →{" "}
           <span className="font-medium text-slate-700">{formatDate(period.end)}</span>
         </p>
       )}
 
       {loading ? (
-        <Spinner label="Reconciling hours…" />
+        <Spinner label={t("settlement.calculating")} />
       ) : rows.length === 0 ? (
         <Card className="p-10 text-center text-slate-500">
-          {onlyViolations ? "No cap breaches this period. 🎉" : "No time entries in this period yet."}
+          {onlyViolations ? t("settlement.noBreaches") : t("settlement.noEntries")}
         </Card>
       ) : (
         <Card className="overflow-hidden">
@@ -116,14 +121,14 @@ function TenantSettlement({ canReadProtections, canWriteProtections }) {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
                 <tr>
-                  <th className="text-left font-medium px-4 py-3">Employee</th>
-                  <th className="text-left font-medium px-4 py-3">Worked (period)</th>
-                  <th className="text-left font-medium px-4 py-3">Avg weekly (≤48h)</th>
-                  <th className="text-left font-medium px-4 py-3">Overtime (year, ≤150h)</th>
+                  <th className="text-left font-medium px-4 py-3">{t("common.employee")}</th>
+                  <th className="text-left font-medium px-4 py-3">{t("settlement.workedPeriod")}</th>
+                  <th className="text-left font-medium px-4 py-3">{t("settlement.avgWeeklyCap")}</th>
+                  <th className="text-left font-medium px-4 py-3">{t("settlement.overtimeYearCap")}</th>
                   {/* The "Protections" column holds health-related data, so it is
                       not even rendered for someone who may not read it. */}
                   {canReadProtections && (
-                    <th className="text-right font-medium px-4 py-3">Protections</th>
+                    <th className="text-right font-medium px-4 py-3">{t("settlement.protections")}</th>
                   )}
                 </tr>
               </thead>
@@ -161,6 +166,9 @@ function TenantSettlement({ canReadProtections, canWriteProtections }) {
 // The same two legal limits, but only for the person looking at the screen. There
 // is no table and no other name anywhere on it.
 function MySettlement() {
+  const { t } = useTranslation();
+  const { formatDate, formatDuration } = useFormat();
+
   const [settlement, setSettlement] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -177,25 +185,23 @@ function MySettlement() {
     })();
   }, []);
 
-  if (loading) return <Spinner label="Working out your hours…" />;
+  if (loading) return <Spinner label={t("settlement.myLoading")} />;
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
       <PageHeader
-        title="My Settlement Period"
-        subtitle="Okres rozliczeniowy — your average week (art. 131) and your overtime this year (art. 151 §3)"
+        title={t("settlement.myTitle")}
+        subtitle={t("settlement.mySubtitle")}
       />
       <ErrorBanner message={error} />
 
       {!settlement ? (
-        <Card className="p-10 text-center text-slate-500">
-          No time entries in this period yet.
-        </Card>
+        <Card className="p-10 text-center text-slate-500">{t("settlement.noEntries")}</Card>
       ) : (
         <>
           {settlement.periodStart && (
             <p className="text-sm text-slate-500 mb-4">
-              Current period:{" "}
+              {t("settlement.currentPeriod")}:{" "}
               <span className="font-medium text-slate-700">{formatDate(settlement.periodStart)}</span> →{" "}
               <span className="font-medium text-slate-700">{formatDate(settlement.periodEnd)}</span>
             </p>
@@ -203,19 +209,19 @@ function MySettlement() {
 
           <Card className="p-6">
             <div className="flex items-center justify-between mb-5">
-              <p className="text-sm font-semibold text-slate-700">Where you stand</p>
+              <p className="text-sm font-semibold text-slate-700">{t("settlement.whereYouStand")}</p>
               <CapBadge s={settlement} />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-400">Worked this period</p>
+                <p className="text-xs uppercase tracking-wide text-slate-400">{t("settlement.workedThisPeriod")}</p>
                 <p className="text-2xl font-extrabold text-slate-800 mt-1">
                   {formatDuration(settlement.workedMinutes)}
                 </p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-400">Average week</p>
+                <p className="text-xs uppercase tracking-wide text-slate-400">{t("settlement.averageWeek")}</p>
                 <p
                   className={`text-2xl font-extrabold mt-1 ${
                     settlement.exceedsWeeklyAverageCap ? "text-red-600" : "text-slate-800"
@@ -224,12 +230,14 @@ function MySettlement() {
                   {(settlement.averageWeeklyMinutes / 60).toFixed(1)}h
                   <span className="text-xs font-medium text-slate-400">
                     {" "}
-                    / {(settlement.maxAverageWeeklyMinutes / 60).toFixed(0)}h cap
+                    {t("settlement.capSuffix", {
+                      hours: (settlement.maxAverageWeeklyMinutes / 60).toFixed(0),
+                    })}
                   </span>
                 </p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-400">Overtime this year</p>
+                <p className="text-xs uppercase tracking-wide text-slate-400">{t("settlement.overtimeThisYear")}</p>
                 <p
                   className={`text-2xl font-extrabold mt-1 ${
                     settlement.exceedsAnnualOvertimeLimit
@@ -242,16 +250,16 @@ function MySettlement() {
                   {(settlement.annualOvertimeMinutes / 60).toFixed(1)}h
                   <span className="text-xs font-medium text-slate-400">
                     {" "}
-                    / {(settlement.annualOvertimeLimitMinutes / 60).toFixed(0)}h limit
+                    {t("settlement.limitSuffix", {
+                      hours: (settlement.annualOvertimeLimitMinutes / 60).toFixed(0),
+                    })}
                   </span>
                 </p>
               </div>
             </div>
 
             <p className="mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500 leading-relaxed">
-              Your average working week may not go over 48 hours including overtime
-              (art. 131), and your overtime may not go over the yearly limit
-              (art. 151 §3). If either figure is red, speak to HR.
+              {t("settlement.myNote")}
             </p>
           </Card>
         </>
@@ -262,17 +270,28 @@ function MySettlement() {
 
 // One short "are you inside the limits?" badge, used by the personal view.
 function CapBadge({ s }) {
+  const { t } = useTranslation();
+
   if (s.exceedsWeeklyAverageCap || s.exceedsAnnualOvertimeLimit) {
-    return <Badge cls="bg-red-50 text-red-700 border-red-200">Over a legal limit</Badge>;
+    return (
+      <Badge cls="bg-red-50 text-red-700 border-red-200">{t("settlement.overALegalLimit")}</Badge>
+    );
   }
   if (s.approachingAnnualOvertimeLimit) {
-    return <Badge cls="bg-amber-50 text-amber-700 border-amber-200">Near yearly limit</Badge>;
+    return (
+      <Badge cls="bg-amber-50 text-amber-700 border-amber-200">{t("settlement.nearYearlyLimit")}</Badge>
+    );
   }
-  return <Badge cls="bg-emerald-50 text-emerald-700 border-emerald-200">Within limits</Badge>;
+  return (
+    <Badge cls="bg-emerald-50 text-emerald-700 border-emerald-200">{t("settlement.withinLimits")}</Badge>
+  );
 }
 
 // One row of the reconciliation table, with cap badges.
 function SettlementRow({ row, showProtections, onEdit }) {
+  const { t } = useTranslation();
+  const { formatDuration } = useFormat();
+
   const avgHours = (row.averageWeeklyMinutes / 60).toFixed(1);
   const annual = formatDuration(row.annualOvertimeMinutes);
 
@@ -284,16 +303,22 @@ function SettlementRow({ row, showProtections, onEdit }) {
       <td className="px-4 py-3 text-slate-600">{formatDuration(row.workedMinutes)}</td>
       <td className="px-4 py-3">
         {row.exceedsWeeklyAverageCap ? (
-          <Badge cls="bg-red-50 text-red-700 border-red-200">{avgHours}h — over 48h</Badge>
+          <Badge cls="bg-red-50 text-red-700 border-red-200">
+            {t("settlement.overCap", { hours: avgHours })}
+          </Badge>
         ) : (
           <span className="text-slate-700">{avgHours}h</span>
         )}
       </td>
       <td className="px-4 py-3">
         {row.exceedsAnnualOvertimeLimit ? (
-          <Badge cls="bg-red-50 text-red-700 border-red-200">{annual} — over limit</Badge>
+          <Badge cls="bg-red-50 text-red-700 border-red-200">
+            {t("settlement.overLimit", { duration: annual })}
+          </Badge>
         ) : row.approachingAnnualOvertimeLimit ? (
-          <Badge cls="bg-amber-50 text-amber-700 border-amber-200">{annual} — near limit</Badge>
+          <Badge cls="bg-amber-50 text-amber-700 border-amber-200">
+            {t("settlement.nearLimit", { duration: annual })}
+          </Badge>
         ) : (
           <span className="text-slate-700">{annual}</span>
         )}
@@ -304,7 +329,7 @@ function SettlementRow({ row, showProtections, onEdit }) {
             onClick={onEdit}
             className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
           >
-            Open
+            {t("settlement.open")}
           </button>
         </td>
       )}
@@ -321,6 +346,8 @@ function SettlementRow({ row, showProtections, onEdit }) {
 // pregnant employee may not work overtime or nights at all (art. 178 §1), and the
 // same is true for a young worker (art. 203).
 function ProtectionsModal({ row, canWrite, onClose, onSaved }) {
+  const { t } = useTranslation();
+
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -395,7 +422,7 @@ function ProtectionsModal({ row, canWrite, onClose, onSaved }) {
       <Card className="w-full max-w-md p-6">
         <div className="flex items-start justify-between mb-2">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Working-time protections</h3>
+            <h3 className="text-lg font-bold text-slate-900">{t("settlement.protectionsTitle")}</h3>
             <p className="text-sm text-slate-500">{row.employeeName}</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">
@@ -406,29 +433,29 @@ function ProtectionsModal({ row, canWrite, onClose, onSaved }) {
         <ErrorBanner message={error} />
 
         {loading ? (
-          <Spinner label="Loading profile…" />
+          <Spinner label={t("settlement.protectionsLoading")} />
         ) : (
           <>
             {!canWrite && (
               <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mb-3">
-                View only — you can see these protections but not change them.
+                {t("settlement.protectionsViewOnly")}
               </p>
             )}
 
             <div className="divide-y divide-slate-100">
-              {check("isPregnant", "Pregnant employee", "No overtime or night work (art. 178 §1)")}
-              {check("isYoungWorker", "Young worker (młodociany)", "No overtime or night work (art. 203)")}
+              {check("isPregnant", t("settlement.pregnant"), t("settlement.pregnantHint"))}
+              {check("isYoungWorker", t("settlement.youngWorker"), t("settlement.youngWorkerHint"))}
               {check(
                 "isParentOfChildUnder4",
-                "Parent of a child under 4",
-                "Overtime / night work only with consent (art. 178 §2)"
+                t("settlement.parentUnder4"),
+                t("settlement.parentUnder4Hint")
               )}
             </div>
 
             <div className="mt-3 rounded-xl bg-slate-50 border border-slate-200 p-3">
-              <p className="text-xs text-slate-500 mb-1 font-medium">Consent (for parent of a small child)</p>
-              {check("consentToOvertime", "Agrees to overtime")}
-              {check("consentToNightWork", "Agrees to night work")}
+              <p className="text-xs text-slate-500 mb-1 font-medium">{t("settlement.consentTitle")}</p>
+              {check("consentToOvertime", t("settlement.consentOvertime"))}
+              {check("consentToNightWork", t("settlement.consentNightWork"))}
             </div>
 
             <div className="mt-5 flex justify-end gap-2">
@@ -437,7 +464,7 @@ function ProtectionsModal({ row, canWrite, onClose, onSaved }) {
                 className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50"
               >
                 {/* A reader has nothing to cancel — for them this just shuts the box. */}
-                {canWrite ? "Cancel" : "Close"}
+                {canWrite ? t("common.cancel") : t("common.close")}
               </button>
               {canWrite && (
                 <button
@@ -445,7 +472,7 @@ function ProtectionsModal({ row, canWrite, onClose, onSaved }) {
                   disabled={saving}
                   className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-sm font-semibold shadow hover:from-indigo-400 hover:to-blue-400 disabled:opacity-50"
                 >
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? t("common.saving") : t("common.save")}
                 </button>
               )}
             </div>

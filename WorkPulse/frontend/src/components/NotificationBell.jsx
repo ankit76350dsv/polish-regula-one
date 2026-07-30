@@ -5,7 +5,8 @@ import {
   markAllNotificationsRead,
   notificationStreamUrl,
 } from "../api/workpulseApi";
-import { formatDateTime } from "../utils/format";
+import { useTranslation } from "../hooks/useTranslation";
+import { useFormat } from "../hooks/useFormat";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NotificationBell — the live alert inbox shown in the header.
@@ -35,6 +36,9 @@ const TYPE_META = {
 const isUnread = (n) => n.status === "PENDING" || n.status === "SENT";
 
 export default function NotificationBell() {
+  const { t } = useTranslation();
+  const { formatDateTime } = useFormat();
+
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -153,7 +157,9 @@ export default function NotificationBell() {
       <button
         onClick={() => setOpen((v) => !v)}
         className="relative p-2 rounded-xl text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/70 transition-colors"
-        aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
+        aria-label={
+          unread ? t("notifications.ariaWithUnread", { count: unread }) : t("notifications.aria")
+        }
       >
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path
@@ -174,10 +180,10 @@ export default function NotificationBell() {
         <div className="absolute right-0 mt-2 w-80 sm:w-96 max-h-[70vh] overflow-hidden flex flex-col bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-300/40 z-50">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-900 text-sm">Notifications</span>
+              <span className="font-semibold text-slate-900 text-sm">{t("notifications.title")}</span>
               <span
                 className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-slate-300"}`}
-                title={connected ? "Live" : "Reconnecting…"}
+                title={connected ? t("notifications.live") : t("notifications.reconnecting")}
               />
             </div>
             {unread > 0 && (
@@ -185,7 +191,7 @@ export default function NotificationBell() {
                 onClick={handleReadAll}
                 className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
               >
-                Mark all read
+                {t("notifications.markAllRead")}
               </button>
             )}
           </div>
@@ -193,7 +199,7 @@ export default function NotificationBell() {
           <div className="overflow-y-auto">
             {items.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-slate-400">
-                You have no notifications.
+                {t("notifications.empty")}
               </div>
             ) : (
               items.map((n) => {

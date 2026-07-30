@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import * as api from "../api/workpulseApi";
 import { Card, Spinner, ErrorBanner, Badge } from "../components/ui";
-import { formatDuration, formatTime } from "../utils/format";
+import { useTranslation } from "../hooks/useTranslation";
+import { useFormat } from "../hooks/useFormat";
 
 // Ask the browser for the current GPS position. Returns a small
 // { latitude, longitude, accuracy } object, or null if the user blocks it or
@@ -72,6 +73,10 @@ function computeLive(active) {
 }
 
 export default function Clock() {
+  // Words, plus formatting that follows the chosen language.
+  const { t } = useTranslation();
+  const { formatTime } = useFormat();
+
   const [status, setStatus] = useState(null);
   const [policy, setPolicy] = useState(null);
   const [monitoring, setMonitoring] = useState(null); // Art. 22² notice status
@@ -150,7 +155,7 @@ export default function Clock() {
     }
   };
 
-  if (loading) return <Spinner label="Loading your clock…" />;
+  if (loading) return <Spinner label={t("clock.loading")} />;
 
   const eligibility = status?.eligibility;
   const active = status?.active;
@@ -179,7 +184,7 @@ export default function Clock() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-slate-900">You cannot clock in</h2>
+          <h2 className="text-xl font-bold text-slate-900">{t("clock.cannotClockIn")}</h2>
           <p className="text-slate-600 mt-2 max-w-md mx-auto">{eligibility?.reason}</p>
           {eligibility?.employee?.blockReason && (
             <div className="mt-4">
@@ -188,35 +193,37 @@ export default function Clock() {
               </Badge>
             </div>
           )}
-          <p className="text-xs text-slate-400 mt-6">
-            This check comes from your SafeWork compliance record (medical certificate / BHP training).
-            Please contact your administrator.
-          </p>
+          <p className="text-xs text-slate-400 mt-6">{t("clock.safeWorkNote")}</p>
         </Card>
       )}
 
       {/* ── Allowed and not currently clocked in ─────────────────────────── */}
       {allowed && !active && !needsNotice && (
         <Card className="p-8 text-center">
-          <p className="text-sm text-slate-500">Welcome back{eligibility?.employee?.name ? `, ${eligibility.employee.name}` : ""}</p>
+          <p className="text-sm text-slate-500">
+            {eligibility?.employee?.name
+              ? t("clock.welcomeBackNamed", { name: eligibility.employee.name })
+              : t("clock.welcomeBack")}
+          </p>
           <p className="text-4xl font-extrabold text-slate-900 mt-2 tabular-nums">
-            {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {formatTime(new Date())}
           </p>
           <p className="text-xs text-slate-400 mt-1">
-            Daily norm: {policy?.standardDailyHours ?? 8}h · {policy?.workingTimeSystem ?? "STANDARD"} system
+            {t("clock.dailyNorm", {
+              hours: policy?.standardDailyHours ?? 8,
+              system: policy?.workingTimeSystem ?? "STANDARD",
+            })}
           </p>
           <button
             disabled={busy}
             onClick={() => doClock("in")}
             className="mt-6 inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-lg font-bold shadow-lg shadow-indigo-500/30 hover:from-indigo-400 hover:to-blue-400 transition-all active:scale-95 disabled:opacity-50"
           >
-            {busy ? "Please wait…" : "Clock In"}
+            {busy ? t("common.pleaseWait") : t("clock.clockIn")}
           </button>
-          <p className="text-xs text-emerald-600 mt-4">✓ Your safety & medical compliance is up to date</p>
+          <p className="text-xs text-emerald-600 mt-4">{t("clock.complianceUpToDate")}</p>
           {trackingOn && (
-            <p className="text-xs text-slate-400 mt-1">
-              📍 Your location will be recorded for this clock-in (you accepted the monitoring notice).
-            </p>
+            <p className="text-xs text-slate-400 mt-1">{t("clock.locationWillBeRecorded")}</p>
           )}
         </Card>
       )}
@@ -240,6 +247,8 @@ export default function Clock() {
 // clock-in when the tenant tracks location, so the employee is informed and
 // agrees before any position is ever recorded.
 function MonitoringNotice({ monitoring, busy, onAccept }) {
+  const { t } = useTranslation();
+
   return (
     <Card className="p-8 border-indigo-200">
       <div className="flex items-center gap-3 mb-4">
@@ -250,9 +259,9 @@ function MonitoringNotice({ monitoring, busy, onAccept }) {
           </svg>
         </div>
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Location monitoring notice</h2>
+          <h2 className="text-lg font-bold text-slate-900">{t("clock.monitoringTitle")}</h2>
           <p className="text-xs text-slate-400">
-            Required by art. 22² of the Polish Labour Code · notice v{monitoring?.noticeVersion}
+            {t("clock.monitoringSubtitle", { version: monitoring?.noticeVersion })}
           </p>
         </div>
       </div>
@@ -267,7 +276,7 @@ function MonitoringNotice({ monitoring, busy, onAccept }) {
           onClick={onAccept}
           className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white font-semibold shadow hover:from-indigo-400 hover:to-blue-400 active:scale-95 disabled:opacity-50"
         >
-          {busy ? "Saving…" : "I understand and accept"}
+          {busy ? t("common.saving") : t("clock.monitoringAccept")}
         </button>
       </div>
     </Card>
@@ -276,6 +285,9 @@ function MonitoringNotice({ monitoring, busy, onAccept }) {
 
 // The live shift panel: worked-so-far, break progress, and the action buttons.
 function ActiveShift({ active, policy, busy, act, onClockOut }) {
+  const { t } = useTranslation();
+  const { formatDuration, formatTime } = useFormat();
+
   const live = computeLive(active);
   const scheduled = active.scheduledMinutes || (policy?.standardDailyHours ?? 8) * 60;
   const req = requiredBreak(live.netMinutes + live.breakMinutes);
@@ -287,21 +299,23 @@ function ActiveShift({ active, policy, busy, act, onClockOut }) {
       <Card className="p-8 text-center">
         <div className="flex items-center justify-center gap-2 mb-2">
           {live.onBreak ? (
-            <Badge cls="bg-amber-50 text-amber-700 border-amber-200">On break</Badge>
+            <Badge cls="bg-amber-50 text-amber-700 border-amber-200">{t("clock.onBreak")}</Badge>
           ) : (
-            <Badge cls="bg-indigo-50 text-indigo-700 border-indigo-200">Working</Badge>
+            <Badge cls="bg-indigo-50 text-indigo-700 border-indigo-200">{t("clock.working")}</Badge>
           )}
-          <span className="text-xs text-slate-400">since {formatTime(active.clockIn)}</span>
+          <span className="text-xs text-slate-400">
+            {t("clock.since", { time: formatTime(active.clockIn) })}
+          </span>
         </div>
 
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Worked so far</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{t("clock.workedSoFar")}</p>
         <p className="text-5xl font-extrabold text-slate-900 mt-1 tabular-nums">
           {formatHMS(live.netSeconds)}
         </p>
 
         {live.onBreak && (
           <p className="text-sm text-amber-600 mt-2 tabular-nums">
-            On break for {formatHMS(live.openBreakSeconds)}
+            {t("clock.onBreakFor", { duration: formatHMS(live.openBreakSeconds) })}
           </p>
         )}
 
@@ -312,7 +326,7 @@ function ActiveShift({ active, policy, busy, act, onClockOut }) {
               onClick={() => act(() => api.endBreak())}
               className="px-6 py-3 rounded-xl bg-amber-500 text-white font-semibold shadow hover:bg-amber-400 active:scale-95 disabled:opacity-50"
             >
-              End Break
+              {t("clock.endBreak")}
             </button>
           ) : (
             <button
@@ -320,7 +334,7 @@ function ActiveShift({ active, policy, busy, act, onClockOut }) {
               onClick={() => act(() => api.startBreak())}
               className="px-6 py-3 rounded-xl bg-white border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 active:scale-95 disabled:opacity-50"
             >
-              Start Break
+              {t("clock.startBreak")}
             </button>
           )}
           <button
@@ -328,7 +342,7 @@ function ActiveShift({ active, policy, busy, act, onClockOut }) {
             onClick={onClockOut}
             className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white font-semibold shadow-lg shadow-indigo-500/30 hover:from-indigo-400 hover:to-blue-400 active:scale-95 disabled:opacity-50"
           >
-            Clock Out
+            {t("clock.clockOut")}
           </button>
         </div>
       </Card>
@@ -336,23 +350,31 @@ function ActiveShift({ active, policy, busy, act, onClockOut }) {
       {/* Break + overtime status tiles */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="p-4">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Break taken</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">{t("clock.breakTaken")}</p>
           <p className="text-lg font-bold text-slate-800 mt-1">{formatDuration(live.breakMinutes)}</p>
-          <p className="text-xs text-slate-400 mt-0.5">Required: {req}m</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Break status</p>
-          <p className={`text-lg font-bold mt-1 ${req === 0 ? "text-slate-500" : breakOk ? "text-emerald-600" : "text-amber-600"}`}>
-            {req === 0 ? "Not required yet" : breakOk ? "Compliant" : "Break due"}
+          <p className="text-xs text-slate-400 mt-0.5">
+            {t("clock.breakRequired", { minutes: t("common.minutesShort", { count: req }) })}
           </p>
-          <p className="text-xs text-slate-400 mt-0.5">6h → 15m · 9h → 30m</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Overtime so far</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">{t("clock.breakStatusTitle")}</p>
+          <p className={`text-lg font-bold mt-1 ${req === 0 ? "text-slate-500" : breakOk ? "text-emerald-600" : "text-amber-600"}`}>
+            {req === 0
+              ? t("clock.breakNotRequiredYet")
+              : breakOk
+              ? t("clock.breakCompliant")
+              : t("clock.breakDue")}
+          </p>
+          <p className="text-xs text-slate-400 mt-0.5">{t("clock.breakRule")}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-400">{t("clock.overtimeSoFar")}</p>
           <p className={`text-lg font-bold mt-1 ${overtime > 0 ? "text-amber-600" : "text-slate-800"}`}>
             {formatDuration(overtime)}
           </p>
-          <p className="text-xs text-slate-400 mt-0.5">Norm: {formatDuration(scheduled)}</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            {t("clock.normLabel", { duration: formatDuration(scheduled) })}
+          </p>
         </Card>
       </div>
     </div>

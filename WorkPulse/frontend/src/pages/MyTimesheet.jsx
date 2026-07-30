@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import * as api from "../api/workpulseApi";
 import { PageHeader, Card, Spinner, ErrorBanner, Badge } from "../components/ui";
-import { formatDuration, formatTime, formatDate, breakStatusMeta, entryStatusMeta } from "../utils/format";
+import { useTranslation } from "../hooks/useTranslation";
+import { useFormat } from "../hooks/useFormat";
 
 // The logged-in employee's own working-time history (read-only).
 export default function MyTimesheet() {
+  const { t } = useTranslation();
+  const { formatDuration, formatTime, formatDate, breakStatus, entryStatus } = useFormat();
+
   const [data, setData] = useState(null);
   const [settlement, setSettlement] = useState(null); // my period + yearly picture
   const [loading, setLoading] = useState(true);
@@ -27,7 +31,7 @@ export default function MyTimesheet() {
     })();
   }, []);
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner label={t("common.loading")} />;
 
   const entries = data?.entries || [];
 
@@ -43,7 +47,7 @@ export default function MyTimesheet() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-      <PageHeader title="My Timesheet" subtitle="Your recorded working time and breaks" />
+      <PageHeader title={t("timesheet.title")} subtitle={t("timesheet.subtitle")} />
       <ErrorBanner message={error} />
 
       {/* My working-time compliance this settlement period (art. 131 / 151 §3). */}
@@ -51,15 +55,15 @@ export default function MyTimesheet() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
         <Card className="p-4">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Days shown</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">{t("timesheet.daysShown")}</p>
           <p className="text-2xl font-extrabold text-slate-800 mt-1">{entries.length}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Total worked</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">{t("timesheet.totalWorked")}</p>
           <p className="text-2xl font-extrabold text-indigo-700 mt-1">{formatDuration(totals.worked)}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Total overtime</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">{t("timesheet.totalOvertime")}</p>
           <p className="text-2xl font-extrabold text-amber-600 mt-1">{formatDuration(totals.overtime)}</p>
         </Card>
       </div>
@@ -69,26 +73,26 @@ export default function MyTimesheet() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
               <tr>
-                <th className="text-left px-4 py-3">Date</th>
-                <th className="text-left px-4 py-3">In</th>
-                <th className="text-left px-4 py-3">Out</th>
-                <th className="text-left px-4 py-3">Worked</th>
-                <th className="text-left px-4 py-3">Break</th>
-                <th className="text-left px-4 py-3">Overtime</th>
-                <th className="text-left px-4 py-3">Status</th>
+                <th className="text-left px-4 py-3">{t("common.date")}</th>
+                <th className="text-left px-4 py-3">{t("common.in")}</th>
+                <th className="text-left px-4 py-3">{t("common.out")}</th>
+                <th className="text-left px-4 py-3">{t("common.worked")}</th>
+                <th className="text-left px-4 py-3">{t("common.break")}</th>
+                <th className="text-left px-4 py-3">{t("common.overtime")}</th>
+                <th className="text-left px-4 py-3">{t("common.status")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {entries.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
-                    No time entries yet. Clock in from the Clock screen to start.
+                    {t("timesheet.empty")}
                   </td>
                 </tr>
               )}
               {entries.map((e) => {
-                const bm = breakStatusMeta(e.breakComplianceStatus);
-                const sm = entryStatusMeta(e.status);
+                const bm = breakStatus(e.breakComplianceStatus);
+                const sm = entryStatus(e.status);
                 return (
                   <tr key={e._id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 font-medium text-slate-700">{formatDate(e.workDate)}</td>
@@ -102,7 +106,9 @@ export default function MyTimesheet() {
                       {e.overtimeMinutes > 0 ? (
                         <span className="text-amber-600 font-medium">
                           {formatDuration(e.overtimeMinutes)}
-                          {e.approvalStatus === "PENDING" && <span className="text-xs"> (pending)</span>}
+                          {e.approvalStatus === "PENDING" && (
+                            <span className="text-xs">{t("timesheet.pendingSuffix")}</span>
+                          )}
                         </span>
                       ) : (
                         <span className="text-slate-400">—</span>
@@ -125,6 +131,8 @@ export default function MyTimesheet() {
 // A compact card showing the employee's own settlement-period compliance:
 // average weekly hours (vs the 48h cap) and overtime used this year (vs 150h).
 function MyComplianceCard({ s }) {
+  const { t } = useTranslation();
+
   const avgHours = (s.averageWeeklyMinutes / 60).toFixed(1);
   const annualHours = (s.annualOvertimeMinutes / 60).toFixed(1);
   const limitHours = (s.annualOvertimeLimitMinutes / 60).toFixed(0);
@@ -133,31 +141,37 @@ function MyComplianceCard({ s }) {
   return (
     <Card className="p-5 mb-6">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-semibold text-slate-700">My compliance this period</p>
+        <p className="text-sm font-semibold text-slate-700">{t("timesheet.myCompliance")}</p>
         {s.exceedsWeeklyAverageCap || s.exceedsAnnualOvertimeLimit ? (
-          <Badge cls="bg-red-50 text-red-700 border-red-200">Attention needed</Badge>
+          <Badge cls="bg-red-50 text-red-700 border-red-200">{t("timesheet.attentionNeeded")}</Badge>
         ) : s.approachingAnnualOvertimeLimit ? (
-          <Badge cls="bg-amber-50 text-amber-700 border-amber-200">Near yearly limit</Badge>
+          <Badge cls="bg-amber-50 text-amber-700 border-amber-200">{t("timesheet.nearYearlyLimit")}</Badge>
         ) : (
-          <Badge cls="bg-emerald-50 text-emerald-700 border-emerald-200">Within limits</Badge>
+          <Badge cls="bg-emerald-50 text-emerald-700 border-emerald-200">{t("timesheet.withinLimits")}</Badge>
         )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-400">Average weekly hours</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">{t("timesheet.averageWeeklyHours")}</p>
           <p className={`text-xl font-extrabold mt-1 ${s.exceedsWeeklyAverageCap ? "text-red-600" : "text-slate-800"}`}>
-            {avgHours}h <span className="text-xs font-medium text-slate-400">/ {maxAvg}h cap</span>
+            {avgHours}h{" "}
+            <span className="text-xs font-medium text-slate-400">
+              {t("timesheet.capSuffix", { hours: maxAvg })}
+            </span>
           </p>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-400">Overtime this year</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">{t("timesheet.overtimeThisYear")}</p>
           <p
             className={`text-xl font-extrabold mt-1 ${
               s.exceedsAnnualOvertimeLimit ? "text-red-600" : s.approachingAnnualOvertimeLimit ? "text-amber-600" : "text-slate-800"
             }`}
           >
-            {annualHours}h <span className="text-xs font-medium text-slate-400">/ {limitHours}h limit</span>
+            {annualHours}h{" "}
+            <span className="text-xs font-medium text-slate-400">
+              {t("timesheet.limitSuffix", { hours: limitHours })}
+            </span>
           </p>
         </div>
       </div>

@@ -1,14 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import * as api from "../api/workpulseApi";
 import { PageHeader, Card, Spinner, ErrorBanner, Badge } from "../components/ui";
-import {
-  formatDuration,
-  formatTime,
-  formatDate,
-  breakStatusMeta,
-  entryStatusMeta,
-} from "../utils/format";
 import { useCapabilities } from "../hooks/useCapabilities";
+import { useTranslation } from "../hooks/useTranslation";
+import { useFormat } from "../hooks/useFormat";
 
 // Convert a Date to the value a <input type="datetime-local"> expects.
 function toLocalInput(value) {
@@ -33,6 +28,9 @@ export default function TimeRecords() {
   // separate legal acts — approving overtime commits the employer (art. 151 §3),
   // while a correction rewrites evidence and always needs a written reason.
   const { can, CAPABILITIES } = useCapabilities();
+  const { t } = useTranslation();
+  const { formatDuration, formatTime, formatDate, breakStatus, entryStatus } = useFormat();
+
   const canDecideOvertime = can(CAPABILITIES.OVERTIME_DECIDE);
   const canCorrect = can(CAPABILITIES.TIME_CORRECT);
 
@@ -71,7 +69,7 @@ export default function TimeRecords() {
     }
   };
 
-  if (loading) return <Spinner label="Loading time records…" />;
+  if (loading) return <Spinner label={t("common.loading")} />;
 
   const entries = data?.entries || [];
 
@@ -80,21 +78,20 @@ export default function TimeRecords() {
       {/* The subtitle follows the permissions too, so a read-only viewer is not
           promised buttons they will never see. */}
       <PageHeader
-        title="Time Records"
-        subtitle={
-          showActions
-            ? "All working-time entries · overtime approval · corrections"
-            : "All working-time entries · read-only view"
-        }
+        title={t("records.title")}
+        subtitle={showActions ? t("records.subtitleFull") : t("records.subtitleReadOnly")}
       >
         <select
           value={filters.status}
           onChange={(e) => setFilters({ ...filters, status: e.target.value })}
           className="border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 outline-none"
         >
+          {/* "All" is our own word so it is translated; the rest are the status
+              codes the backend filters on, shown through the same labels as the
+              table so the filter and the rows agree. */}
           {["All", "OPEN", "ON_BREAK", "COMPLETED", "MISSING_CLOCK_OUT"].map((s) => (
             <option key={s} value={s}>
-              {s}
+              {s === "All" ? t("records.filterAll") : entryStatus(s).label}
             </option>
           ))}
         </select>
@@ -107,33 +104,35 @@ export default function TimeRecords() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
               <tr>
-                <th className="text-left px-4 py-3">Employee</th>
-                <th className="text-left px-4 py-3">Date</th>
-                <th className="text-left px-4 py-3">In / Out</th>
-                <th className="text-left px-4 py-3">Worked</th>
-                <th className="text-left px-4 py-3">Break</th>
-                <th className="text-left px-4 py-3">Overtime</th>
-                <th className="text-left px-4 py-3">Status</th>
-                {showActions && <th className="text-left px-4 py-3">Actions</th>}
+                <th className="text-left px-4 py-3">{t("common.employee")}</th>
+                <th className="text-left px-4 py-3">{t("common.date")}</th>
+                <th className="text-left px-4 py-3">{t("records.inOut")}</th>
+                <th className="text-left px-4 py-3">{t("common.worked")}</th>
+                <th className="text-left px-4 py-3">{t("common.break")}</th>
+                <th className="text-left px-4 py-3">{t("common.overtime")}</th>
+                <th className="text-left px-4 py-3">{t("common.status")}</th>
+                {showActions && <th className="text-left px-4 py-3">{t("common.actions")}</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {entries.length === 0 && (
                 <tr>
                   {/* 7 fixed columns, plus "Actions" only when it is shown. */}
-                  <td colSpan={showActions ? 8 : 7} className="px-4 py-8 text-center text-slate-400">No records.</td>
+                  <td colSpan={showActions ? 8 : 7} className="px-4 py-8 text-center text-slate-400">{t("records.empty")}</td>
                 </tr>
               )}
               {entries.map((e) => {
-                const bm = breakStatusMeta(e.breakComplianceStatus);
-                const sm = entryStatusMeta(e.status);
+                const bm = breakStatus(e.breakComplianceStatus);
+                const sm = entryStatus(e.status);
                 return (
                   <tr key={e._id} className="hover:bg-slate-50 align-top">
                     <td className="px-4 py-3 text-slate-700">
                       {e.employeeName || "—"}
-                      {e.corrected && <span className="block text-[10px] text-amber-600">corrected</span>}
+                      {e.corrected && (
+                        <span className="block text-[10px] text-amber-600">{t("records.correctedFlag")}</span>
+                      )}
                       {e.dailyRest?.violation && (
-                        <span className="block text-[10px] text-red-600">rest &lt;11h</span>
+                        <span className="block text-[10px] text-red-600">{t("records.restViolation")}</span>
                       )}
                     </td>
                     <td className="px-4 py-3">{formatDate(e.workDate)}</td>
@@ -165,13 +164,13 @@ export default function TimeRecords() {
                                 onClick={() => decideOvertime(e._id, "APPROVE")}
                                 className="px-2 py-1 rounded-lg bg-emerald-500 text-white text-xs hover:bg-emerald-400"
                               >
-                                Approve OT
+                                {t("records.approveOvertime")}
                               </button>
                               <button
                                 onClick={() => decideOvertime(e._id, "REJECT")}
                                 className="px-2 py-1 rounded-lg bg-red-500 text-white text-xs hover:bg-red-400"
                               >
-                                Reject
+                                {t("common.reject")}
                               </button>
                             </div>
                           )}
@@ -182,7 +181,7 @@ export default function TimeRecords() {
                               onClick={() => setEditing(e)}
                               className="px-2 py-1 rounded-lg border border-slate-300 text-slate-600 text-xs hover:bg-slate-50"
                             >
-                              Correct
+                              {t("records.correct")}
                             </button>
                           )}
                         </div>
@@ -217,6 +216,9 @@ export default function TimeRecords() {
 // Modal for a manual correction. A reason is mandatory — the backend rejects an
 // edit without one, so the evidence trail always explains why a record changed.
 function CorrectionModal({ entry, onClose, onSaved, onError }) {
+  const { t } = useTranslation();
+  const { formatDate } = useFormat();
+
   const [clockIn, setClockIn] = useState(toLocalInput(entry.clockIn));
   const [clockOut, setClockOut] = useState(toLocalInput(entry.clockOut));
   const [reason, setReason] = useState("");
@@ -224,7 +226,7 @@ function CorrectionModal({ entry, onClose, onSaved, onError }) {
 
   const save = async () => {
     if (!reason.trim()) {
-      onError("A correction reason is required.");
+      onError(t("records.correctReasonMissing"));
       return;
     }
     setSaving(true);
@@ -245,13 +247,13 @@ function CorrectionModal({ entry, onClose, onSaved, onError }) {
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-6">
-        <h2 className="font-bold text-slate-900 text-lg mb-1">Correct time entry</h2>
+        <h2 className="font-bold text-slate-900 text-lg mb-1">{t("records.correctTitle")}</h2>
         <p className="text-xs text-slate-500 mb-4">
           {entry.employeeName} · {formatDate(entry.workDate)}
         </p>
 
         <label className="block text-sm mb-3">
-          <span className="text-slate-500">Clock in</span>
+          <span className="text-slate-500">{t("records.correctClockIn")}</span>
           <input
             type="datetime-local"
             value={clockIn}
@@ -260,7 +262,7 @@ function CorrectionModal({ entry, onClose, onSaved, onError }) {
           />
         </label>
         <label className="block text-sm mb-3">
-          <span className="text-slate-500">Clock out</span>
+          <span className="text-slate-500">{t("records.correctClockOut")}</span>
           <input
             type="datetime-local"
             value={clockOut}
@@ -269,26 +271,26 @@ function CorrectionModal({ entry, onClose, onSaved, onError }) {
           />
         </label>
         <label className="block text-sm mb-4">
-          <span className="text-slate-500">Reason (required)</span>
+          <span className="text-slate-500">{t("records.correctReason")}</span>
           <input
             type="text"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g. employee forgot to clock out"
+            placeholder={t("records.correctReasonPlaceholder")}
             className="mt-1 w-full border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-indigo-400 outline-none"
           />
         </label>
 
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 text-sm hover:bg-slate-50">
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             onClick={save}
             disabled={saving}
             className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-sm font-semibold disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save correction"}
+            {saving ? t("common.saving") : t("records.correctSave")}
           </button>
         </div>
       </Card>
