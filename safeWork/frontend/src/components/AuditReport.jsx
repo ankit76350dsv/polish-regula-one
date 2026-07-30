@@ -1,19 +1,22 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAuditLogs } from "../store/slices/auditSlice";
+import { useTranslation } from "../hooks/useTranslation";
 
 // ─── Action metadata ──────────────────────────────────────────────────────────
-// Maps every known action key to a human label and a colour group.
+// Maps every action the backend can record to a colour group and a translation
+// key. The KEY on the left (for example EMPLOYEE_LIST_VIEWED) is what the backend
+// stores and must never change; only the words shown to the user are translated.
 const ACTION_META = {
-  EMPLOYEE_LIST_VIEWED:    { label: "Employee List Viewed",  color: "blue"   },
-  EMPLOYEE_PROFILE_VIEWED: { label: "Profile Viewed",        color: "blue"   },
-  DOCUMENT_VIEWED:         { label: "Document Viewed",       color: "blue"   },
-  EMPLOYEE_PROFILE_CREATED:{ label: "Employee Created",      color: "green"  },
-  EMPLOYEE_PROFILE_UPDATED:{ label: "Profile Updated",       color: "amber"  },
-  DOCUMENT_UPLOADED:       { label: "Document Uploaded",     color: "purple" },
-  COMPLIANCE_UPDATED:      { label: "Compliance Updated",    color: "indigo" },
-  LOGIN:                   { label: "Login",                 color: "slate"  },
-  LOGOUT:                  { label: "Logout",                color: "slate"  },
+  EMPLOYEE_LIST_VIEWED:    { labelKey: "audit.actionListViewed",       color: "blue"   },
+  EMPLOYEE_PROFILE_VIEWED: { labelKey: "audit.actionProfileViewed",    color: "blue"   },
+  DOCUMENT_VIEWED:         { labelKey: "audit.actionDocumentViewed",   color: "blue"   },
+  EMPLOYEE_PROFILE_CREATED:{ labelKey: "audit.actionEmployeeCreated",  color: "green"  },
+  EMPLOYEE_PROFILE_UPDATED:{ labelKey: "audit.actionProfileUpdated",   color: "amber"  },
+  DOCUMENT_UPLOADED:       { labelKey: "audit.actionDocumentUploaded", color: "purple" },
+  COMPLIANCE_UPDATED:      { labelKey: "audit.actionComplianceUpdated",color: "indigo" },
+  LOGIN:                   { labelKey: "audit.actionLogin",            color: "slate"  },
+  LOGOUT:                  { labelKey: "audit.actionLogout",           color: "slate"  },
 };
 
 const COLOR_CLASSES = {
@@ -26,8 +29,11 @@ const COLOR_CLASSES = {
 };
 
 function ActionBadge({ action }) {
+  const { t } = useTranslation();
   const meta   = ACTION_META[action];
-  const label  = meta?.label  ?? action.replace(/_/g, " ");
+  // An action we do not know yet is shown with its underscores turned into spaces,
+  // so a new backend event is still readable instead of blank.
+  const label  = meta ? t(meta.labelKey) : action.replace(/_/g, " ");
   const color  = meta?.color  ?? "slate";
   const cls    = COLOR_CLASSES[color] ?? COLOR_CLASSES.slate;
   return (
@@ -38,21 +44,22 @@ function ActionBadge({ action }) {
 }
 
 function StatusBadge({ success }) {
+  const { t } = useTranslation();
   return success === false ? (
     <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200">
-      <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Failed
+      <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> {t("audit.failed")}
     </span>
   ) : (
     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Success
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {t("audit.success")}
     </span>
   );
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
-function formatDateTime(d) {
+function formatDateTime(d, locale) {
   if (!d) return "—";
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(locale, {
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   }).format(new Date(d));
@@ -79,6 +86,9 @@ function truncate(str, n = 18) {
 function AuditReport() {
   const dispatch = useDispatch();
   const { logs, pagination, loading, error } = useSelector((s) => s.audit);
+
+  // t() = words in the chosen language; `language` formats dates the local way.
+  const { t, language } = useTranslation();
 
   // Filter state
   const [search, setSearch]         = useState("");
@@ -138,17 +148,17 @@ function AuditReport() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="mb-2 inline-flex rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-indigo-200 ring-1 ring-white/20">
-                SafeWork Compliance
+                {t("audit.badge")}
               </p>
-              <h1 className="text-3xl font-bold">Audit Trail</h1>
+              <h1 className="text-3xl font-bold">{t("audit.title")}</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-300">
-                Complete immutable record of every action performed — who accessed which records, made changes, and when.
+                {t("audit.subtitle")}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-3">
               <div className="rounded-2xl bg-white/10 px-5 py-3 text-center ring-1 ring-white/20">
                 <p className="text-2xl font-bold">{loading ? "…" : total.toLocaleString()}</p>
-                <p className="text-xs text-slate-300">Total Events</p>
+                <p className="text-xs text-slate-300">{t("audit.statTotal")}</p>
               </div>
             </div>
           </div>
@@ -157,43 +167,43 @@ function AuditReport() {
         {/* ── Error ──────────────────────────────────────────────────────── */}
         {error && (
           <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
+            {t("audit.loadFailed", { error })}
           </div>
         )}
 
         {/* ── Quick stats strip ───────────────────────────────────────────── */}
         <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-slate-500">This Page</p>
+            <p className="text-xs font-medium text-slate-500">{t("audit.statPage")}</p>
             <p className="mt-1 text-2xl font-bold text-slate-900">{loading ? "…" : logs.length}</p>
-            <p className="text-xs text-slate-400">records shown</p>
+            <p className="text-xs text-slate-400">{t("audit.statPageSub")}</p>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-slate-500">Successful</p>
+            <p className="text-xs font-medium text-slate-500">{t("audit.statSuccess")}</p>
             <p className="mt-1 text-2xl font-bold text-emerald-600">{loading ? "…" : successCount}</p>
-            <p className="text-xs text-slate-400">on this page</p>
+            <p className="text-xs text-slate-400">{t("audit.statSuccessSub")}</p>
           </div>
           <div className="rounded-2xl border border-red-100 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-slate-500">Failed</p>
+            <p className="text-xs font-medium text-slate-500">{t("audit.failed")}</p>
             <p className="mt-1 text-2xl font-bold text-red-600">{loading ? "…" : failCount}</p>
-            <p className="text-xs text-slate-400">on this page</p>
+            <p className="text-xs text-slate-400">{t("audit.statSuccessSub")}</p>
           </div>
           <div className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium text-slate-500">Unique Users</p>
+            <p className="text-xs font-medium text-slate-500">{t("audit.statUsers")}</p>
             <p className="mt-1 text-2xl font-bold text-blue-600">{loading ? "…" : uniqueUsers}</p>
-            <p className="text-xs text-slate-400">on this page</p>
+            <p className="text-xs text-slate-400">{t("audit.statSuccessSub")}</p>
           </div>
         </div>
 
         {/* ── Filters ────────────────────────────────────────────────────── */}
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">Filter Events</p>
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">{t("audit.filterTitle")}</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {/* Search */}
             <div className="xl:col-span-2">
               <input
                 type="text"
-                placeholder="Search email, action, record ID…"
+                placeholder={t("audit.searchPlaceholder")}
                 value={search}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -206,21 +216,21 @@ function AuditReport() {
               onChange={(e) => handleActionChange(e.target.value)}
               className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
             >
-              <option value="ALL">All Actions</option>
-              <optgroup label="Read Events">
-                <option value="EMPLOYEE_LIST_VIEWED">Employee List Viewed</option>
-                <option value="EMPLOYEE_PROFILE_VIEWED">Profile Viewed</option>
-                <option value="DOCUMENT_VIEWED">Document Viewed</option>
+              <option value="ALL">{t("audit.allActions")}</option>
+              <optgroup label={t("audit.readEvents")}>
+                <option value="EMPLOYEE_LIST_VIEWED">{t("audit.actionListViewed")}</option>
+                <option value="EMPLOYEE_PROFILE_VIEWED">{t("audit.actionProfileViewed")}</option>
+                <option value="DOCUMENT_VIEWED">{t("audit.actionDocumentViewed")}</option>
               </optgroup>
-              <optgroup label="Write Events">
-                <option value="EMPLOYEE_PROFILE_CREATED">Employee Created</option>
-                <option value="EMPLOYEE_PROFILE_UPDATED">Profile Updated</option>
-                <option value="DOCUMENT_UPLOADED">Document Uploaded</option>
-                <option value="COMPLIANCE_UPDATED">Compliance Updated</option>
+              <optgroup label={t("audit.writeEvents")}>
+                <option value="EMPLOYEE_PROFILE_CREATED">{t("audit.actionEmployeeCreated")}</option>
+                <option value="EMPLOYEE_PROFILE_UPDATED">{t("audit.actionProfileUpdated")}</option>
+                <option value="DOCUMENT_UPLOADED">{t("audit.actionDocumentUploaded")}</option>
+                <option value="COMPLIANCE_UPDATED">{t("audit.actionComplianceUpdated")}</option>
               </optgroup>
-              <optgroup label="Auth Events">
-                <option value="LOGIN">Login</option>
-                <option value="LOGOUT">Logout</option>
+              <optgroup label={t("audit.authEvents")}>
+                <option value="LOGIN">{t("audit.actionLogin")}</option>
+                <option value="LOGOUT">{t("audit.actionLogout")}</option>
               </optgroup>
             </select>
 
@@ -230,10 +240,10 @@ function AuditReport() {
               onChange={(e) => handleResourceChange(e.target.value)}
               className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
             >
-              <option value="ALL">All Resources</option>
-              <option value="EmployeeProfile">Employee Profile</option>
-              <option value="EmployeeDocument">Employee Document</option>
-              <option value="User">User</option>
+              <option value="ALL">{t("audit.allResources")}</option>
+              <option value="EmployeeProfile">{t("audit.resourceEmployeeProfile")}</option>
+              <option value="EmployeeDocument">{t("audit.resourceEmployeeDocument")}</option>
+              <option value="User">{t("audit.resourceUser")}</option>
             </select>
 
             {/* Date from */}
@@ -256,17 +266,17 @@ function AuditReport() {
           {/* Active filter chips + clear */}
           {isFiltered && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-slate-400">Active filters:</span>
-              {search    && <Chip label={`Search: "${search}"`}    onRemove={() => handleSearchChange("")} />}
-              {action !== "ALL"   && <Chip label={`Action: ${action}`}     onRemove={() => handleActionChange("ALL")} />}
-              {resource !== "ALL" && <Chip label={`Resource: ${resource}`} onRemove={() => handleResourceChange("ALL")} />}
-              {startDate && <Chip label={`From: ${startDate}`}  onRemove={() => handleStartDate("")} />}
-              {endDate   && <Chip label={`To: ${endDate}`}      onRemove={() => handleEndDate("")} />}
+              <span className="text-xs text-slate-400">{t("audit.activeFilters")}</span>
+              {search    && <Chip label={t("audit.chipSearch", { value: search })}    onRemove={() => handleSearchChange("")} />}
+              {action !== "ALL"   && <Chip label={t("audit.chipAction", { value: action })}     onRemove={() => handleActionChange("ALL")} />}
+              {resource !== "ALL" && <Chip label={t("audit.chipResource", { value: resource })} onRemove={() => handleResourceChange("ALL")} />}
+              {startDate && <Chip label={t("audit.chipFrom", { value: startDate })}  onRemove={() => handleStartDate("")} />}
+              {endDate   && <Chip label={t("audit.chipTo", { value: endDate })}      onRemove={() => handleEndDate("")} />}
               <button
                 onClick={() => { handleSearchChange(""); handleActionChange("ALL"); handleResourceChange("ALL"); handleStartDate(""); handleEndDate(""); }}
                 className="text-xs font-semibold text-red-600 hover:underline"
               >
-                Clear all
+                {t("common.clearAll")}
               </button>
             </div>
           )}
@@ -278,17 +288,19 @@ function AuditReport() {
           {/* Table header bar */}
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Event Log</h2>
+              <h2 className="text-lg font-bold text-slate-900">{t("audit.logTitle")}</h2>
               <p className="text-sm text-slate-500">
-                {loading ? "Loading…" : (() => {
+                {loading ? t("common.loading") : (() => {
                   const from = total === 0 ? 0 : (pagination?.page - 1) * pagination?.limit + 1;
                   const to   = Math.min(pagination?.page * pagination?.limit, total);
-                  return `Showing ${from}–${to} of ${total.toLocaleString()} event${total !== 1 ? "s" : ""}`;
+                  // One sentence with three numbers — each language sets its own
+                  // word order, so we never glue text fragments together here.
+                  return t("audit.showingRange", { from, to, total: total.toLocaleString() });
                 })()}
               </p>
             </div>
             <label className="flex items-center gap-2 text-sm text-slate-500">
-              Rows per page
+              {t("common.rowsPerPage")}
               <select
                 value={itemsPerPage}
                 onChange={(e) => handleLimitChange(e.target.value)}
@@ -305,27 +317,27 @@ function AuditReport() {
           {loading ? (
             <div className="py-16 text-center">
               <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
-              <p className="text-sm text-slate-500">Loading audit events…</p>
+              <p className="text-sm text-slate-500">{t("audit.logLoading")}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] border-separate border-spacing-y-1.5">
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
-                    <th className="px-3 py-2">Timestamp</th>
-                    <th className="px-3 py-2">Performed By</th>
-                    <th className="px-3 py-2">Action</th>
-                    <th className="px-3 py-2">Resource</th>
-                    <th className="px-3 py-2">Affected Employee</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">IP Address</th>
+                    <th className="px-3 py-2">{t("audit.colTimestamp")}</th>
+                    <th className="px-3 py-2">{t("audit.colPerformedBy")}</th>
+                    <th className="px-3 py-2">{t("audit.colAction")}</th>
+                    <th className="px-3 py-2">{t("audit.colResource")}</th>
+                    <th className="px-3 py-2">{t("audit.colAffected")}</th>
+                    <th className="px-3 py-2">{t("common.status")}</th>
+                    <th className="px-3 py-2">{t("audit.colIp")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {logs.map((log) => (
                     <tr key={log._id} className="bg-slate-50 text-sm transition hover:bg-blue-50/60">
                       <td className="rounded-l-xl px-3 py-3">
-                        <p className="font-medium text-slate-800">{formatDateTime(log.createdAt)}</p>
+                        <p className="font-medium text-slate-800">{formatDateTime(log.createdAt, language)}</p>
                         <p className="text-xs text-slate-400">{relativeTime(log.createdAt)}</p>
                       </td>
                       <td className="px-3 py-3">
@@ -381,12 +393,12 @@ function AuditReport() {
               {logs.length === 0 && !loading && (
                 <div className="py-12 text-center">
                   <p className="font-semibold text-slate-700">
-                    {isFiltered ? "No events match your filters" : "No audit events recorded yet"}
+                    {isFiltered ? t("audit.emptyFiltered") : t("audit.emptyNone")}
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
                     {isFiltered
-                      ? "Try adjusting your filters or date range."
-                      : "Events will appear here as users interact with the system."}
+                      ? t("audit.emptyFilteredHint")
+                      : t("audit.emptyNoneHint")}
                   </p>
                 </div>
               )}
@@ -448,7 +460,7 @@ function AuditReport() {
 
               {totalPages > 1 && (
                 <label className="flex items-center gap-2 text-sm text-slate-500">
-                  Go to page
+                  {t("common.goToPage")}
                   <input
                     type="number"
                     min={1}

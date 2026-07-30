@@ -3,6 +3,7 @@ import dashboardReducer  from "./slices/dashboardSlice";
 import authReducer       from "./slices/authSlice";
 import employeeReducer   from "./slices/employeeSlice";
 import auditReducer      from "./slices/auditSlice";
+import languageReducer   from "./slices/languageSlice";
 
 // Central Redux store for the SafeWork frontend.
 const store = configureStore({
@@ -12,6 +13,8 @@ const store = configureStore({
     employees: employeeReducer,
     // audit slice holds paginated audit logs for the Audit Report page.
     audit:     auditReducer,
+    // language slice holds the chosen interface language (Polish or English).
+    language:  languageReducer,
   },
 });
 

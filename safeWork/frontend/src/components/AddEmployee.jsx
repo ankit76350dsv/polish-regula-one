@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+import { useTranslation } from "../hooks/useTranslation";
 import {
   fetchEmployees,
   upsertProfile,
@@ -253,9 +254,25 @@ const CONTRACT_TYPES = [
   { value: "OTHER",          label: "Other" },
 ];
 
-const RISK_CATEGORIES  = ["Low", "Medium", "High"];
-const MEDICAL_EXAM_TYPES = ["Initial", "Periodic", "Control", "Specialized"];
-const BHP_FREQUENCIES  = ["Annually", "Every 2 years", "Every 3 years", "Every 5 years"];
+// For each list the `value` is what we SAVE (English, so it keeps matching the
+// records already in the database) and the `labelKey` is what the user READS.
+const RISK_CATEGORIES = [
+  { value: "Low",    labelKey: "profile.riskLow"    },
+  { value: "Medium", labelKey: "profile.riskMedium" },
+  { value: "High",   labelKey: "profile.riskHigh"   },
+];
+const MEDICAL_EXAM_TYPES = [
+  { value: "Initial",     labelKey: "profile.examTypeInitial"     },
+  { value: "Periodic",    labelKey: "profile.examTypePeriodic"    },
+  { value: "Control",     labelKey: "profile.examTypeControl"     },
+  { value: "Specialized", labelKey: "profile.examTypeSpecialized" },
+];
+const BHP_FREQUENCIES = [
+  { value: "Annually",      labelKey: "profile.freqAnnually" },
+  { value: "Every 2 years", labelKey: "profile.freqEvery2"   },
+  { value: "Every 3 years", labelKey: "profile.freqEvery3"   },
+  { value: "Every 5 years", labelKey: "profile.freqEvery5"   },
+];
 
 const INITIAL_FORM = {
   phone: "",
@@ -277,10 +294,11 @@ const INITIAL_FORM = {
   periodicBHPFrequency: "Every 3 years",
 };
 
+// The wizard steps. Words come from the dictionary so the header translates too.
 const STEPS = [
-  { id: 1, label: "Select Employee",    description: "Pick from RegulaOne users" },
-  { id: 2, label: "Employment Details", description: "Role, site & contract"      },
-  { id: 3, label: "Compliance Setup",   description: "Safety & medical config"    },
+  { id: 1, labelKey: "addEmployee.stepSelect",     descriptionKey: "addEmployee.stepSelectSub"     },
+  { id: 2, labelKey: "addEmployee.stepEmployment", descriptionKey: "addEmployee.stepEmploymentSub" },
+  { id: 3, labelKey: "addEmployee.stepCompliance", descriptionKey: "addEmployee.stepComplianceSub" },
 ];
 
 // ─── Shared UI primitives ─────────────────────────────────────────────────────
@@ -330,7 +348,10 @@ function Select({ children, value, onChange }) {
 //                  objects. Objects let us SAVE one thing (e.g. "Warehouse")
 //                  but SHOW another (e.g. "Magazyn / Warehouse").
 //   placeholder -> greyed-out hint shown when nothing is selected
-function SearchableSelect({ value, onChange, options, placeholder = "Select..." }) {
+function SearchableSelect({ value, onChange, options, placeholder }) {
+  const { t } = useTranslation();
+  // Fall back to the translated "Select..." wording when none is passed in.
+  const placeholderText = placeholder ?? t("common.selectPlaceholder");
   const [open, setOpen] = useState(false);   // is the dropdown list showing?
   const [query, setQuery] = useState("");    // what the user has typed to search
   const boxRef = useRef(null);               // the whole widget, used to detect outside clicks
@@ -376,7 +397,7 @@ function SearchableSelect({ value, onChange, options, placeholder = "Select..." 
         // When open we show what the user is typing; when closed we show the label.
         value={open ? query : selectedLabel}
         // If something is already chosen, keep showing it as a faint hint while searching.
-        placeholder={selectedLabel || placeholder}
+        placeholder={selectedLabel || placeholderText}
         onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
@@ -385,7 +406,7 @@ function SearchableSelect({ value, onChange, options, placeholder = "Select..." 
       {open && (
         <ul className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
           {filtered.length === 0 ? (
-            <li className="px-4 py-2 text-sm text-slate-400">No matches found</li>
+            <li className="px-4 py-2 text-sm text-slate-400">{t("common.noMatches")}</li>
           ) : (
             filtered.map((it) => (
               <li
@@ -408,6 +429,8 @@ function SearchableSelect({ value, onChange, options, placeholder = "Select..." 
 }
 
 function YesNoToggle({ label, hint, value, onChange }) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <div className="min-w-0">
@@ -417,11 +440,11 @@ function YesNoToggle({ label, hint, value, onChange }) {
       <div className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
         <button type="button" onClick={() => onChange(true)}
           className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${value ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-slate-50"}`}>
-          Yes
+          {t("common.yes")}
         </button>
         <button type="button" onClick={() => onChange(false)}
           className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${!value ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:bg-slate-50"}`}>
-          No
+          {t("common.no")}
         </button>
       </div>
     </div>
@@ -450,6 +473,7 @@ function CheckIcon() {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 function AddEmployee() {
+  const { t } = useTranslation();
   const navigate  = useNavigate();
   const dispatch  = useDispatch();
   const location  = useLocation();
@@ -555,27 +579,27 @@ function AddEmployee() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold">Compliance Profile Saved</h2>
+            <h2 className="text-2xl font-bold">{t("addEmployee.savedTitle")}</h2>
             <p className="mt-3 text-slate-300">
-              {savedProfile.firstName} {savedProfile.lastName} has been registered in the SafeWork compliance system.
+              {t("addEmployee.savedMessage", { name: `${savedProfile.firstName} ${savedProfile.lastName}` })}
             </p>
             <div className="mt-6 rounded-2xl bg-white/10 p-5 ring-1 ring-white/20">
               <div className="grid grid-cols-2 gap-4 text-left">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-blue-200">Department</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-blue-200">{t("addEmployee.department")}</p>
                   <p className="mt-1 text-base font-bold">{savedProfile.profile?.department || "—"}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-blue-200">Site</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-blue-200">{t("addEmployee.site")}</p>
                   <p className="mt-1 text-base font-bold">{savedProfile.profile?.site || "—"}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-blue-200">Risk Level</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-blue-200">{t("addEmployee.riskLevel")}</p>
                   <p className="mt-1 text-base font-bold">{form.riskCategory}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-blue-200">BHP Required</p>
-                  <p className="mt-1 text-base font-bold">{form.requiresBHP ? "Yes" : "No"}</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-blue-200">{t("addEmployee.bhpRequiredShort")}</p>
+                  <p className="mt-1 text-base font-bold">{form.requiresBHP ? t("common.yes") : t("common.no")}</p>
                 </div>
               </div>
             </div>
@@ -584,13 +608,13 @@ function AddEmployee() {
                 onClick={() => { setSavedProfile(null); setForm(INITIAL_FORM); setSelectedUser(null); setCurrentStep(1); }}
                 className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-900 transition hover:bg-blue-50"
               >
-                Add Another
+                {t("addEmployee.addAnother")}
               </button>
               <button
                 onClick={() => navigate("/employees")}
                 className="rounded-xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20"
               >
-                View Employee List
+                {t("addEmployee.viewList")}
               </button>
             </div>
           </div>
@@ -609,18 +633,18 @@ function AddEmployee() {
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="mb-2 inline-flex rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-blue-100 ring-1 ring-white/20">
-                SafeWork HR Compliance
+                {t("addEmployee.badge")}
               </p>
-              <h1 className="text-3xl font-bold">Setup Employee Compliance Profile</h1>
+              <h1 className="text-3xl font-bold">{t("addEmployee.title")}</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-300">
-                Select an existing RegulaOne user and configure their medical, BHP, and compliance requirements.
+                {t("addEmployee.subtitle")}
               </p>
             </div>
             <button
               onClick={() => navigate("/employees")}
               className="self-start rounded-xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20 lg:self-auto"
             >
-              ← Back to List
+              {t("common.backToList")}
             </button>
           </div>
         </div>
@@ -646,9 +670,9 @@ function AddEmployee() {
                   </div>
                   <div className="mt-2.5 hidden sm:block">
                     <p className={`text-xs font-bold ${step.id === currentStep ? "text-slate-900" : "text-slate-400"}`}>
-                      {step.label}
+                      {t(step.labelKey)}
                     </p>
-                    <p className="text-xs text-slate-400">{step.description}</p>
+                    <p className="text-xs text-slate-400">{t(step.descriptionKey)}</p>
                   </div>
                 </div>
                 {index < STEPS.length - 1 && (
@@ -663,24 +687,24 @@ function AddEmployee() {
         {currentStep === 1 && (
           <div className="space-y-5">
             <SectionCard
-              title="Select Employee"
-              subtitle="Choose a user from RegulaOne who needs a compliance profile. Identity details are read-only."
+              title={t("addEmployee.stepSelect")}
+              subtitle={t("addEmployee.selectStepSubtitle")}
             >
               {listLoading ? (
                 <div className="flex items-center gap-3 py-4 text-sm text-slate-500">
                   <div className="h-5 w-5 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
-                  Loading users…
+                  {t("addEmployee.loadingUsers")}
                 </div>
               ) : usersNeedingProfile.length === 0 ? (
                 <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-700">
-                  All users already have compliance profiles set up.
+                  {t("addEmployee.allHaveProfiles")}
                 </div>
               ) : (
                 <div className="space-y-3">
                   {/* Search box for the user list */}
                   <input
                     type="text"
-                    placeholder="Search by name or email…"
+                    placeholder={t("addEmployee.searchUsers")}
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -689,7 +713,7 @@ function AddEmployee() {
                   {/* Scrollable user picker */}
                   <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
                     {filteredUsers.length === 0 ? (
-                      <p className="px-4 py-3 text-sm text-slate-400">No users match your search.</p>
+                      <p className="px-4 py-3 text-sm text-slate-400">{t("addEmployee.noUserMatches")}</p>
                     ) : (
                       filteredUsers.map((user) => {
                         const isSelected = selectedUser?._id === user._id;
@@ -731,20 +755,20 @@ function AddEmployee() {
             {/* Read-only identity preview + editable SafeWork-specific fields */}
             {selectedUser && (
               <SectionCard
-                title="Employee Identity"
-                subtitle="Name and email come from RegulaOne and cannot be changed here."
+                title={t("addEmployee.identityTitle")}
+                subtitle={t("addEmployee.identitySubtitle")}
               >
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <FormField label="First Name">
+                  <FormField label={t("addEmployee.firstName")}>
                     <Input type="text" value={selectedUser.firstName ?? ""} disabled />
                   </FormField>
-                  <FormField label="Last Name">
+                  <FormField label={t("addEmployee.lastName")}>
                     <Input type="text" value={selectedUser.lastName ?? ""} disabled />
                   </FormField>
-                  <FormField label="Email Address">
+                  <FormField label={t("addEmployee.emailAddress")}>
                     <Input type="email" value={selectedUser.email ?? ""} disabled />
                   </FormField>
-                  <FormField label="Phone Number">
+                  <FormField label={t("addEmployee.phoneNumber")}>
                     <Input
                       type="tel"
                       placeholder="+48 600 000 000"
@@ -752,17 +776,17 @@ function AddEmployee() {
                       onChange={(e) => update("phone", e.target.value)}
                     />
                   </FormField>
-                  <FormField label="Date of Birth">
+                  <FormField label={t("profile.dateOfBirth")}>
                     <Input
                       type="date"
                       value={form.dateOfBirth}
                       onChange={(e) => update("dateOfBirth", e.target.value)}
                     />
                   </FormField>
-                  <FormField label="PESEL / National ID">
+                  <FormField label={t("profile.pesel")}>
                     <Input
                       type="text"
-                      placeholder="Polish national identifier"
+                      placeholder={t("profile.peselHint")}
                       value={form.pesel}
                       onChange={(e) => update("pesel", e.target.value)}
                     />
@@ -776,54 +800,54 @@ function AddEmployee() {
         {/* ── Step 2: Employment Details ──────────────────────────────────────── */}
         {currentStep === 2 && (
           <div className="space-y-5">
-            <SectionCard title="Role & Workplace" subtitle="Job role, department, and site assignment">
+            <SectionCard title={t("profile.roleWorkplaceTitle")} subtitle={t("profile.roleWorkplaceSubtitle")}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <FormField label="Department" required>
+                <FormField label={t("profile.department")} required>
                   <SearchableSelect
                     value={form.department}
                     onChange={(v) => update("department", v)}
                     options={DEPARTMENTS}
-                    placeholder="Search department..."
+                    placeholder={t("profile.searchDepartment")}
                   />
                 </FormField>
-                <FormField label="Job Role" required>
+                <FormField label={t("addEmployee.jobRole")} required>
                   <SearchableSelect
                     value={form.jobRole}
                     onChange={(v) => update("jobRole", v)}
                     options={JOB_ROLES}
-                    placeholder="Search job role..."
+                    placeholder={t("addEmployee.searchJobRole")}
                   />
                 </FormField>
-                <FormField label="Work Site" required>
+                <FormField label={t("profile.workSite")} required>
                   <Select value={form.workSite} onChange={(e) => update("workSite", e.target.value)}>
-                    <option value="">Select site</option>
+                    <option value="">{t("profile.selectSite")}</option>
                     {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </Select>
                 </FormField>
               </div>
             </SectionCard>
 
-            <SectionCard title="Contract Details" subtitle="Employment type, start date, and reporting manager">
+            <SectionCard title={t("addEmployee.contractTitle")} subtitle={t("addEmployee.contractSubtitle")}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <FormField label="Employment Start Date" required>
+                <FormField label={t("addEmployee.startDate")} required>
                   <Input type="date" value={form.startDate} onChange={(e) => update("startDate", e.target.value)} />
                 </FormField>
-                <FormField label="Contract Type" required>
+                <FormField label={t("profile.contractType")} required>
                   <Select value={form.contractType} onChange={(e) => update("contractType", e.target.value)}>
-                    <option value="">Select contract type</option>
+                    <option value="">{t("profile.selectContractType")}</option>
                     {CONTRACT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </Select>
                 </FormField>
-                <FormField label="Manager">
+                <FormField label={t("addEmployee.manager")}>
                   <Select value={form.manager} onChange={(e) => update("manager", e.target.value)}>
-                    <option value="">Select manager</option>
+                    <option value="">{t("addEmployee.selectManager")}</option>
                     {MANAGERS.map((m) => <option key={m} value={m}>{m}</option>)}
                   </Select>
                 </FormField>
               </div>
             </SectionCard>
 
-            <SectionCard title="Employment Status" subtitle="Set the initial status for this employee record">
+            <SectionCard title={t("addEmployee.statusTitle")} subtitle={t("addEmployee.statusSubtitle")}>
               <div className="flex gap-3">
                 {["Active", "Inactive"].map((status) => (
                   <button
@@ -846,10 +870,12 @@ function AddEmployee() {
         {/* ── Step 3: Compliance Setup ────────────────────────────────────────── */}
         {currentStep === 3 && (
           <div className="space-y-5">
-            <SectionCard title="Risk Classification" subtitle="Occupational risk level for this position">
+            <SectionCard title={t("profile.riskTitle")} subtitle={t("profile.riskSubtitle")}>
               <div className="grid grid-cols-3 gap-3">
                 {RISK_CATEGORIES.map((category) => {
-                  const selected = form.riskCategory === category;
+                  // `category.value` is the saved English value; the label shown
+                  // comes from the dictionary.
+                  const selected = form.riskCategory === category.value;
                   const colorMap = {
                     Low:    selected ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500 hover:border-emerald-200 hover:bg-emerald-50/60",
                     Medium: selected ? "border-amber-300 bg-amber-50 text-amber-700"       : "border-slate-200 bg-slate-50 text-slate-500 hover:border-amber-200 hover:bg-amber-50/60",
@@ -857,29 +883,29 @@ function AddEmployee() {
                   };
                   const dotMap = { Low: "bg-emerald-500", Medium: "bg-amber-500", High: "bg-red-500" };
                   return (
-                    <button key={category} type="button" onClick={() => update("riskCategory", category)}
-                      className={`rounded-xl border px-4 py-5 text-sm font-bold transition ${colorMap[category]}`}>
-                      <span className={`mx-auto mb-2 block h-3 w-3 rounded-full ${dotMap[category]}`} />
-                      {category} Risk
+                    <button key={category.value} type="button" onClick={() => update("riskCategory", category.value)}
+                      className={`rounded-xl border px-4 py-5 text-sm font-bold transition ${colorMap[category.value]}`}>
+                      <span className={`mx-auto mb-2 block h-3 w-3 rounded-full ${dotMap[category.value]}`} />
+                      {t("profile.riskOption", { level: t(category.labelKey) })}
                     </button>
                   );
                 })}
               </div>
             </SectionCard>
 
-            <SectionCard title="Medical Requirements" subtitle="Occupational health examination configuration">
+            <SectionCard title={t("profile.medicalReqTitle")} subtitle={t("profile.medicalReqSubtitle")}>
               <div className="space-y-3">
                 <YesNoToggle
-                  label="Requires Medical Certificate"
-                  hint="Badania medycyny pracy — occupational health examination required"
+                  label={t("profile.requiresMedical")}
+                  hint={t("profile.medicalHint")}
                   value={form.requiresMedical}
                   onChange={(val) => update("requiresMedical", val)}
                 />
                 {form.requiresMedical && (
                   <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-                    <FormField label="Medical Exam Type Required">
+                    <FormField label={t("addEmployee.medicalExamTypeRequired")}>
                       <Select value={form.medicalExamType} onChange={(e) => update("medicalExamType", e.target.value)}>
-                        {MEDICAL_EXAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                        {MEDICAL_EXAM_TYPES.map((type) => <option key={type.value} value={type.value}>{t(type.labelKey)}</option>)}
                       </Select>
                     </FormField>
                   </div>
@@ -887,25 +913,25 @@ function AddEmployee() {
               </div>
             </SectionCard>
 
-            <SectionCard title="BHP Safety Training" subtitle="Bezpieczenstwo i Higiena Pracy — mandatory occupational safety training">
+            <SectionCard title={t("profile.bhpTitle")} subtitle={t("addEmployee.bhpSectionSubtitle")}>
               <div className="space-y-3">
                 <YesNoToggle
-                  label="Requires BHP Training"
-                  hint="Mandatory safety training under Polish Labour Code"
+                  label={t("profile.requiresBhp")}
+                  hint={t("profile.bhpMandatoryNote")}
                   value={form.requiresBHP}
                   onChange={(val) => update("requiresBHP", val)}
                 />
                 {form.requiresBHP && (
                   <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50 p-4">
                     <YesNoToggle
-                      label="Initial BHP Required"
-                      hint="One-time onboarding safety training on employment start date"
+                      label={t("profile.initialBhp")}
+                      hint={t("profile.initialBhpNote")}
                       value={form.initialBHPRequired}
                       onChange={(val) => update("initialBHPRequired", val)}
                     />
-                    <FormField label="Periodic BHP Frequency">
+                    <FormField label={t("profile.periodicBhp")}>
                       <Select value={form.periodicBHPFrequency} onChange={(e) => update("periodicBHPFrequency", e.target.value)}>
-                        {BHP_FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
+                        {BHP_FREQUENCIES.map((freq) => <option key={freq.value} value={freq.value}>{t(freq.labelKey)}</option>)}
                       </Select>
                     </FormField>
                   </div>
@@ -913,10 +939,10 @@ function AddEmployee() {
               </div>
             </SectionCard>
 
-            <SectionCard title="Special Training" subtitle="Additional role-specific certifications and qualifications">
+            <SectionCard title={t("addEmployee.specialTrainingTitle")} subtitle={t("addEmployee.specialTrainingSubtitle")}>
               <YesNoToggle
-                label="Requires Special Training"
-                hint="Equipment licenses, forklift certification, or role-specific qualifications"
+                label={t("addEmployee.requiresSpecialTraining")}
+                hint={t("addEmployee.specialTrainingHint")}
                 value={form.requiresSpecialTraining}
                 onChange={(val) => update("requiresSpecialTraining", val)}
               />
@@ -924,30 +950,30 @@ function AddEmployee() {
 
             {/* Compliance preview */}
             <div className="rounded-2xl bg-gradient-to-br from-slate-900 to-blue-950 p-5 shadow-sm">
-              <p className="mb-4 text-xs font-bold uppercase tracking-wide text-blue-200">Compliance Profile Preview</p>
+              <p className="mb-4 text-xs font-bold uppercase tracking-wide text-blue-200">{t("addEmployee.previewTitle")}</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded-xl bg-white/10 p-3 ring-1 ring-white/20">
-                  <p className="text-xs text-slate-400">Risk Level</p>
+                  <p className="text-xs text-slate-400">{t("addEmployee.riskLevel")}</p>
                   <p className={`mt-1 text-sm font-bold ${form.riskCategory === "High" ? "text-red-300" : form.riskCategory === "Medium" ? "text-amber-300" : "text-emerald-300"}`}>
                     {form.riskCategory}
                   </p>
                 </div>
                 <div className="rounded-xl bg-white/10 p-3 ring-1 ring-white/20">
-                  <p className="text-xs text-slate-400">Medical</p>
+                  <p className="text-xs text-slate-400">{t("addEmployee.previewMedical")}</p>
                   <p className={`mt-1 text-sm font-bold ${form.requiresMedical ? "text-blue-300" : "text-slate-400"}`}>
-                    {form.requiresMedical ? form.medicalExamType : "Not Required"}
+                    {form.requiresMedical ? form.medicalExamType : t("common.notRequired")}
                   </p>
                 </div>
                 <div className="rounded-xl bg-white/10 p-3 ring-1 ring-white/20">
-                  <p className="text-xs text-slate-400">BHP Training</p>
+                  <p className="text-xs text-slate-400">{t("addEmployee.previewBhp")}</p>
                   <p className={`mt-1 text-sm font-bold ${form.requiresBHP ? "text-blue-300" : "text-slate-400"}`}>
-                    {form.requiresBHP ? form.periodicBHPFrequency : "Not Required"}
+                    {form.requiresBHP ? form.periodicBHPFrequency : t("common.notRequired")}
                   </p>
                 </div>
                 <div className="rounded-xl bg-white/10 p-3 ring-1 ring-white/20">
-                  <p className="text-xs text-slate-400">Special Training</p>
+                  <p className="text-xs text-slate-400">{t("addEmployee.previewSpecial")}</p>
                   <p className={`mt-1 text-sm font-bold ${form.requiresSpecialTraining ? "text-blue-300" : "text-slate-400"}`}>
-                    {form.requiresSpecialTraining ? "Required" : "Not Required"}
+                    {form.requiresSpecialTraining ? t("common.required") : t("common.notRequired")}
                   </p>
                 </div>
               </div>
@@ -962,7 +988,7 @@ function AddEmployee() {
               onClick={() => setCurrentStep(currentStep - 1)}
               className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
             >
-              Back
+              {t("common.back")}
             </button>
           ) : (
             <div />
@@ -972,7 +998,7 @@ function AddEmployee() {
               onClick={() => navigate("/employees")}
               className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-500 transition hover:bg-slate-50"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             {currentStep < 3 ? (
               <button
@@ -980,7 +1006,7 @@ function AddEmployee() {
                 disabled={currentStep === 1 && !selectedUser}
                 className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Continue
+                {t("common.continue")}
               </button>
             ) : (
               <button
@@ -988,7 +1014,7 @@ function AddEmployee() {
                 disabled={submitting || !selectedUser}
                 className="rounded-xl bg-blue-600 px-8 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
               >
-                {submitting ? "Saving…" : "Save Profile"}
+                {submitting ? t("common.saving") : t("addEmployee.saveProfile")}
               </button>
             )}
           </div>
