@@ -13,6 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { Textarea } from './Field';
+import { downloadMarkdown } from '../../lib/documentDownload';
 import { fetchSettings } from '../../store/slices/settingsSlice';
 import { useT } from '../../i18n';
 
@@ -70,15 +71,7 @@ export function AiDraftDialog({ open, onOpenChange, title, generate, filename })
     }
   };
 
-  const download = () => {
-    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+  const download = () => downloadMarkdown(filename, text);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -94,7 +87,7 @@ export function AiDraftDialog({ open, onOpenChange, title, generate, filename })
             <Textarea value={text} onChange={(e) => setText(e.target.value)} className="min-h-72 font-mono text-xs" />
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={copy}><Copy /> {t('ai.copy')}</Button>
-              <Button variant="outline" size="sm" onClick={download}><Download /> {t('notices.download')}</Button>
+              <Button variant="outline" size="sm" onClick={download}><Download /> {t('common.download')}</Button>
             </div>
           </>
         )}

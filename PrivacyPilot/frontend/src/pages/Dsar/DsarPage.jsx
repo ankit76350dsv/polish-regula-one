@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { CheckCircle2, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +23,7 @@ import { useT } from '../../i18n';
 import { useOrgBase } from '../../lib/paths';
 import { can, ACTIONS } from '../../lib/permissions';
 import { DSAR_TYPES, labelOf, byId } from '../../lib/gdpr';
+import { failureMessage } from '../../lib/apiErrors';
 
 const EMPTY_FORM = { type: 'access', requesterName: '', requesterEmail: '', relation: '', notes: '', receivedAt: '' };
 
@@ -34,17 +35,34 @@ export default function DsarPage() {
   const { items, status, error, refetch } = useSliceData('dsars', fetchDsars);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [errors, setErrors] = useState({});
+
+  const closeDialog = () => { setOpen(false); setForm(EMPTY_FORM); setErrors({}); };
+
+  // Update a field and clear its error as soon as the user starts fixing it.
+  const setField = (patch) => {
+    setForm((f) => ({ ...f, ...patch }));
+    setErrors((e) => {
+      const next = { ...e };
+      for (const key of Object.keys(patch)) delete next[key];
+      return next;
+    });
+  };
 
   const submit = async () => {
     // A request may be logged after it was received — let the user set the true
     // receipt date so the Art. 12(3) one-month deadline is calculated correctly.
     // Empty → the service defaults to now.
+    if (!form.requesterName.trim()) {
+      setErrors({ requesterName: t('dsar.nameRequired') });
+      return;
+    }
     const payload = { ...form };
     if (form.receivedAt) payload.receivedAt = new Date(form.receivedAt).toISOString();
     else delete payload.receivedAt;
     const action = await dispatch(createDsar(payload));
-    if (action.error) toast.error(t('common.notAuthorized'));
-    else { toast.success(t('common.save')); setOpen(false); setForm(EMPTY_FORM); }
+    if (action.error) toast.error(failureMessage(action.error, t));
+    else { toast.success(t('common.save')); closeDialog(); }
   };
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={4} />;
@@ -59,7 +77,13 @@ export default function DsarPage() {
       </PageHeader>
 
       {items.length === 0 ? (
-        <EmptyState />
+        <EmptyState
+          title={t('dsar.emptyTitle')}
+          hint={t('dsar.empty')}
+          action={can(user, ACTIONS.MANAGE_DSAR) && (
+            <Button size="sm" onClick={() => setOpen(true)}><Plus /> {t('dsar.new')}</Button>
+          )}
+        />
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <Table>
@@ -91,12 +115,25 @@ export default function DsarPage() {
                       {new Date(r.receivedAt).toLocaleDateString(lang === 'pl' ? 'pl-PL' : 'en-GB')}
                     </TableCell>
                     <TableCell>
+                      {/* A completed request has no deadline pressure left, so the useful
+                          fact is WHEN it was completed — not a bare tick, which the status
+                          column already conveys. */}
                       {r.status === 'completed' ? (
-                        <span className="text-xs text-(--status-ok)">✓</span>
+                        <span className="flex items-center gap-1.5 text-xs text-(--status-ok)">
+                          <CheckCircle2 className="size-3.5 shrink-0" aria-hidden />
+                          {r.completedAt
+                            ? t('dsar.completedOn').replace('{date}',
+                                new Date(r.completedAt).toLocaleDateString(lang === 'pl' ? 'pl-PL' : 'en-GB'))
+                            : t('status.completed')}
+                        </span>
                       ) : (
                         <DeadlineBadge daysLeft={days} overdueLabel={t('common.overdue')} daysLabel={t('common.daysLeft')} />
                       )}
-                      {r.extended && <p className="mt-0.5 text-[10px] text-muted-foreground">Art. 12(3) +2m</p>}
+                      {r.extended && (
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {t('dsar.extendedBy2Months')}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell><StatusBadge status={r.status} /></TableCell>
                   </TableRow>
@@ -107,38 +144,40 @@ export default function DsarPage() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : closeDialog())}>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>{t('dsar.new')}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
             <FormField label={t('dsar.type')}>
               {(fid) => (
-                <Select id={fid} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                <Select id={fid} value={form.type} onChange={(e) => setField({ type: e.target.value })}>
                   {DSAR_TYPES.map((d) => <option key={d.id} value={d.id}>{d[lang]} ({d.ref})</option>)}
                 </Select>
               )}
             </FormField>
-            <FormField label={t('dsar.requester')} required>
-              {(fid) => <Input id={fid} value={form.requesterName} onChange={(e) => setForm({ ...form, requesterName: e.target.value })} />}
+            <FormField label={t('dsar.requester')} required error={errors.requesterName}>
+              {(fid) => <Input id={fid} value={form.requesterName} onChange={(e) => setField({ requesterName: e.target.value })} />}
             </FormField>
-            <FormField label="E-mail">
-              {(fid) => <Input id={fid} type="email" value={form.requesterEmail} onChange={(e) => setForm({ ...form, requesterEmail: e.target.value })} />}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label={t('dsar.requesterEmail')}>
+                {(fid) => <Input id={fid} type="email" value={form.requesterEmail} onChange={(e) => setField({ requesterEmail: e.target.value })} />}
+              </FormField>
+              <FormField label={t('dsar.receivedAt')} hint={t('dsar.receivedAtHint')}>
+                {(fid) => <Input id={fid} type="date" value={form.receivedAt}
+                  onChange={(e) => setField({ receivedAt: e.target.value })} />}
+              </FormField>
+            </div>
+            <FormField label={t('dsar.relation')} hint={t('dsar.relationHint')}>
+              {(fid) => <Input id={fid} value={form.relation} onChange={(e) => setField({ relation: e.target.value })} />}
             </FormField>
-            <FormField label={lang === 'pl' ? 'Relacja (np. były pracownik, klient)' : 'Relation (e.g. former employee, customer)'}>
-              {(fid) => <Input id={fid} value={form.relation} onChange={(e) => setForm({ ...form, relation: e.target.value })} />}
-            </FormField>
-            <FormField label={t('dsar.receivedAt')}
-              hint={lang === 'pl' ? 'Domyślnie dziś. Termin 1 miesiąca liczy się od tej daty.' : 'Defaults to today. The 1-month deadline runs from this date.'}>
-              {(fid) => <Input id={fid} type="date" value={form.receivedAt}
-                onChange={(e) => setForm({ ...form, receivedAt: e.target.value })} />}
-            </FormField>
-            <FormField label={lang === 'pl' ? 'Notatki' : 'Notes'}>
-              {(fid) => <Textarea id={fid} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />}
+            <FormField label={t('dsar.notes')}>
+              {(fid) => <Textarea id={fid} value={form.notes} onChange={(e) => setField({ notes: e.target.value })} />}
             </FormField>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={submit} disabled={!form.requesterName.trim()}>{t('common.save')}</Button>
+            <Button variant="outline" onClick={closeDialog}>{t('common.cancel')}</Button>
+            {/* Deliberately NOT disabled — pressing Save explains what is missing. */}
+            <Button onClick={submit}>{t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

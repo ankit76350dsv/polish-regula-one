@@ -21,6 +21,8 @@ import { dsarDaysLeft } from '../../services/dsarService';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { DSAR_TYPES, labelOf, byId } from '../../lib/gdpr';
+import { failureMessage } from '../../lib/apiErrors';
+import { documentFilename } from '../../lib/documentDownload';
 import { AiDraftDialog, useAiEnabled } from '../../components/common/AiAssist';
 import { aiDraftDsarReply } from '../../store/slices/aiSlice';
 
@@ -54,7 +56,7 @@ export default function DsarDetailPage() {
 
   const patch = async (p) => {
     const action = await dispatch(updateDsar({ id: dsar.id, patch: p }));
-    if (action.error) toast.error(t('common.notAuthorized'));
+    if (action.error) toast.error(failureMessage(action.error, t));
   };
 
   const toggleTask = (taskId) =>
@@ -76,19 +78,19 @@ export default function DsarDetailPage() {
 
   const refuse = async () => {
     const action = await dispatch(refuseDsar({ id: dsar.id, reason: refuseReason }));
-    if (action.error) toast.error(t('common.notAuthorized'));
+    if (action.error) toast.error(failureMessage(action.error, t));
     else { toast.success(t('dsar.refused')); setRefuseOpen(false); }
   };
 
   const extend = async () => {
     const action = await dispatch(extendDsar({ id: dsar.id, reason: extendReason }));
-    if (action.error) toast.error(t('common.notAuthorized'));
+    if (action.error) toast.error(failureMessage(action.error, t));
     else { toast.success(t('dsar.extended')); setExtendOpen(false); }
   };
 
   const complete = async () => {
     const action = await dispatch(completeDsar(dsar.id));
-    if (action.error) toast.error(t('common.notAuthorized'));
+    if (action.error) toast.error(failureMessage(action.error, t));
     else toast.success(t('status.completed'));
   };
 
@@ -96,7 +98,10 @@ export default function DsarDetailPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title={`${labelOf(DSAR_TYPES, dsar.type, lang)} — ${dsar.requesterName}`}
-        subtitle={`${byId(DSAR_TYPES, dsar.type)?.ref} · ${dsar.requesterEmail} · ${dsar.relation}`}
+        // Join only the parts that exist — a blank e-mail or relation used to leave
+        // dangling " · · " separators in the heading.
+        subtitle={[byId(DSAR_TYPES, dsar.type)?.ref, dsar.requesterEmail, dsar.relation]
+          .filter(Boolean).join(' · ')}
       >
         {open && <DeadlineBadge daysLeft={days} overdueLabel={t('common.overdue')} daysLabel={t('common.daysLeft')} />}
         <StatusBadge status={dsar.status} />
@@ -105,7 +110,7 @@ export default function DsarDetailPage() {
       <div className="grid gap-4">
         {/* Deadline card */}
         <Card>
-          <CardContent className="flex flex-wrap items-center gap-4 p-4">
+          <CardContent className="flex flex-wrap items-center gap-4">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('common.deadline')} — Art. 12(3)</p>
               <p className="font-display text-xl text-foreground">
@@ -113,7 +118,7 @@ export default function DsarDetailPage() {
               </p>
               {dsar.extended && (
                 <p className="mt-1 max-w-md text-xs text-muted-foreground">
-                  Art. 12(3) +2m — {dsar.extensionReason}
+                  {t('dsar.extendedBy2Months')} — {dsar.extensionReason}
                 </p>
               )}
             </div>
@@ -133,7 +138,11 @@ export default function DsarDetailPage() {
                   onClick={() => setRefuseOpen(true)}>
                   <Ban /> {t('dsar.refuse')}
                 </Button>
-                <Button onClick={complete} disabled={!dsar.identityVerified || !allTasksDone}>
+                <Button
+                  onClick={complete}
+                  disabled={!dsar.identityVerified || !allTasksDone}
+                  title={!dsar.identityVerified || !allTasksDone ? t('dsar.completeBlocked') : undefined}
+                >
                   <CheckCircle2 /> {t('dsar.complete')}
                 </Button>
               </div>
@@ -162,12 +171,15 @@ export default function DsarDetailPage() {
           <CardContent className="grid gap-2">
             <p className="text-xs text-muted-foreground">{t('dsar.identityHint')}</p>
             {dsar.identityVerified ? (
-              <p className="text-sm text-(--status-ok)">✓ {dsar.identityMethod}</p>
+              <p className="flex items-center gap-1.5 text-sm text-(--status-ok)">
+                <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+                {dsar.identityMethod}
+              </p>
             ) : canManage && open ? (
               <div className="grid gap-2">
-                <FormField label={lang === 'pl' ? 'Sposób weryfikacji' : 'Verification method'} required>
+                <FormField label={t('dsar.identityMethod')} required>
                   {(fid) => <Input id={fid} value={identityMethod} onChange={(e) => setIdentityMethod(e.target.value)}
-                    placeholder={lang === 'pl' ? 'np. odpowiedź z adresu e-mail w aktach' : 'e.g. reply from the e-mail address on file'} />}
+                    placeholder={t('dsar.identityMethodPlaceholder')} />}
                 </FormField>
                 <Button size="sm" className="justify-self-start" onClick={verifyIdentity} disabled={!identityMethod.trim()}>
                   {t('common.save')}
@@ -182,17 +194,19 @@ export default function DsarDetailPage() {
         {/* Collection tasks */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">{lang === 'pl' ? 'Zadania zbierania danych' : 'Collection tasks'}</CardTitle>
+            <CardTitle className="text-sm">{t('dsar.tasks')}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-1.5">
             {dsar.tasks.map((task) => (
               <label key={task.id} className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-accent">
-                <input type="checkbox" className="accent-[#c5a059]" checked={task.done}
+                <input type="checkbox" className="accent-primary" checked={task.done}
                   disabled={!canManage || !open} onChange={() => toggleTask(task.id)} />
                 <span className={task.done ? 'text-muted-foreground line-through' : 'text-foreground'}>{task.text}</span>
               </label>
             ))}
-            {dsar.tasks.length === 0 && <p className="text-sm text-muted-foreground">—</p>}
+            {dsar.tasks.length === 0 && (
+              <p className="text-sm text-muted-foreground">{t('dsar.noTasks')}</p>
+            )}
             {canManage && open && (
               <div className="mt-1 flex gap-2">
                 <Input value={newTask} onChange={(e) => setNewTask(e.target.value)}
@@ -212,7 +226,9 @@ export default function DsarDetailPage() {
         open={aiOpen}
         onOpenChange={setAiOpen}
         title={t('ai.draftReply')}
-        filename={`DSAR_reply_draft_${dsar.id}.md`}
+        // Named after the request TYPE, not the record id and not the requester — a file
+        // name ends up in folders and e-mail attachments, so it carries no personal data.
+        filename={documentFilename(t('ai.draftReply'), labelOf(DSAR_TYPES, dsar.type, lang), null, 'md')}
         generate={async () => {
           const action = await dispatch(aiDraftDsarReply({ dsar, lang }));
           if (action.error) throw new Error(action.error.message);
@@ -224,9 +240,9 @@ export default function DsarDetailPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t('dsar.extend')}</DialogTitle>
-            <DialogDescription>{t('dsar.extended')}</DialogDescription>
+            <DialogDescription>{t('dsar.extendBody')}</DialogDescription>
           </DialogHeader>
-          <FormField label={lang === 'pl' ? 'Uzasadnienie (złożoność / liczba wniosków)' : 'Justification (complexity / number of requests)'} required>
+          <FormField label={t('dsar.extendReason')} required>
             {(fid) => <Textarea id={fid} value={extendReason} onChange={(e) => setExtendReason(e.target.value)} />}
           </FormField>
           <DialogFooter>
@@ -242,7 +258,7 @@ export default function DsarDetailPage() {
             <DialogTitle>{t('dsar.refuse')}</DialogTitle>
             <DialogDescription>{t('dsar.refuseHint')}</DialogDescription>
           </DialogHeader>
-          <FormField label={lang === 'pl' ? 'Podstawa odmowy' : 'Legal ground for refusal'} required>
+          <FormField label={t('dsar.refuseReason')} required>
             {(fid) => <Textarea id={fid} value={refuseReason} onChange={(e) => setRefuseReason(e.target.value)} />}
           </FormField>
           <DialogFooter>
