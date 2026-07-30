@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 import { Plus, Check, Minus, ShieldCheck, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ import {
 } from '../../store/slices/usersSlice';
 import { useT } from '../../i18n';
 import { ROLES, ROLE_LABELS, ACTIONS, permissionCan } from '../../lib/permissions';
+import { failureMessage } from '../../lib/apiErrors';
 
 const EMPTY_FORM = { name: '', email: '', permissions: [], role: 'ROLE_USER' };
 const ACCOUNT_ROLE_LABELS = {
@@ -44,17 +46,40 @@ export default function UsersPage() {
   const { items, status, error, refetch } = useSliceData('users', fetchUsers);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [errors, setErrors] = useState({});
   const [userToDelete, setUserToDelete] = useState(null);
   const canDeleteUsers = me?.role === 'ROLE_ADMIN';
 
+  const closeDialog = () => { setOpen(false); setForm(EMPTY_FORM); setErrors({}); };
+
+  // Update a field and clear its error as soon as the user starts fixing it.
+  const setField = (patch) => {
+    setForm((f) => ({ ...f, ...patch }));
+    setErrors((e) => {
+      const next = { ...e };
+      for (const key of Object.keys(patch)) delete next[key];
+      return next;
+    });
+  };
+
   const submit = async () => {
+    // Say what is missing, next to the field. The Save button used to be silently disabled
+    // on two conditions, one of which was a bare "does the address contain an @".
+    const found = {};
+    if (!form.name.trim()) found.name = t('users.nameRequired');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) found.email = t('users.emailRequired');
+    if (Object.keys(found).length > 0) {
+      setErrors(found);
+      return;
+    }
     const action = await dispatch(inviteUser(form));
     if (action.error) {
-      toast.error(action.error.message === 'EMAIL_EXISTS' ? t('common.emailExists') : t('common.notAuthorized'));
+      toast.error(action.error.message === 'EMAIL_EXISTS'
+        ? t('common.emailExists')
+        : failureMessage(action.error, t));
     } else {
       toast.success(t('common.save'));
-      setOpen(false);
-      setForm(EMPTY_FORM);
+      closeDialog();
     }
   };
 
@@ -66,7 +91,7 @@ export default function UsersPage() {
     } else if (action.error.message === 'INVALID_STATE') {
       toast.error(t('users.statusProtected'));
     } else {
-      toast.error(t('common.notAuthorized'));
+      toast.error(failureMessage(action.error, t));
     }
   };
 
@@ -83,7 +108,7 @@ export default function UsersPage() {
     } else if (action.error.message === 'RESOURCE_NOT_FOUND') {
       toast.error(t('users.deleteNotFound'));
     } else {
-      toast.error(t('common.notAuthorized'));
+      toast.error(failureMessage(action.error, t));
     }
   };
 
@@ -103,10 +128,10 @@ export default function UsersPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{lang === 'pl' ? 'Użytkownik' : 'User'}</TableHead>
-              <TableHead>E-mail</TableHead>
-              <TableHead>{lang === 'pl' ? 'Uprawnienia PrivacyPilot' : 'PrivacyPilot permissions'}</TableHead>
-              <TableHead>{lang === 'pl' ? 'Rola konta' : 'Account role'}</TableHead>
+              <TableHead>{t('users.user')}</TableHead>
+              <TableHead>{t('users.businessEmail')}</TableHead>
+              <TableHead>{t('users.permissions')}</TableHead>
+              <TableHead>{t('users.accountRole')}</TableHead>
               <TableHead>{t('common.status')}</TableHead>
               <TableHead className="w-20 text-right">{t('common.actions')}</TableHead>
             </TableRow>
@@ -117,15 +142,13 @@ export default function UsersPage() {
                 <TableCell className="font-medium text-foreground">
                   <div className="flex flex-wrap items-center gap-2">
                     <span>{u.name} {u.id === me.id && <span className="text-xs text-primary">({t('common.you')})</span>}</span>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${
-                      u.hasAccess
-                        ? 'border-(--status-ok)/40 text-(--status-ok)'
-                        : 'border-border text-muted-foreground'
-                    }`}>
-                      {u.hasAccess
-                        ? (lang === 'pl' ? 'Dostęp' : 'Access')
-                        : (lang === 'pl' ? 'Brak dostępu' : 'No access')}
-                    </span>
+                    {/* The shared Badge, not a hand-rolled pill with its own border,
+                        padding and radius — those drifted from every other chip in the app. */}
+                    <Badge variant="outline" className={u.hasAccess
+                      ? 'border-(--status-ok)/40 text-(--status-ok)'
+                      : 'text-muted-foreground'}>
+                      {u.hasAccess ? t('users.hasAccess') : t('users.noAccess')}
+                    </Badge>
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{u.email}</TableCell>
@@ -133,16 +156,13 @@ export default function UsersPage() {
                   {u.privacyPermissions.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {u.privacyPermissions.map((permission) => (
-                        <span key={permission}
-                          className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        <Badge key={permission} variant="outline" className="border-primary/30 bg-primary/10 text-primary">
                           {ROLE_LABELS[permission]?.[lang] ?? permission}
-                        </span>
+                        </Badge>
                       ))}
                     </div>
                   ) : (
-                    <span className="text-xs text-muted-foreground">
-                      {lang === 'pl' ? 'Brak uprawnień PrivacyPilot' : 'No PrivacyPilot permissions'}
-                    </span>
+                    <span className="text-xs text-muted-foreground">{t('users.noPermissions')}</span>
                   )}
                 </TableCell>
                 <TableCell className="text-sm text-foreground">
@@ -154,10 +174,9 @@ export default function UsersPage() {
                     size="xs"
                     disabled={u.id === me.id || me?.role !== 'ROLE_ADMIN' || saveStatus === 'saving'}
                     onClick={() => toggleActive(u)}
+                    title={u.active ? t('users.toggleActive') : t('users.toggleInactive')}
                   >
-                    {u.active
-                      ? (lang === 'pl' ? 'Aktywny' : 'Active')
-                      : (lang === 'pl' ? 'Wyłączony' : 'Disabled')}
+                    {u.active ? t('users.active') : t('users.disabled')}
                   </Button>
                 </TableCell>
                 <TableCell className="text-right">
@@ -184,7 +203,10 @@ export default function UsersPage() {
       <Card className="mt-6">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">{t('users.matrix')}</CardTitle>
-          <p className="text-xs text-muted-foreground">{t('users.matrixHint')}</p>
+          {/* The old caption read "enforced on every route, button, and service call — not
+              just displayed". "Route" and "service call" mean nothing to an administrator,
+              and the reassurance was written for a developer reviewing the code. */}
+          <p className="text-xs text-muted-foreground">{t('users.matrixCaption')}</p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
@@ -199,12 +221,14 @@ export default function UsersPage() {
             <TableBody>
               {actionIds.map((a) => (
                 <TableRow key={a}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{a}</TableCell>
+                  {/* Every row used to print its internal code — VIEW_REGISTER,
+                      MANAGE_DPIA — in a monospace font. */}
+                  <TableCell className="text-xs text-muted-foreground">{t(`perm.${a}`)}</TableCell>
                   {roleIds.map((r) => (
                     <TableCell key={r} className="text-center">
                       {permissionCan(r, a)
-                        ? <Check className="mx-auto size-3.5 text-(--status-ok)" aria-label="allowed" />
-                        : <Minus className="mx-auto size-3.5 text-border" aria-label="denied" />}
+                        ? <Check className="mx-auto size-3.5 text-(--status-ok)" aria-label={t('users.allowed')} />
+                        : <Minus className="mx-auto size-3.5 text-border" aria-label={t('users.denied')} />}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -214,28 +238,28 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : closeDialog())}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>{t('users.invite')}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
-            <FormField label={lang === 'pl' ? 'Imię i nazwisko' : 'Full name'} required>
-              {(fid) => <Input id={fid} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />}
+            <FormField label={t('users.fullName')} required error={errors.name}>
+              {(fid) => <Input id={fid} value={form.name} onChange={(e) => setField({ name: e.target.value })} />}
             </FormField>
-            <FormField label={lang === 'pl' ? 'E-mail służbowy' : 'Business email'} required>
-              {(fid) => <Input id={fid} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />}
+            <FormField label={t('users.businessEmail')} required error={errors.email}>
+              {(fid) => <Input id={fid} type="email" value={form.email} onChange={(e) => setField({ email: e.target.value })} />}
             </FormField>
             <div className="grid gap-1.5">
-              <p className="text-xs">{lang === 'pl' ? 'Dostęp' : 'Access'}</p>
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-(--status-ok)/40 bg-(--status-ok)/10 px-2.5 py-1 text-xs font-medium text-(--status-ok)">
+              <p className="text-xs">{t('users.grantsAccessTo')}</p>
+              <Badge variant="outline" className="w-fit gap-1.5 border-(--status-ok)/40 bg-(--status-ok)/10 text-(--status-ok)">
                 <ShieldCheck className="size-3.5" aria-hidden /> PrivacyPilot
-              </span>
+              </Badge>
             </div>
             <div className="grid gap-1.5">
+              {/* Called "permissions", not "role": a person can hold several at once, which
+                  is why these are checkboxes — and it matches the table column above. */}
               <p className="text-xs">
-                {lang === 'pl' ? 'Rola PrivacyPilot' : 'PrivacyPilot role'}{' '}
-                <span className="text-muted-foreground">
-                  ({lang === 'pl' ? 'Opcjonalnie' : 'Optional'})
-                </span>
+                {t('users.permissions')}{' '}
+                <span className="text-muted-foreground">({t('users.optional')})</span>
               </p>
               <div className="grid gap-2 rounded-lg border p-3">
                 {roleIds.map((role) => (
@@ -244,8 +268,7 @@ export default function UsersPage() {
                       type="checkbox"
                       className="accent-primary"
                       checked={form.permissions.includes(role)}
-                      onChange={(e) => setForm({
-                        ...form,
+                      onChange={(e) => setField({
                         permissions: e.target.checked
                           ? [...form.permissions, role]
                           : form.permissions.filter((permission) => permission !== role),
@@ -256,18 +279,19 @@ export default function UsersPage() {
                 ))}
               </div>
             </div>
-            <FormField label={`${lang === 'pl' ? 'Rola konta' : 'Account role'} (${lang === 'pl' ? 'Opcjonalnie' : 'Optional'})`}>
+            <FormField label={`${t('users.accountRole')} (${t('users.optional')})`}>
               {(fid) => (
-                <Select id={fid} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                  <option value="ROLE_USER">{lang === 'pl' ? 'Użytkownik' : 'User'}</option>
-                  <option value="ROLE_ADMIN">{lang === 'pl' ? 'Administrator' : 'Admin'}</option>
+                <Select id={fid} value={form.role} onChange={(e) => setField({ role: e.target.value })}>
+                  <option value="ROLE_USER">{ACCOUNT_ROLE_LABELS.ROLE_USER[lang]}</option>
+                  <option value="ROLE_ADMIN">{ACCOUNT_ROLE_LABELS.ROLE_ADMIN[lang]}</option>
                 </Select>
               )}
             </FormField>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={submit} disabled={!form.name.trim() || !form.email.includes('@')}>{t('common.save')}</Button>
+            <Button variant="outline" onClick={closeDialog}>{t('common.cancel')}</Button>
+            {/* Deliberately NOT disabled — pressing Save explains what is missing. */}
+            <Button onClick={submit}>{t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
