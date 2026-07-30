@@ -6,6 +6,7 @@ import SsoCallback from "../components/SsoCallback";
 
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute";
+import ModuleAccessGuard from "./ModuleAccessGuard";
 import RequireCapability from "./RequireCapability";
 import HomeRoute from "./HomeRoute";
 import { CAPABILITIES } from "../config/capabilities";
@@ -32,6 +33,15 @@ const router = createBrowserRouter([
   {
     element: <ProtectedRoute />,
     children: [
+      {
+        // ModuleAccessGuard sits between "is logged in" (ProtectedRoute) and the
+        // real app (Layout). It blocks users whose account has been suspended,
+        // whose tenant has no WorkPulse licence, whose subscription plan has
+        // expired, or who were never granted WorkPulse. Because it wraps the
+        // Layout, there is no page — not even a mistyped URL — that can get past
+        // it while one of those is true.
+        element: <ModuleAccessGuard />,
+        children: [
       {
         path: "/",
         element: <Layout />,
@@ -96,6 +106,8 @@ const router = createBrowserRouter([
             children: [{ path: "audit-logs", element: <AuditReport /> }],
           },
           { path: "*", element: <NotFound /> },
+        ],
+      },
         ],
       },
     ],
