@@ -2,14 +2,54 @@ import { useEffect, useState, useCallback } from "react";
 import * as api from "../api/workpulseApi";
 import { PageHeader, Card, Spinner, ErrorBanner, Badge } from "../components/ui";
 import { formatDuration, formatDate } from "../utils/format";
+import { useCapabilities } from "../hooks/useCapabilities";
 
-// Settlement reconciliation report (admin/HR).
+// The settlement period (okres rozliczeniowy) — how many hours were really worked
+// against the two limits Polish law sets:
+//   - the average week must not go over 48h including overtime (Kodeks pracy art. 131)
+//   - overtime must not go over 150h a year per person unless the workplace rules
+//     say otherwise (art. 151 §3)
 //
-// Shows, for the current settlement period, each employee's average weekly hours
-// (checked against the 48h cap — art. 131) and their overtime so far this year
-// (checked against the 150h cap — art. 151 §3). From each row an admin can open
-// the "Protections" editor to set special-group flags (art. 178 / 203).
+// ─────────────────────────────────────────────────────────────────────────────────
+// THIS PAGE SHOWS TWO COMPLETELY DIFFERENT THINGS
+// ─────────────────────────────────────────────────────────────────────────────────
+// Which one you get depends on what you are allowed to read:
+//
+//   SETTLEMENT_READ_ALL  -> the whole workforce, one row per employee.
+//                           Admins, HR and auditors have this.
+//   SETTLEMENT_SELF_READ -> only your own balance. A normal worker has this, and
+//                           nothing more, so they can never see a colleague's hours.
+//
+// Before this split the page always asked the server for the WHOLE-TENANT report,
+// so a normal employee opening it got nothing but a "permission denied" error —
+// even though their own balance is information they have every right to see. Each
+// view now calls the endpoint that matches the permission the person actually holds.
 export default function Settlement() {
+  const { can, CAPABILITIES } = useCapabilities();
+
+  // May this person see EVERYBODY's balance, or only their own?
+  const canReadAll = can(CAPABILITIES.SETTLEMENT_READ_ALL);
+
+  // The protected-status flags (pregnancy, young worker, parent of a small child)
+  // are special-category data under GDPR art. 9, so they stay with HR and admins.
+  // An AUDITOR deliberately does NOT get them: an auditor's job is to confirm the
+  // LIMITS were respected, which the hours in this table already show. They do not
+  // need to know who is pregnant (GDPR art. 5(1)(c), data minimisation).
+  const canReadProtections = can(CAPABILITIES.PROFILE_READ);
+  const canWriteProtections = can(CAPABILITIES.PROFILE_WRITE);
+
+  return canReadAll ? (
+    <TenantSettlement
+      canReadProtections={canReadProtections}
+      canWriteProtections={canWriteProtections}
+    />
+  ) : (
+    <MySettlement />
+  );
+}
+
+// ── View 1: the whole workforce (admins, HR, auditors) ────────────────────────
+function TenantSettlement({ canReadProtections, canWriteProtections }) {
   const [rows, setRows] = useState([]);
   const [period, setPeriod] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -80,12 +120,21 @@ export default function Settlement() {
                   <th className="text-left font-medium px-4 py-3">Worked (period)</th>
                   <th className="text-left font-medium px-4 py-3">Avg weekly (≤48h)</th>
                   <th className="text-left font-medium px-4 py-3">Overtime (year, ≤150h)</th>
-                  <th className="text-right font-medium px-4 py-3">Protections</th>
+                  {/* The "Protections" column holds health-related data, so it is
+                      not even rendered for someone who may not read it. */}
+                  {canReadProtections && (
+                    <th className="text-right font-medium px-4 py-3">Protections</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r) => (
-                  <SettlementRow key={r.userId} row={r} onEdit={() => setEditing(r)} />
+                  <SettlementRow
+                    key={r.userId}
+                    row={r}
+                    showProtections={canReadProtections}
+                    onEdit={() => setEditing(r)}
+                  />
                 ))}
               </tbody>
             </table>
@@ -93,9 +142,12 @@ export default function Settlement() {
         </Card>
       )}
 
-      {editing && (
+      {/* Checked again here, not only on the button, so the health data can never
+          be fetched by someone without PROFILE_READ. */}
+      {editing && canReadProtections && (
         <ProtectionsModal
           row={editing}
+          canWrite={canWriteProtections}
           onClose={() => setEditing(null)}
           onSaved={() => setEditing(null)}
         />
@@ -104,8 +156,123 @@ export default function Settlement() {
   );
 }
 
+// ── View 2: just my own balance (a normal worker) ─────────────────────────────
+//
+// The same two legal limits, but only for the person looking at the screen. There
+// is no table and no other name anywhere on it.
+function MySettlement() {
+  const [settlement, setSettlement] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setSettlement(await api.getMySettlement());
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) return <Spinner label="Working out your hours…" />;
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+      <PageHeader
+        title="My Settlement Period"
+        subtitle="Okres rozliczeniowy — your average week (art. 131) and your overtime this year (art. 151 §3)"
+      />
+      <ErrorBanner message={error} />
+
+      {!settlement ? (
+        <Card className="p-10 text-center text-slate-500">
+          No time entries in this period yet.
+        </Card>
+      ) : (
+        <>
+          {settlement.periodStart && (
+            <p className="text-sm text-slate-500 mb-4">
+              Current period:{" "}
+              <span className="font-medium text-slate-700">{formatDate(settlement.periodStart)}</span> →{" "}
+              <span className="font-medium text-slate-700">{formatDate(settlement.periodEnd)}</span>
+            </p>
+          )}
+
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-sm font-semibold text-slate-700">Where you stand</p>
+              <CapBadge s={settlement} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Worked this period</p>
+                <p className="text-2xl font-extrabold text-slate-800 mt-1">
+                  {formatDuration(settlement.workedMinutes)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Average week</p>
+                <p
+                  className={`text-2xl font-extrabold mt-1 ${
+                    settlement.exceedsWeeklyAverageCap ? "text-red-600" : "text-slate-800"
+                  }`}
+                >
+                  {(settlement.averageWeeklyMinutes / 60).toFixed(1)}h
+                  <span className="text-xs font-medium text-slate-400">
+                    {" "}
+                    / {(settlement.maxAverageWeeklyMinutes / 60).toFixed(0)}h cap
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Overtime this year</p>
+                <p
+                  className={`text-2xl font-extrabold mt-1 ${
+                    settlement.exceedsAnnualOvertimeLimit
+                      ? "text-red-600"
+                      : settlement.approachingAnnualOvertimeLimit
+                      ? "text-amber-600"
+                      : "text-slate-800"
+                  }`}
+                >
+                  {(settlement.annualOvertimeMinutes / 60).toFixed(1)}h
+                  <span className="text-xs font-medium text-slate-400">
+                    {" "}
+                    / {(settlement.annualOvertimeLimitMinutes / 60).toFixed(0)}h limit
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500 leading-relaxed">
+              Your average working week may not go over 48 hours including overtime
+              (art. 131), and your overtime may not go over the yearly limit
+              (art. 151 §3). If either figure is red, speak to HR.
+            </p>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+// One short "are you inside the limits?" badge, used by the personal view.
+function CapBadge({ s }) {
+  if (s.exceedsWeeklyAverageCap || s.exceedsAnnualOvertimeLimit) {
+    return <Badge cls="bg-red-50 text-red-700 border-red-200">Over a legal limit</Badge>;
+  }
+  if (s.approachingAnnualOvertimeLimit) {
+    return <Badge cls="bg-amber-50 text-amber-700 border-amber-200">Near yearly limit</Badge>;
+  }
+  return <Badge cls="bg-emerald-50 text-emerald-700 border-emerald-200">Within limits</Badge>;
+}
+
 // One row of the reconciliation table, with cap badges.
-function SettlementRow({ row, onEdit }) {
+function SettlementRow({ row, showProtections, onEdit }) {
   const avgHours = (row.averageWeeklyMinutes / 60).toFixed(1);
   const annual = formatDuration(row.annualOvertimeMinutes);
 
@@ -131,20 +298,29 @@ function SettlementRow({ row, onEdit }) {
           <span className="text-slate-700">{annual}</span>
         )}
       </td>
-      <td className="px-4 py-3 text-right">
-        <button
-          onClick={onEdit}
-          className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
-        >
-          Edit
-        </button>
-      </td>
+      {showProtections && (
+        <td className="px-4 py-3 text-right">
+          <button
+            onClick={onEdit}
+            className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
+          >
+            Open
+          </button>
+        </td>
+      )}
     </tr>
   );
 }
 
 // Modal to view/set an employee's special-group protection flags (art. 178/203).
-function ProtectionsModal({ row, onClose, onSaved }) {
+//
+// `canWrite` decides whether this is a form or a read-only card. Reading these
+// flags and changing them are separate permissions (PROFILE_READ / PROFILE_WRITE)
+// because they are health-related, special-category data under GDPR art. 9 — and
+// because setting a flag changes what the law then allows for that person: a
+// pregnant employee may not work overtime or nights at all (art. 178 §1), and the
+// same is true for a young worker (art. 203).
+function ProtectionsModal({ row, canWrite, onClose, onSaved }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -175,6 +351,10 @@ function ProtectionsModal({ row, onClose, onSaved }) {
   const set = (key, value) => setProfile((p) => ({ ...p, [key]: value }));
 
   const save = async () => {
+    // Guard as well as hiding the button, so the request can never be sent by
+    // someone who may only read these flags.
+    if (!canWrite) return;
+
     setSaving(true);
     setError("");
     try {
@@ -199,6 +379,8 @@ function ProtectionsModal({ row, onClose, onSaved }) {
         type="checkbox"
         checked={!!profile?.[key]}
         onChange={(e) => set(key, e.target.checked)}
+        // A reader sees the real values but cannot change them.
+        disabled={!canWrite}
         className="w-4 h-4 mt-0.5 accent-indigo-600"
       />
       <span>
@@ -227,6 +409,12 @@ function ProtectionsModal({ row, onClose, onSaved }) {
           <Spinner label="Loading profile…" />
         ) : (
           <>
+            {!canWrite && (
+              <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mb-3">
+                View only — you can see these protections but not change them.
+              </p>
+            )}
+
             <div className="divide-y divide-slate-100">
               {check("isPregnant", "Pregnant employee", "No overtime or night work (art. 178 §1)")}
               {check("isYoungWorker", "Young worker (młodociany)", "No overtime or night work (art. 203)")}
@@ -248,15 +436,18 @@ function ProtectionsModal({ row, onClose, onSaved }) {
                 onClick={onClose}
                 className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50"
               >
-                Cancel
+                {/* A reader has nothing to cancel — for them this just shuts the box. */}
+                {canWrite ? "Cancel" : "Close"}
               </button>
-              <button
-                onClick={save}
-                disabled={saving}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-sm font-semibold shadow hover:from-indigo-400 hover:to-blue-400 disabled:opacity-50"
-              >
-                {saving ? "Saving…" : "Save"}
-              </button>
+              {canWrite && (
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white text-sm font-semibold shadow hover:from-indigo-400 hover:to-blue-400 disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save"}
+                </button>
+              )}
             </div>
           </>
         )}

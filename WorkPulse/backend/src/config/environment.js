@@ -37,7 +37,35 @@ const config = {
   // logged-in user?" via GET /api/auth/me and uses the tenantId it returns as
   // the single source of truth for tenant isolation.
   regulaOne: {
-    baseUrl: process.env.REGULAONE_API_URL || 'http://localhost:8080',
+    // Two spellings of this variable exist in older .env files. We accept BOTH so
+    // an existing deployment keeps working. This address matters a lot: the
+    // user's permissions are read from RegulaOne, so if it is wrong we cannot
+    // check permissions and every request is refused.
+    baseUrl:
+      process.env.REGULAONE_API_URL ||
+      process.env.REGULA_ONE_API_URL ||
+      'http://localhost:8080',
+  },
+
+  // WorkPulse access rules.
+  //
+  // The central RegulaOne login tells us what a user may do by returning a
+  // "permissions" list (see config/permissions.js). Only the roles named here are
+  // recognised; what each one may actually DO is decided by the capability table
+  // in that file.
+  //
+  // Kept as configuration so a role can be rolled out or renamed without a code
+  // change. Comma-separated, for example:
+  //   WORKPULSE_ALLOWED_PERMISSIONS=WORKPULSE_ADMIN,WORKPULSE_EMPLOYEE
+  // Leave it unset to recognise every role WorkPulse has a policy for.
+  workpulse: {
+    allowedPermissions: (
+      process.env.WORKPULSE_ALLOWED_PERMISSIONS ||
+      'WORKPULSE_ADMIN,WORKPULSE_HR_ADMIN,WORKPULSE_AUDITOR,WORKPULSE_EMPLOYEE'
+    )
+      .split(',')
+      .map((permission) => permission.trim())
+      .filter(Boolean),
   },
 
   cors: {

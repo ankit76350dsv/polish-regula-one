@@ -8,6 +8,7 @@ import {
   breakStatusMeta,
   entryStatusMeta,
 } from "../utils/format";
+import { useCapabilities } from "../hooks/useCapabilities";
 
 // Convert a Date to the value a <input type="datetime-local"> expects.
 function toLocalInput(value) {
@@ -17,9 +18,28 @@ function toLocalInput(value) {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
 }
 
-// Admin/HR view: every time entry in the tenant, with overtime approval and
-// manual correction (a documented reason is required for any edit).
+// Every time entry in the tenant.
+//
+// Three different people open this page and must see three different things:
+//   - an ADMIN or HR ADMIN can approve overtime and correct a wrong entry
+//   - an AUDITOR can read every row and must be able to change NOTHING. Working
+//     time records are the employer's legal evidence (Kodeks pracy art. 149); an
+//     auditor who could edit them could create the very result they sign off.
+// So the buttons below are tied to the ACTION they perform, not to a job title.
 export default function TimeRecords() {
+  // Reading the page (TIME_READ_ALL) is already checked by the router. Here we ask
+  // the two narrower questions: may this person DECIDE overtime, and may they
+  // CHANGE a stored record? They are separate permissions because they are
+  // separate legal acts — approving overtime commits the employer (art. 151 §3),
+  // while a correction rewrites evidence and always needs a written reason.
+  const { can, CAPABILITIES } = useCapabilities();
+  const canDecideOvertime = can(CAPABILITIES.OVERTIME_DECIDE);
+  const canCorrect = can(CAPABILITIES.TIME_CORRECT);
+
+  // With neither permission the whole "Actions" column is empty, so we drop the
+  // column instead of showing a bare strip of white space.
+  const showActions = canDecideOvertime || canCorrect;
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -57,7 +77,16 @@ export default function TimeRecords() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-      <PageHeader title="Time Records" subtitle="All working-time entries · overtime approval · corrections">
+      {/* The subtitle follows the permissions too, so a read-only viewer is not
+          promised buttons they will never see. */}
+      <PageHeader
+        title="Time Records"
+        subtitle={
+          showActions
+            ? "All working-time entries · overtime approval · corrections"
+            : "All working-time entries · read-only view"
+        }
+      >
         <select
           value={filters.status}
           onChange={(e) => setFilters({ ...filters, status: e.target.value })}
@@ -85,13 +114,14 @@ export default function TimeRecords() {
                 <th className="text-left px-4 py-3">Break</th>
                 <th className="text-left px-4 py-3">Overtime</th>
                 <th className="text-left px-4 py-3">Status</th>
-                <th className="text-left px-4 py-3">Actions</th>
+                {showActions && <th className="text-left px-4 py-3">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {entries.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">No records.</td>
+                  {/* 7 fixed columns, plus "Actions" only when it is shown. */}
+                  <td colSpan={showActions ? 8 : 7} className="px-4 py-8 text-center text-slate-400">No records.</td>
                 </tr>
               )}
               {entries.map((e) => {
@@ -123,32 +153,41 @@ export default function TimeRecords() {
                       )}
                     </td>
                     <td className="px-4 py-3"><Badge cls={sm.cls}>{sm.label}</Badge></td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1.5">
-                        {e.overtimeMinutes > 0 && e.approvalStatus === "PENDING" && (
-                          <div className="flex gap-1.5">
+                    {showActions && (
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1.5">
+                          {/* Approve / Reject overtime — only for someone who may
+                              decide it. Still only shown while a decision is
+                              actually waiting. */}
+                          {canDecideOvertime && e.overtimeMinutes > 0 && e.approvalStatus === "PENDING" && (
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => decideOvertime(e._id, "APPROVE")}
+                                className="px-2 py-1 rounded-lg bg-emerald-500 text-white text-xs hover:bg-emerald-400"
+                              >
+                                Approve OT
+                              </button>
+                              <button
+                                onClick={() => decideOvertime(e._id, "REJECT")}
+                                className="px-2 py-1 rounded-lg bg-red-500 text-white text-xs hover:bg-red-400"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                          {/* Correcting a record rewrites legal evidence, so it is
+                              its own permission. */}
+                          {canCorrect && (
                             <button
-                              onClick={() => decideOvertime(e._id, "APPROVE")}
-                              className="px-2 py-1 rounded-lg bg-emerald-500 text-white text-xs hover:bg-emerald-400"
+                              onClick={() => setEditing(e)}
+                              className="px-2 py-1 rounded-lg border border-slate-300 text-slate-600 text-xs hover:bg-slate-50"
                             >
-                              Approve OT
+                              Correct
                             </button>
-                            <button
-                              onClick={() => decideOvertime(e._id, "REJECT")}
-                              className="px-2 py-1 rounded-lg bg-red-500 text-white text-xs hover:bg-red-400"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        )}
-                        <button
-                          onClick={() => setEditing(e)}
-                          className="px-2 py-1 rounded-lg border border-slate-300 text-slate-600 text-xs hover:bg-slate-50"
-                        >
-                          Correct
-                        </button>
-                      </div>
-                    </td>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -157,7 +196,10 @@ export default function TimeRecords() {
         </div>
       </Card>
 
-      {editing && (
+      {/* `canCorrect` is checked again here, not only on the button. If a later
+          change ever sets `editing` from somewhere else, the form still cannot
+          open for someone who may not correct records. */}
+      {editing && canCorrect && (
         <CorrectionModal
           entry={editing}
           onClose={() => setEditing(null)}

@@ -1,18 +1,30 @@
 const express = require('express');
 const { body } = require('express-validator');
 const policyController = require('../controllers/policyController');
-const { isAuthenticatedUser, authorizeRoles } = require('../middleware/authMiddleware');
+const {
+  isAuthenticatedUser,
+  authorizePermissions,
+  authorizeCapability,
+} = require('../middleware/authMiddleware');
+const { CAPABILITIES } = require('../config/permissions');
 
 const router = express.Router();
 router.use(isAuthenticatedUser);
+router.use(authorizePermissions());
 
-// Any authenticated user can READ the policy (the Clock screen shows the norm).
-router.get('/', policyController.getPolicy);
+// Everyone may READ the policy: the Clock screen has to show people the daily and
+// weekly norm that applies to them, so every role holds POLICY_READ.
+router.get('/', authorizeCapability(CAPABILITIES.POLICY_READ), policyController.getPolicy);
 
-// Only admins may CHANGE the working-time policy.
+// Only an ADMIN may CHANGE it — not even HR.
+//
+// The working-time system and settlement period are set in the workplace rules or
+// the collective agreement (Kodeks pracy art. 150), so switching a tenant from a
+// standard to an equivalent system is an employer-level decision that changes how
+// every future hour is judged. That is why POLICY_WRITE sits with the admin alone.
 router.put(
   '/',
-  authorizeRoles('ROLE_ADMIN', 'ROLE_SUPER_ADMIN'),
+  authorizeCapability(CAPABILITIES.POLICY_WRITE),
   [
     body('workingTimeSystem')
       .optional()

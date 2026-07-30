@@ -1,17 +1,26 @@
 const express = require('express');
 const settlementController = require('../controllers/settlementController');
-const { isAuthenticatedUser, authorizeRoles } = require('../middleware/authMiddleware');
+const {
+  isAuthenticatedUser,
+  authorizePermissions,
+  authorizeCapability,
+} = require('../middleware/authMiddleware');
+const { CAPABILITIES } = require('../config/permissions');
 
 const router = express.Router();
 router.use(isAuthenticatedUser);
+router.use(authorizePermissions());
 
-// An employee may see their OWN settlement reconciliation.
-router.get('/me', settlementController.getMySettlement);
+// A person may always see their OWN settlement-period balance — how many hours
+// they owe or are owed at the end of the period. That is their own data.
+router.get('/me', authorizeCapability(CAPABILITIES.SETTLEMENT_SELF_READ), settlementController.getMySettlement);
 
-// Only admins/HR may see the whole tenant's reconciliation report.
+// The whole-tenant reconciliation report shows every employee's balance, so it
+// needs the wider SETTLEMENT_READ_ALL. Auditors have it too, since balancing the
+// settlement period is part of proving working-time compliance.
 router.get(
   '/',
-  authorizeRoles('ROLE_ADMIN', 'ROLE_SUPER_ADMIN'),
+  authorizeCapability(CAPABILITIES.SETTLEMENT_READ_ALL),
   settlementController.getTenantSettlement
 );
 

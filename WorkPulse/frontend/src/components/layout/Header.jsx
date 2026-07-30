@@ -3,17 +3,26 @@ import { NavLink, Link } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useAuth } from "../../context/AuthContext";
 import NotificationBell from "../NotificationBell";
+import { useCapabilities } from "../../hooks/useCapabilities";
+import { CAPABILITIES } from "../../config/capabilities";
 
-// Navigation items. `adminOnly` items are shown only to admins/super admins.
+// Navigation items. Each one names the ONE thing a person must be allowed to do
+// before the link is shown.
+//
+// This replaced an `adminOnly` flag. A flag can only say "admin or not", which
+// cannot express the real rules: an AUDITOR must see Time Records, the Dashboard
+// and Audit, but must NOT see the Clock screen; an HR ADMIN sees everything except
+// Audit and Policy. Naming the capability lets each item follow the real policy in
+// config/capabilities.js.
 const NAV_ITEMS = [
-  { label: "Clock", path: "/" },
-  { label: "My Timesheet", path: "/my-timesheet" },
-  { label: "Absences", path: "/absences" },
-  { label: "Time Records", path: "/records", adminOnly: true },
-  { label: "Dashboard", path: "/dashboard", adminOnly: true },
-  { label: "Settlement", path: "/settlement", adminOnly: true },
-  { label: "Policy", path: "/policy", adminOnly: true },
-  { label: "Audit", path: "/audit-logs", adminOnly: true },
+  { label: "Clock",        path: "/",            capability: CAPABILITIES.CLOCK_SELF },
+  { label: "My Timesheet", path: "/my-timesheet", capability: CAPABILITIES.TIME_SELF_READ },
+  { label: "Absences",     path: "/absences",     capability: CAPABILITIES.ABSENCE_SELF, alsoIf: CAPABILITIES.ABSENCE_READ_ALL },
+  { label: "Time Records", path: "/records",      capability: CAPABILITIES.TIME_READ_ALL },
+  { label: "Dashboard",    path: "/dashboard",    capability: CAPABILITIES.DASHBOARD_READ },
+  { label: "Settlement",   path: "/settlement",   capability: CAPABILITIES.SETTLEMENT_SELF_READ, alsoIf: CAPABILITIES.SETTLEMENT_READ_ALL },
+  { label: "Policy",       path: "/policy",       capability: CAPABILITIES.POLICY_READ },
+  { label: "Audit",        path: "/audit-logs",   capability: CAPABILITIES.AUDIT_READ },
 ];
 
 export default function Header() {
@@ -21,10 +30,17 @@ export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isAuthenticated, login, logout } = useAuth();
 
-  // Read the user from Redux to decide which nav items to show.
+  // The signed-in person, used to show their name in the corner.
   const user = useSelector((state) => state.auth.user);
-  const isAdmin = ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"].includes(user?.role);
-  const items = NAV_ITEMS.filter((i) => !i.adminOnly || isAdmin);
+
+  // What this user is allowed to do decides which menu items appear.
+  const { can } = useCapabilities();
+
+  // An item shows when the user holds its capability, OR the second one listed in
+  // `alsoIf`. That covers the two screens that serve two audiences: Absences works
+  // for a worker asking for leave AND for HR reviewing requests, and Settlement
+  // shows either your own balance or the whole tenant's report.
+  const items = NAV_ITEMS.filter((i) => can(i.capability) || (i.alsoIf && can(i.alsoIf)));
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);

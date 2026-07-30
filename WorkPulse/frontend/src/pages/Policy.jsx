@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import * as api from "../api/workpulseApi";
 import { PageHeader, Card, Spinner, ErrorBanner } from "../components/ui";
+import { useCapabilities } from "../hooks/useCapabilities";
 
 const SYSTEMS = [
   ["STANDARD", "Standard (podstawowy) — 8h/day, 40h/week"],
@@ -12,8 +13,23 @@ const SYSTEMS = [
   ["INDIVIDUAL", "Individual schedule (indywidualny)"],
 ];
 
-// The tenant's Working Time Policy. Read by everyone, editable by admins.
+// The tenant's Working Time Policy (regulamin czasu pracy).
+//
+// EVERYONE may READ this page — a worker has to be able to see the daily norm,
+// the break rule and the monitoring notice that apply to them. Only an ADMIN may
+// CHANGE it, because the working-time system and the settlement period belong in
+// the workplace rules or the collective agreement (Kodeks pracy art. 150), not in
+// one manager's hands. That is why not even HR gets POLICY_WRITE.
+//
+// So the page has two modes: a normal form for an admin, and the same page
+// locked for everybody else.
 export default function Policy() {
+  // One question decides the whole mode of this page: may this person change the
+  // policy? The backend refuses PUT /api/policy without POLICY_WRITE anyway — this
+  // check just means a reader never fills in a form that would be rejected.
+  const { can, CAPABILITIES } = useCapabilities();
+  const canEdit = can(CAPABILITIES.POLICY_WRITE);
+
   const [policy, setPolicy] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,6 +51,10 @@ export default function Policy() {
   const set = (key, value) => setPolicy((p) => ({ ...p, [key]: value }));
 
   const save = async () => {
+    // Second check, on top of hiding the button. If a future change ever calls
+    // save() from somewhere else, a reader still cannot send the request.
+    if (!canEdit) return;
+
     setSaving(true);
     setError("");
     setMessage("");
@@ -87,7 +107,14 @@ export default function Policy() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-      <PageHeader title="Working Time Policy" subtitle="Regulamin czasu pracy — the rules the engine applies" />
+      <PageHeader
+        title="Working Time Policy"
+        subtitle={
+          canEdit
+            ? "Regulamin czasu pracy — the rules the engine applies"
+            : "Regulamin czasu pracy — the rules that apply to you"
+        }
+      />
       <ErrorBanner message={error} />
       {message && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl px-4 py-3 mb-4">
@@ -95,7 +122,24 @@ export default function Policy() {
         </div>
       )}
 
-      <Card className="p-6 space-y-5">
+      {/* Tell a reader plainly why the fields are greyed out, so a locked form does
+          not look like a broken page. */}
+      {!canEdit && (
+        <div className="bg-slate-50 border border-slate-200 text-slate-600 text-sm rounded-xl px-4 py-3 mb-4">
+          <span className="font-semibold text-slate-700">View only.</span> These are the
+          working-time rules your employer has set. Changing them is an employer-level
+          decision (Kodeks pracy art. 150), so only an administrator can edit this page.
+        </div>
+      )}
+
+      <Card className="p-6">
+        {/* One `disabled` fieldset locks EVERY field inside it — inputs, selects,
+            checkboxes and the geofence buttons — instead of us remembering to add
+            the same flag to twenty separate controls. Forgetting one of those is
+            exactly how a read-only screen quietly becomes editable.
+            `min-w-0` is needed because a fieldset otherwise refuses to shrink and
+            would break the grid layout on small screens. */}
+        <fieldset disabled={!canEdit} className="space-y-5 min-w-0">
         <label className="block text-sm">
           <span className="text-slate-500">Working-time system</span>
           <select value={policy.workingTimeSystem} onChange={(e) => set("workingTimeSystem", e.target.value)} className={field}>
@@ -226,16 +270,20 @@ export default function Policy() {
           working time reaches 6h, +15 min over 9h, +15 min over 16h. Overtime is time worked beyond the daily norm
           above, not simply a long shift.
         </div>
+        </fieldset>
 
-        <div className="flex justify-end">
-          <button
-            onClick={save}
-            disabled={saving}
-            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white font-semibold shadow hover:from-indigo-400 hover:to-blue-400 active:scale-95 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save policy"}
-          </button>
-        </div>
+        {/* No Save button at all for a reader — there is nothing for them to save. */}
+        {canEdit && (
+          <div className="flex justify-end mt-5">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white font-semibold shadow hover:from-indigo-400 hover:to-blue-400 active:scale-95 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save policy"}
+            </button>
+          </div>
+        )}
       </Card>
     </div>
   );
