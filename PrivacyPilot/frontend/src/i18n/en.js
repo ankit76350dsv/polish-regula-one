@@ -1,7 +1,6 @@
 // English dictionary. Keys are grouped by feature; keep flat dot-paths.
 export default {
   'app.name': 'PrivacyPilot',
-  'app.tagline': 'GDPR / RODO Compliance Register',
   'app.disclaimer': 'Documents are drafts compiled from register data and require review by your DPO or legal counsel before publication.',
 
   // Public landing page
@@ -208,7 +207,8 @@ export default {
   'dash.byBasis': 'Lawful basis distribution',
   'dash.attention': 'Needs attention',
   'dash.recentAudit': 'Recent audit trail',
-  'dash.noAttention': 'No open compliance issues. Well done.',
+  'dash.noAttention': 'No items require attention.',
+  'dash.noRecentAudit': 'No recorded activity yet.',
 
   // ROPA
   'ropa.title': 'Register of Processing Activities',

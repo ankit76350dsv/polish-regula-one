@@ -1,7 +1,6 @@
 // Polski słownik — język domyślny (rynek docelowy: Polska).
 export default {
   'app.name': 'PrivacyPilot',
-  'app.tagline': 'Rejestr zgodności RODO',
   'app.disclaimer': 'Dokumenty są wersjami roboczymi utworzonymi z danych rejestru i wymagają weryfikacji przez IOD lub prawnika przed publikacją.',
 
   // Publiczna strona startowa
@@ -208,7 +207,8 @@ export default {
   'dash.byBasis': 'Podstawy prawne przetwarzania',
   'dash.attention': 'Wymaga uwagi',
   'dash.recentAudit': 'Ostatnie zdarzenia',
-  'dash.noAttention': 'Brak otwartych problemów zgodności. Dobra robota.',
+  'dash.noAttention': 'Brak pozycji wymagających uwagi.',
+  'dash.noRecentAudit': 'Brak zarejestrowanych zdarzeń.',
 
   // Rejestr
   'ropa.title': 'Rejestr Czynności Przetwarzania',

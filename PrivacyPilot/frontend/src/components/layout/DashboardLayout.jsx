@@ -73,9 +73,11 @@ export default function DashboardLayout() {
             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <ShieldCheck className="size-5" />
             </div>
+            {/* Product name only. The descriptive tagline that used to sit under it was
+                decoration: the topbar already reads "RegulaOne / PrivacyPilot", so the name
+                appeared twice on screen, and the navigation makes the purpose obvious. */}
             <div className="grid leading-tight group-data-[collapsible=icon]:hidden">
               <span className="font-display text-sm font-semibold text-foreground">{t('app.name')}</span>
-              <span className="text-[11px] text-muted-foreground">{t('app.tagline')}</span>
             </div>
           </div>
         </SidebarHeader>
@@ -157,11 +159,11 @@ export default function DashboardLayout() {
           </div>
         </header>
 
-        {/* Honest-drafts disclaimer — every generated document needs legal review. */}
-        <div className="border-b border-primary/20 bg-accent px-4 py-1.5 text-[11px] text-accent-foreground">
-          {t('app.disclaimer')}
-        </div>
-
+        {/* The "documents are drafts, get them reviewed" note used to live HERE, on every
+            single screen — including ones that produce no documents at all, like the
+            dashboard. A warning shown where it does not apply just teaches people to ignore
+            it. It now appears only on the screens that actually generate a document for use
+            outside the app (see components/common/DraftsDisclaimer). */}
         <main className="flex-1 p-4 md:p-6">
           <Outlet />
         </main>

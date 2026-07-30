@@ -23,6 +23,7 @@ import {
 } from '../../store/slices/breachesSlice';
 import { fetchSettings } from '../../store/slices/settingsSlice';
 import { recordExport } from '../../store/slices/exportsSlice';
+import DraftsDisclaimer from '../../components/common/DraftsDisclaimer';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { UODO_WINDOW_MS } from '../../services/breachService';
@@ -365,6 +366,9 @@ export default function BreachDetailPage() {
                 : 'Ready to submit. Copy it into the form on uodo.gov.pl, or download it for your file.'}
             </DialogDescription>
           </DialogHeader>
+          {/* This document goes to the supervisory authority, so the "have it reviewed
+              first" note belongs here — at the point it is about to leave the app. */}
+          <DraftsDisclaimer />
           {!settings.data && (
             <p className="text-xs text-(--status-warn)">
               {lang === 'pl'

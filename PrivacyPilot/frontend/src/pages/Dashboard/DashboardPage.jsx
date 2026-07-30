@@ -155,6 +155,11 @@ export default function DashboardPage() {
         <Card>
           <CardHeader><CardTitle className="text-sm">{t('dash.recentAudit')}</CardTitle></CardHeader>
           <CardContent>
+            {/* Say so when there is nothing, rather than leaving an empty card that looks
+                like a screen that failed to load. */}
+            {recentAudit.length === 0 && (
+              <p className="text-sm text-muted-foreground">{t('dash.noRecentAudit')}</p>
+            )}
             <ul className="grid gap-2">
               {recentAudit.map((entry) => (
                 <li key={entry.id} className="flex items-baseline gap-2 text-xs">

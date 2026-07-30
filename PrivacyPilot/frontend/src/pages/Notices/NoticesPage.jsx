@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import PageHeader from '../../components/common/PageHeader';
+import DraftsDisclaimer from '../../components/common/DraftsDisclaimer';
 import { Select, FormField } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchNotices, fetchChecklist, generateNotice } from '../../store/slices/noticesSlice';
@@ -128,6 +129,10 @@ export default function NoticesPage() {
   return (
     <div>
       <PageHeader title={t('notices.title')} subtitle={t('notices.subtitle')} />
+
+      {/* This screen produces a document that real people will be shown, so the
+          "have it reviewed first" note belongs here. */}
+      <DraftsDisclaimer className="mb-4" />
 
       {/* Audience picker */}
       <div className="mb-4 flex flex-wrap gap-1.5">
