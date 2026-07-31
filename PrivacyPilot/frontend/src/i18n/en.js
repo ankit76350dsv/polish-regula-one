@@ -74,16 +74,21 @@ export default {
 
   // Navigation
   'nav.dashboard': 'Dashboard',
-  'nav.register': 'ROPA Register',
-  'nav.dpia': 'DPIA Center',
+  'nav.register': 'Processing Register',
+  'nav.dpia': 'Impact Assessments',
   'nav.notices': 'Privacy Notices',
-  'nav.vendors': 'Processors & DPAs',
-  'nav.transfers': 'Intl. Transfers',
-  'nav.breaches': 'Breach Register',
+  'nav.vendors': 'Processors',
+  'nav.transfers': 'International Transfers',
+  'nav.breaches': 'Data Breaches',
   'nav.dsar': 'Data Subject Requests',
   'nav.auditTrail': 'Audit Trail',
-  'nav.users': 'Users & Roles',
+  'nav.users': 'Users',
   'nav.settings': 'Settings',
+  // Heading over the last three items. One word of structure so the eleven links read
+  // as "my compliance work" and "running the app" rather than one long list.
+  'nav.group.admin': 'Administration',
+  // Screen-reader name for the sidebar landmark. Never shown on screen.
+  'nav.mainLabel': 'Main navigation',
   'nav.logout': 'Sign out',
 
   // Common
@@ -272,7 +277,7 @@ export default {
   'wizard.suggested': 'suggested',
 
   // DPIA
-  'dpia.title': 'DPIA Center',
+  'dpia.title': 'Data Protection Impact Assessments',
   'dpia.subtitle': 'Data Protection Impact Assessments (Art. 35) screened against the UODO list (M.P. 2019 poz. 666)',
   'dpia.screening': 'Screening',
   'dpia.verdict.required': 'DPIA required',

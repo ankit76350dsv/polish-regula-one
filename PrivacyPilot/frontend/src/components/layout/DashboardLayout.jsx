@@ -1,6 +1,5 @@
-// App shell — gold-on-charcoal sidebar, topbar with language switch, and the
-// permanent "drafts require DPO review" disclaimer (an honest product promise,
-// not decoration).
+// App shell — the sidebar menu, the top bar with the language switch, and the frame every
+// screen is drawn inside.
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -10,8 +9,8 @@ import {
 
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
-  SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
-  SidebarProvider, SidebarTrigger,
+  SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton,
+  SidebarMenuItem, SidebarProvider, SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +20,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { useT } from '../../i18n';
 import { setLanguage } from '../../store/slices/uiSlice';
 import { signOut } from '../../store/slices/authSlice';
-import { navFor } from '../../lib/permissions';
+import { navFor, NAV_SECTIONS } from '../../lib/permissions';
 import { roleDisplay, platformRoleLabel } from '../../lib/sso';
 import { useOrgBase } from '../../lib/paths';
 
@@ -45,7 +44,11 @@ export default function DashboardLayout() {
   const { pathname } = useLocation();
   const user = useSelector((s) => s.auth.user);
   const base = useOrgBase(); // "/company/{tenantId}"
+  // The menu, already filtered to what this user is allowed to open, split into the
+  // day-to-day compliance screens and the administration ones.
   const items = navFor(user);
+  const workItems = items.filter((i) => i.section === NAV_SECTIONS.WORK);
+  const adminItems = items.filter((i) => i.section === NAV_SECTIONS.ADMIN);
   // Sidebar footer: the user's PrivacyPilot capacity, in the same words the Users and
   // Profile screens use for it (e.g. "PrivacyPilot Admin"), in the chosen language.
   const roleLabel = roleDisplay(user, lang);
@@ -60,11 +63,46 @@ export default function DashboardLayout() {
     return pathname === full || pathname.startsWith(`${full}/`);
   };
 
+  // First letter of the first two words of the name, for the round avatar. Empty words are
+  // dropped so a name typed with a double space still gives two letters, and a missing name
+  // falls back to "?" rather than an empty circle.
+  const initials = user.name.split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+
   // Ends the RegulaOne SSO session and sends the browser to the central logout
   // page (which finishes sign-out and returns here to the login screen).
   const handleLogout = () => {
     dispatch(signOut());
   };
+
+  // One block of menu links, with an optional heading above it. Both blocks are drawn the
+  // same way so spacing, sizing and the active-link highlight can never drift apart.
+  const renderSection = (sectionItems, heading) => (
+    <SidebarGroup>
+      {heading && <SidebarGroupLabel>{heading}</SidebarGroupLabel>}
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {sectionItems.map((item) => {
+            const Icon = NAV_ICONS[item.key];
+            const label = t(item.key);
+            return (
+              <SidebarMenuItem key={item.to}>
+                <SidebarMenuButton
+                  // When the sidebar is collapsed to icons only, the name appears on hover.
+                  tooltip={label}
+                  isActive={isActive(item.to)}
+                  render={<NavLink to={`${base}${item.to}`} />}
+                  className="data-active:bg-primary/15 data-active:text-primary data-active:font-medium"
+                >
+                  {Icon && <Icon />}
+                  <span>{label}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
 
   return (
     <SidebarProvider>
@@ -84,28 +122,14 @@ export default function DashboardLayout() {
         </SidebarHeader>
 
         <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {items.map((item) => {
-                  const Icon = NAV_ICONS[item.key];
-                  return (
-                    <SidebarMenuItem key={item.to}>
-                      <SidebarMenuButton
-                        tooltip={t(item.key)}
-                        isActive={isActive(item.to)}
-                        render={<NavLink to={`${base}${item.to}`} />}
-                        className="data-active:bg-primary/15 data-active:text-primary data-active:font-medium"
-                      >
-                        {Icon && <Icon />}
-                        <span>{t(item.key)}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          {/* A real <nav> landmark so screen readers can jump straight to the menu (WCAG 2.1). */}
+          <nav aria-label={t('nav.mainLabel')} className="flex flex-col">
+            {renderSection(workItems)}
+            {/* Only drawn when the user can reach at least one of these screens — an
+                auditor, for example, sees the heading only because they have the audit
+                trail. A heading over nothing would be clutter. */}
+            {adminItems.length > 0 && renderSection(adminItems, t('nav.group.admin'))}
+          </nav>
         </SidebarContent>
 
         <SidebarFooter>
@@ -117,13 +141,11 @@ export default function DashboardLayout() {
               className="flex min-w-0 items-center gap-2 rounded-md p-1 hover:bg-accent"
             >
               <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
-                {user.name.split(' ').map((p) => p[0]).join('').slice(0, 2)}
+                {initials}
               </div>
               <div className="grid leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate text-xs font-medium text-foreground">{user.name}</span>
-                <span className="truncate text-[11px] text-muted-foreground">
-                  {roleLabel}
-                </span>
+                <span className="truncate text-xs text-muted-foreground">{roleLabel}</span>
               </div>
             </NavLink>
             <Button

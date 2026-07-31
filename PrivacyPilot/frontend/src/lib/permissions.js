@@ -111,20 +111,26 @@ export function hasRole(user, code) {
   return Array.isArray(user?.permissions) && user.permissions.includes(code);
 }
 
+// The two halves of the sidebar. `work` is the day-to-day compliance work; `admin` is
+// overseeing and configuring the app. Eleven links in one undivided list are hard to scan,
+// and the split matches how people think about them.
+export const NAV_SECTIONS = { WORK: 'work', ADMIN: 'admin' };
+
 /** Which sidebar sections a user sees. Used by DashboardLayout. */
 export function navFor(user) {
+  const S = NAV_SECTIONS;
   const items = [
-    { to: '/dashboard',  key: 'nav.dashboard',  always: true },
-    { to: '/register',   key: 'nav.register',   action: A.VIEW_REGISTER },
-    { to: '/dpia',       key: 'nav.dpia',       action: A.MANAGE_DPIA, or: A.VIEW_REGISTER },
-    { to: '/notices',    key: 'nav.notices',    action: A.GENERATE_NOTICES },
-    { to: '/vendors',    key: 'nav.vendors',    action: A.MANAGE_VENDORS },
-    { to: '/transfers',  key: 'nav.transfers',  action: A.MANAGE_TRANSFERS },
-    { to: '/breaches',   key: 'nav.breaches',   action: A.MANAGE_BREACHES },
-    { to: '/dsar',       key: 'nav.dsar',       action: A.MANAGE_DSAR },
-    { to: '/audit-trail', key: 'nav.auditTrail', action: A.VIEW_AUDIT_TRAIL },
-    { to: '/users',      key: 'nav.users',      action: A.MANAGE_USERS },
-    { to: '/settings',   key: 'nav.settings',   action: A.EDIT_SETTINGS },
+    { to: '/dashboard',  key: 'nav.dashboard',  section: S.WORK,  always: true },
+    { to: '/register',   key: 'nav.register',   section: S.WORK,  action: A.VIEW_REGISTER },
+    { to: '/dpia',       key: 'nav.dpia',       section: S.WORK,  action: A.MANAGE_DPIA, or: A.VIEW_REGISTER },
+    { to: '/notices',    key: 'nav.notices',    section: S.WORK,  action: A.GENERATE_NOTICES },
+    { to: '/vendors',    key: 'nav.vendors',    section: S.WORK,  action: A.MANAGE_VENDORS },
+    { to: '/transfers',  key: 'nav.transfers',  section: S.WORK,  action: A.MANAGE_TRANSFERS },
+    { to: '/breaches',   key: 'nav.breaches',   section: S.WORK,  action: A.MANAGE_BREACHES },
+    { to: '/dsar',       key: 'nav.dsar',       section: S.WORK,  action: A.MANAGE_DSAR },
+    { to: '/audit-trail', key: 'nav.auditTrail', section: S.ADMIN, action: A.VIEW_AUDIT_TRAIL },
+    { to: '/users',      key: 'nav.users',      section: S.ADMIN, action: A.MANAGE_USERS },
+    { to: '/settings',   key: 'nav.settings',   section: S.ADMIN, action: A.EDIT_SETTINGS },
   ];
   return items.filter((i) => i.always || can(user, i.action) || (i.or && can(user, i.or)));
 }

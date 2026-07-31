@@ -75,15 +75,17 @@ export default {
   // Nawigacja
   'nav.dashboard': 'Pulpit',
   'nav.register': 'Rejestr czynności',
-  'nav.dpia': 'Centrum DPIA',
+  'nav.dpia': 'Oceny skutków',
   'nav.notices': 'Klauzule informacyjne',
   'nav.vendors': 'Podmioty przetwarzające',
   'nav.transfers': 'Transfery międzynarodowe',
   'nav.breaches': 'Rejestr naruszeń',
   'nav.dsar': 'Wnioski osób',
   'nav.auditTrail': 'Dziennik zdarzeń',
-  'nav.users': 'Użytkownicy i role',
+  'nav.users': 'Użytkownicy',
   'nav.settings': 'Ustawienia',
+  'nav.group.admin': 'Administracja',
+  'nav.mainLabel': 'Nawigacja główna',
   'nav.logout': 'Wyloguj',
 
   // Wspólne
@@ -272,7 +274,7 @@ export default {
   'wizard.suggested': 'sugerowane',
 
   // DPIA
-  'dpia.title': 'Centrum DPIA',
+  'dpia.title': 'Oceny skutków dla ochrony danych',
   'dpia.subtitle': 'Oceny skutków dla ochrony danych (art. 35) wg wykazu UODO (M.P. 2019 poz. 666)',
   'dpia.screening': 'Analiza wstępna',
   'dpia.verdict.required': 'DPIA wymagana',
