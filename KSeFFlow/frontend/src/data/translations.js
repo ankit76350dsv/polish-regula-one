@@ -27,7 +27,9 @@ export const translations = {
       required: "Required",
       back: "Back",
       retry: "Retry",
-      close: "Close"
+      close: "Close",
+      signOutConfirmTitle: "Sign out?",
+      signOutConfirmMessage: "Do you really want to sign out? You will need to sign in again to access KSeFFlow."
     },
     header: {
       tenant: "Corporate Tenant",
@@ -506,7 +508,9 @@ export const translations = {
       required: "Wymagane",
       back: "Wstecz",
       retry: "Ponów",
-      close: "Zamknij"
+      close: "Zamknij",
+      signOutConfirmTitle: "Wylogować się?",
+      signOutConfirmMessage: "Czy na pewno chcesz się wylogować? Aby ponownie uzyskać dostęp do KSeFFlow, musisz się zalogować."
     },
     header: {
       tenant: "Wielodostępność firmowa",

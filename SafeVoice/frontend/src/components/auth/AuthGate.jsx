@@ -17,13 +17,14 @@ import {
 // Guard wrapped around the STAFF area only. In priority order: loading → error →
 // not-signed-in → no module/expired/disabled → render the protected page.
 // Public report/tracking/legal pages are NOT wrapped in this gate.
-export default function AuthGate({ children }) {
+export default function AuthGate({ children, onSignOut }) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const status = useSelector(selectAuthStatus);
   const error = useSelector(selectAuthError);
   const user = useSelector(selectCurrentUser);
   const ssoLoop = useSelector(selectSsoLoop);
+  const requestSignOut = onSignOut ?? (() => dispatch(signOut()));
 
   // 1. Loading.
   if (status === "idle" || status === "loading") {
@@ -69,7 +70,7 @@ export default function AuthGate({ children }) {
   // 4. Signed in but not allowed into SafeVoice.
   const { allowed, reason } = evaluateSafeVoiceAccess(user);
   if (!allowed) {
-    return <SafeVoiceAccessModal reason={reason} onSignOut={() => dispatch(signOut())} />;
+    return <SafeVoiceAccessModal reason={reason} onSignOut={requestSignOut} />;
   }
 
   // 5. Allowed.

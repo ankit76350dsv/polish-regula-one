@@ -21,6 +21,8 @@
     "no": "Nie",
     "retry": "Spróbuj ponownie",
     "signOut": "Wyloguj",
+    "signOutConfirmTitle": "Wylogować się?",
+    "signOutConfirmMessage": "Czy na pewno chcesz się wylogować? Aby ponownie uzyskać dostęp do SafeVoice, musisz się zalogować.",
     "copy": "Kopiuj",
     "copied": "Skopiowano",
     "none": "Brak",

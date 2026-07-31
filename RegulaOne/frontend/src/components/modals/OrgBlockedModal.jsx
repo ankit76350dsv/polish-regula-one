@@ -1,12 +1,11 @@
 import { LogOut, Building2, ShieldAlert } from 'lucide-react';
-import { useLogout } from '../../hooks/useAuth';
 import { useAuthStore } from '../../store/authStore';
+import ConfirmedLogoutButton from '../common/ConfirmedLogoutButton';
 
 // Shown to ROLE_USER when their organisation is missing, disabled, or suspended.
 // Non-dismissable — only action available is to sign out.
 export default function OrgBlockedModal() {
   const { user } = useAuthStore();
-  const logout = useLogout();
 
   const config = resolveConfig(user?.tenantStatus);
 
@@ -37,14 +36,12 @@ export default function OrgBlockedModal() {
 
         {/* Footer */}
         <div className="px-8 pb-7">
-          <button
-            onClick={() => logout.mutate()}
-            disabled={logout.isPending}
+          <ConfirmedLogoutButton
             className="flex items-center gap-2 mx-auto text-slate-500 hover:text-red-700 font-medium text-sm transition-colors disabled:opacity-50"
           >
             <LogOut className="h-4 w-4" />
             Sign out
-          </button>
+          </ConfirmedLogoutButton>
         </div>
       </div>
     </div>

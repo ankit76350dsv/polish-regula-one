@@ -10,6 +10,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LandingPage from './components/LandingPage';
 import NotFoundPage from './components/NotFoundPage';
 import Workspace from './components/Workspace';
+import ConfirmationDialog from './components/ConfirmationDialog';
 
 // Host URLs resolved at runtime (localhost or LAN IP) — see lib/serviceHosts.js.
 import { REGULA_ONE_API_URL as API_URL, CENTRAL_LOGIN } from './lib/serviceHosts';
@@ -60,6 +61,8 @@ export default function App() {
   const [sessionReloadKey, setSessionReloadKey] = useState(0);
   const [activeTenant,    setActiveTenant]    = useState({ id: '', name: 'My Organisation', nip: '', subscriptionPlan: 'Active' });
   const [activeRole,      setActiveRole]      = useState('Company Admin');
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
   // Local audit trail. Write-only here (kept for traceability); fed by logout and
   // by the Workspace's invoice actions through the shared logAuditAction below.
   const [, setAuditLogs] = useState(INITIAL_AUDIT_LOGS);
@@ -274,7 +277,8 @@ export default function App() {
     setAuditLogs(prev => [newLog, ...prev]);
   };
 
-  const handleLogout = () => {
+  const performLogout = () => {
+    setLogoutPending(true);
     logAuditAction('USER_SESSION_TERMINATED', 'SSO session cleared. Shared-domain cookies invalidated.');
     // POST /api/sso/logout clears all auth cookies.
     // Response is AppResponse<{ logoutUrl }> — unwrap .data before reading logoutUrl.
@@ -287,6 +291,8 @@ export default function App() {
       })
       .catch(() => { window.location.href = CENTRAL_LOGIN; });
   };
+
+  const handleLogout = () => setLogoutConfirmOpen(true);
 
   // ── Route validity ──────────────────────────────────────────────────────────
   // Decide whether the current URL is a path the app knows how to render.
@@ -345,27 +351,40 @@ export default function App() {
   // handled by <ProtectedRoute>. Once it lets the user through, <Workspace> renders the
   // whole authenticated app (sidebar, header, and the current feature screen).
   return (
-    <ProtectedRoute
-      loading={isAuthLoading}
-      error={authError}
-      isAuthenticated={isAuthenticated && !ssoLoop}
-      user={currentUser}
-      onRetry={() => setSessionReloadKey((k) => k + 1)}
-      onSignOut={handleLogout}
-    >
-      <Workspace
+    <>
+      <ProtectedRoute
+        loading={isAuthLoading}
+        error={authError}
+        isAuthenticated={isAuthenticated && !ssoLoop}
         user={currentUser}
-        tenant={activeTenant}
-        role={activeRole}
-        urlTenantId={urlTenantId}
-        section={currentSection}
-        invoiceId={currentInvoiceId}
-        pageKey={pageKey}
-        onNavigate={navigateTo}
-        onOpenInvoice={openInvoice}
-        onLogout={handleLogout}
-        logAuditAction={logAuditAction}
+        onRetry={() => setSessionReloadKey((k) => k + 1)}
+        onSignOut={handleLogout}
+      >
+        <Workspace
+          user={currentUser}
+          tenant={activeTenant}
+          role={activeRole}
+          urlTenantId={urlTenantId}
+          section={currentSection}
+          invoiceId={currentInvoiceId}
+          pageKey={pageKey}
+          onNavigate={navigateTo}
+          onOpenInvoice={openInvoice}
+          onLogout={handleLogout}
+          logAuditAction={logAuditAction}
+        />
+      </ProtectedRoute>
+
+      <ConfirmationDialog
+        open={logoutConfirmOpen}
+        title={t('common.signOutConfirmTitle')}
+        message={t('common.signOutConfirmMessage')}
+        cancelLabel={t('common.cancel')}
+        confirmLabel={t('header.signOut')}
+        loading={logoutPending}
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={performLogout}
       />
-    </ProtectedRoute>
+    </>
   );
 }

@@ -21,6 +21,8 @@
     "no": "No",
     "retry": "Try again",
     "signOut": "Sign out",
+    "signOutConfirmTitle": "Sign out?",
+    "signOutConfirmMessage": "Do you really want to sign out? You will need to sign in again to access SafeVoice.",
     "copy": "Copy",
     "copied": "Copied",
     "none": "None",

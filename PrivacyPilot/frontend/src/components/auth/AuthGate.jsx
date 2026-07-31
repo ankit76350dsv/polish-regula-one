@@ -4,6 +4,7 @@
 //   3. not signed in       → the RegulaOne SSO login screen
 //   4. signed in, no access → an "access denied" card with Sign out
 //   5. allowed             → the real app (DashboardLayout, which renders <Outlet/>)
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Navigate, useParams, useLocation } from 'react-router-dom';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
@@ -12,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import LoginPage from '../../pages/Auth/LoginPage';
 import DashboardLayout from '../layout/DashboardLayout';
 import PrivacyPilotAccessModal from './PrivacyPilotAccessModal';
+import ConfirmDialog from '../common/ConfirmDialog';
 import { evaluatePrivacyPilotAccess } from '../../lib/sso';
 import { orgPath } from '../../lib/paths';
 import { useT } from '../../i18n';
@@ -34,6 +36,7 @@ export default function AuthGate() {
   const ssoLoop = useSelector(selectSsoLoop);
   const params = useParams();
   const location = useLocation();
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   // 1. Still checking the session.
   if (status === 'idle' || status === 'loading') {
@@ -76,10 +79,20 @@ export default function AuthGate() {
   const { allowed, reason } = evaluatePrivacyPilotAccess(user);
   if (!allowed) {
     return (
-      <PrivacyPilotAccessModal
-        reason={reason}
-        onSignOut={() => dispatch(signOut())}
-      />
+      <>
+        <PrivacyPilotAccessModal
+          reason={reason}
+          onSignOut={() => setLogoutConfirmOpen(true)}
+        />
+        <ConfirmDialog
+          open={logoutConfirmOpen}
+          onOpenChange={setLogoutConfirmOpen}
+          title={t('auth.signOutConfirmTitle')}
+          description={t('auth.signOutConfirmMessage')}
+          confirmLabel={t('auth.signOut')}
+          onConfirm={() => dispatch(signOut())}
+        />
+      </>
     );
   }
 

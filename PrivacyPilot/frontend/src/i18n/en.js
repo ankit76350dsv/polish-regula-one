@@ -90,6 +90,8 @@ export default {
   // Screen-reader name for the sidebar landmark. Never shown on screen.
   'nav.mainLabel': 'Main navigation',
   'nav.logout': 'Sign out',
+  'auth.signOutConfirmTitle': 'Sign out?',
+  'auth.signOutConfirmMessage': 'Do you really want to sign out? You will need to sign in again to access PrivacyPilot.',
 
   // Common
   'common.save': 'Save',

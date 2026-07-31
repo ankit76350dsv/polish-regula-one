@@ -8,12 +8,11 @@
 // can reactivate a suspended/inactive tenant without RegulaOne support involvement.
 
 import { LogOut, ShieldOff, PhoneCall } from 'lucide-react';
-import { useLogout } from '../../hooks/useAuth';
 import { useAuthStore } from '../../store/authStore';
+import ConfirmedLogoutButton from '../common/ConfirmedLogoutButton';
 
 export default function TenantSuspendedModal() {
   const { user } = useAuthStore();
-  const logout   = useLogout();
 
   const suspended = user?.tenantStatus === 'SUSPENDED';
 
@@ -64,14 +63,12 @@ export default function TenantSuspendedModal() {
 
         {/* Footer */}
         <div className="px-8 pb-7">
-          <button
-            onClick={() => logout.mutate()}
-            disabled={logout.isPending}
+          <ConfirmedLogoutButton
             className="flex items-center gap-2 mx-auto text-slate-500 hover:text-red-700 font-medium text-sm transition-colors disabled:opacity-50"
           >
             <LogOut className="h-4 w-4" />
             Sign out
-          </button>
+          </ConfirmedLogoutButton>
         </div>
       </div>
     </div>

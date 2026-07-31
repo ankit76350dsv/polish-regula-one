@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { AppNavbar } from "./AppNavbar";
 import { AppSidebar } from "./AppSidebar";
 import { MobileNavigation } from "./MobileNavigation";
+import { ConfirmDialog } from "../ui";
 import { AuthGate } from "../auth";
 import { tryRefreshSession } from "../../services/api";
 import { socketService } from "../../services/socketService";
@@ -40,6 +41,7 @@ export function StaffShell({ currentPath, navigate, children }) {
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   // The case the user currently has open. Kept in a ref so the long-lived socket callback
   // below always reads the LATEST value (a plain closure would capture a stale one) — used
@@ -171,7 +173,8 @@ export function StaffShell({ currentPath, navigate, children }) {
     }
   }, [isAuthenticated, tenantId, currentPath]);
 
-  const handleLogout = () => dispatch(signOut());
+  const handleLogout = () => setLogoutConfirmOpen(true);
+  const confirmLogout = () => dispatch(signOut());
 
   // The whole staff chrome (sidebar + navbar + content) is wrapped in <AuthGate>.
   // Until the session is verified AND the user is allowed into SafeVoice, AuthGate
@@ -179,8 +182,9 @@ export function StaffShell({ currentPath, navigate, children }) {
   // and the chrome below is NEVER mounted — so an unauthenticated or blocked visitor
   // never even sees the navigation. This matches KSeFFlow's ProtectedRoute → Workspace.
   return (
-    <AuthGate>
-      <div className="bg-slate-50 text-slate-900 font-sans h-screen flex overflow-hidden antialiased">
+    <>
+      <AuthGate onSignOut={handleLogout}>
+        <div className="bg-slate-50 text-slate-900 font-sans h-screen flex overflow-hidden antialiased">
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-3 focus:left-3 focus:bg-cyan-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"
@@ -216,7 +220,18 @@ export function StaffShell({ currentPath, navigate, children }) {
             <div className="p-4 md:p-6 lg:p-8 w-full mx-auto flex-1">{children}</div>
           </main>
         </div>
-      </div>
-    </AuthGate>
+        </div>
+      </AuthGate>
+
+      <ConfirmDialog
+        isOpen={logoutConfirmOpen}
+        title={t("common.signOutConfirmTitle")}
+        message={t("common.signOutConfirmMessage")}
+        confirmLabel={t("common.signOut")}
+        tone="danger"
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={confirmLogout}
+      />
+    </>
   );
 }

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { PackageX, LogOut, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import { useLogout } from '../../hooks/useAuth';
+import ConfirmedLogoutButton from '../common/ConfirmedLogoutButton';
 
 // Shown when the tenant's currentPackage.expiringDate is in the past (planExpired = true).
 // ROLE_ADMIN  → "Manage Plan" button navigates to /my-plan (modal is suppressed on that route)
@@ -9,7 +9,6 @@ import { useLogout } from '../../hooks/useAuth';
 // ROLE_SUPER_ADMIN → never shown (they manage the platform, have no tenant plan)
 export default function PlanExpiredModal() {
   const { user } = useAuthStore();
-  const logout   = useLogout();
   const navigate = useNavigate();
 
   const isAdmin = user?.role === 'ROLE_ADMIN';
@@ -74,14 +73,12 @@ export default function PlanExpiredModal() {
               Manage Plan
             </button>
           )}
-          <button
-            onClick={() => logout.mutate()}
-            disabled={logout.isPending}
+          <ConfirmedLogoutButton
             className="flex items-center justify-center gap-2 mx-auto text-slate-500 hover:text-red-700 font-medium text-sm transition-colors disabled:opacity-50"
           >
             <LogOut className="h-4 w-4" />
             Sign out
-          </button>
+          </ConfirmedLogoutButton>
         </div>
 
       </div>

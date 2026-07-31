@@ -87,6 +87,8 @@ export default {
   'nav.group.admin': 'Administracja',
   'nav.mainLabel': 'Nawigacja główna',
   'nav.logout': 'Wyloguj',
+  'auth.signOutConfirmTitle': 'Wylogować się?',
+  'auth.signOutConfirmMessage': 'Czy na pewno chcesz się wylogować? Aby ponownie uzyskać dostęp do PrivacyPilot, musisz się zalogować.',
 
   // Wspólne
   'common.save': 'Zapisz',

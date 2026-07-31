@@ -1,6 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
-import { useLogout } from '../../hooks/useAuth';
 import UserDisabledModal    from '../modals/UserDisabledModal';
 import SetupOrgModal        from '../modals/SetupOrgModal';
 import OrgBlockedModal      from '../modals/OrgBlockedModal';
@@ -19,11 +18,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import NotificationBell from '../notifications/NotificationBell';
+import ConfirmedLogoutButton from '../common/ConfirmedLogoutButton';
 
 export default function DashboardLayout() {
   const { user } = useAuthStore();
   const location  = useLocation();
-  const logout    = useLogout();
 
   // ── Tenant + plan guards (evaluated in priority order) ───────────────────
   //
@@ -174,9 +173,12 @@ export default function DashboardLayout() {
                   <span className="text-[10px] text-red-300 uppercase font-bold tracking-tighter">{user?.role?.replace('ROLE_', '').replace(/_/g, ' ')}</span>
                 </div>
               </Link>
-              <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-red-300 hover:text-white hover:bg-red-600 flex-shrink-0" disabled={logout.isPending} onClick={() => logout.mutate()}>
+              <ConfirmedLogoutButton
+                size="icon"
+                className="ml-auto h-8 w-8 text-red-300 hover:text-white hover:bg-red-600 flex-shrink-0"
+              >
                 <LogOut className="h-4 w-4" />
-              </Button>
+              </ConfirmedLogoutButton>
             </div>
           </SidebarFooter>
         </Sidebar>

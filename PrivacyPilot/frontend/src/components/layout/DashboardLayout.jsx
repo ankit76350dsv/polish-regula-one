@@ -1,5 +1,6 @@
 // App shell — the sidebar menu, the top bar with the language switch, and the frame every
 // screen is drawn inside.
+import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -22,6 +23,7 @@ import { signOut } from '../../store/slices/authSlice';
 import { navFor, NAV_SECTIONS } from '../../lib/permissions';
 import { roleDisplay } from '../../lib/sso';
 import { useOrgBase } from '../../lib/paths';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 const NAV_ICONS = {
   'nav.dashboard': LayoutDashboard,
@@ -43,6 +45,7 @@ export default function DashboardLayout() {
   const { pathname } = useLocation();
   const user = useSelector((s) => s.auth.user);
   const base = useOrgBase(); // "/company/{tenantId}"
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   // The menu, already filtered to what this user is allowed to open, split into the
   // day-to-day compliance screens and the administration ones.
   const items = navFor(user);
@@ -68,7 +71,7 @@ export default function DashboardLayout() {
   // Ends the RegulaOne SSO session and sends the browser to the central logout
   // page (which finishes sign-out and returns here to the login screen).
   const handleLogout = () => {
-    dispatch(signOut());
+    setLogoutConfirmOpen(true);
   };
 
   // One block of menu links, with an optional heading above it. Both blocks are drawn the
@@ -194,6 +197,15 @@ export default function DashboardLayout() {
         </div>
         <Toaster position="bottom-right" />
       </SidebarInset>
+
+      <ConfirmDialog
+        open={logoutConfirmOpen}
+        onOpenChange={setLogoutConfirmOpen}
+        title={t('auth.signOutConfirmTitle')}
+        description={t('auth.signOutConfirmMessage')}
+        confirmLabel={t('auth.signOut')}
+        onConfirm={() => dispatch(signOut())}
+      />
     </SidebarProvider>
   );
 }

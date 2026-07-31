@@ -11,12 +11,11 @@
 // Non-dismissable — the user cannot take any action except signing out.
 
 import { LogOut, UserX } from 'lucide-react';
-import { useLogout } from '../../hooks/useAuth';
 import { useAuthStore } from '../../store/authStore';
+import ConfirmedLogoutButton from '../common/ConfirmedLogoutButton';
 
 export default function UserDisabledModal() {
   const { user } = useAuthStore();
-  const logout   = useLogout();
 
   const isAdmin = user?.role === 'ROLE_ADMIN';
 
@@ -59,14 +58,12 @@ export default function UserDisabledModal() {
 
         {/* Footer */}
         <div className="px-8 pb-7">
-          <button
-            onClick={() => logout.mutate()}
-            disabled={logout.isPending}
+          <ConfirmedLogoutButton
             className="flex items-center gap-2 mx-auto text-slate-500 hover:text-slate-800 font-medium text-sm transition-colors disabled:opacity-50"
           >
             <LogOut className="h-4 w-4" />
             Sign out
-          </button>
+          </ConfirmedLogoutButton>
         </div>
       </div>
     </div>
