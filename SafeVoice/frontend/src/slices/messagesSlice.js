@@ -119,7 +119,12 @@ const messagesSlice = createSlice({
 
 export const { selectThread, clearSelectedThread, messageReceived, markMessageRead, markThreadRead } = messagesSlice.actions;
 
-export const selectMessagesFor = (caseId) => (s) => s.messages.byCase[caseId] || [];
+// A selector must return the same reference when its inputs have not changed.
+// Using `|| []` created a fresh array on every call while a thread was empty,
+// which triggered React Redux's selector-stability warning and extra renders.
+const EMPTY_MESSAGES = Object.freeze([]);
+export const selectMessagesFor = (caseId) => (s) =>
+  s.messages.byCase[caseId] ?? EMPTY_MESSAGES;
 export const selectMessagesStatus = (s) => s.messages.status;
 export const selectSending = (s) => s.messages.sending;
 export const selectSelectedThreadId = (s) => s.messages.selectedThreadId;
