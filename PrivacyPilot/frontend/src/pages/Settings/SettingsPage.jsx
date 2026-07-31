@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
+import { CheckCircle2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +15,7 @@ import { FormField, Input } from '../../components/common/Field';
 import { fetchSettings, updateSettings } from '../../store/slices/settingsSlice';
 import { uodoWindow } from '../../services/settingsService';
 import { useT } from '../../i18n';
+import { failureMessage } from '../../lib/apiErrors';
 
 export default function SettingsPage() {
   const { t, lang } = useT();
@@ -22,6 +24,7 @@ export default function SettingsPage() {
   const [company, setCompany] = useState(null);
   const [dpo, setDpo] = useState(null);
   const [ai, setAi] = useState(null);
+  const [emailError, setEmailError] = useState(null);
 
   useEffect(() => {
     if (status === 'idle') dispatch(fetchSettings());
@@ -39,12 +42,29 @@ export default function SettingsPage() {
   if (status === 'failed') return <ErrorState error={error} onRetry={() => dispatch(fetchSettings())} />;
 
   const windowDays = uodoWindow(dpo);
+  // A DPO "exists" once someone has entered a name or a designation date. Only then are
+  // published contact details required (Art. 37(7)).
+  const dpoDesignated = Boolean(dpo.name?.trim() || dpo.appointedAt);
 
   const save = async () => {
+    // The DPO e-mail is marked required but nothing checked it, and the server accepts
+    // whatever it is sent — so a typo silently became the published contact on every
+    // privacy notice.
+    //
+    // It is required only once a DPO actually exists (a name or a designation date has
+    // been entered). Not every company has to appoint one (Art. 37), and demanding an
+    // address from a company that has not would block them from saving anything on this
+    // page at all — including the unrelated AI settings.
+    const email = dpo.email?.trim() ?? '';
+    if (dpoDesignated && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError(t('settings.dpoEmailRequired'));
+      return;
+    }
+    setEmailError(null);
     // Only the DPO + AI settings are saved here. The company identity is owned by
     // RegulaOne (read-only in this page), so it is deliberately not sent.
     const action = await dispatch(updateSettings({ dpo, ai }));
-    if (action.error) toast.error(t('common.notAuthorized'));
+    if (action.error) toast.error(failureMessage(action.error, t));
     else toast.success(t('common.save'));
   };
 
@@ -64,9 +84,7 @@ export default function SettingsPage() {
           <CardHeader className="pb-2"><CardTitle className="text-sm">{t('settings.company')}</CardTitle></CardHeader>
           <CardContent className="grid gap-3">
             <p className="rounded-lg border border-border bg-muted/40 p-2.5 text-[11px] text-muted-foreground">
-              {lang === 'pl'
-                ? 'Dane firmy są zarządzane centralnie w RegulaOne (profil firmy) i tutaj są tylko do odczytu. Zasilają nagłówek rejestru (art. 30(1)(a)) i każdą klauzulę informacyjną.'
-                : 'Company details are managed centrally in RegulaOne (company profile) and are read-only here. They feed the register header (Art. 30(1)(a)) and every privacy notice.'}
+              {t('settings.companyReadOnly')}
             </p>
             <ReadOnlyRow label={t('settings.companyName')} value={company.name} />
             <div className="grid gap-3 sm:grid-cols-2">
@@ -84,8 +102,14 @@ export default function SettingsPage() {
               <FormField label={t('settings.dpoName')}>
                 {(fid) => <Input id={fid} value={dpo.name} onChange={(e) => setDpo({ ...dpo, name: e.target.value })} />}
               </FormField>
-              <FormField label={t('settings.dpoEmail')} required>
-                {(fid) => <Input id={fid} type="email" value={dpo.email} onChange={(e) => setDpo({ ...dpo, email: e.target.value })} />}
+              <FormField label={t('settings.dpoEmail')} required={dpoDesignated} error={emailError}>
+                {(fid) => (
+                  <Input id={fid} type="email" value={dpo.email}
+                    onChange={(e) => {
+                      setDpo({ ...dpo, email: e.target.value });
+                      if (emailError) setEmailError(null); // clear as they fix it
+                    }} />
+                )}
               </FormField>
               <FormField label={t('settings.dpoPhone')}>
                 {(fid) => <Input id={fid} value={dpo.phone} onChange={(e) => setDpo({ ...dpo, phone: e.target.value })} />}
@@ -105,26 +129,31 @@ export default function SettingsPage() {
               <p className="text-xs font-medium text-foreground">{t('settings.uodoNotification')}</p>
               <p className="mt-1 text-xs text-muted-foreground">{t('settings.uodoDeadline')}</p>
               {dpo.uodoNotifiedAt ? (
-                <p className="mt-2 text-sm text-(--status-ok)">
-                  ✓ {t('settings.uodoNotified')} {new Date(dpo.uodoNotifiedAt).toLocaleDateString(lang === 'pl' ? 'pl-PL' : 'en-GB')}
+                <p className="mt-2 flex items-center gap-1.5 text-sm text-(--status-ok)">
+                  <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+                  {t('settings.uodoNotified')}{' '}
+                  {new Date(dpo.uodoNotifiedAt).toLocaleDateString(lang === 'pl' ? 'pl-PL' : 'en-GB')}
                 </p>
               ) : windowDays != null && (
                 <p className={`mt-2 text-sm ${windowDays < 0 ? 'text-(--status-risk)' : 'text-(--status-warn)'}`}>
                   {windowDays < 0
                     ? t('settings.uodoOverdue')
-                    : `${windowDays} ${t('common.daysLeft')}`}
+                    : t('settings.uodoDaysLeft').replace('{days}', windowDays)}
                 </p>
               )}
-              <div className="mt-2 flex items-center gap-3">
-                <FormField label={t('settings.uodoNotified')}>
-                  {(fid) => <Input id={fid} type="date" value={dpo.uodoNotifiedAt?.slice(0, 10) ?? ''}
-                    onChange={(e) => setDpo({ ...dpo, uodoNotifiedAt: e.target.value ? new Date(e.target.value).toISOString() : null })} />}
-                </FormField>
-              </div>
+              {/* The date input was wrapped in a pointless flex row and stretched the full
+                  width of the card. */}
+              <FormField label={t('settings.uodoNotified')}>
+                {(fid) => (
+                  <Input id={fid} type="date" className="mt-2 max-w-48"
+                    value={dpo.uodoNotifiedAt?.slice(0, 10) ?? ''}
+                    onChange={(e) => setDpo({ ...dpo, uodoNotifiedAt: e.target.value ? new Date(e.target.value).toISOString() : null })} />
+                )}
+              </FormField>
             </div>
 
             <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input type="checkbox" className="accent-[#c5a059]" checked={dpo.publishedOnWebsite}
+              <input type="checkbox" className="accent-primary" checked={dpo.publishedOnWebsite}
                 onChange={(e) => setDpo({ ...dpo, publishedOnWebsite: e.target.checked })} />
               {t('settings.dpoPublished')}
             </label>
@@ -136,7 +165,7 @@ export default function SettingsPage() {
           <CardHeader className="pb-2"><CardTitle className="text-sm">{t('ai.settings')}</CardTitle></CardHeader>
           <CardContent className="grid gap-3">
             <label className="flex cursor-pointer items-start gap-2 text-sm">
-              <input type="checkbox" className="mt-0.5 accent-[#c5a059]" checked={ai.enabled}
+              <input type="checkbox" className="mt-0.5 accent-primary" checked={ai.enabled}
                 onChange={(e) => setAi({ ...ai, enabled: e.target.checked })} />
               <span>
                 {t('ai.settingsEnabled')}
@@ -144,7 +173,7 @@ export default function SettingsPage() {
               </span>
             </label>
             <label className="flex cursor-pointer items-start gap-2 text-sm">
-              <input type="checkbox" className="mt-0.5 accent-[#c5a059]" checked={ai.excludeSpecialCategories}
+              <input type="checkbox" className="mt-0.5 accent-primary" checked={ai.excludeSpecialCategories}
                 disabled={!ai.enabled}
                 onChange={(e) => setAi({ ...ai, excludeSpecialCategories: e.target.checked })} />
               <span className={!ai.enabled ? 'opacity-50' : ''}>{t('ai.settingsExclude')}</span>
