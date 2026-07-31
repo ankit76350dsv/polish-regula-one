@@ -2,6 +2,30 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 
+function isLocalNetworkHost(hostname) {
+  if (!hostname) return false;
+  if (hostname === "localhost" || hostname === "0.0.0.0" || hostname === "::1") return true;
+  if (/^127\./.test(hostname) || /^10\./.test(hostname) || /^192\.168\./.test(hostname)) return true;
+  const match = /^172\.(\d{1,3})\./.exec(hostname);
+  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
+}
+
+// If an API is configured with a LAN IP, the runtime may rewrite that hostname
+// to localhost. Both origins must therefore be present in development CSP.
+function localOriginVariants(value) {
+  try {
+    const url = new URL(value);
+    if (!isLocalNetworkHost(url.hostname)) return [];
+    const port = url.port ? `:${url.port}` : "";
+    return [
+      `${url.protocol}//localhost${port}`,
+      `${url.protocol}//127.0.0.1${port}`,
+    ];
+  } catch {
+    return [];
+  }
+}
+
 // Build a strict Content-Security-Policy (CLAUDE.md §11). connect-src must allow the API and
 // WebSocket origins, which are environment-specific, so we compute it from the same VITE_ vars
 // the app uses. The meta policy intentionally omits `frame-ancestors`, because browsers ignore
@@ -28,6 +52,11 @@ function buildCsp(
       "ws://localhost:*",
       "ws://127.0.0.1:*",
       "ws://0.0.0.0:*",
+    );
+    connectSrc.push(
+      ...localOriginVariants(regula),
+      ...localOriginVariants(safe),
+      ...localOriginVariants(safeWs),
     );
   }
 

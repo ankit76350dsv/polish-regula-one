@@ -16,23 +16,64 @@
  * Only if that fails do we send the browser to the central login page with a
  * ?redirect_uri that brings the user back here afterwards.
  */
-// All endpoints are configurable through environment variables so the same build
-// works on localhost and in the EEA production environment. Defaults match the
-// local dev setup (RegulaOne backend on :8080, SafeVoice frontend on :1003).
-const REGULAONE_API_URL = import.meta.env.VITE_REGULAONE_API_URL ?? "http://localhost:8080";
+// Local development can be opened through localhost OR the machine's LAN IP. Keep
+// every local service on the hostname the user actually opened; otherwise a
+// localhost page gets redirected back to the configured LAN IP and its host-only
+// SSO cookies no longer match. Production domains are never rewritten.
+function isLocalNetworkHost(hostname) {
+  if (!hostname) return false;
+  if (hostname === "localhost" || hostname === "0.0.0.0" || hostname === "::1") return true;
+  if (/^127\./.test(hostname) || /^10\./.test(hostname) || /^192\.168\./.test(hostname)) return true;
+  const match = /^172\.(\d{1,3})\./.exec(hostname);
+  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
+}
+
+function resolveServiceUrl(configuredUrl, fallbackUrl, { useCurrentOrigin = false } = {}) {
+  const resolved = new URL(configuredUrl || fallbackUrl);
+
+  if (
+    typeof window !== "undefined"
+    && isLocalNetworkHost(window.location.hostname)
+    && isLocalNetworkHost(resolved.hostname)
+  ) {
+    if (useCurrentOrigin) return window.location.origin;
+    resolved.hostname = window.location.hostname;
+  }
+
+  return resolved.toString().replace(/\/$/, "");
+}
+
+// All endpoints remain configurable for deployed EEA environments. Local URLs
+// follow the current browser host while retaining their configured service ports.
+const REGULAONE_API_URL = resolveServiceUrl(
+  import.meta.env.VITE_REGULAONE_API_URL,
+  "http://localhost:8080",
+);
 
 // The SafeVoice backend serves the whistleblower feature endpoints (/api/safevoice/…).
 // In local development it runs on its OWN port (9003), separate from the central
 // RegulaOne backend (8080) which only handles login/SSO. In production both sit behind
 // the same gateway, so this just points at the same origin there.
-const SAFEVOICE_API_URL = import.meta.env.VITE_SAFEVOICE_API_URL ?? "http://localhost:9003";
-const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:1003";
-const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? "http://localhost:3000/login";
+const SAFEVOICE_API_URL = resolveServiceUrl(
+  import.meta.env.VITE_SAFEVOICE_API_URL,
+  "http://localhost:9003",
+);
+const APP_URL = resolveServiceUrl(
+  import.meta.env.VITE_APP_URL,
+  "http://localhost:1003",
+  { useCurrentOrigin: true },
+);
+const CENTRAL_LOGIN = resolveServiceUrl(
+  import.meta.env.VITE_CENTRAL_LOGIN_URL,
+  "http://localhost:3000/login",
+);
 // The central RegulaOne "create an organisation account" page. SafeVoice has no
 // sign-up form of its own, so the landing page's "Sign Up" button just sends the
 // visitor here. Defaults to /auth/signup on the same host as the central login.
-const CENTRAL_SIGNUP =
-  import.meta.env.VITE_CENTRAL_SIGNUP_URL ?? new URL("/auth/signup", CENTRAL_LOGIN).toString();
+const CENTRAL_SIGNUP = resolveServiceUrl(
+  import.meta.env.VITE_CENTRAL_SIGNUP_URL,
+  new URL("/auth/signup", CENTRAL_LOGIN).toString(),
+);
 
 // Where the central login sends the browser back to after a successful sign-in.
 export const SSO_CALLBACK_URL = `${APP_URL}/auth/sso-callback`;
