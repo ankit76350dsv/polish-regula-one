@@ -46,8 +46,9 @@ export default function DashboardLayout() {
   const user = useSelector((s) => s.auth.user);
   const base = useOrgBase(); // "/company/{tenantId}"
   const items = navFor(user);
-  // Sidebar footer: the user's PrivacyPilot capacity (raw code, e.g. "PRIVACYPILOT ADMIN").
-  const roleLabel = roleDisplay(user);
+  // Sidebar footer: the user's PrivacyPilot capacity, in the same words the Users and
+  // Profile screens use for it (e.g. "PrivacyPilot Admin"), in the chosen language.
+  const roleLabel = roleDisplay(user, lang);
   // Navbar header: the PLATFORM role (ROLE_ADMIN → "Admin", ROLE_SUPER_ADMIN → "Super Admin").
   const platformLabel = platformRoleLabel(user.role);
 

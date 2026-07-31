@@ -10,6 +10,8 @@
 // lib/permissions.js). We do NOT rename or remap those codes — PRIVACYPILOT_ADMIN
 // stays PRIVACYPILOT_ADMIN everywhere.
 
+import { ROLE_LABELS } from './permissions';
+
 // The prefix that marks a PrivacyPilot permission in the /me permissions array.
 export const PRIVACYPILOT_PREFIX = 'PRIVACYPILOT_';
 
@@ -32,9 +34,19 @@ export function privacyPilotPermissions(user) {
 }
 
 // ── Display helpers ────────────────────────────────────────────────────────────
-// Show a permission code with underscores as spaces (e.g. "PRIVACYPILOT_ADMIN" →
-// "PRIVACYPILOT ADMIN"). We show the REAL code, not a friendly business name.
-export function formatPermissionCode(code) {
+// The stored permission code with its underscores swapped for spaces
+// ("PRIVACYPILOT_ADMIN" → "PRIVACYPILOT ADMIN").
+//
+// This is a LAST RESORT only: a safety net in case the ranked list below (PP_PRIORITY) and
+// the wording list (ROLE_LABELS in lib/permissions.js) ever fall out of step, so a user
+// still sees something rather than a blank space. The names people should actually see
+// live in ROLE_LABELS.
+//
+// No longer exported: it used to be the profile and sidebar's normal way of naming a
+// permission, which is why those screens read "PRIVACYPILOT ADMIN" while the Users screen
+// said "PrivacyPilot Admin" for the same person. Keeping it private stops a future screen
+// from reintroducing that.
+function formatPermissionCode(code) {
   return code ? code.replace(/_/g, ' ') : code;
 }
 
@@ -50,13 +62,21 @@ export function platformRoleLabel(role) {
   return PLATFORM_ROLE_LABELS[role] ?? role.replace(/^ROLE_/, '').replace(/_/g, ' ');
 }
 
-// The single line to show as a user's "role" in the UI: their most-privileged
-// PrivacyPilot code (as the raw code), or the platform role if they hold none.
-export function roleDisplay(user) {
+/**
+ * The single line to show as a user's role in the UI: the friendly name of their
+ * most-privileged PrivacyPilot permission, or the account role if they hold none.
+ *
+ * This used to return the raw code, so the sidebar under every screen read
+ * "PRIVACYPILOT ADMIN" while the Users and Profile screens said "PrivacyPilot Admin"
+ * for the same person.
+ *
+ * @param {object} user the signed-in user
+ * @param {'pl'|'en'} lang which wording to use
+ */
+export function roleDisplay(user, lang = 'en') {
   if (!user) return '';
-  return user.primaryPermission
-    ? formatPermissionCode(user.primaryPermission)
-    : platformRoleLabel(user.role);
+  if (!user.primaryPermission) return platformRoleLabel(user.role);
+  return ROLE_LABELS[user.primaryPermission]?.[lang] ?? formatPermissionCode(user.primaryPermission);
 }
 
 // The single most-privileged PrivacyPilot code a user holds, or null. For the
