@@ -13,7 +13,6 @@ import {
   SidebarMenuItem, SidebarProvider, SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -21,7 +20,7 @@ import { useT } from '../../i18n';
 import { setLanguage } from '../../store/slices/uiSlice';
 import { signOut } from '../../store/slices/authSlice';
 import { navFor, NAV_SECTIONS } from '../../lib/permissions';
-import { roleDisplay, platformRoleLabel } from '../../lib/sso';
+import { roleDisplay } from '../../lib/sso';
 import { useOrgBase } from '../../lib/paths';
 
 const NAV_ICONS = {
@@ -52,8 +51,6 @@ export default function DashboardLayout() {
   // Sidebar footer: the user's PrivacyPilot capacity, in the same words the Users and
   // Profile screens use for it (e.g. "PrivacyPilot Admin"), in the chosen language.
   const roleLabel = roleDisplay(user, lang);
-  // Navbar header: the PLATFORM role (ROLE_ADMIN → "Admin", ROLE_SUPER_ADMIN → "Super Admin").
-  const platformLabel = platformRoleLabel(user.role);
 
   // A nav item is active on its own route and every sub-route
   // (e.g. /register stays highlighted on /register/:id and the wizard).
@@ -160,26 +157,31 @@ export default function DashboardLayout() {
       </Sidebar>
 
       <SidebarInset>
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/90 px-4 backdrop-blur">
+        {/* Top bar. It holds only what cannot live anywhere else: the button that opens the
+            menu, and the language switch. Two things were removed from it:
+
+            • "RegulaOne / PrivacyPilot" — the menu already names the app two centimetres to
+              the left, so the name was on screen twice. It is kept for narrow screens ONLY,
+              where the menu slides off and this bar is the only thing framing the page.
+            • The account-role badge ("Admin") — it sat beside the menu's "PrivacyPilot
+              Admin", so two different words described the same person's access. The account
+              role now appears once, on the profile page, where it can be explained. */}
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur sm:gap-3 sm:px-4 md:px-6">
           <SidebarTrigger />
-          <Separator orientation="vertical" className="h-5" />
-          <span className="font-display text-sm text-muted-foreground">
-            RegulaOne <span className="text-primary">/</span> {t('app.name')}
+          <Separator orientation="vertical" className="h-5 md:hidden" />
+          <span className="truncate font-display text-sm font-semibold text-foreground md:hidden">
+            {t('app.name')}
           </span>
-          <div className="ml-auto flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => dispatch(setLanguage(lang === 'pl' ? 'en' : 'pl'))}
-              aria-label={t('common.switchLanguage')}
-            >
-              <Languages />
-              {lang === 'pl' ? 'PL' : 'EN'}
-            </Button>
-            <Badge variant="outline" className="hidden sm:inline-flex border-primary/40 text-primary">
-              {platformLabel}
-            </Badge>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto shrink-0"
+            onClick={() => dispatch(setLanguage(lang === 'pl' ? 'en' : 'pl'))}
+            aria-label={t('common.switchLanguage')}
+          >
+            <Languages />
+            {lang === 'pl' ? 'PL' : 'EN'}
+          </Button>
         </header>
 
         {/* The "documents are drafts, get them reviewed" note used to live HERE, on every
