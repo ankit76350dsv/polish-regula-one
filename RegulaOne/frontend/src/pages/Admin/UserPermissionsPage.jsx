@@ -149,7 +149,7 @@ const PERMISSION_GROUPS = [
     ],
   },
 
-     {
+  {
     app: 'WorkPulse',
     description: 'Employee time tracking (Polish Labour Code) permissions',
     // Codes MUST match WorkPulsePermission on the WorkPulse backend.
@@ -173,6 +173,27 @@ const PERMISSION_GROUPS = [
         code: 'WORKPULSE_EMPLOYEE',
         label: 'Employee',
         desc: 'Baseline member access: clock in and out, record breaks and view own attendance only.',
+      },
+    ],
+  },
+  {
+    app: 'WasteSync',
+    description: 'BDO waste records, reporting and environmental compliance permissions',
+    permissions: [
+      {
+        code: 'WASTESYNC_ADMIN',
+        label: 'WasteSync Admin',
+        desc: 'Full control: manage waste records, BDO reports, reporting settings and WasteSync access.',
+      },
+      {
+        code: 'WASTESYNC_AUDITOR',
+        label: 'Auditor',
+        desc: 'Read-only access to waste records, historical BDO reports and audit exports.',
+      },
+      {
+        code: 'WASTESYNC_HR_MANAGER',
+        label: 'HR Manager',
+        desc: 'Manage day-to-day WasteSync records and prepare environmental compliance reports.',
       },
     ],
   },
