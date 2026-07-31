@@ -10,7 +10,7 @@ class PasswordRecoveryServiceTest {
 
     private final RecordingCognitoService cognitoService = new RecordingCognitoService();
     private final UserService userService = new UserService(
-            cognitoService, null, null, null, null, null);
+            cognitoService, null, null, null, null, null, null);
 
     @Test
     void requestsResetUsingCanonicalEmailInput() {

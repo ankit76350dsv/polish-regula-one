@@ -29,11 +29,13 @@ import com.regulaone.backend.models.Tenant;
 import com.regulaone.backend.models.TenantModule;
 import com.regulaone.backend.models.User;
 import com.regulaone.backend.repository.PackageRepository;
+import com.regulaone.backend.repository.SafeWorkEmployeeStubRepository;
 import com.regulaone.backend.repository.TenantRepository;
 import com.regulaone.backend.repository.UserRepository;
 import com.regulaone.backend.utils.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bson.types.ObjectId;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,6 +72,7 @@ public class UserService {
     private final PackageRepository appPackageRepository;
     // Added: generates a billing invoice whenever a plan is assigned to a tenant
     private final BillingService billingService;
+    private final SafeWorkEmployeeStubRepository safeWorkEmployeeStubRepository;
 
     // ! --- Public Auth ---
     public MessageResponse signup(SignupRequest request) {
@@ -118,7 +121,19 @@ public class UserService {
 
         LoginResponse response = cognitoService.signIn(request.getEmail(), request.getPassword());
 
+        // Self-heal users created before SafeWork provisioning was introduced.
+        // This runs only after Cognito has successfully authenticated the caller.
+        ensureSafeWorkEmployeeExists(user.get());
+
         return response;
+    }
+
+    private void ensureSafeWorkEmployeeExists(User user) {
+        String userId = user.getId();
+        if (userId == null || !ObjectId.isValid(userId)) {
+            throw new IllegalStateException("Persisted RegulaOne user does not have a valid MongoDB ObjectId");
+        }
+        safeWorkEmployeeStubRepository.ensureExists(new ObjectId(userId));
     }
 
     public LoginResponse respondToChallenge(RespondChallengeRequest request) {

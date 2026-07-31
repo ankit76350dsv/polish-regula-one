@@ -6,9 +6,9 @@ import com.regulaone.backend.repository.SafeWorkEmployeeStubRepository;
 import org.bson.Document;
 import org.bson.types.ObjectId;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.mongodb.core.mapping.event.AfterSaveEvent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class UserSafeWorkProvisioningListenerTest {
@@ -20,7 +20,7 @@ class UserSafeWorkProvisioningListenerTest {
         RecordingStubRepository repository = new RecordingStubRepository();
 
         UserSafeWorkProvisioningListener listener = new UserSafeWorkProvisioningListener(repository);
-        listener.onAfterSave(new AfterSaveEvent<>(user, new Document(), "users"));
+        listener.onAfterSave(user, new Document("_id", userId), "users");
 
         assertEquals(userId, repository.provisionedUserId);
     }
@@ -33,7 +33,18 @@ class UserSafeWorkProvisioningListenerTest {
 
         assertThrows(
                 IllegalStateException.class,
-                () -> listener.onAfterSave(new AfterSaveEvent<>(user, new Document(), "users")));
+                () -> listener.onAfterSave(user, new Document(), "users"));
+    }
+
+    @Test
+    void ignoresUserDocumentsSavedOutsideTheUsersCollection() {
+        User user = User.builder().id(new ObjectId().toHexString()).build();
+        RecordingStubRepository repository = new RecordingStubRepository();
+        UserSafeWorkProvisioningListener listener = new UserSafeWorkProvisioningListener(repository);
+
+        listener.onAfterSave(user, new Document(), "archived_users");
+
+        assertNull(repository.provisionedUserId);
     }
 
     private static final class RecordingStubRepository extends SafeWorkEmployeeStubRepository {
