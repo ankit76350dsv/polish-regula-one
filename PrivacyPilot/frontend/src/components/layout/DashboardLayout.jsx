@@ -156,7 +156,7 @@ export default function DashboardLayout() {
         </SidebarFooter>
       </Sidebar>
 
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         {/* Top bar. It holds only what cannot live anywhere else: the button that opens the
             menu, and the language switch. Two things were removed from it:
 
@@ -166,7 +166,7 @@ export default function DashboardLayout() {
             • The account-role badge ("Admin") — it sat beside the menu's "PrivacyPilot
               Admin", so two different words described the same person's access. The account
               role now appears once, on the profile page, where it can be explained. */}
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur sm:gap-3 sm:px-4 md:px-6">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/90 px-4 backdrop-blur sm:gap-3 md:px-6">
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-5 md:hidden" />
           <span className="truncate font-display text-sm font-semibold text-foreground md:hidden">
@@ -189,9 +189,9 @@ export default function DashboardLayout() {
             dashboard. A warning shown where it does not apply just teaches people to ignore
             it. It now appears only on the screens that actually generate a document for use
             outside the app (see components/common/DraftsDisclaimer). */}
-        <main className="flex-1 p-4 md:p-6">
+        <div className="min-w-0 flex-1 p-4 md:p-6">
           <Outlet />
-        </main>
+        </div>
         <Toaster position="bottom-right" />
       </SidebarInset>
     </SidebarProvider>
