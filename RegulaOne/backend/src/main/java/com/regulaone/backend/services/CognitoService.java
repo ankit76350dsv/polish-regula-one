@@ -87,6 +87,48 @@ public class CognitoService {
         }
     }
 
+    /**
+     * Starts Cognito's password-recovery flow. Unknown or ineligible accounts are
+     * deliberately treated like successful requests so this public endpoint cannot
+     * be used to discover which email addresses are registered.
+     */
+    public void forgotPassword(String email) {
+        try {
+            ForgotPasswordRequest.Builder req = ForgotPasswordRequest.builder()
+                    .clientId(clientId)
+                    .username(email);
+            if (hasClientSecret()) req.secretHash(secretHash(email));
+            cognitoClient.forgotPassword(req.build());
+        } catch (UserNotFoundException | InvalidParameterException e) {
+            // Enumeration-safe response: the controller returns the same message for all emails.
+        } catch (LimitExceededException | TooManyRequestsException e) {
+            // Do not reveal whether throttling was tied to a real Cognito account.
+        }
+    }
+
+    /** Completes password recovery using the one-time code Cognito emailed. */
+    public void confirmForgotPassword(String email, String code, String newPassword) {
+        try {
+            ConfirmForgotPasswordRequest.Builder req = ConfirmForgotPasswordRequest.builder()
+                    .clientId(clientId)
+                    .username(email)
+                    .confirmationCode(code)
+                    .password(newPassword);
+            if (hasClientSecret()) req.secretHash(secretHash(email));
+            cognitoClient.confirmForgotPassword(req.build());
+        } catch (CodeMismatchException e) {
+            throw new IllegalArgumentException("Invalid password reset code");
+        } catch (ExpiredCodeException e) {
+            throw new IllegalArgumentException("Password reset code has expired. Request a new one.");
+        } catch (InvalidPasswordException e) {
+            throw new IllegalArgumentException("New password does not meet the security requirements");
+        } catch (UserNotFoundException | NotAuthorizedException e) {
+            throw new IllegalArgumentException("Password reset code is invalid or expired");
+        } catch (LimitExceededException | TooManyFailedAttemptsException e) {
+            throw new IllegalArgumentException("Too many reset attempts. Please wait before trying again.");
+        }
+    }
+
     //! login
     public LoginResponse signIn(String email, String password) {
         try {

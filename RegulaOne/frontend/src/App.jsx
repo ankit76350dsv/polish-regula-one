@@ -4,6 +4,7 @@ import { useAuthStore }                                           from './store/
 
 // Auth pages
 import LoginPage            from './pages/Auth/LoginPage';
+import ForgotPasswordPage   from './pages/Auth/ForgotPasswordPage';
 import SignupPage           from './pages/Auth/SignupPage';
 import ConfirmSignupPage    from './pages/Auth/ConfirmSignupPage';
 import ResendCodePage       from './pages/Auth/ResendCodePage';
@@ -114,6 +115,7 @@ export default function App() {
 
         {/* ── Public auth routes ── */}
         <Route path="/login"          element={<LoginRoute />} />
+        <Route path="/auth/forgot-password" element={!user ? <ForgotPasswordPage /> : <Navigate to="/" />} />
         <Route path="/register"       element={!user ? <SignupPage />         : <Navigate to="/" />} />
         <Route path="/auth/signup"    element={!user ? <SignupPage />         : <Navigate to="/" />} />
         <Route path="/auth/confirm"   element={!user ? <ConfirmSignupPage />  : <Navigate to="/" />} />

@@ -3,6 +3,8 @@ package com.regulaone.backend.controllers;
 import com.regulaone.backend.dto.AppResponse;
 import com.regulaone.backend.dto.Auth.ChangePasswordRequest;
 import com.regulaone.backend.dto.Auth.ConfirmSignupRequest;
+import com.regulaone.backend.dto.Auth.ForgotPasswordRequest;
+import com.regulaone.backend.dto.Auth.ResetPasswordRequest;
 import com.regulaone.backend.dto.Auth.SignupRequest;
 import com.regulaone.backend.dto.Auth.UpdateProfileRequest;
 import com.regulaone.backend.dto.Auth.UserResponse;
@@ -73,6 +75,25 @@ public class AuthController {
     }
 
     // ── Password ──────────────────────────────────────────────────────────────
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<AppResponse<Void>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        // Never log the supplied address and always return the same success message;
+        // this public endpoint must not disclose whether an account exists.
+        userService.requestPasswordReset(request);
+        log.info("[AuthController] Password-recovery request accepted");
+        return ResponseEntity.ok(AppResponse.success(
+                "If an eligible account exists, a password reset code has been sent."));
+    }
+
+    @PostMapping("/forgot-password/confirm")
+    public ResponseEntity<AppResponse<Void>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        userService.resetPassword(request);
+        log.info("[AuthController] Password reset completed successfully");
+        return ResponseEntity.ok(AppResponse.success("Password reset successfully. You can now sign in."));
+    }
 
     @PreAuthorize("isAuthenticated()")
     @PutMapping("/change-password")

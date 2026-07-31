@@ -4,10 +4,12 @@ import com.regulaone.backend.dto.*;
 import com.regulaone.backend.dto.Admin.AdminPackageResponse;
 import com.regulaone.backend.dto.Auth.ChangePasswordRequest;
 import com.regulaone.backend.dto.Auth.ConfirmSignupRequest;
+import com.regulaone.backend.dto.Auth.ForgotPasswordRequest;
 import com.regulaone.backend.dto.Auth.InviteUserRequest;
 import com.regulaone.backend.dto.Auth.LoginRequest;
 import com.regulaone.backend.dto.Auth.LoginResponse;
 import com.regulaone.backend.dto.Auth.RespondChallengeRequest;
+import com.regulaone.backend.dto.Auth.ResetPasswordRequest;
 import com.regulaone.backend.dto.Auth.SignupRequest;
 import com.regulaone.backend.dto.Auth.UpdateEmailNotificationRequest;
 import com.regulaone.backend.dto.Auth.UpdatePermissionsRequest;
@@ -146,6 +148,17 @@ public class UserService {
     public void changePassword(ChangePasswordRequest request, String accessToken) {
         cognitoService.changePassword(
                 accessToken, request.getCurrentPassword(), request.getNewPassword());
+    }
+
+    public void requestPasswordReset(ForgotPasswordRequest request) {
+        cognitoService.forgotPassword(request.getEmail().trim());
+    }
+
+    public void resetPassword(ResetPasswordRequest request) {
+        cognitoService.confirmForgotPassword(
+                request.getEmail().trim(),
+                request.getCode().trim(),
+                request.getNewPassword());
     }
 
     public UserResponse getCurrentUser(String cognitoSub) {

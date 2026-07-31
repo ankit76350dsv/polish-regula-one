@@ -49,7 +49,7 @@ export default function LoginPage() {
   const redirectUri   = searchParams.get('redirect_uri');
   const moduleLabel   = resolveModuleLabel(redirectUri);
 
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { register, handleSubmit, getValues, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
   });
 
@@ -65,6 +65,15 @@ export default function LoginPage() {
       toast.error(message);
     },
   );
+
+  const openForgotPassword = () => {
+    const params = new URLSearchParams();
+    const email = getValues('email')?.trim();
+    if (email) params.set('email', email);
+    if (redirectUri) params.set('redirect_uri', redirectUri);
+    const query = params.toString();
+    navigate(`/auth/forgot-password${query ? `?${query}` : ''}`);
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 font-sans antialiased text-slate-900">
@@ -136,9 +145,18 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Password
-                </Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Password
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={openForgotPassword}
+                    className="text-[10px] font-bold uppercase tracking-wider text-red-600 transition-colors hover:text-red-700"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
                 <Input
                   type="password"
                   autoComplete="current-password"

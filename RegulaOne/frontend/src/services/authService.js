@@ -20,6 +20,14 @@ export const authService = {
   resendCode: (email) =>
     api.post(`/api/auth/resend-code?email=${encodeURIComponent(email)}`),
 
+  // POST /api/auth/forgot-password
+  requestPasswordReset: (data) =>
+    api.post('/api/auth/forgot-password', data),
+
+  // POST /api/auth/forgot-password/confirm
+  confirmPasswordReset: (data) =>
+    api.post('/api/auth/forgot-password/confirm', data),
+
   // ── Profile ─────────────────────────────────────────────────────────────────
 
   // GET /api/auth/me
