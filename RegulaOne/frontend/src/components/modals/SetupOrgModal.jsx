@@ -6,6 +6,43 @@ import { tenantService } from '../../services/tenantService';
 import { authService } from '../../services/authService';
 import { useAuthStore, mapApiUserToProfile } from '../../store/authStore';
 
+function validationError(form) {
+  const name = form.name.trim();
+  const nip = form.nip.trim();
+  const regon = form.regon.trim();
+  const email = form.email.trim();
+  const phone = form.phone.trim();
+  const city = form.city.trim();
+  const postalCode = form.postalCode.trim();
+
+  if (!name) return 'Company name is required';
+  if (name.length < 2 || name.length > 200) return 'Company name must be between 2 and 200 characters';
+  if (!nip) return 'NIP is required';
+  if (!/^\d{10}$/.test(nip)) return 'NIP must be exactly 10 digits';
+  if (regon && !/^(\d{9}|\d{14})$/.test(regon)) return 'REGON must be 9 or 14 digits';
+  if (!email) return 'Email is required';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please provide a valid email address';
+  if (phone && !/^[+]?[0-9\s\-()]{7,20}$/.test(phone)) return 'Please provide a valid phone number';
+  if (city.length > 100) return 'City name must not exceed 100 characters';
+  if (postalCode && !/^\d{2}-\d{3}$/.test(postalCode)) {
+    return 'Postal code must match format XX-XXX (e.g. 00-001)';
+  }
+  return null;
+}
+
+function setupPayload(form) {
+  const payload = Object.fromEntries(
+    Object.entries(form).map(([key, value]) => [key, value.trim()]),
+  );
+
+  // Optional patterned fields must be omitted when blank; an empty string is
+  // still a value and would correctly fail backend @Pattern validation.
+  for (const field of ['regon', 'phone', 'address', 'city', 'postalCode']) {
+    if (!payload[field]) delete payload[field];
+  }
+  return payload;
+}
+
 // Shown to ROLE_ADMIN when tenantId is null (first login, no org linked yet).
 // Non-dismissable — admin must complete setup before accessing the dashboard.
 export default function SetupOrgModal() {
@@ -22,18 +59,31 @@ export default function SetupOrgModal() {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const submit = useMutation({
-    mutationFn: () => tenantService.setupOrg(form),
+    mutationFn: (payload) => tenantService.setupOrg(payload),
     onSuccess: async () => {
-      toast.success('Organisation set up! Welcome to RegulaOne.');
-      // Refresh the user profile so tenantId/tenantStatus are now populated
-      // and DashboardLayout drops this modal automatically.
-      const me = await authService.getMe();
-      setUser(mapApiUserToProfile(me));
+      try {
+        // Refresh the user profile so tenantId/tenantStatus are now populated
+        // and DashboardLayout drops this modal automatically.
+        const me = await authService.getMe();
+        setUser(mapApiUserToProfile(me));
+        toast.success('Organisation set up! Welcome to RegulaOne.');
+      } catch (error) {
+        toast.error(error?.message || 'Organisation was created, but the profile could not be refreshed.');
+      }
     },
-    onError: (e) => toast.error(e.message || 'Setup failed. Please try again.'),
+    onError: (error) => {
+      toast.error(error?.message || 'Setup failed. Please try again.', { duration: 8000 });
+    },
   });
 
-  const canSubmit = form.name.trim() && form.nip.trim() && form.email.trim();
+  const handleSetup = () => {
+    const message = validationError(form);
+    if (message) {
+      toast.error(message, { duration: 8000 });
+      return;
+    }
+    submit.mutate(setupPayload(form));
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
@@ -120,8 +170,8 @@ export default function SetupOrgModal() {
         <div className="px-8 py-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <p className="text-xs text-slate-400">* Required fields</p>
           <button
-            onClick={() => submit.mutate()}
-            disabled={submit.isPending || !canSubmit}
+            onClick={handleSetup}
+            disabled={submit.isPending}
             className="flex items-center gap-2 bg-red-700 hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors"
           >
             {submit.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
