@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, MailCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
 import { useSignup, useConfirmSignup, useResendCode } from '../../hooks/useAuth';
 
 // ── Step 1: POST /api/auth/signup  { name, email, password } ─────────────────
@@ -37,19 +38,33 @@ export default function SignupPage() {
   const confirmForm = useForm({ resolver: zodResolver(confirmSchema) });
 
   // Step 1 submit → calls POST /api/auth/signup
-  const onSignup = signupForm.handleSubmit((data) => {
-    signup.mutate(data, {
-      onSuccess: () => {
-        setSentEmail(data.email);
-        setStep(2);
-      },
-    });
-  });
+  const onSignup = signupForm.handleSubmit(
+    (data) => {
+      signup.mutate(data, {
+        onSuccess: () => {
+          setSentEmail(data.email);
+          setStep(2);
+        },
+      });
+    },
+    (formErrors) => {
+      const message = formErrors.name?.message
+        ?? formErrors.email?.message
+        ?? formErrors.password?.message
+        ?? 'Please correct the highlighted fields.';
+      toast.error(message);
+    },
+  );
 
   // Step 2 submit → calls POST /api/auth/confirm { email, code }
-  const onConfirm = confirmForm.handleSubmit((data) => {
-    confirm.mutate({ email: sentEmail, code: data.code });
-  });
+  const onConfirm = confirmForm.handleSubmit(
+    (data) => {
+      confirm.mutate({ email: sentEmail, code: data.code });
+    },
+    (formErrors) => {
+      toast.error(formErrors.code?.message ?? 'Enter a valid verification code.');
+    },
+  );
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 font-sans antialiased text-slate-900">

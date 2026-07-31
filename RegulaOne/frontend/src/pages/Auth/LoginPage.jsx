@@ -8,6 +8,7 @@ import { Input }                      from '@/components/ui/input';
 import { Label }                      from '@/components/ui/label';
 import { LogIn, Loader2, ArrowRight } from 'lucide-react';
 import { motion }                     from 'motion/react';
+import { toast }                      from 'sonner';
 import { useLogin }                   from '../../hooks/useAuth';
 
 const schema = z.object({
@@ -52,9 +53,18 @@ export default function LoginPage() {
     resolver: zodResolver(schema),
   });
 
-  const onSubmit = handleSubmit((data) => {
-    login.mutate({ email: data.email, password: data.password });
-  });
+  const onSubmit = handleSubmit(
+    (data) => {
+      login.mutate({ email: data.email, password: data.password });
+    },
+    (formErrors) => {
+      // Keep inline field guidance and also announce the first error prominently.
+      const message = formErrors.email?.message
+        ?? formErrors.password?.message
+        ?? 'Please correct the highlighted fields.';
+      toast.error(message);
+    },
+  );
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 font-sans antialiased text-slate-900">

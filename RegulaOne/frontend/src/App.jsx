@@ -37,6 +37,7 @@ import WorkPulse         from './pages/Modules/WorkPulse';
 import ModulePlaceholder from './pages/Modules/ModulePlaceholder';
 
 import DashboardLayout from './components/layout/DashboardLayout';
+import { Toaster } from '@/components/ui/sonner';
 
 /** Returns the dashboard path for a user — used after login / challenge / already-authed. */
 function dashboardPath(tenantId) {
@@ -159,6 +160,8 @@ export default function App() {
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      {/* Global renderer: auth-page and dashboard errors must be visible alike. */}
+      <Toaster position="top-center" richColors closeButton />
     </BrowserRouter>
   );
 }
