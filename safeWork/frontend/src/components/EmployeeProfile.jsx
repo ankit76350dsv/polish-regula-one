@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
-import { SAFEWORK_API_URL } from "../config/serviceUrls";
 import {
   fetchEmployee,
   clearSelected,
@@ -11,8 +10,10 @@ import {
   clearSubmitError,
   clearUploadError,
 } from "../store/slices/employeeSlice";
+import { useCapabilities } from "../hooks/useCapabilities";
+import { useTranslation } from "../hooks/useTranslation";
 
-const API_BASE_URL = `${SAFEWORK_API_URL}/api`;
+const API_BASE_URL = "http://localhost:8082/api";
 // We no longer read a token from localStorage or send an Authorization header.
 // The auth token travels in an HttpOnly cookie, which axios attaches
 // automatically when we set `withCredentials: true` on the request.
@@ -255,8 +256,20 @@ const CONTRACT_TYPES = [
   { value: "OTHER",          label: "Other" },
 ];
 const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH"];
-const MEDICAL_EXAM_TYPES = ["Initial", "Periodic", "Control", "Specialized"];
-const BHP_FREQUENCIES = ["Annually", "Every 2 years", "Every 3 years", "Every 5 years"];
+// The `value` is what we SAVE (it must keep matching existing records, so it
+// stays English). The `labelKey` is what the user READS, in their language.
+const MEDICAL_EXAM_TYPES = [
+  { value: "Initial",     labelKey: "profile.examTypeInitial"     },
+  { value: "Periodic",    labelKey: "profile.examTypePeriodic"    },
+  { value: "Control",     labelKey: "profile.examTypeControl"     },
+  { value: "Specialized", labelKey: "profile.examTypeSpecialized" },
+];
+const BHP_FREQUENCIES = [
+  { value: "Annually",      labelKey: "profile.freqAnnually" },
+  { value: "Every 2 years", labelKey: "profile.freqEvery2"   },
+  { value: "Every 3 years", labelKey: "profile.freqEvery3"   },
+  { value: "Every 5 years", labelKey: "profile.freqEvery5"   },
+];
 const DOC_STATUSES = [
   { value: "VALID",    label: "Valid" },
   { value: "EXPIRING", label: "Expiring Soon" },
@@ -266,31 +279,35 @@ const DOC_STATUSES = [
 
 // ─── Status config ─────────────────────────────────────────────────────────────
 const statusConfig = {
-  valid:     { label: "Valid",          className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
-  compliant: { label: "Compliant",      className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
-  allowed:   { label: "Allowed",        className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
-  expiring:  { label: "Expiring Soon",  className: "bg-amber-50 text-amber-700 ring-amber-200",       dot: "bg-amber-500"   },
-  warning:   { label: "Non-Compliant",  className: "bg-amber-50 text-amber-700 ring-amber-200",       dot: "bg-amber-500"   },
-  expired:   { label: "Expired",        className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
-  missing:   { label: "Missing",        className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
-  blocked:   { label: "Blocked",        className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
-  inactive:  { label: "Inactive",       className: "bg-slate-100 text-slate-600 ring-slate-200",      dot: "bg-slate-400"   },
+  valid:     { labelKey: "status.valid",        className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
+  compliant: { labelKey: "status.compliant",    className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
+  allowed:   { labelKey: "status.allowed",      className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
+  expiring:  { labelKey: "status.expiringSoon", className: "bg-amber-50 text-amber-700 ring-amber-200",       dot: "bg-amber-500"   },
+  warning:   { labelKey: "status.nonCompliant", className: "bg-amber-50 text-amber-700 ring-amber-200",       dot: "bg-amber-500"   },
+  expired:   { labelKey: "status.expired",      className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
+  missing:   { labelKey: "status.missing",      className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
+  blocked:   { labelKey: "status.blocked",      className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
+  inactive:  { labelKey: "common.inactive",     className: "bg-slate-100 text-slate-600 ring-slate-200",      dot: "bg-slate-400"   },
 };
 
 function StatusBadge({ status }) {
+  const { t } = useTranslation();
   const cfg = statusConfig[status?.toLowerCase()] || statusConfig.missing;
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${cfg.className}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
-      {cfg.label}
+      {t(cfg.labelKey)}
     </span>
   );
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
-function formatDate(d) {
-  if (!d) return "Not set";
-  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(d));
+// Writes a date the way the chosen language writes dates.
+// `t` and `locale` are passed in because this is a plain helper, not a component,
+// and only components may use hooks.
+function formatDate(d, t, locale) {
+  if (!d) return t ? t("common.notSet") : "";
+  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(d));
 }
 
 // Mirrors the backend calculateDocumentStatus rule so the UI preview is always
@@ -391,7 +408,10 @@ function SelectInput({ value, onChange, children, disabled }) {
 //                  objects. Objects let us SAVE one thing (e.g. "Warehouse")
 //                  but SHOW another (e.g. "Magazyn / Warehouse").
 //   placeholder -> greyed-out hint shown when nothing is selected
-function SearchableSelect({ value, onChange, options, placeholder = "Select..." }) {
+function SearchableSelect({ value, onChange, options, placeholder }) {
+  const { t } = useTranslation();
+  // When no placeholder is passed we use the translated "Select..." wording.
+  const placeholderText = placeholder ?? t("common.selectPlaceholder");
   const [open, setOpen] = useState(false);   // is the dropdown list showing?
   const [query, setQuery] = useState("");    // what the user has typed to search
   const boxRef = useRef(null);               // the whole widget, used to detect outside clicks
@@ -437,7 +457,7 @@ function SearchableSelect({ value, onChange, options, placeholder = "Select..." 
         // When open we show what the user is typing; when closed we show the label.
         value={open ? query : selectedLabel}
         // If something is already chosen, keep showing it as a faint hint while searching.
-        placeholder={selectedLabel || placeholder}
+        placeholder={selectedLabel || placeholderText}
         onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
@@ -446,7 +466,7 @@ function SearchableSelect({ value, onChange, options, placeholder = "Select..." 
       {open && (
         <ul className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
           {filtered.length === 0 ? (
-            <li className="px-4 py-2 text-sm text-slate-400">No matches found</li>
+            <li className="px-4 py-2 text-sm text-slate-400">{t("common.noMatches")}</li>
           ) : (
             filtered.map((it) => (
               <li
@@ -469,6 +489,7 @@ function SearchableSelect({ value, onChange, options, placeholder = "Select..." 
 }
 
 function Toggle({ label, hint, value, onChange }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <div>
@@ -478,11 +499,11 @@ function Toggle({ label, hint, value, onChange }) {
       <div className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
         <button type="button" onClick={() => onChange(true)}
           className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${value ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
-          Yes
+          {t("common.yes")}
         </button>
         <button type="button" onClick={() => onChange(false)}
           className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${!value ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
-          No
+          {t("common.no")}
         </button>
       </div>
     </div>
@@ -508,6 +529,7 @@ function SectionTitle({ title, subtitle }) {
 
 // ─── Document Upload Modal ────────────────────────────────────────────────────
 function UploadModal({ docType, profileId, onClose, onSuccess }) {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const { uploading, uploadError } = useSelector((s) => s.employees);
   const fileRef = useRef(null);
@@ -542,10 +564,10 @@ function UploadModal({ docType, profileId, onClose, onSuccess }) {
       <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl">
         <div className="border-b border-slate-100 px-6 py-5">
           <h2 className="text-lg font-bold text-slate-900">
-            Upload {ismedical ? "Medical Certificate" : "BHP Training Certificate"}
+            {ismedical ? t("profile.uploadModalMedical") : t("profile.uploadModalBhp")}
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            File is uploaded securely to S3. Only the reference is stored in the database.
+            {t("profile.uploadModalNote")}
           </p>
         </div>
         <div className="space-y-4 px-6 py-5">
@@ -556,7 +578,7 @@ function UploadModal({ docType, profileId, onClose, onSuccess }) {
           )}
 
           {/* File picker */}
-          <FormField label="Select File" required>
+          <FormField label={t("profile.selectFile")} required>
             <div
               onClick={() => fileRef.current?.click()}
               className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center transition hover:border-blue-400 hover:bg-blue-50"
@@ -567,7 +589,7 @@ function UploadModal({ docType, profileId, onClose, onSuccess }) {
               {localFile ? (
                 <p className="text-sm font-semibold text-blue-600">{localFile.name}</p>
               ) : (
-                <p className="text-sm text-slate-500">Click to choose PDF, DOCX, or image</p>
+                <p className="text-sm text-slate-500">{t("profile.filePickHint")}</p>
               )}
               <input
                 ref={fileRef}
@@ -581,34 +603,34 @@ function UploadModal({ docType, profileId, onClose, onSuccess }) {
 
           {/* BHP only: completed date */}
           {!ismedical && (
-            <FormField label="Training Completed Date">
+            <FormField label={t("profile.trainingCompletedDate")}>
               <Input type="date" value={form.completedDate} onChange={(e) => update("completedDate", e.target.value)} />
             </FormField>
           )}
 
           {/* Expiry date */}
-          <FormField label="Expiry Date" required>
+          <FormField label={t("profile.expiryDate")} required>
             <Input type="date" value={form.expiryDate} onChange={(e) => update("expiryDate", e.target.value)} />
           </FormField>
 
           {/* Calculated status — read-only, derived from expiry date */}
           {computedStatus && (
             <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-sm font-semibold text-slate-600">Calculated Status</p>
+              <p className="text-sm font-semibold text-slate-600">{t("profile.calculatedStatus")}</p>
               <StatusBadge status={computedStatus} />
             </div>
           )}
         </div>
         <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
           <button onClick={onClose} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             onClick={handleSubmit}
             disabled={!localFile || !form.expiryDate || uploading}
             className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {uploading ? "Uploading…" : "Upload & Save"}
+            {uploading ? t("profile.uploading") : t("profile.uploadAndSave")}
           </button>
         </div>
       </div>
@@ -620,6 +642,15 @@ function UploadModal({ docType, profileId, onClose, onSuccess }) {
 // Extracted into its own component so it can declare local derived variables
 // without polluting the main EmployeeProfile scope.
 function EligibilityTab({ employee }) {
+  const { t, language } = useTranslation();
+
+  // Turns a backend status code (EXPIRED / MISSING) into a lowercase word in the
+  // reader's language, so it can sit inside a sentence naturally.
+  const statusWord = (code) => {
+    const keys = { VALID: "status.valid", EXPIRING: "status.expiring", EXPIRED: "status.expired", MISSING: "status.missing" };
+    return keys[code] ? t(keys[code]).toLowerCase() : String(code).toLowerCase();
+  };
+
   const medRequired = employee.requiresMedicalCertificate;
   const bhpRequired = employee.requiresBHPTraining;
   const medStatus   = employee.medicalCertificate?.status ?? "MISSING";
@@ -633,44 +664,44 @@ function EligibilityTab({ employee }) {
   const isBlocked   = !employee.isActive || medBlocked || bhpBlocked;
 
   const blockMessages = [];
-  if (!employee.isActive) blockMessages.push("Employee account is inactive — contact an administrator");
-  if (medBlocked) blockMessages.push(`Medical certificate is ${medStatus.toLowerCase()} — upload a valid document to restore access`);
-  if (bhpBlocked) blockMessages.push(`BHP training certificate is ${bhpStatus.toLowerCase()} — upload a valid certificate to restore access`);
+  if (!employee.isActive) blockMessages.push(t("profile.blockMsgInactive"));
+  if (medBlocked) blockMessages.push(t("profile.blockMsgMedical", { status: statusWord(medStatus) }));
+  if (bhpBlocked) blockMessages.push(t("profile.blockMsgBhp", { status: statusWord(bhpStatus) }));
 
   const checks = [
     {
-      label:  "Employee Active",
+      label:  t("profile.employeeActive"),
       ok:     employee.isActive,
-      detail: employee.isActive ? "Active" : "Inactive — contact an administrator",
+      detail: employee.isActive ? t("common.active") : t("profile.employeeInactive"),
       sub:    null,
     },
     {
-      label:  "Medical Certificate",
+      label:  t("profile.medicalTitle"),
       ok:     !medBlocked,
       detail: !medRequired
-        ? "Not required for this role"
+        ? t("profile.notRequiredForRole")
         : medBlocked
-          ? `Certificate is ${medStatus.toLowerCase()} — upload a new document to unblock`
-          : medStatus,
-      sub: medRequired ? formatDate(employee.medicalCertificate?.expiryDate) : null,
+          ? t("profile.checkMedicalBlocked", { status: statusWord(medStatus) })
+          : statusWord(medStatus),
+      sub: medRequired ? formatDate(employee.medicalCertificate?.expiryDate, t, language) : null,
     },
     {
-      label:  "BHP Training",
+      label:  t("profile.bhpTraining"),
       ok:     !bhpBlocked,
       detail: !bhpRequired
-        ? "Not required for this role"
+        ? t("profile.notRequiredForRole")
         : bhpBlocked
-          ? `Training is ${bhpStatus.toLowerCase()} — upload a new certificate to unblock`
-          : bhpStatus,
-      sub: bhpRequired ? formatDate(employee.bhpTraining?.expiryDate) : null,
+          ? t("profile.checkBhpBlocked", { status: statusWord(bhpStatus) })
+          : statusWord(bhpStatus),
+      sub: bhpRequired ? formatDate(employee.bhpTraining?.expiryDate, t, language) : null,
     },
   ];
 
   return (
     <Card className={isBlocked ? "border-red-100" : "border-emerald-100"}>
       <SectionTitle
-        title="Clock-in Eligibility"
-        subtitle="Checks whether the employee can start a work shift"
+        title={t("profile.clockInTitle")}
+        subtitle={t("profile.clockInSubtitle")}
       />
       <div className={`rounded-2xl p-5 ${isBlocked ? "bg-red-50" : "bg-emerald-50"}`}>
         <div className="mb-5 flex items-center gap-4">
@@ -679,7 +710,7 @@ function EligibilityTab({ employee }) {
           </div>
           <div>
             <h3 className={`text-xl font-bold ${isBlocked ? "text-red-700" : "text-emerald-700"}`}>
-              {isBlocked ? "Clock-in Blocked" : "Clock-in Allowed"}
+              {isBlocked ? t("profile.clockInBlocked") : t("profile.clockInAllowed")}
             </h3>
             {isBlocked && blockMessages.length > 0 && (
               <ul className="mt-1 space-y-0.5 list-disc list-inside">
@@ -712,6 +743,7 @@ function EligibilityTab({ employee }) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 function EmployeeProfile() {
+  const { t, language } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -726,6 +758,20 @@ function EmployeeProfile() {
   // viewingDoc tracks which document type is currently being fetched (for loading state).
   const [viewingDoc, setViewingDoc] = useState(null); // "medical" | "bhp" | null
   const [viewDocError, setViewDocError] = useState(null);
+
+  // ── What is this user allowed to do on this page? ───────────────────────────
+  // We work these out once and reuse them, so the whole page agrees with itself.
+  // The backend checks the same rules on every request; hiding a button here just
+  // stops people clicking something that would be refused.
+  const { can, CAPABILITIES } = useCapabilities();
+  // May change profile details (department, contract, risk level).
+  const canEditProfile = can(CAPABILITIES.EMPLOYEE_WRITE);
+  // May upload or replace a certificate file.
+  const canUploadDocuments = can(CAPABILITIES.DOCUMENT_WRITE);
+  // May OPEN the certificate file itself. Auditors do not have this: the status
+  // and expiry date above already prove a valid certificate exists, and the
+  // doctor's note is health data we keep to the smallest possible audience.
+  const canViewDocuments = can(CAPABILITIES.DOCUMENT_READ);
 
   useEffect(() => {
     if (id) dispatch(fetchEmployee(id));
@@ -817,10 +863,10 @@ function EmployeeProfile() {
         }
       );
       const viewUrl = response.data?.data?.viewUrl ?? response.data?.viewUrl;
-      if (!viewUrl) throw new Error("No URL returned from server");
+      if (!viewUrl) throw new Error(t("profile.noUrlReturned"));
       window.open(viewUrl, "_blank", "noopener,noreferrer");
     } catch (err) {
-      setViewDocError(err.response?.data?.message || err.message || "Failed to open document");
+      setViewDocError(err.response?.data?.message || err.message || t("profile.openFailed"));
     } finally {
       setViewingDoc(null);
     }
@@ -832,7 +878,7 @@ function EmployeeProfile() {
       <div className="flex min-h-screen items-center justify-center bg-slate-100">
         <div className="text-center">
           <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-          <p className="text-sm text-slate-500">Loading employee profile…</p>
+          <p className="text-sm text-slate-500">{t("profile.loading")}</p>
         </div>
       </div>
     );
@@ -842,11 +888,11 @@ function EmployeeProfile() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 p-8">
         <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
-          <p className="mb-2 font-bold text-red-700">Failed to load employee</p>
-          <p className="text-sm text-red-600">{selectedError || "Employee not found"}</p>
+          <p className="mb-2 font-bold text-red-700">{t("profile.loadFailed")}</p>
+          <p className="text-sm text-red-600">{selectedError || t("profile.notFound")}</p>
           <button onClick={() => navigate("/employees")}
             className="mt-4 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white">
-            ← Back to List
+            {t("common.backToList")}
           </button>
         </div>
       </div>
@@ -862,10 +908,10 @@ function EmployeeProfile() {
   const bhpDays = daysUntil(employee.bhpTraining?.expiryDate);
 
   const TABS = [
-    { key: "overview",     label: "Overview"          },
-    { key: "employment",   label: "Employment"        },
-    { key: "documents",    label: "Documents"         },
-    { key: "eligibility",  label: "Clock-in"          },
+    { key: "overview",     label: t("profile.tabOverview")   },
+    { key: "employment",   label: t("profile.tabEmployment") },
+    { key: "documents",    label: t("profile.tabDocuments")  },
+    { key: "eligibility",  label: t("profile.headerClockIn") },
   ];
 
   return (
@@ -882,7 +928,7 @@ function EmployeeProfile() {
       <div className="mx-auto max-w-7xl">
 
         {/* ── Profile Header ─────────────────────────────────────────────────── */}
-        <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-xl">
+        <div className="mb-6 overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 p-6 text-white shadow-xl">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
 
             <div className="flex items-start gap-4">
@@ -893,18 +939,18 @@ function EmployeeProfile() {
               <div>
                 <button
                   onClick={() => navigate("/employees")}
-                  className="mb-2 text-xs text-slate-400 hover:text-white transition-colors"
+                  className="mb-2 text-xs text-white-400 hover:text-white transition-colors"
                 >
-                  ← Back to list
+                  {t("profile.backToList")}
                 </button>
                 <h1 className="text-3xl font-bold">{employee.user?.name ?? "—"}</h1>
-                <p className="mt-1 text-sm text-slate-300">
+                <p className="mt-1 text-sm text-white-300">
                   {employee.user?.email}
                   {employee.position ? ` • ${employee.position}` : ""}
                   {employee.department ? ` • ${employee.department}` : ""}
                   {employee.site ? ` • ${employee.site}` : ""}
                 </p>
-                <p className="mt-1 text-xs text-slate-400 capitalize">
+                <p className="mt-1 text-xs text-white-400 capitalize">
                   {employee.user?.role?.toLowerCase().replace(/_/g, " ")}
                   {" • "}
                   {employee.isActive ? "Active" : "Inactive"}
@@ -915,28 +961,31 @@ function EmployeeProfile() {
             {/* Status cards */}
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 text-center">
-                <p className="mb-2 text-xs text-slate-300">Compliance</p>
+                <p className="mb-2 text-xs text-white-300">{t("profile.headerCompliance")}</p>
                 <StatusBadge status={overallStatus} />
               </div>
               <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 text-center">
-                <p className="mb-2 text-xs text-slate-300">Clock-in</p>
+                <p className="mb-2 text-xs text-white-300">{t("profile.headerClockIn")}</p>
                 <StatusBadge status={clockStatus} />
               </div>
               <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 text-center">
-                <p className="mb-1 text-xs text-slate-300">Risk</p>
+                <p className="mb-1 text-xs text-white-300">{t("profile.headerRisk")}</p>
                 <p className={`text-sm font-bold ${riskColor(employee.riskLevel)}`}>
                   {employee.riskLevel ?? "—"}
                 </p>
               </div>
             </div>
 
-            {/* Edit button */}
-            <button
-              onClick={() => { setEditMode(true); setActiveTab("employment"); }}
-              className="self-start rounded-xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20 lg:self-auto"
-            >
-              Edit Profile
-            </button>
+            {/* Edit button — only for roles that may change profile details.
+                An auditor sees this page read-only. */}
+            {canEditProfile && (
+              <button
+                onClick={() => { setEditMode(true); setActiveTab("employment"); }}
+                className="self-start rounded-xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20 lg:self-auto"
+              >
+                {t("profile.editProfile")}
+              </button>
+            )}
           </div>
         </div>
 
@@ -963,25 +1012,25 @@ function EmployeeProfile() {
 
             {/* Personal Info */}
             <Card className="lg:col-span-2">
-              <SectionTitle title="Personal Information" subtitle="Identity and contact details" />
+              <SectionTitle title={t("profile.personalTitle")} subtitle={t("profile.personalSubtitle")} />
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                <InfoRow label="Full Name"    value={employee.user?.name} />
-                <InfoRow label="Email"        value={employee.user?.email} />
-                <InfoRow label="Phone"        value={employee.phone} />
-                <InfoRow label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
-                <InfoRow label="PESEL"        value={employee.pesel} />
-                <InfoRow label="Status"       value={employee.isActive ? "Active" : "Inactive"} />
+                <InfoRow label={t("profile.fullName")}    value={employee.user?.name} />
+                <InfoRow label={t("profile.email")}        value={employee.user?.email} />
+                <InfoRow label={t("profile.phone")}        value={employee.phone} />
+                <InfoRow label={t("profile.dateOfBirth")} value={formatDate(employee.dateOfBirth, t, language)} />
+                <InfoRow label={t("profile.pesel")}        value={employee.pesel} />
+                <InfoRow label={t("common.status")}       value={employee.isActive ? "Active" : "Inactive"} />
               </div>
 
               <div className="mt-6 border-t border-slate-100 pt-5">
-                <h4 className="mb-4 text-sm font-bold text-slate-700">Employment Details</h4>
+                <h4 className="mb-4 text-sm font-bold text-slate-700">{t("profile.employmentDetails")}</h4>
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                  <InfoRow label="Department"   value={employee.department} />
-                  <InfoRow label="Position"     value={employee.position} />
-                  <InfoRow label="Work Site"    value={employee.site} />
-                  <InfoRow label="Contract Type" value={employee.contractType} />
-                  <InfoRow label="Start Date"   value={formatDate(employee.startDate)} />
-                  <InfoRow label="Risk Level"   value={employee.riskLevel} />
+                  <InfoRow label={t("profile.department")}   value={employee.department} />
+                  <InfoRow label={t("profile.position")}     value={employee.position} />
+                  <InfoRow label={t("profile.workSite")}    value={employee.site} />
+                  <InfoRow label={t("profile.contractType")} value={employee.contractType} />
+                  <InfoRow label={t("profile.startDate")}   value={formatDate(employee.startDate, t, language)} />
+                  <InfoRow label={t("profile.riskLevel")}   value={employee.riskLevel} />
                 </div>
               </div>
             </Card>
@@ -990,21 +1039,21 @@ function EmployeeProfile() {
             <div className="space-y-4">
               {/* Medical */}
               <Card>
-                <SectionTitle title="Medical Certificate" />
+                <SectionTitle title={t("profile.medicalTitle")} />
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">Status</span>
+                    <span className="text-sm text-slate-600">{t("common.status")}</span>
                     <StatusBadge status={medStatus} />
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">Expiry</span>
+                    <span className="text-sm text-slate-600">{t("profile.expiry")}</span>
                     <span className="text-sm font-semibold text-slate-800">
-                      {formatDate(employee.medicalCertificate?.expiryDate)}
+                      {formatDate(employee.medicalCertificate?.expiryDate, t, language)}
                     </span>
                   </div>
                   {medDays !== null && (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600">Days Left</span>
+                      <span className="text-sm text-slate-600">{t("profile.daysLeft")}</span>
                       <span className={`text-sm font-bold ${medDays < 0 ? "text-red-600" : medDays < 30 ? "text-amber-600" : "text-emerald-600"}`}>
                         {medDays < 0 ? `${Math.abs(medDays)} overdue` : `${medDays} days`}
                       </span>
@@ -1012,7 +1061,7 @@ function EmployeeProfile() {
                   )}
                   {employee.medicalCertificate?.documentPath && (
                     <div className="mt-2 rounded-xl bg-slate-50 px-3 py-2">
-                      <p className="text-xs text-slate-400">Document stored</p>
+                      <p className="text-xs text-slate-400">{t("profile.documentStored")}</p>
                       <p className="mt-0.5 truncate text-xs font-semibold text-blue-600">
                         {employee.medicalCertificate.documentPath}
                       </p>
@@ -1023,27 +1072,27 @@ function EmployeeProfile() {
 
               {/* BHP */}
               <Card>
-                <SectionTitle title="BHP Safety Training" />
+                <SectionTitle title={t("profile.bhpTitle")} />
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">Status</span>
+                    <span className="text-sm text-slate-600">{t("common.status")}</span>
                     <StatusBadge status={bhpStatus} />
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">Completed</span>
+                    <span className="text-sm text-slate-600">{t("profile.completed")}</span>
                     <span className="text-sm font-semibold text-slate-800">
-                      {formatDate(employee.bhpTraining?.completedDate)}
+                      {formatDate(employee.bhpTraining?.completedDate, t, language)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">Expiry</span>
+                    <span className="text-sm text-slate-600">{t("profile.expiry")}</span>
                     <span className="text-sm font-semibold text-slate-800">
-                      {formatDate(employee.bhpTraining?.expiryDate)}
+                      {formatDate(employee.bhpTraining?.expiryDate, t, language)}
                     </span>
                   </div>
                   {bhpDays !== null && (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600">Days Left</span>
+                      <span className="text-sm text-slate-600">{t("profile.daysLeft")}</span>
                       <span className={`text-sm font-bold ${bhpDays < 0 ? "text-red-600" : bhpDays < 30 ? "text-amber-600" : "text-emerald-600"}`}>
                         {bhpDays < 0 ? `${Math.abs(bhpDays)} overdue` : `${bhpDays} days`}
                       </span>
@@ -1051,7 +1100,7 @@ function EmployeeProfile() {
                   )}
                   {employee.bhpTraining?.documentPath && (
                     <div className="mt-2 rounded-xl bg-slate-50 px-3 py-2">
-                      <p className="text-xs text-slate-400">Document stored</p>
+                      <p className="text-xs text-slate-400">{t("profile.documentStored")}</p>
                       <p className="mt-0.5 truncate text-xs font-semibold text-blue-600">
                         {employee.bhpTraining.documentPath}
                       </p>
@@ -1063,9 +1112,9 @@ function EmployeeProfile() {
               {/* Block reason */}
               {employee.isBlocked && (
                 <Card className="border-red-100 bg-red-50">
-                  <SectionTitle title="Block Reason" />
+                  <SectionTitle title={t("profile.blockReason")} />
                   <p className="text-sm font-semibold text-red-700">
-                    {employee.blockReason || "Compliance block is active"}
+                    {employee.blockReason || t("profile.blockActive")}
                   </p>
                 </Card>
               )}
@@ -1089,24 +1138,24 @@ function EmployeeProfile() {
               <Card>
                 <div className="mb-5 flex items-center justify-between border-b border-slate-100 pb-4">
                   <div>
-                    <h3 className="text-base font-bold text-slate-900">Employment Details</h3>
-                    <p className="mt-1 text-sm text-slate-500">Role, contract, and workplace information</p>
+                    <h3 className="text-base font-bold text-slate-900">{t("profile.employmentDetails")}</h3>
+                    <p className="mt-1 text-sm text-slate-500">{t("profile.roleContractInfo")}</p>
                   </div>
                   <button
                     onClick={() => setEditMode(true)}
                     className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
                   >
-                    Edit
+                    {t("common.edit")}
                   </button>
                 </div>
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                  <InfoRow label="Department"    value={employee.department} />
-                  <InfoRow label="Position"      value={employee.position} />
-                  <InfoRow label="Work Site"     value={employee.site} />
-                  <InfoRow label="Contract Type" value={employee.contractType} />
-                  <InfoRow label="Start Date"    value={formatDate(employee.startDate)} />
-                  <InfoRow label="Status"        value={employee.isActive ? "Active" : "Inactive"} />
-                  <InfoRow label="Risk Level"    value={employee.riskLevel} />
+                  <InfoRow label={t("profile.department")}    value={employee.department} />
+                  <InfoRow label={t("profile.position")}      value={employee.position} />
+                  <InfoRow label={t("profile.workSite")}     value={employee.site} />
+                  <InfoRow label={t("profile.contractType")} value={employee.contractType} />
+                  <InfoRow label={t("profile.startDate")}    value={formatDate(employee.startDate, t, language)} />
+                  <InfoRow label={t("common.status")}        value={employee.isActive ? "Active" : "Inactive"} />
+                  <InfoRow label={t("profile.riskLevel")}    value={employee.riskLevel} />
                 </div>
               </Card>
             ) : (
@@ -1114,24 +1163,24 @@ function EmployeeProfile() {
               <>
                 {/* Identity (read-only) */}
                 <Card>
-                  <SectionTitle title="Employee Identity" subtitle="Identity is managed by RegulaOne and cannot be changed here" />
+                  <SectionTitle title={t("profile.identityTitle")} subtitle={t("profile.identitySubtitle")} />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <FormField label="Full Name">
+                    <FormField label={t("profile.fullName")}>
                       <Input type="text" value={employee.user?.name ?? ""} disabled />
                     </FormField>
-                    <FormField label="Email">
+                    <FormField label={t("profile.email")}>
                       <Input type="email" value={employee.user?.email ?? ""} disabled />
                     </FormField>
-                    <FormField label="Phone">
+                    <FormField label={t("profile.phone")}>
                       <Input type="tel" placeholder="+48 600 000 000" value={editForm.phone}
                         onChange={(e) => updateEdit("phone", e.target.value)} />
                     </FormField>
-                    <FormField label="Date of Birth">
+                    <FormField label={t("profile.dateOfBirth")}>
                       <Input type="date" value={editForm.dateOfBirth}
                         onChange={(e) => updateEdit("dateOfBirth", e.target.value)} />
                     </FormField>
-                    <FormField label="PESEL / National ID">
-                      <Input type="text" placeholder="Polish national identifier" value={editForm.pesel}
+                    <FormField label={t("profile.pesel")}>
+                      <Input type="text" placeholder={t("profile.peselHint")} value={editForm.pesel}
                         onChange={(e) => updateEdit("pesel", e.target.value)} />
                     </FormField>
                   </div>
@@ -1139,37 +1188,37 @@ function EmployeeProfile() {
 
                 {/* Role & workplace */}
                 <Card>
-                  <SectionTitle title="Role & Workplace" subtitle="Job role, department, and site assignment" />
+                  <SectionTitle title={t("profile.roleWorkplaceTitle")} subtitle={t("profile.roleWorkplaceSubtitle")} />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <FormField label="Department" required>
+                    <FormField label={t("profile.department")} required>
                       <SearchableSelect
                         value={editForm.department}
                         onChange={(v) => updateEdit("department", v)}
                         options={DEPARTMENTS}
-                        placeholder="Search department..."
+                        placeholder={t("profile.searchDepartment")}
                       />
                     </FormField>
-                    <FormField label="Position" required>
+                    <FormField label={t("profile.position")} required>
                       <SearchableSelect
                         value={editForm.position}
                         onChange={(v) => updateEdit("position", v)}
                         options={JOB_ROLES}
-                        placeholder="Search position..."
+                        placeholder={t("profile.searchPosition")}
                       />
                     </FormField>
-                    <FormField label="Work Site" required>
+                    <FormField label={t("profile.workSite")} required>
                       <SelectInput value={editForm.site} onChange={(e) => updateEdit("site", e.target.value)}>
-                        <option value="">Select site</option>
+                        <option value="">{t("profile.selectSite")}</option>
                         {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
                       </SelectInput>
                     </FormField>
-                    <FormField label="Contract Type" required>
+                    <FormField label={t("profile.contractType")} required>
                       <SelectInput value={editForm.contractType} onChange={(e) => updateEdit("contractType", e.target.value)}>
-                        <option value="">Select contract type</option>
+                        <option value="">{t("profile.selectContractType")}</option>
                         {CONTRACT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </SelectInput>
                     </FormField>
-                    <FormField label="Start Date">
+                    <FormField label={t("profile.startDate")}>
                       <Input type="date" value={editForm.startDate}
                         onChange={(e) => updateEdit("startDate", e.target.value)} />
                     </FormField>
@@ -1177,7 +1226,7 @@ function EmployeeProfile() {
 
                   {/* Active/Inactive toggle */}
                   <div className="mt-4">
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Employment Status</p>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{t("profile.employmentStatus")}</p>
                     <div className="flex gap-3">
                       {["Active", "Inactive"].map((s) => (
                         <button key={s} type="button"
@@ -1197,7 +1246,7 @@ function EmployeeProfile() {
 
                 {/* Risk classification */}
                 <Card>
-                  <SectionTitle title="Risk Classification" subtitle="Occupational risk level for this position" />
+                  <SectionTitle title={t("profile.riskTitle")} subtitle={t("profile.riskSubtitle")} />
                   <div className="grid grid-cols-3 gap-3">
                     {RISK_LEVELS.map((level) => {
                       const sel = editForm.riskLevel === level;
@@ -1220,19 +1269,19 @@ function EmployeeProfile() {
 
                 {/* Compliance requirements */}
                 <Card>
-                  <SectionTitle title="Medical Requirements" subtitle="Occupational health examination configuration" />
+                  <SectionTitle title={t("profile.medicalReqTitle")} subtitle={t("profile.medicalReqSubtitle")} />
                   <div className="space-y-3">
                     <Toggle
-                      label="Requires Medical Certificate"
-                      hint="Badania medycyny pracy — occupational health examination required"
+                      label={t("profile.requiresMedical")}
+                      hint={t("profile.medicalHint")}
                       value={editForm.requiresMedical}
                       onChange={(v) => updateEdit("requiresMedical", v)}
                     />
                     {editForm.requiresMedical && (
                       <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-                        <FormField label="Medical Exam Type">
+                        <FormField label={t("profile.medicalExamType")}>
                           <SelectInput value={editForm.medicalExamType} onChange={(e) => updateEdit("medicalExamType", e.target.value)}>
-                            {MEDICAL_EXAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                            {MEDICAL_EXAM_TYPES.map((type) => <option key={type.value} value={type.value}>{t(type.labelKey)}</option>)}
                           </SelectInput>
                         </FormField>
                       </div>
@@ -1241,25 +1290,25 @@ function EmployeeProfile() {
                 </Card>
 
                 <Card>
-                  <SectionTitle title="BHP Safety Training" subtitle="Bezpieczenstwo i Higiena Pracy — mandatory safety training" />
+                  <SectionTitle title={t("profile.bhpTitle")} subtitle={t("profile.bhpReqSubtitle")} />
                   <div className="space-y-3">
                     <Toggle
-                      label="Requires BHP Training"
-                      hint="Mandatory safety training under Polish Labour Code"
+                      label={t("profile.requiresBhp")}
+                      hint={t("profile.bhpMandatoryNote")}
                       value={editForm.requiresBHP}
                       onChange={(v) => updateEdit("requiresBHP", v)}
                     />
                     {editForm.requiresBHP && (
                       <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50 p-4">
                         <Toggle
-                          label="Initial BHP Required"
-                          hint="One-time onboarding safety training on employment start date"
+                          label={t("profile.initialBhp")}
+                          hint={t("profile.initialBhpNote")}
                           value={editForm.initialBHPRequired}
                           onChange={(v) => updateEdit("initialBHPRequired", v)}
                         />
-                        <FormField label="Periodic BHP Frequency">
+                        <FormField label={t("profile.periodicBhp")}>
                           <SelectInput value={editForm.periodicBHPFrequency} onChange={(e) => updateEdit("periodicBHPFrequency", e.target.value)}>
-                            {BHP_FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
+                            {BHP_FREQUENCIES.map((freq) => <option key={freq.value} value={freq.value}>{t(freq.labelKey)}</option>)}
                           </SelectInput>
                         </FormField>
                       </div>
@@ -1273,14 +1322,14 @@ function EmployeeProfile() {
                     onClick={() => { setEditMode(false); }}
                     className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </button>
                   <button
                     onClick={handleEditSave}
                     disabled={submitting}
                     className="rounded-xl bg-blue-600 px-8 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {submitting ? "Saving…" : "Save Changes"}
+                    {submitting ? t("common.saving") : t("profile.saveChanges")}
                   </button>
                 </div>
               </>
@@ -1304,10 +1353,13 @@ function EmployeeProfile() {
             {!employee.requiresMedicalCertificate && !employee.requiresBHPTraining && (
               <Card>
                 <div className="py-6 text-center">
-                  <p className="font-semibold text-slate-700">No compliance documents required</p>
+                  <p className="font-semibold text-slate-700">{t("profile.noDocsRequiredTitle")}</p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Go to the <strong>Employment</strong> tab and set "Requires Medical Certificate"
-                    or "Requires BHP Training" to <strong>Yes</strong> to enable document uploads.
+                    {t("profile.noDocsRequiredHintStart")}{" "}
+                    <strong>{t("profile.tabEmployment")}</strong>{" "}
+                    {t("profile.noDocsRequiredHintMiddle")}{" "}
+                    <strong>{t("common.yes")}</strong>{" "}
+                    {t("profile.noDocsRequiredHintEnd")}
                   </p>
                 </div>
               </Card>
@@ -1320,33 +1372,35 @@ function EmployeeProfile() {
                 <Card>
                   <div className="mb-5 flex items-center justify-between border-b border-slate-100 pb-4">
                     <div>
-                      <h3 className="text-base font-bold text-slate-900">Medical Certificate</h3>
-                      <p className="mt-1 text-sm text-slate-500">Badania medycyny pracy</p>
+                      <h3 className="text-base font-bold text-slate-900">{t("profile.medicalTitle")}</h3>
+                      <p className="mt-1 text-sm text-slate-500">{t("profile.medicalSubtitle")}</p>
                     </div>
-                    <button
-                      onClick={() => setUploadModal("medical")}
-                      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
-                    >
-                      Upload
-                    </button>
+                    {canUploadDocuments && (
+                      <button
+                        onClick={() => setUploadModal("medical")}
+                        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                      >
+                        {t("common.upload")}
+                      </button>
+                    )}
                   </div>
 
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-500">Status</span>
+                      <span className="text-sm text-slate-500">{t("common.status")}</span>
                       <StatusBadge status={medStatus} />
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-500">Expiry Date</span>
+                      <span className="text-sm text-slate-500">{t("profile.expiryDate")}</span>
                       <span className="text-sm font-semibold text-slate-800">
-                        {formatDate(employee.medicalCertificate?.expiryDate)}
+                        {formatDate(employee.medicalCertificate?.expiryDate, t, language)}
                       </span>
                     </div>
                     {medDays !== null && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-500">Days Until Expiry</span>
+                        <span className="text-sm text-slate-500">{t("profile.daysUntilExpiry")}</span>
                         <span className={`text-sm font-bold ${medDays < 0 ? "text-red-600" : medDays < 30 ? "text-amber-600" : "text-emerald-600"}`}>
-                          {medDays < 0 ? `${Math.abs(medDays)} days overdue` : `${medDays} days remaining`}
+                          {medDays < 0 ? t("profile.daysOverdue", { count: Math.abs(medDays) }) : t("profile.daysRemaining", { count: medDays })}
                         </span>
                       </div>
                     )}
@@ -1356,36 +1410,51 @@ function EmployeeProfile() {
                       // from the backend and open it in a new tab.
                       <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                         <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">
-                          Stored Document
+                          {t("profile.storedDocument")}
                         </p>
                         <p className="mb-3 break-all text-xs text-slate-500">
                           {employee.medicalCertificate.documentPath.split("/").pop()}
                         </p>
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => handleViewDocument("medical")}
-                            disabled={viewingDoc === "medical"}
-                            className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                          >
-                            {viewingDoc === "medical" ? "Opening…" : "View Document"}
-                          </button>
-                          <button
-                            onClick={() => setUploadModal("medical")}
-                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
-                          >
-                            Replace
-                          </button>
+                          {/* Opening the file needs DOCUMENT_READ (health data). */}
+                          {canViewDocuments && (
+                            <button
+                              onClick={() => handleViewDocument("medical")}
+                              disabled={viewingDoc === "medical"}
+                              className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {viewingDoc === "medical" ? t("profile.opening") : t("profile.viewDocument")}
+                            </button>
+                          )}
+                          {canUploadDocuments && (
+                            <button
+                              onClick={() => setUploadModal("medical")}
+                              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                            >
+                              {t("common.replace")}
+                            </button>
+                          )}
+                          {/* Read-only roles (for example an auditor) see the file
+                              name and its status, which is what an audit needs,
+                              but cannot open the certificate itself. */}
+                          {!canViewDocuments && !canUploadDocuments && (
+                            <p className="text-xs text-slate-400">
+                              {t("profile.readOnlyDocNote")}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ) : (
                       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-                        <p className="text-sm text-slate-400">No document uploaded yet</p>
-                        <button
-                          onClick={() => setUploadModal("medical")}
-                          className="mt-3 text-sm font-bold text-blue-600 hover:underline"
-                        >
-                          Upload Now →
-                        </button>
+                        <p className="text-sm text-slate-400">{t("profile.noDocument")}</p>
+                        {canUploadDocuments && (
+                          <button
+                            onClick={() => setUploadModal("medical")}
+                            className="mt-3 text-sm font-bold text-blue-600 hover:underline"
+                          >
+                            {t("profile.uploadNow")}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1397,39 +1466,41 @@ function EmployeeProfile() {
                 <Card>
                   <div className="mb-5 flex items-center justify-between border-b border-slate-100 pb-4">
                     <div>
-                      <h3 className="text-base font-bold text-slate-900">BHP Safety Training</h3>
-                      <p className="mt-1 text-sm text-slate-500">Bezpieczenstwo i Higiena Pracy</p>
+                      <h3 className="text-base font-bold text-slate-900">{t("profile.bhpTitle")}</h3>
+                      <p className="mt-1 text-sm text-slate-500">{t("profile.bhpSubtitle")}</p>
                     </div>
-                    <button
-                      onClick={() => setUploadModal("bhp")}
-                      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
-                    >
-                      Upload
-                    </button>
+                    {canUploadDocuments && (
+                      <button
+                        onClick={() => setUploadModal("bhp")}
+                        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                      >
+                        {t("common.upload")}
+                      </button>
+                    )}
                   </div>
 
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-500">Status</span>
+                      <span className="text-sm text-slate-500">{t("common.status")}</span>
                       <StatusBadge status={bhpStatus} />
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-500">Completed Date</span>
+                      <span className="text-sm text-slate-500">{t("profile.completedDate")}</span>
                       <span className="text-sm font-semibold text-slate-800">
-                        {formatDate(employee.bhpTraining?.completedDate)}
+                        {formatDate(employee.bhpTraining?.completedDate, t, language)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-500">Expiry Date</span>
+                      <span className="text-sm text-slate-500">{t("profile.expiryDate")}</span>
                       <span className="text-sm font-semibold text-slate-800">
-                        {formatDate(employee.bhpTraining?.expiryDate)}
+                        {formatDate(employee.bhpTraining?.expiryDate, t, language)}
                       </span>
                     </div>
                     {bhpDays !== null && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-500">Days Until Expiry</span>
+                        <span className="text-sm text-slate-500">{t("profile.daysUntilExpiry")}</span>
                         <span className={`text-sm font-bold ${bhpDays < 0 ? "text-red-600" : bhpDays < 30 ? "text-amber-600" : "text-emerald-600"}`}>
-                          {bhpDays < 0 ? `${Math.abs(bhpDays)} days overdue` : `${bhpDays} days remaining`}
+                          {bhpDays < 0 ? t("profile.daysOverdue", { count: Math.abs(bhpDays) }) : t("profile.daysRemaining", { count: bhpDays })}
                         </span>
                       </div>
                     )}
@@ -1437,36 +1508,47 @@ function EmployeeProfile() {
                     {employee.bhpTraining?.documentPath ? (
                       <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                         <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">
-                          Stored Document
+                          {t("profile.storedDocument")}
                         </p>
                         <p className="mb-3 break-all text-xs text-slate-500">
                           {employee.bhpTraining.documentPath.split("/").pop()}
                         </p>
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => handleViewDocument("bhp")}
-                            disabled={viewingDoc === "bhp"}
-                            className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                          >
-                            {viewingDoc === "bhp" ? "Opening…" : "View Document"}
-                          </button>
-                          <button
-                            onClick={() => setUploadModal("bhp")}
-                            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
-                          >
-                            Replace
-                          </button>
+                          {canViewDocuments && (
+                            <button
+                              onClick={() => handleViewDocument("bhp")}
+                              disabled={viewingDoc === "bhp"}
+                              className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {viewingDoc === "bhp" ? t("profile.opening") : t("profile.viewDocument")}
+                            </button>
+                          )}
+                          {canUploadDocuments && (
+                            <button
+                              onClick={() => setUploadModal("bhp")}
+                              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                            >
+                              {t("common.replace")}
+                            </button>
+                          )}
+                          {!canViewDocuments && !canUploadDocuments && (
+                            <p className="text-xs text-slate-400">
+                              {t("profile.readOnlyDocNote")}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ) : (
                       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-                        <p className="text-sm text-slate-400">No document uploaded yet</p>
-                        <button
-                          onClick={() => setUploadModal("bhp")}
-                          className="mt-3 text-sm font-bold text-blue-600 hover:underline"
-                        >
-                          Upload Now →
-                        </button>
+                        <p className="text-sm text-slate-400">{t("profile.noDocument")}</p>
+                        {canUploadDocuments && (
+                          <button
+                            onClick={() => setUploadModal("bhp")}
+                            className="mt-3 text-sm font-bold text-blue-600 hover:underline"
+                          >
+                            {t("profile.uploadNow")}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

@@ -1,12 +1,23 @@
 import { useState, useEffect, useRef } from "react";
 import { NavLink, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useCapabilities } from "../../hooks/useCapabilities";
+import { CAPABILITIES } from "../../config/capabilities";
+import { useTranslation } from "../../hooks/useTranslation";
+import LanguageToggle from "./LanguageToggle";
 
+// Every menu item says which ONE thing a user must be allowed to do before the
+// link is shown. For example "Audit Reports" needs AUDIT_READ, which admins and
+// auditors have but HR does not — so HR simply never sees that menu item instead
+// of clicking it and being turned away.
+//
+// An item with no `capability` is shown to everyone who can open SafeWork.
 const NAV_ITEMS = [
-  { label: "Home", path: "/" },
+  { labelKey: "nav.home", path: "/", capability: CAPABILITIES.DASHBOARD_READ },
   {
-    label: "Employees",
+    labelKey: "nav.employees",
     path: "/employees",
+    capability: CAPABILITIES.EMPLOYEE_READ,
     // children: [
     //   { label: "Employee List", path: "/employees" },
     //   { label: "Add Employee", path: "/employees/add" },
@@ -17,10 +28,11 @@ const NAV_ITEMS = [
     // ],
   },
   {
-    label: "Audit Reports",
+    labelKey: "nav.auditReports",
     path: "/audit-logs",
+    capability: CAPABILITIES.AUDIT_READ,
   },
-  { label: "Dashboard", path: "/dashboard" },
+  { labelKey: "nav.dashboard", path: "/dashboard", capability: CAPABILITIES.DASHBOARD_READ },
   // { label: "Reports", path: "/reports" },
   // { label: "Contact", path: "/contact" },
 ];
@@ -35,6 +47,19 @@ export default function Header() {
   // login() sends the user to the central RegulaOne login page.
   // logout() clears the shared cookie and returns to the central login page.
   const { isAuthenticated, login, logout } = useAuth();
+
+  // What this user is allowed to do. Used to drop menu items they cannot use.
+  const { can } = useCapabilities();
+
+  // t() gives us the words for the language the user picked (Polish by default).
+  const { t } = useTranslation();
+
+  // Keep only the menu items this user's role covers. Items with no capability
+  // set are always kept. We work this out once per render of the header, and both
+  // the desktop and mobile menus use the same list so they can never disagree.
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => !item.capability || can(item.capability)
+  );
 
   const dropdownRef = useRef(null);
 
@@ -111,34 +136,34 @@ export default function Header() {
               </span>
 
               <p className="text-slate-400 text-[10px] font-medium tracking-widest uppercase leading-none">
-                Poland · HRMS Platform
+                {t("nav.brandTagline")}
               </p>
             </div>
           </Link>
 
           {/* Desktop Navigation */}
           <nav ref={dropdownRef} className="hidden lg:flex items-center gap-1">
-            {NAV_ITEMS.map((item) =>
+            {visibleNavItems.map((item) =>
               item.children ? (
                 <div
-                  key={item.label}
+                  key={item.labelKey}
                   className="relative"
-                  onMouseEnter={() => setOpenDropdown(item.label)}
+                  onMouseEnter={() => setOpenDropdown(item.labelKey)}
                   onMouseLeave={() => setOpenDropdown(null)}
                 >
                   <button
                     type="button"
                     className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      openDropdown === item.label
+                      openDropdown === item.labelKey
                         ? "bg-emerald-50 text-emerald-700"
                         : "text-slate-600 hover:text-emerald-700 hover:bg-emerald-50/70"
                     }`}
                   >
-                    {item.label}
+                    {t(item.labelKey)}
 
                     <svg
                       className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                        openDropdown === item.label
+                        openDropdown === item.labelKey
                           ? "rotate-180 text-emerald-600"
                           : "text-slate-400"
                       }`}
@@ -155,7 +180,7 @@ export default function Header() {
                     </svg>
                   </button>
 
-                  {openDropdown === item.label && (
+                  {openDropdown === item.labelKey && (
                     <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-52 z-50">
                       <div className="bg-white border border-slate-100 rounded-2xl shadow-xl shadow-slate-200/60 overflow-hidden animate-fade-in-down">
                         <div className="p-1.5">
@@ -173,7 +198,7 @@ export default function Header() {
                               }
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-                              {child.label}
+                              {t(child.labelKey)}
                             </NavLink>
                           ))}
                         </div>
@@ -194,7 +219,7 @@ export default function Header() {
                     }`
                   }
                 >
-                  {item.label}
+                  {t(item.labelKey)}
                 </NavLink>
               )
             )}
@@ -202,18 +227,21 @@ export default function Header() {
 
           {/* Desktop CTA */}
           <div className="hidden lg:flex items-center gap-3">
+            {/* Language switch (PL / EN). Polish is the default. */}
+            <LanguageToggle />
+
             <button
               onClick={() => (isAuthenticated ? logout() : login())}
               className="text-sm font-medium text-slate-600 hover:text-emerald-700 transition-colors duration-200 px-3 py-2 rounded-lg hover:bg-emerald-50/70"
             >
-              {isAuthenticated ? "Sign Out" : "Sign In"}
+              {isAuthenticated ? t("nav.signOut") : t("nav.signIn")}
             </button>
 
             <Link
               to="/contact"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold shadow-md shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:from-emerald-400 hover:to-teal-400 transition-all duration-200 active:scale-95"
             >
-              Get Started
+              {t("nav.getStarted")}
 
               <svg
                 className="w-3.5 h-3.5"
@@ -235,7 +263,7 @@ export default function Header() {
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
             className="lg:hidden flex flex-col justify-center items-center w-10 h-10 rounded-xl hover:bg-slate-100 transition-colors duration-200 gap-1.5"
-            aria-label="Toggle menu"
+            aria-label={t("nav.toggleMenu")}
           >
             <span
               className={`block w-5 h-0.5 bg-slate-600 transition-all duration-300 ${
@@ -265,22 +293,22 @@ export default function Header() {
         }`}
       >
         <div className="bg-white border-t border-slate-100 px-4 pb-6 pt-2">
-          {NAV_ITEMS.map((item) =>
+          {visibleNavItems.map((item) =>
             item.children ? (
-              <div key={item.label}>
+              <div key={item.labelKey}>
                 <button
                   onClick={() =>
                     setMobileExpanded(
-                      mobileExpanded === item.label ? null : item.label
+                      mobileExpanded === item.labelKey ? null : item.labelKey
                     )
                   }
                   className="w-full flex items-center justify-between py-3 text-sm font-medium text-slate-600 hover:text-emerald-700 border-b border-slate-100"
                 >
-                  {item.label}
+                  {t(item.labelKey)}
 
                   <svg
                     className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
-                      mobileExpanded === item.label
+                      mobileExpanded === item.labelKey
                         ? "rotate-180 text-emerald-600"
                         : ""
                     }`}
@@ -297,7 +325,7 @@ export default function Header() {
                   </svg>
                 </button>
 
-                {mobileExpanded === item.label && (
+                {mobileExpanded === item.labelKey && (
                   <div className="pl-4 pb-1">
                     {item.children.map((child) => (
                       <NavLink
@@ -316,7 +344,7 @@ export default function Header() {
                         }
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        {child.label}
+                        {t(child.labelKey)}
                       </NavLink>
                     ))}
                   </div>
@@ -336,12 +364,19 @@ export default function Header() {
                   }`
                 }
               >
-                {item.label}
+                {t(item.labelKey)}
               </NavLink>
             )
           )}
 
           <div className="mt-5 flex flex-col gap-3">
+            {/* Same language switch as the desktop header, so a phone user can
+                change language without opening anything else. */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <span className="text-sm font-medium text-slate-600">{t("language.label")}</span>
+              <LanguageToggle />
+            </div>
+
             <button
               onClick={() => {
                 setMobileOpen(false);
@@ -349,7 +384,7 @@ export default function Header() {
               }}
               className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
             >
-              {isAuthenticated ? "Sign Out" : "Sign In"}
+              {isAuthenticated ? t("nav.signOut") : t("nav.signIn")}
             </button>
 
             <Link
@@ -357,7 +392,7 @@ export default function Header() {
               onClick={() => setMobileOpen(false)}
               className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold text-center shadow-md shadow-emerald-500/20 hover:from-emerald-400 hover:to-teal-400 transition-all"
             >
-              Get Started
+              {t("nav.getStarted")}
             </Link>
           </div>
         </div>

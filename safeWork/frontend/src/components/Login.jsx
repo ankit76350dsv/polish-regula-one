@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { redirectToCentralLogin } from "../api/authApi";
+import { useTranslation } from "../hooks/useTranslation";
 
 /**
  * SafeWork does NOT have its own login form anymore.
@@ -16,6 +17,8 @@ import { redirectToCentralLogin } from "../api/authApi";
  * the user.
  */
 export default function Login() {
+  const { t } = useTranslation();
+
   useEffect(() => {
     redirectToCentralLogin();
   }, []);
@@ -24,12 +27,8 @@ export default function Login() {
     <div className="min-h-screen bg-slate-900 flex items-center justify-center">
       <div className="text-center space-y-4">
         <div className="w-10 h-10 mx-auto border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-slate-400 text-sm font-medium">
-          Redirecting to RegulaOne login…
-        </p>
-        <p className="text-slate-600 text-xs">
-          You will be returned to SafeWork automatically after signing in.
-        </p>
+        <p className="text-slate-400 text-sm font-medium">{t("login.redirecting")}</p>
+        <p className="text-slate-600 text-xs">{t("login.returnNote")}</p>
       </div>
     </div>
   );

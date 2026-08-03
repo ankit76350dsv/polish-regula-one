@@ -1,6 +1,6 @@
 // SafeWork Express application entry point.
 // Auth (login/logout/me) is handled by the RegulaOne backend on port 8080.
-// This service runs on port 8082 and owns: employee compliance profiles, dashboard.
+// This service runs on port 3001 and owns: employee compliance profiles, dashboard.
 
 const express = require('express');
 const cors = require('cors');
@@ -17,6 +17,9 @@ const { errorHandler, notFoundHandler } = require('./src/middleware/errorHandler
 const adminRoutes = require('./src/routes/adminRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const authRoutes = require('./src/routes/authRoutes');
+
+// Scheduled jobs (daily certificate-expiry refresh).
+const { registerJobs } = require('./src/jobs');
 
 const app = express();
 
@@ -72,8 +75,10 @@ app.use(errorHandler);
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 const start = async () => {
   await connectDB();
-  app.listen(config.port, config.bindHost, () => {
-    console.log(`[APP] SafeWork backend running on ${config.bindHost}:${config.port} (${config.nodeEnv})`);
+  // Start the scheduled jobs once the DB is connected.
+  registerJobs();
+  app.listen(config.port, () => {
+    console.log(`[APP] SafeWork backend running on port ${config.port} (${config.nodeEnv})`);
     console.log(`[APP] Health: http://localhost:${config.port}/health`);
     console.log(`[APP] Auth is served by RegulaOne at http://localhost:8080`);
   });

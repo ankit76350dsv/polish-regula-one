@@ -2,32 +2,40 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchEmployees } from "../store/slices/employeeSlice";
+import { useCapabilities } from "../hooks/useCapabilities";
+import { useTranslation } from "../hooks/useTranslation";
 
 // ─── Status config ─────────────────────────────────────────────────────────────
+// Colours stay here; the WORDS come from the dictionary (labelKey), so a badge
+// reads "Ważne" in Polish and "Valid" in English.
 const statusConfig = {
-  valid:     { label: "Valid",           className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
-  compliant: { label: "Compliant",       className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
-  allowed:   { label: "Allowed",         className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
-  expiring:  { label: "Expiring Soon",   className: "bg-amber-50 text-amber-700 ring-amber-200",       dot: "bg-amber-500"   },
-  warning:   { label: "Non-Compliant",   className: "bg-amber-50 text-amber-700 ring-amber-200",       dot: "bg-amber-500"   },
-  expired:   { label: "Expired",         className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
-  missing:   { label: "Missing",         className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
-  blocked:   { label: "Blocked",         className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
+  valid:     { labelKey: "status.valid",        className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
+  compliant: { labelKey: "status.compliant",    className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
+  allowed:   { labelKey: "status.allowed",      className: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
+  expiring:  { labelKey: "status.expiringSoon", className: "bg-amber-50 text-amber-700 ring-amber-200",       dot: "bg-amber-500"   },
+  warning:   { labelKey: "status.nonCompliant", className: "bg-amber-50 text-amber-700 ring-amber-200",       dot: "bg-amber-500"   },
+  expired:   { labelKey: "status.expired",      className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
+  missing:   { labelKey: "status.missing",      className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
+  blocked:   { labelKey: "status.blocked",      className: "bg-red-50 text-red-700 ring-red-200",             dot: "bg-red-500"     },
 };
 
 function StatusBadge({ status }) {
+  const { t } = useTranslation();
   const config = statusConfig[status] || statusConfig.missing;
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${config.className}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
-      {config.label}
+      {t(config.labelKey)}
     </span>
   );
 }
 
-function formatDate(dateValue) {
-  if (!dateValue) return "Not set";
-  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(dateValue));
+// Dates are written the way each language writes them, so `locale` is passed in.
+// `t` is passed in too because this is a plain helper, not a component, and only
+// components are allowed to use hooks.
+function formatDate(dateValue, t, locale) {
+  if (!dateValue) return t ? t("common.notSet") : "";
+  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(dateValue));
 }
 
 // ─── Data-shape helpers ────────────────────────────────────────────────────────
@@ -36,8 +44,8 @@ function formatDate(dateValue) {
 //   medicalCertificate: { status, expiryDate }, bhpTraining: { status, expiryDate },
 //   complianceStatus, isBlocked, blockReason, ... }
 
-function displayName(e) {
-  return e.user?.name || e.user?.email || "Unknown";
+function displayName(e, t) {
+  return e.user?.name || e.user?.email || t("common.unknown");
 }
 
 // Normalise backend UPPERCASE enum → lowercase statusConfig key
@@ -61,14 +69,17 @@ function clockInStatus(e) {
   return e.isBlocked ? "blocked" : "allowed";
 }
 
-function resolveBlockReason(e) {
+// Explains in one short sentence WHY this employee is blocked.
+// The reason is built from the document statuses, in the chosen language.
+function resolveBlockReason(e, t, locale) {
   const med = e.medicalCertificate;
   const bhp = e.bhpTraining;
-  if (med?.status === "EXPIRED") return `Medical expired on ${formatDate(med.expiryDate)}`;
-  if (med?.status === "MISSING") return "Medical certificate is missing";
-  if (bhp?.status === "EXPIRED") return `BHP training expired on ${formatDate(bhp.expiryDate)}`;
-  if (bhp?.status === "MISSING") return "BHP training certificate is missing";
-  return e.blockReason || "Compliance block active";
+  if (med?.status === "EXPIRED") return t("employees.reasonMedicalExpired", { date: formatDate(med.expiryDate, t, locale) });
+  if (med?.status === "MISSING") return t("employees.reasonMedicalMissing");
+  if (bhp?.status === "EXPIRED") return t("employees.reasonBhpExpired", { date: formatDate(bhp.expiryDate, t, locale) });
+  if (bhp?.status === "MISSING") return t("employees.reasonBhpMissing");
+  // blockReason comes from the backend as free text; show it as it is if present.
+  return e.blockReason || t("employees.reasonBlockActive");
 }
 
 // Static option lists — match the values used in AddEmployee and EmployeeProfile.
@@ -80,7 +91,7 @@ function resolveBlockReason(e) {
 // (bilingual "Polish / English"). MUST stay in sync with the DEPARTMENTS list
 // used in AddEmployee.jsx and EmployeeProfile.jsx.
 const DEPARTMENTS = [
-  { value: "All",                    label: "All Departments" },
+  // "All" is added at render time so its label can be translated.
   { value: "Warehouse",              label: "Magazyn / Warehouse" },
   { value: "Operations",             label: "Operacje / Operations" },
   { value: "Manufacturing",          label: "Wytwarzanie / Manufacturing" },
@@ -112,8 +123,10 @@ const DEPARTMENTS = [
   { value: "Training & Development", label: "Szkolenia i rozwój / Training & Development" },
   { value: "Project Management",     label: "Zarządzanie projektami / Project Management" },
 ];
+// Site names are real place names, so they are not translated. "All" is added at
+// render time so its label can be.
 const SITES = [
-  "All", "Warsaw Site", "Krakow Site", "Gdansk Site",
+  "Warsaw Site", "Krakow Site", "Gdansk Site",
   "Poznan Site", "Warsaw HQ", "Wroclaw Site",
 ];
 
@@ -122,6 +135,14 @@ function EmployeeList() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { list: employees, pagination, summary, loading, error } = useSelector((s) => s.employees);
+
+  // Creating an employee profile is a write action, so read-only roles (such as
+  // an auditor) must not be offered the button. The backend refuses the call too.
+  const { can, CAPABILITIES } = useCapabilities();
+  const canAddEmployee = can(CAPABILITIES.EMPLOYEE_WRITE);
+
+  // t() = words in the chosen language; `language` also formats dates the local way.
+  const { t, language } = useTranslation();
 
   const [searchTerm, setSearchTerm]                 = useState("");
   const [debouncedSearch, setDebouncedSearch]       = useState("");
@@ -168,57 +189,57 @@ function EmployeeList() {
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-9xl">
 
         {/* Header */}
         <div className="mb-6 rounded-3xl bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 p-6 text-white shadow-lg shadow-emerald-500/20">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="mb-2 inline-flex rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-blue-100 ring-1 ring-white/20">
-                SafeWork HR Compliance
+                {t("employees.badge")}
               </p>
-              <h1 className="text-3xl font-bold">Employee Compliance Register</h1>
+              <h1 className="text-3xl font-bold">{t("employees.title")}</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-300">
-                Track employee medical certificates, BHP safety training, document expiry status, and clock-in eligibility.
+                {t("employees.subtitle")}
               </p>
             </div>
-            <button
+            {/* <button
               onClick={() => navigate("/employees/add")}
               className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-900 transition hover:bg-blue-50"
             >
               + Add Employee
-            </button>
+            </button> */}
           </div>
         </div>
 
         {/* Error */}
         {error && (
           <div className="mb-4 rounded-2xl bg-red-50 border border-red-200 p-4 text-sm text-red-700">
-            Failed to load employees: {error}
+            {t("employees.loadFailed", { error })}
           </div>
         )}
 
         {/* Summary Cards */}
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Total Employees</p>
+            <p className="text-sm font-medium text-slate-500">{t("employees.statTotal")}</p>
             <p className="mt-2 text-3xl font-bold text-slate-900">{loading ? "…" : totalCount}</p>
-            <p className="mt-1 text-sm text-slate-400">Active user records</p>
+            <p className="mt-1 text-sm text-slate-400">{t("employees.statTotalSub")}</p>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Compliant</p>
+            <p className="text-sm font-medium text-slate-500">{t("employees.statCompliant")}</p>
             <p className="mt-2 text-3xl font-bold text-emerald-600">{loading ? "…" : compliantCount}</p>
-            <p className="mt-1 text-sm text-slate-400">Medical + BHP valid</p>
+            <p className="mt-1 text-sm text-slate-400">{t("employees.statCompliantSub")}</p>
           </div>
           <div className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Expiring Soon</p>
+            <p className="text-sm font-medium text-slate-500">{t("employees.statExpiring")}</p>
             <p className="mt-2 text-3xl font-bold text-amber-600">{loading ? "…" : expiringCount}</p>
-            <p className="mt-1 text-sm text-slate-400">Within warning period</p>
+            <p className="mt-1 text-sm text-slate-400">{t("employees.statExpiringSub")}</p>
           </div>
           <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Blocked</p>
+            <p className="text-sm font-medium text-slate-500">{t("employees.statBlocked")}</p>
             <p className="mt-2 text-3xl font-bold text-red-600">{loading ? "…" : blockedCount}</p>
-            <p className="mt-1 text-sm text-slate-400">Clock-in not allowed</p>
+            <p className="mt-1 text-sm text-slate-400">{t("employees.statBlockedSub")}</p>
           </div>
         </div>
 
@@ -227,7 +248,7 @@ function EmployeeList() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <input
               type="text"
-              placeholder="Search name, email, position, site…"
+              placeholder={t("employees.searchPlaceholder")}
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -237,6 +258,9 @@ function EmployeeList() {
               onChange={(e) => handleDepartmentChange(e.target.value)}
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
             >
+              {/* The "All" row means "do not filter". Its label is translated;
+                  the saved department names stay as they are in the database. */}
+              <option value="All">{t("employees.allDepartments")}</option>
               {DEPARTMENTS.map((d) => (
                 <option key={d.value} value={d.value}>{d.label}</option>
               ))}
@@ -246,8 +270,9 @@ function EmployeeList() {
               onChange={(e) => handleSiteChange(e.target.value)}
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
             >
+              <option value="All">{t("employees.allSites")}</option>
               {SITES.map((s) => (
-                <option key={s} value={s}>{s === "All" ? "All Sites" : s}</option>
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
             <select
@@ -255,11 +280,11 @@ function EmployeeList() {
               onChange={(e) => handleStatusChange(e.target.value)}
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
             >
-              <option value="All">All Compliance Status</option>
-              <option value="compliant">Compliant</option>
-              <option value="expiring">Expiring Soon</option>
-              <option value="warning">Non-Compliant</option>
-              <option value="blocked">Blocked</option>
+              <option value="All">{t("employees.allStatuses")}</option>
+              <option value="compliant">{t("employees.filterCompliant")}</option>
+              <option value="expiring">{t("employees.filterExpiring")}</option>
+              <option value="warning">{t("employees.filterNonCompliant")}</option>
+              <option value="blocked">{t("employees.filterBlocked")}</option>
             </select>
           </div>
         </div>
@@ -268,19 +293,21 @@ function EmployeeList() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Employee List</h2>
+              <h2 className="text-lg font-bold text-slate-900">{t("employees.listTitle")}</h2>
               <p className="text-sm text-slate-500">
-                {loading ? "Loading…" : (() => {
+                {loading ? t("common.loading") : (() => {
                   const from = totalCount === 0 ? 0 : (pagination?.page - 1) * pagination?.limit + 1;
                   const to   = Math.min(pagination?.page * pagination?.limit, totalCount);
-                  return `Showing ${from}–${to} of ${totalCount} employee${totalCount !== 1 ? "s" : ""}`;
+                  // One sentence with three numbers. Each language decides the word
+                  // order, so we never glue pieces of text together here.
+                  return t("employees.showingRange", { from, to, total: totalCount });
                 })()}
               </p>
             </div>
             <div className="flex items-center gap-3">
               {/* Rows per page selector */}
               <label className="flex items-center gap-2 text-sm text-slate-500">
-                Rows per page
+                {t("common.rowsPerPage")}
                 <select
                   value={itemsPerPage}
                   onChange={(e) => handleLimitChange(e.target.value)}
@@ -291,31 +318,31 @@ function EmployeeList() {
                   <option value={50}>50</option>
                 </select>
               </label>
-              <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              {/* <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                 Export Register
-              </button>
+              </button> */}
             </div>
           </div>
 
           {loading ? (
             <div className="py-16 text-center">
               <div className="mx-auto w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin mb-3" />
-              <p className="text-sm text-slate-500">Loading employees…</p>
+              <p className="text-sm text-slate-500">{t("employees.listLoading")}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1150px] border-separate border-spacing-y-2">
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
-                    <th className="px-3 py-2">Employee</th>
-                    <th className="px-3 py-2">Department</th>
-                    <th className="px-3 py-2">Role / Site</th>
-                    <th className="px-3 py-2">Medical</th>
-                    <th className="px-3 py-2">BHP</th>
-                    <th className="px-3 py-2">Overall</th>
-                    <th className="px-3 py-2">Clock-in</th>
-                    <th className="px-3 py-2">Expiry</th>
-                    <th className="px-3 py-2 text-right">Actions</th>
+                    <th className="px-3 py-2">{t("employees.colEmployee")}</th>
+                    <th className="px-3 py-2">{t("employees.colDepartment")}</th>
+                    <th className="px-3 py-2">{t("employees.colRoleSite")}</th>
+                    <th className="px-3 py-2">{t("employees.colMedical")}</th>
+                    <th className="px-3 py-2">{t("employees.colBhp")}</th>
+                    <th className="px-3 py-2">{t("employees.colOverall")}</th>
+                    <th className="px-3 py-2">{t("employees.colClockIn")}</th>
+                    <th className="px-3 py-2">{t("employees.colExpiry")}</th>
+                    <th className="px-3 py-2 text-right">{t("common.actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -328,7 +355,7 @@ function EmployeeList() {
                       {/* Identity — sourced from e.user (RegulaOne) */}
                       <td className="rounded-l-xl px-3 py-4">
                         <div>
-                          <p className="font-bold text-slate-900">{displayName(employee)}</p>
+                          <p className="font-bold text-slate-900">{displayName(employee, t)}</p>
                           <p className="text-xs text-slate-400">{employee.user?.email}</p>
                           <p className="text-xs font-medium text-slate-500 capitalize">
                             {employee.user?.role?.toLowerCase().replace(/_/g, " ")}
@@ -358,7 +385,7 @@ function EmployeeList() {
                           <StatusBadge status={clockInStatus(employee)} />
                           {employee.isBlocked && (
                             <p className="max-w-[230px] text-xs font-medium text-red-600">
-                              {resolveBlockReason(employee)}
+                              {resolveBlockReason(employee, t, language)}
                             </p>
                           )}
                         </div>
@@ -366,8 +393,8 @@ function EmployeeList() {
 
                       {/* Expiry dates */}
                       <td className="px-3 py-4 text-xs text-slate-500">
-                        <p>Medical: {formatDate(employee.medicalCertificate?.expiryDate)}</p>
-                        <p>BHP: {formatDate(employee.bhpTraining?.expiryDate)}</p>
+                        <p>{t("employees.colMedical")}: {formatDate(employee.medicalCertificate?.expiryDate, t, language)}</p>
+                        <p>{t("employees.colBhp")}: {formatDate(employee.bhpTraining?.expiryDate, t, language)}</p>
                       </td>
 
                       <td className="rounded-r-xl px-3 py-4 text-right">
@@ -376,14 +403,14 @@ function EmployeeList() {
                             onClick={() => navigate(`/employees/${employee._id}`)}
                             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                           >
-                            View
+                            {t("common.view")}
                           </button>
-                          <button className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+                          {/* <button className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
                             Upload
-                          </button>
-                          <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700">
+                          </button> */}
+                          {/* <button className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700">
                             Alert
-                          </button>
+                          </button> */}
                         </div>
                       </td>
                     </tr>
@@ -395,20 +422,20 @@ function EmployeeList() {
                 <div className="py-12 text-center">
                   <p className="font-semibold text-slate-700">
                     {!searchTerm && selectedDepartment === "All" && selectedSite === "All" && selectedStatus === "All"
-                      ? "No employees in the system"
-                      : "No employees match your filters"}
+                      ? t("employees.emptyNoRecords")
+                      : t("employees.emptyNoMatches")}
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
                     {!searchTerm && selectedDepartment === "All" && selectedSite === "All" && selectedStatus === "All"
-                      ? "Add your first employee to get started."
-                      : "Try changing your filters or search keyword."}
+                      ? t("employees.emptyAddFirstHint")
+                      : t("employees.emptyFilterHint")}
                   </p>
-                  {!searchTerm && selectedDepartment === "All" && selectedSite === "All" && selectedStatus === "All" && (
+                  {canAddEmployee && !searchTerm && selectedDepartment === "All" && selectedSite === "All" && selectedStatus === "All" && (
                     <button
                       onClick={() => navigate("/employees/add")}
                       className="mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"
                     >
-                      + Add First Employee
+                      {t("employees.addFirst")}
                     </button>
                   )}
                 </div>
@@ -488,7 +515,7 @@ function EmployeeList() {
               {/* Right: jump-to input — only useful when there are multiple pages */}
               {pagination?.totalPages > 1 && (
                 <label className="flex items-center gap-2 text-sm text-slate-500">
-                  Go to page
+                  {t("common.goToPage")}
                   <input
                     type="number"
                     min={1}
