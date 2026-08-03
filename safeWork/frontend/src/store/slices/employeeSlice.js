@@ -1,7 +1,10 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:8082/api";
+// The address follows whatever host the browser used to open SafeWork, so a teammate on
+// http://<machine-ip>:3002 reaches the backend on that same machine, not their own.
+// Written down once, in src/config/serviceUrls.js.
+import { SAFEWORK_API_BASE as API_BASE_URL } from "../../config/serviceUrls";
 
 // We no longer read a token from localStorage or send an Authorization header.
 // The auth token travels in an HttpOnly cookie, which axios attaches

@@ -4,6 +4,12 @@ require('dotenv').config();
 
 const config = {
   port: parseInt(process.env.PORT, 10) || 8082,
+
+  // Which network connections to answer on. 0.0.0.0 means "all of them", so the API can be
+  // reached both as http://localhost:8082 and as http://<machine-ip>:8082 by the rest of the
+  // team. Set BIND_HOST=127.0.0.1 to keep it private to this computer.
+  bindHost: process.env.BIND_HOST || '0.0.0.0',
+
   nodeEnv: process.env.NODE_ENV || 'development',
 
   mongo: {
@@ -71,8 +77,24 @@ const config = {
   },
 
   cors: {
-    // Accept comma-separated origins for multi-frontend support
-    origins: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(','),
+    // Accept comma-separated origins for multi-frontend support.
+    //
+    // The fallback used to be http://localhost:5173 — Vite's out-of-the-box port, which
+    // SafeWork does not use. So if CORS_ORIGIN was ever missing, the API allowed a port
+    // nothing runs on and refused the SafeWork frontend on 3002. The fallback is now the
+    // port this module actually uses (see the platform start.sh port map).
+    //
+    // Entries are trimmed and blanks dropped, so a stray space or trailing comma in the
+    // .env file cannot create an origin that matches nothing.
+    origins: (process.env.CORS_ORIGIN || 'http://localhost:3002')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+
+    // While developing, also accept the SAME port on this computer or on a private
+    // office/home network, so a teammate opening http://<machine-ip>:3002 is not refused.
+    // Off in production, where the list above is the only answer. See config/corsOptions.js.
+    allowPrivateNetwork: (process.env.NODE_ENV || 'development') !== 'production',
   },
 
   rateLimit: {

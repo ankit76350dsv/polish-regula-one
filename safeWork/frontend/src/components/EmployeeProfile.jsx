@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
+
+// The address follows whatever host the browser used to open SafeWork, so a teammate on
+// http://<machine-ip>:3002 reaches the backend on that same machine, not their own.
+// Written down once, in src/config/serviceUrls.js.
+import { SAFEWORK_API_BASE } from "../config/serviceUrls";
 import {
   fetchEmployee,
   clearSelected,
@@ -13,7 +18,7 @@ import {
 import { useCapabilities } from "../hooks/useCapabilities";
 import { useTranslation } from "../hooks/useTranslation";
 
-const API_BASE_URL = "http://localhost:8082/api";
+const API_BASE_URL = SAFEWORK_API_BASE;
 // We no longer read a token from localStorage or send an Authorization header.
 // The auth token travels in an HttpOnly cookie, which axios attaches
 // automatically when we set `withCredentials: true` on the request.

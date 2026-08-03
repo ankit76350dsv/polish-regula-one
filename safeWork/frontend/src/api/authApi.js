@@ -13,16 +13,17 @@
 // attacker) can never read it. We never use localStorage or an Authorization
 // header anymore.
 
-// RegulaOne backend — owns auth/me, login and logout. Default :8080.
-const API_BASE_URL =
-  (import.meta.env.VITE_API_URL ?? "http://localhost:8080") + "/api";
+// These addresses follow whatever host the browser used to open SafeWork, so the app works
+// on http://localhost:3002 AND on http://<machine-ip>:3002 for the rest of the team.
+// See src/config/serviceUrls.js for why that matters.
+import {
+  REGULAONE_API_URL,
+  APP_URL,
+  CENTRAL_LOGIN_URL,
+} from "../config/serviceUrls";
 
-// This SafeWork app's own address. Default :3002 (see vite.config.js).
-const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:3002";
-
-// The central RegulaOne login page the user is redirected to. Default :3000.
-const CENTRAL_LOGIN_URL =
-  import.meta.env.VITE_CENTRAL_LOGIN_URL ?? "http://localhost:3000/login";
+// RegulaOne backend — owns auth/me, login and logout. Port 8080.
+const API_BASE_URL = `${REGULAONE_API_URL}/api`;
 
 // After a successful central login, RegulaOne sends the user back to this page.
 export const SSO_CALLBACK_URL = `${APP_URL}/auth/sso-callback`;
