@@ -1,9 +1,21 @@
 const express = require('express');
 const notificationController = require('../controllers/notificationController');
-const { isAuthenticatedUser } = require('../middleware/authMiddleware');
+const {
+  isAuthenticatedUser,
+  authorizePermissions,
+  authorizeCapability,
+} = require('../middleware/authMiddleware');
+const { CAPABILITIES } = require('../config/permissions');
 
 const router = express.Router();
 router.use(isAuthenticatedUser);
+router.use(authorizePermissions());
+
+// Everything in this file is the caller's OWN alert inbox (break reminders,
+// missing clock-out warnings), so one capability covers the whole file. Every
+// WorkPulse role has it — a person must always be able to read the warnings the
+// system raises about their own working time.
+router.use(authorizeCapability(CAPABILITIES.NOTIFICATION_SELF));
 
 // Real-time channel: the browser opens this once and we push alerts down it.
 // (Server-Sent Events — no polling.) Kept above the ":id" route so "stream" is

@@ -13,14 +13,16 @@
 // attacker) can never read it. We never use localStorage or an Authorization
 // header.
 
-import {
-  APP_URL,
-  CENTRAL_LOGIN_URL,
-  REGULAONE_API_URL,
-} from "../config/serviceUrls";
+// RegulaOne backend — owns auth/me, login and logout. Default :8080.
+const API_BASE_URL =
+  (import.meta.env.VITE_API_URL ?? "http://localhost:8080") + "/api";
 
-// RegulaOne backend — owns auth/me, login and logout.
-const API_BASE_URL = `${REGULAONE_API_URL}/api`;
+// This WorkPulse app's own address. Default :3005 (see vite.config.js).
+const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:3005";
+
+// The central RegulaOne login page the user is redirected to. Default :3000.
+const CENTRAL_LOGIN_URL =
+  import.meta.env.VITE_CENTRAL_LOGIN_URL ?? "http://localhost:3000/login";
 
 // After a successful central login, RegulaOne returns the user to this page.
 export const SSO_CALLBACK_URL = `${APP_URL}/auth/sso-callback`;

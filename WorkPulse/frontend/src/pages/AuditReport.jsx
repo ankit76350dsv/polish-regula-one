@@ -1,8 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
 import * as api from "../api/workpulseApi";
 import { PageHeader, Card, Spinner, ErrorBanner, Badge } from "../components/ui";
-import { formatDateTime } from "../utils/format";
+import { useTranslation } from "../hooks/useTranslation";
+import { useFormat } from "../hooks/useFormat";
 
+// The audit action codes exactly as the backend stores them. These are NOT
+// translated: they are the values written into the immutable audit trail, and an
+// inspector matching a screen against an export must see the same text in both.
+// Only the "All" filter option is our own word, so only that one is translated.
 const ACTIONS = [
   "All",
   "CLOCK_IN",
@@ -21,6 +26,9 @@ const ACTIONS = [
 
 // Read-only view of the immutable WorkPulse audit trail (workplus_auditlogs).
 export default function AuditReport() {
+  const { t } = useTranslation();
+  const { formatDateTime } = useFormat();
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -43,14 +51,14 @@ export default function AuditReport() {
     load();
   }, [load]);
 
-  if (loading) return <Spinner label="Loading audit trail…" />;
+  if (loading) return <Spinner label={t("audit.loading")} />;
 
   const logs = data?.logs || [];
   const pagination = data?.pagination || { page: 1, totalPages: 1 };
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-      <PageHeader title="Audit Trail" subtitle="Immutable record of every working-time action (10-year retention)">
+      <PageHeader title={t("audit.title")} subtitle={t("audit.subtitle")}>
         <select
           value={action}
           onChange={(e) => {
@@ -61,7 +69,7 @@ export default function AuditReport() {
         >
           {ACTIONS.map((a) => (
             <option key={a} value={a}>
-              {a}
+              {a === "All" ? t("audit.filterAll") : a}
             </option>
           ))}
         </select>
@@ -74,17 +82,17 @@ export default function AuditReport() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
               <tr>
-                <th className="text-left px-4 py-3">When</th>
-                <th className="text-left px-4 py-3">User</th>
-                <th className="text-left px-4 py-3">Action</th>
-                <th className="text-left px-4 py-3">Resource</th>
-                <th className="text-left px-4 py-3">Result</th>
+                <th className="text-left px-4 py-3">{t("audit.when")}</th>
+                <th className="text-left px-4 py-3">{t("audit.user")}</th>
+                <th className="text-left px-4 py-3">{t("audit.action")}</th>
+                <th className="text-left px-4 py-3">{t("audit.resource")}</th>
+                <th className="text-left px-4 py-3">{t("audit.result")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {logs.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">No audit entries.</td>
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">{t("audit.empty")}</td>
                 </tr>
               )}
               {logs.map((l) => (
@@ -98,9 +106,9 @@ export default function AuditReport() {
                   </td>
                   <td className="px-4 py-3">
                     {l.success ? (
-                      <Badge cls="bg-emerald-50 text-emerald-700 border-emerald-200">OK</Badge>
+                      <Badge cls="bg-emerald-50 text-emerald-700 border-emerald-200">{t("common.ok")}</Badge>
                     ) : (
-                      <Badge cls="bg-red-50 text-red-700 border-red-200">Blocked</Badge>
+                      <Badge cls="bg-red-50 text-red-700 border-red-200">{t("common.blocked")}</Badge>
                     )}
                   </td>
                 </tr>
@@ -112,7 +120,7 @@ export default function AuditReport() {
         {/* Pagination */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 text-sm">
           <span className="text-slate-500">
-            Page {pagination.page} of {pagination.totalPages}
+            {t("audit.pageOf", { page: pagination.page, total: pagination.totalPages })}
           </span>
           <div className="flex gap-2">
             <button
@@ -120,14 +128,14 @@ export default function AuditReport() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 disabled:opacity-40 hover:bg-slate-50"
             >
-              Previous
+              {t("common.previous")}
             </button>
             <button
               disabled={pagination.page >= pagination.totalPages}
               onClick={() => setPage((p) => p + 1)}
               className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 disabled:opacity-40 hover:bg-slate-50"
             >
-              Next
+              {t("common.next")}
             </button>
           </div>
         </div>

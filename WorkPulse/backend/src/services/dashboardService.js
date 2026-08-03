@@ -73,6 +73,7 @@ async function getOverview(tenantId) {
           missingBreak: { $sum: { $cond: [{ $eq: ['$breakComplianceStatus', 'MISSING_BREAK'] }, 1, 0] } },
           shortBreak: { $sum: { $cond: [{ $eq: ['$breakComplianceStatus', 'SHORT_BREAK'] }, 1, 0] } },
           restViolations: { $sum: { $cond: ['$dailyRest.violation', 1, 0] } },
+          weeklyRestViolations: { $sum: { $cond: ['$weeklyRest.violation', 1, 0] } },
         },
       },
     ]),
@@ -106,6 +107,7 @@ async function getOverview(tenantId) {
       missingBreak: week.missingBreak || 0,
       shortBreak: week.shortBreak || 0,
       restViolations: week.restViolations || 0,
+      weeklyRestViolations: week.weeklyRestViolations || 0,
     },
     todayEntries: todayList,
     recentActivity: recentAudit.map((l) => ({
@@ -148,6 +150,11 @@ async function getMonthlySummary(tenantId, year, month) {
         pendingOvertimeMinutes: {
           $sum: { $cond: [{ $eq: ['$approvalStatus', 'PENDING'] }, '$overtimeMinutes', 0] },
         },
+        // Night minutes get the 20% bonus; Sunday/holiday days need the 100%
+        // overtime rate. Payroll needs these totals to pay people correctly.
+        nightMinutes: { $sum: '$nightMinutes' },
+        sundayDays: { $sum: { $cond: ['$isSundayWork', 1, 0] } },
+        holidayDays: { $sum: { $cond: ['$isHolidayWork', 1, 0] } },
       },
     },
     { $sort: { employeeName: 1 } },
@@ -182,6 +189,9 @@ async function getMonthlySummary(tenantId, year, month) {
     workedHours: minutesToHours(w.workedMinutes),
     overtimeHours: minutesToHours(w.overtimeMinutes),
     pendingOvertimeHours: minutesToHours(w.pendingOvertimeMinutes),
+    nightHours: minutesToHours(w.nightMinutes || 0),
+    sundayDays: w.sundayDays || 0,
+    holidayDays: w.holidayDays || 0,
     absences: absenceByUser[String(w._id)] || {},
   }));
 

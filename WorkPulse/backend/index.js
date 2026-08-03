@@ -24,6 +24,9 @@ const { registerJobs } = require('./src/jobs');
 const authRoutes = require('./src/routes/authRoutes');
 const timeRoutes = require('./src/routes/timeRoutes');
 const policyRoutes = require('./src/routes/policyRoutes');
+const settlementRoutes = require('./src/routes/settlementRoutes');
+const monitoringRoutes = require('./src/routes/monitoringRoutes');
+const employeeProfileRoutes = require('./src/routes/employeeProfileRoutes');
 const absenceRoutes = require('./src/routes/absenceRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const auditRoutes = require('./src/routes/auditRoutes');
@@ -68,6 +71,9 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/time', timeRoutes);
 app.use('/api/policy', policyRoutes);
+app.use('/api/settlement', settlementRoutes);
+app.use('/api/monitoring', monitoringRoutes);
+app.use('/api/employee-profiles', employeeProfileRoutes);
 app.use('/api/absences', absenceRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/audit-logs', auditRoutes);
@@ -84,8 +90,8 @@ const start = async () => {
   // Start the scheduled compliance jobs (break / open-break / missing clock-out).
   registerJobs();
 
-  app.listen(config.port, config.bindHost, () => {
-    console.log(`[APP] WorkPulse backend running on ${config.bindHost}:${config.port} (${config.nodeEnv})`);
+  app.listen(config.port, () => {
+    console.log(`[APP] WorkPulse backend running on port ${config.port} (${config.nodeEnv})`);
     console.log(`[APP] Health: http://localhost:${config.port}/health`);
     console.log(`[APP] Auth is served by RegulaOne at ${config.regulaOne.baseUrl}`);
   });

@@ -5,6 +5,10 @@ const eligibilityService = require('./eligibilityService');
 const policyService = require('./policyService');
 const notificationService = require('./notificationService');
 const wt = require('../utils/workingTime');
+const holidays = require('../utils/polishHolidays');
+const locationService = require('./locationService');
+const monitoringService = require('./monitoringService');
+const employeeProfileService = require('./employeeProfileService');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Time entry service — the heart of WorkPulse.
@@ -51,6 +55,80 @@ function recompute(entry) {
   entry.isOvertime = totals.isOvertime;
 
   return totals;
+}
+
+// Work out the "special day" facts for a finished shift and write them onto the
+// entry: how much night work it had, whether it was a Sunday or public holiday,
+// and (if there was overtime) whether it is paid at the 50% or 100% rate.
+// Needs the tenant policy for the night-window hours and night bonus %.
+function applyClassification(entry, policy) {
+  // Night work (art. 151⁷). Measure how many minutes fell in the night window.
+  const nightMinutes = wt.nightWorkMinutes(
+    entry.clockIn,
+    entry.clockOut,
+    policy.nightStartHour ?? 21,
+    policy.nightEndHour ?? 7
+  );
+  entry.nightMinutes = nightMinutes;
+  entry.isNightWork = nightMinutes > 0;
+  entry.nightPremiumPercent = nightMinutes > 0 ? policy.nightPremiumPercent ?? 20 : 0;
+
+  // What kind of day was worked (art. 151⁹–151¹²)? Public holiday beats Sunday
+  // if a holiday happens to land on a Sunday.
+  const isHoliday = holidays.isPublicHoliday(entry.clockIn);
+  const isSunday = holidays.isSunday(entry.clockIn);
+  entry.isHolidayWork = isHoliday;
+  entry.isSundayWork = isSunday;
+  entry.dayType = isHoliday ? 'HOLIDAY' : isSunday ? 'SUNDAY' : 'WORKDAY';
+
+  // Overtime pay rate (art. 151¹) — only meaningful when there IS overtime.
+  entry.overtimePremiumRate = entry.isOvertime
+    ? wt.overtimePremiumRate({ isSunday, isHoliday, nightMinutes })
+    : 0;
+}
+
+// Work out the GPS location to store for one clock action (clock-in/out).
+//
+// Privacy first (Art. 22²): if the tenant has NOT turned location monitoring on,
+// we return null and never touch the coordinates. If it IS on, the employee must
+// first have acknowledged the monitoring notice, otherwise we refuse the punch.
+// We also let the tenant BLOCK punches made outside every allowed work site.
+//
+//   prevPunch — the location of the employee's previous punch, for the
+//               "impossible travel" (teleport) spoofing check.
+async function resolvePunchLocation(tenantId, user, policy, meta, prevPunch, now) {
+  // Location monitoring switched off → do not capture anything.
+  if (!policy.locationTrackingEnabled) return null;
+
+  // Monitoring is on → the employee must have been informed (Art. 22²).
+  const acknowledged = await monitoringService.hasAcknowledgedCurrent(tenantId, user._id);
+  if (!acknowledged) {
+    throw {
+      status: 403,
+      code: 'MONITORING_NOTICE_REQUIRED',
+      message:
+        'Please read and accept the location monitoring notice before clocking in.',
+    };
+  }
+
+  const punch = locationService.evaluatePunch({
+    policy,
+    location: meta.location,
+    device: meta.device || {},
+    prevPunch,
+    now,
+  });
+
+  // If the company blocks off-site punches, stop here with a clear message.
+  if (policy.blockOutsideGeofence && punch.flags.includes('OUTSIDE_GEOFENCE')) {
+    throw {
+      status: 403,
+      code: 'OUTSIDE_GEOFENCE',
+      message: 'You appear to be away from an allowed work site, so this action was blocked.',
+    };
+  }
+
+  return punch;
 }
 
 // Build the denormalised snapshot fields from the SafeWork record or the user.
@@ -129,6 +207,34 @@ async function clockIn(user, tenantId, meta) {
 
   const dailyRest = wt.checkDailyRest(lastCompleted?.clockOut, now);
 
+  // 4b) Weekly-rest check (art. 133) — did the employee get at least 35
+  // continuous hours off during the 7 days before this shift? We pull every
+  // finished shift in that window and ask the engine for the longest rest block.
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const recentShifts = await TimeEntry.find({
+    userId: user._id,
+    clockOut: { $ne: null },
+    workDate: { $gte: startOfDay(weekAgo) },
+    deletedAt: null,
+  })
+    .select('clockIn clockOut')
+    .lean();
+
+  const weeklyRest = wt.checkWeeklyRestWindow(recentShifts, weekAgo, now);
+
+  // 4c) GPS location for this clock-in (only when monitoring is on — Art. 22²).
+  // The previous punch is the last completed shift's clock-out location, used to
+  // detect impossible travel (a spoofing signal).
+  const prevPunch = lastCompleted?.clockOutLocation || null;
+  const clockInLocation = await resolvePunchLocation(
+    tenantId,
+    user,
+    policy,
+    meta,
+    prevPunch,
+    now
+  );
+
   const snap = snapshotFrom(eligibility, user);
 
   const entry = await TimeEntry.create({
@@ -143,6 +249,9 @@ async function clockIn(user, tenantId, meta) {
     clockInSource: meta.source || 'WEB',
     scheduledMinutes: policy.scheduledDailyMinutes,
     dailyRest: dailyRest || undefined,
+    weeklyRest: weeklyRest || undefined,
+    clockInLocation: clockInLocation || undefined,
+    locationFlagged: clockInLocation ? !clockInLocation.valid : false,
     status: 'OPEN',
     createdBy: user._id.toString(),
     updatedBy: user._id.toString(),
@@ -161,6 +270,34 @@ async function clockIn(user, tenantId, meta) {
     });
   }
 
+  // If the person did not get a 35-hour continuous rest in the last 7 days,
+  // flag the weekly-rest breach too (art. 133) so HR can review the roster.
+  if (weeklyRest?.violation) {
+    await notificationService.createNotification({
+      tenantId,
+      userId: user._id,
+      employeeId: user._id.toString(),
+      type: 'REST_VIOLATION',
+      title: 'Weekly rest may be too short',
+      message: `The longest unbroken rest in the last 7 days was only ${wt.formatDuration(weeklyRest.longestRestMinutes)} (art. 133 requires at least 35h).`,
+      relatedEntryId: entry._id,
+    });
+  }
+
+  // If the clock-in GPS looked wrong (off-site, faked, impossible travel), tell
+  // HR so they can review it. We record WHAT was flagged, not the raw location.
+  if (clockInLocation && !clockInLocation.valid) {
+    await notificationService.createNotification({
+      tenantId,
+      userId: user._id,
+      employeeId: user._id.toString(),
+      type: 'LOCATION_FLAG',
+      title: 'Clock-in location needs review',
+      message: `This clock-in was flagged: ${clockInLocation.flags.join(', ')}.`,
+      relatedEntryId: entry._id,
+    });
+  }
+
   await logAudit({
     tenantId,
     userId: user._id.toString(),
@@ -168,7 +305,14 @@ async function clockIn(user, tenantId, meta) {
     action: 'CLOCK_IN',
     resource: 'TimeEntry',
     resourceId: entry._id.toString(),
-    newValue: { clockIn: now, source: meta.source },
+    newValue: {
+      clockIn: now,
+      source: meta.source,
+      // Store only the flags/geofence result in the audit trail, never used to
+      // reveal precise movements — just enough to show the check ran.
+      locationFlags: clockInLocation?.flags,
+      withinGeofence: clockInLocation?.withinGeofence,
+    },
     ipAddress: meta.ipAddress,
     userAgent: meta.userAgent,
   });
@@ -182,6 +326,22 @@ async function clockOut(user, tenantId, meta) {
   if (!entry) throw { status: 400, message: 'You are not clocked in.' };
 
   const now = new Date();
+
+  // GPS for the clock-out (only when monitoring is on — Art. 22²). The previous
+  // punch is this shift's clock-in location, for the impossible-travel check.
+  const policyForLoc = await policyService.getOrCreateDefaultPolicy(tenantId);
+  const clockOutLocation = await resolvePunchLocation(
+    tenantId,
+    user,
+    policyForLoc,
+    meta,
+    entry.clockInLocation || null,
+    now
+  );
+  if (clockOutLocation) {
+    entry.clockOutLocation = clockOutLocation;
+    if (!clockOutLocation.valid) entry.locationFlagged = true;
+  }
 
   // If a break was left open, close it at clock-out so totals are correct.
   const openBreak = entry.breaks.find((b) => b.breakStart && !b.breakEnd);
@@ -198,7 +358,12 @@ async function clockOut(user, tenantId, meta) {
 
   // Overtime is controlled: if the policy requires approval and this shift ran
   // over the norm, mark it PENDING so a manager decides — never approve silently.
-  const policy = await policyService.getOrCreateDefaultPolicy(tenantId);
+  // (Reuse the policy we already loaded for the location check above.)
+  const policy = policyForLoc;
+
+  // Record night work, Sunday/holiday work and the overtime pay rate.
+  applyClassification(entry, policy);
+
   if (totals.isOvertime && policy.overtimeRequiresApproval) {
     entry.approvalStatus = 'PENDING';
   } else if (totals.isOvertime) {
@@ -207,8 +372,31 @@ async function clockOut(user, tenantId, meta) {
     entry.approvalStatus = 'NOT_REQUIRED';
   }
 
+  // Special-group protections (art. 178 / 203): did a pregnant employee, young
+  // worker, or parent of a small child do overtime/night work they should not
+  // have (or without consent)? If so, flag it so HR can act.
+  const profile = await employeeProfileService.getProfile(tenantId, user._id);
+  const protection = employeeProfileService.evaluateProtections(profile, {
+    hasOvertime: entry.isOvertime,
+    nightMinutes: entry.nightMinutes,
+  });
+  entry.protectedWorkFlagged = protection.restricted;
+
   entry.updatedBy = user._id.toString();
   await entry.save();
+
+  // Raise a clear alert for any protected-work breach.
+  if (protection.restricted) {
+    await notificationService.createNotification({
+      tenantId,
+      userId: user._id,
+      employeeId: user._id.toString(),
+      type: 'PROTECTED_WORK',
+      title: 'Protected employee working-time breach',
+      message: protection.reasons.join(' '),
+      relatedEntryId: entry._id,
+    });
+  }
 
   if (entry.approvalStatus === 'PENDING') {
     await notificationService.createNotification({
@@ -434,6 +622,10 @@ async function correctEntry(entryId, tenantId, updates, actor) {
 
   // Re-evaluate overtime approval after the correction.
   const policy = await policyService.getOrCreateDefaultPolicy(tenantId);
+
+  // Re-classify night / Sunday / holiday / premium after the edited times.
+  if (entry.clockOut) applyClassification(entry, policy);
+
   if (totals.isOvertime && policy.overtimeRequiresApproval && entry.approvalStatus !== 'APPROVED') {
     entry.approvalStatus = 'PENDING';
   } else if (!totals.isOvertime) {
