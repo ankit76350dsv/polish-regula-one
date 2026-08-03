@@ -153,6 +153,30 @@ const PERMISSION_GROUPS = [
       },
     ],
   },
+  {
+    app: 'WasteSync',
+    description: 'BDO waste register reporting permissions',
+    // Codes MUST match ROLE_CAPABILITIES in WasteSync/backend/src/config/permissions.js.
+    // WasteSync turns each code below into a list of single allowed actions, so the
+    // wording here explains what the person can really do.
+    permissions: [
+      {
+        code: 'WASTESYNC_ADMIN',
+        label: 'WasteSync Admin',
+        desc: 'Full control: manage companies and waste figures, generate annual reports, confirm a BDO filing, set the legal thresholds, and read the audit trail.',
+      },
+      {
+        code: 'WASTESYNC_HR_MANAGER',
+        label: 'HR Manager',
+        desc: 'Day-to-day reporting: manage companies, record and correct monthly waste figures, and generate and download annual reports. Cannot confirm a BDO filing, cannot change the legal thresholds, and cannot read the audit trail.',
+      },
+      {
+        code: 'WASTESYNC_AUDITOR',
+        label: 'Auditor',
+        desc: 'Read-only oversight: every company, waste figure, annual report and the audit trail, plus XML/PDF download as evidence. Changes nothing — the person checking the figures never produces them.',
+      },
+    ],
+  },
 ];
 
 // Derives avatar initials from a full name string (up to 2 characters).

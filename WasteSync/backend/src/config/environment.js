@@ -41,6 +41,26 @@ const config = {
     baseUrl: process.env.REGULAONE_API_URL || 'http://localhost:8080',
   },
 
+  // WasteSync access control.
+  //
+  // RegulaOne gives each person a list of job titles (permissions) that covers
+  // every app on the platform. These are the WasteSync ones this deployment
+  // accepts. Anyone whose list contains none of them cannot use WasteSync at all.
+  //
+  // Normally leave this at the default (all three roles). It exists so a
+  // deployment can temporarily switch a role off — for example while a new role
+  // is still being rolled out — without a code change. What each role may then
+  // DO is decided by the table in config/permissions.js, not here.
+  wastesync: {
+    allowedPermissions: (
+      process.env.WASTESYNC_ALLOWED_PERMISSIONS ||
+      'WASTESYNC_ADMIN,WASTESYNC_HR_MANAGER,WASTESYNC_AUDITOR'
+    )
+      .split(',')
+      .map((permission) => permission.trim())
+      .filter(Boolean),
+  },
+
   cors: {
     // Accept a comma-separated list of origins so several frontends can connect.
     origins: (process.env.CORS_ORIGIN || 'http://localhost:3003').split(','),

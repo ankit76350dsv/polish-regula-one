@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from "react";
-import { useSelector } from "react-redux";
 import {
   PageHeader,
   Card,
@@ -12,6 +11,7 @@ import { YearSelector } from "../components/common/Selectors";
 import { WASTE_CATEGORIES, recentYears } from "../utils/constants";
 import { fetchThresholds, saveThreshold, deleteThreshold } from "../api/thresholdApi";
 import { getErrorMessage } from "../api/axiosClient";
+import { useCapabilities } from "../hooks/useCapabilities";
 
 // The Thresholds page lets an administrator set the legal limits that annual
 // reports are checked against. Before this page existed there was NO way to fill
@@ -24,9 +24,17 @@ import { getErrorMessage } from "../api/axiosClient";
 //   - Legal maximum (kg):       going over this is a hard breach.
 
 export default function Thresholds() {
-  const user = useSelector((state) => state.auth.user);
-  // Only admins may change limits; everyone else sees them read-only.
-  const canEdit = ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"].includes(user?.role);
+  // Only a WasteSync admin may change limits; everyone else sees them read-only.
+  //
+  // WHAT CHANGED AND WHY: this used to read the PLATFORM role from Redux
+  // (["ROLE_ADMIN", "ROLE_SUPER_ADMIN"].includes(user?.role)). That is the wrong
+  // question, because every tenant admin on RegulaOne holds ROLE_ADMIN — including
+  // admins of other apps who were never given WasteSync at all. They would have been
+  // shown editable limit boxes, and the save would then have been refused by the
+  // server. Asking for the THRESHOLD_WRITE capability asks the narrower, correct
+  // question and matches exactly what the backend now enforces.
+  const { can, CAPABILITIES } = useCapabilities();
+  const canEdit = can(CAPABILITIES.THRESHOLD_WRITE);
 
   const [year, setYear] = useState(recentYears()[0]);
   const [loading, setLoading] = useState(true);

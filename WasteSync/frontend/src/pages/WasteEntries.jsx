@@ -20,6 +20,7 @@ import {
 } from "../components/common";
 import { CompanySelector, YearSelector } from "../components/common/Selectors";
 import { WASTE_CATEGORIES, MONTH_NAMES } from "../utils/constants";
+import { useCapabilities } from "../hooks/useCapabilities";
 
 const inputClass =
   "w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500";
@@ -40,6 +41,12 @@ export default function WasteEntries() {
 
   const [year, setYear] = useState(new Date().getFullYear());
   const [historyMonth, setHistoryMonth] = useState(null);
+
+  // May this person record or correct a month? An auditor may only read, so the
+  // whole "record / correct a month" form is hidden for them — the 12-month grid
+  // and the version history stay visible, which is what an audit needs.
+  const { can, CAPABILITIES } = useCapabilities();
+  const canWrite = can(CAPABILITIES.WASTE_ENTRY_WRITE);
 
   const { register, handleSubmit, reset, watch } = useForm({
     defaultValues: { month: 1, notes: "" },
@@ -125,7 +132,11 @@ export default function WasteEntries() {
         <PageHeader title="Waste Entries" />
         <EmptyState
           title="No companies yet"
-          message="Add a company first, then you can record its monthly waste data."
+          message={
+            canWrite
+              ? "Add a company first, then you can record its monthly waste data."
+              : "No companies have been set up yet, so there are no waste figures to look at."
+          }
         />
       </div>
     );
@@ -135,7 +146,11 @@ export default function WasteEntries() {
     <div>
       <PageHeader
         title="Waste Entries"
-        subtitle="Record monthly packaging waste. Saved data is never overwritten — corrections create a new version."
+        subtitle={
+          canWrite
+            ? "Record monthly packaging waste. Saved data is never overwritten — corrections create a new version."
+            : "Monthly packaging waste figures, including every past version of each month."
+        }
         actions={
           <div className="flex items-center gap-3">
             <CompanySelector
@@ -154,7 +169,10 @@ export default function WasteEntries() {
         </div>
       )}
 
-      {/* ── Record / correct a month ────────────────────────────────────────── */}
+      {/* ── Record / correct a month ──────────────────────────────────────────
+          Only shown to people who may write. For a read-only role (auditor) the
+          page starts straight at the 12-month grid below. */}
+      {canWrite && (
       <Card className="p-6 mb-6">
         <div className="text-sm font-semibold text-slate-700 mb-4">
           Record / correct a month
@@ -212,6 +230,7 @@ export default function WasteEntries() {
           </Button>
         </form>
       </Card>
+      )}
 
       {/* ── The 12-month grid ───────────────────────────────────────────────── */}
       {loading ? (

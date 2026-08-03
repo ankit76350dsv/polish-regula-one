@@ -1,20 +1,35 @@
 import { NavLink } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useAuth } from "../../context/AuthContext";
+import { useCapabilities } from "../../hooks/useCapabilities";
+import { CAPABILITIES } from "../../config/capabilities";
 
 // The main navigation bar shown on every signed-in page.
+//
+// Each item names the ONE thing a person must be allowed to do before the link is
+// shown. We name a CAPABILITY rather than a job title because "admin or not"
+// cannot express the real rules: an auditor must see Waste Entries, Reports and
+// Audit Logs, while an HR manager sees everything EXCEPT Audit Logs.
+//
+// Hiding a link is only about a tidy menu. Every page is also wrapped in
+// RequireCapability, and the backend refuses the API calls regardless — typing the
+// address by hand gets a person nowhere.
 const navItems = [
-  { to: "/", label: "Dashboard", end: true },
-  { to: "/companies", label: "Companies" },
-  { to: "/waste-entries", label: "Waste Entries" },
-  { to: "/reports", label: "Reports" },
-  { to: "/thresholds", label: "Thresholds" },
-  { to: "/audit-logs", label: "Audit Logs" },
+  { to: "/", label: "Dashboard", end: true, capability: CAPABILITIES.DASHBOARD_READ },
+  { to: "/companies", label: "Companies", capability: CAPABILITIES.COMPANY_READ },
+  { to: "/waste-entries", label: "Waste Entries", capability: CAPABILITIES.WASTE_ENTRY_READ },
+  { to: "/reports", label: "Reports", capability: CAPABILITIES.REPORT_READ },
+  { to: "/thresholds", label: "Thresholds", capability: CAPABILITIES.THRESHOLD_READ },
+  { to: "/audit-logs", label: "Audit Logs", capability: CAPABILITIES.AUDIT_READ },
 ];
 
 export default function Header() {
   const { logout } = useAuth();
   const user = useSelector((state) => state.auth.user);
+
+  // What this user is allowed to do decides which menu items appear.
+  const { can } = useCapabilities();
+  const items = navItems.filter((item) => can(item.capability));
 
   return (
     <header className="fixed top-0 inset-x-0 z-40 h-[65px] bg-white border-b border-slate-200">
@@ -32,7 +47,7 @@ export default function Header() {
 
         {/* Navigation */}
         <nav className="hidden md:flex items-center gap-1">
-          {navItems.map((item) => (
+          {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

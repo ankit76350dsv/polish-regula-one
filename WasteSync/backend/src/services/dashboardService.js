@@ -9,7 +9,15 @@ const { WASTE_CATEGORY_KEYS } = require('../utils/wasteCategories');
 // makes one call. Everything is scoped to the tenant. An optional companyId
 // narrows the figures to one company; otherwise we cover all of the tenant's
 // companies. The year defaults to the current year.
-const getOverview = async (tenantId, { companyId, year } = {}) => {
+//
+// includeAuditActivity says whether this caller is allowed to see the audit trail.
+// It defaults to FALSE so a caller that forgets to pass it gets LESS data, never
+// more — leaving audit records out by mistake is a bug, handing them to the wrong
+// person is a privacy incident.
+const getOverview = async (
+  tenantId,
+  { companyId, year, includeAuditActivity = false } = {}
+) => {
   const reportingYear = Number(year) || new Date().getFullYear();
 
   // Which companies are we covering?
@@ -111,9 +119,18 @@ const getOverview = async (tenantId, { companyId, year } = {}) => {
     .limit(5)
     .populate('companyId', 'name bdoRegistrationNumber');
 
-  const recentAuditLogs = await AuditLog.find({ tenantId })
-    .sort({ createdAt: -1 })
-    .limit(10);
+  // The "recent activity" list is the audit trail. Only callers who are allowed to
+  // read the audit trail get it — for everyone else we return an empty list and do
+  // not even run the query.
+  //
+  // WHY: HR may use the dashboard but may NOT open the Audit Logs page, because the
+  // trail shows which colleague looked at or corrected whose figures. If the
+  // dashboard still handed HR the last ten audit records, the restriction on the
+  // Audit Logs page would achieve nothing — the same data would simply arrive by a
+  // different door. The route tells us whether this caller holds AUDIT_READ.
+  const recentAuditLogs = includeAuditActivity
+    ? await AuditLog.find({ tenantId }).sort({ createdAt: -1 }).limit(10)
+    : [];
 
   return {
     year: reportingYear,

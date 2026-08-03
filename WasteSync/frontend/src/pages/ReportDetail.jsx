@@ -12,12 +12,23 @@ import {
   Badge,
 } from "../components/common";
 import { WASTE_CATEGORIES, MONTH_NAMES } from "../utils/constants";
+import { useCapabilities } from "../hooks/useCapabilities";
 
 export default function ReportDetail() {
   const { id } = useParams();
   const dispatch = useDispatch();
   const { selected } = useSelector((state) => state.reports);
   const [downloadError, setDownloadError] = useState("");
+
+  // Two different permissions are needed on this page:
+  //   - REPORT_EXPORT lets you download the XML/PDF. Auditors have it, because the
+  //     file IS the evidence an audit needs and downloading changes nothing.
+  //   - REPORT_SUBMIT lets you mark the report as filed in the government BDO
+  //     register. ADMIN ONLY: that flag is the company's record of a legal filing,
+  //     so HR prepares and downloads the report and an admin confirms the filing.
+  const { can, CAPABILITIES } = useCapabilities();
+  const canExport = can(CAPABILITIES.REPORT_EXPORT);
+  const canSubmit = can(CAPABILITIES.REPORT_SUBMIT);
 
   useEffect(() => {
     dispatch(fetchReport(id));
@@ -51,13 +62,19 @@ export default function ReportDetail() {
         subtitle={`${r.companyName || ""} · BDO ${r.bdoRegistrationNumber}`}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => handleDownload("xml")}>
-              Download XML
-            </Button>
-            <Button variant="secondary" onClick={() => handleDownload("pdf")}>
-              Download PDF
-            </Button>
-            {r.status !== "SUBMITTED" && (
+            {canExport && (
+              <>
+                <Button variant="secondary" onClick={() => handleDownload("xml")}>
+                  Download XML
+                </Button>
+                <Button variant="secondary" onClick={() => handleDownload("pdf")}>
+                  Download PDF
+                </Button>
+              </>
+            )}
+            {/* Shown only to an admin, and only while the report has not been
+                marked as filed yet. */}
+            {canSubmit && r.status !== "SUBMITTED" && (
               <Button onClick={() => dispatch(submitReport(id))}>Mark submitted</Button>
             )}
           </div>
@@ -87,6 +104,18 @@ export default function ReportDetail() {
       {downloadError && (
         <div className="mb-4">
           <AlertBanner level="error">{downloadError}</AlertBanner>
+        </div>
+      )}
+
+      {/* The report is ready but this person cannot confirm the filing. We say so
+          plainly, so nobody thinks the report is finished — or waits for a button
+          that is never going to appear for them. */}
+      {!canSubmit && r.status !== "SUBMITTED" && (
+        <div className="mb-4">
+          <AlertBanner level="info">
+            This report has been generated but is not yet marked as filed with BDO.
+            Only an administrator can confirm the filing.
+          </AlertBanner>
         </div>
       )}
 

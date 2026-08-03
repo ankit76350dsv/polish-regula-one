@@ -28,6 +28,7 @@ import {
   MONTH_NAMES,
   CATEGORY_COLORS,
 } from "../utils/constants";
+import { useCapabilities } from "../hooks/useCapabilities";
 
 // ── Small helpers ────────────────────────────────────────────────────────────
 
@@ -154,6 +155,17 @@ export default function Dashboard() {
   // "all" means every company; otherwise a specific company id.
   const [scope, setScope] = useState("all");
 
+  // Three parts of this page depend on what the user may do:
+  //   - the "Recent activity" panel is the audit trail, so only people who may read
+  //     the audit trail see it (the backend also leaves the data out for everyone
+  //     else, so for HR the list would arrive empty anyway),
+  //   - the "Recent reports" links only help someone who may open a report,
+  //   - the "add your first company" button only helps someone who may add one.
+  const { can, CAPABILITIES } = useCapabilities();
+  const canReadAudit = can(CAPABILITIES.AUDIT_READ);
+  const canReadReports = can(CAPABILITIES.REPORT_READ);
+  const canAddCompany = can(CAPABILITIES.COMPANY_WRITE);
+
   useEffect(() => {
     dispatch(fetchCompanies());
   }, [dispatch]);
@@ -172,11 +184,17 @@ export default function Dashboard() {
       <div>
         <EmptyState
           title="Welcome to WasteSync"
-          message="Start by adding the company you report packaging waste for."
+          message={
+            canAddCompany
+              ? "Start by adding the company you report packaging waste for."
+              : "No companies have been set up yet, so there is nothing to show. Someone who manages company records needs to add one first."
+          }
           action={
-            <Link to="/companies/new">
-              <Button>+ Add your company</Button>
-            </Link>
+            canAddCompany ? (
+              <Link to="/companies/new">
+                <Button>+ Add your company</Button>
+              </Link>
+            ) : null
           }
         />
       </div>
@@ -422,8 +440,16 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* ── Recent reports + recent activity ────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* ── Recent reports + recent activity ──────────────────────────────────
+          Both panels are permission-gated, so the row may show two cards, one, or
+          none. When only one panel is left we let it use the full width instead of
+          leaving an empty half. */}
+      <div
+        className={`grid grid-cols-1 gap-6 ${
+          canReadReports && canReadAudit ? "lg:grid-cols-2" : ""
+        }`}
+      >
+        {canReadReports && (
         <Card className="p-5">
           <SectionTitle
             icon={icons.report}
@@ -459,7 +485,13 @@ export default function Dashboard() {
             </div>
           )}
         </Card>
+        )}
 
+        {/* The audit trail is only for admins and auditors. HR must not see which
+            colleague opened or corrected whose figures, so the whole panel — and the
+            link to the Audit Logs page — is left out for them. The backend leaves the
+            data out of the response too, so this is not the only line of defence. */}
+        {canReadAudit && (
         <Card className="p-5">
           <SectionTitle
             icon={icons.clock}
@@ -492,6 +524,7 @@ export default function Dashboard() {
             </div>
           )}
         </Card>
+        )}
       </div>
     </div>
   );

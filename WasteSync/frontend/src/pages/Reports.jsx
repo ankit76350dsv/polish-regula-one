@@ -13,6 +13,7 @@ import {
   EmptyState,
 } from "../components/common";
 import { CompanySelector, YearSelector } from "../components/common/Selectors";
+import { useCapabilities } from "../hooks/useCapabilities";
 
 export default function Reports() {
   const dispatch = useDispatch();
@@ -20,6 +21,12 @@ export default function Reports() {
   const { list, loading, generating, generateError } = useSelector((state) => state.reports);
 
   const [year, setYear] = useState(new Date().getFullYear());
+
+  // Building a report creates new records and new files, so it is a write. An
+  // auditor may read every report but not produce one — otherwise the person
+  // checking the figures would also be the person producing them.
+  const { can, CAPABILITIES } = useCapabilities();
+  const canGenerate = can(CAPABILITIES.REPORT_GENERATE);
 
   useEffect(() => {
     dispatch(fetchCompanies());
@@ -39,18 +46,27 @@ export default function Reports() {
     <div>
       <PageHeader
         title="Annual Reports"
-        subtitle="Generate BDO annual reports (XML for the portal + PDF for your records)."
+        subtitle={
+          canGenerate
+            ? "Generate BDO annual reports (XML for the portal + PDF for your records)."
+            : "BDO annual reports. Open one to see its figures and download the XML or PDF."
+        }
         actions={
           <div className="flex items-center gap-3">
+            {/* The company and year pickers stay for everyone: a read-only user
+                still needs them to choose which report to look for. Only the
+                "Generate" button is hidden. */}
             <CompanySelector
               companies={companies}
               value={activeCompanyId}
               onChange={(id) => dispatch(setActiveCompany(id))}
             />
             <YearSelector value={year} onChange={setYear} />
-            <Button onClick={onGenerate} disabled={generating || !activeCompanyId}>
-              {generating ? "Generating…" : "Generate report"}
-            </Button>
+            {canGenerate && (
+              <Button onClick={onGenerate} disabled={generating || !activeCompanyId}>
+                {generating ? "Generating…" : "Generate report"}
+              </Button>
+            )}
           </div>
         }
       />
@@ -66,7 +82,11 @@ export default function Reports() {
       ) : list.length === 0 ? (
         <EmptyState
           title="No reports yet"
-          message="Choose a company and year above, then generate your first annual report."
+          message={
+            canGenerate
+              ? "Choose a company and year above, then generate your first annual report."
+              : "No annual reports have been generated yet, so there is nothing to review here."
+          }
         />
       ) : (
         <Card>

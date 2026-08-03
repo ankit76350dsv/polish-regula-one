@@ -15,10 +15,16 @@ const ACTIONS = [
   "REPORT_GENERATED",
   "REPORT_DOWNLOADED",
   "REPORT_SUBMITTED",
+  // A request that was REFUSED because the caller was not allowed to make it.
+  // Worth filtering on its own: one entry is usually somebody clicking a stale
+  // link, but a burst of them is how you spot someone probing the API.
+  "ACCESS_DENIED",
 ];
 
 // Picks a badge colour based on how sensitive the action is.
 const actionTone = (action) => {
+  // Refusals first — a red badge makes them stand out in a long list.
+  if (action === "ACCESS_DENIED") return "red";
   if (action?.includes("CORRECTED") || action?.includes("UPDATED")) return "amber";
   if (action?.includes("GENERATED") || action?.includes("CREATED")) return "green";
   if (action?.includes("DOWNLOADED") || action?.includes("VIEWED")) return "blue";
