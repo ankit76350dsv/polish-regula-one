@@ -5,7 +5,7 @@
 //   2. When the user is not logged in, we send the browser to the central
 //      RegulaOne login page (running on port 3000).
 //   3. After the user signs in there, RegulaOne sets a secure HttpOnly cookie
-//      shared across all "localhost" apps and sends the browser back to
+//      shared by every RegulaOne app on the same host, and sends the browser back to
 //      WorkPulse's SSO callback page.
 //   4. WorkPulse then calls /api/auth/me with the cookie to load the user.
 //
@@ -13,16 +13,17 @@
 // attacker) can never read it. We never use localStorage or an Authorization
 // header.
 
-// RegulaOne backend — owns auth/me, login and logout. Default :8080.
-const API_BASE_URL =
-  (import.meta.env.VITE_API_URL ?? "http://localhost:8080") + "/api";
+// These addresses follow whatever host the browser used to open WorkPulse, so the app works
+// on http://localhost:3005 AND on http://<machine-ip>:3005 for the rest of the team.
+// See src/config/serviceUrls.js for why that matters.
+import {
+  REGULAONE_API_URL,
+  APP_URL,
+  CENTRAL_LOGIN_URL,
+} from "../config/serviceUrls";
 
-// This WorkPulse app's own address. Default :3005 (see vite.config.js).
-const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:3005";
-
-// The central RegulaOne login page the user is redirected to. Default :3000.
-const CENTRAL_LOGIN_URL =
-  import.meta.env.VITE_CENTRAL_LOGIN_URL ?? "http://localhost:3000/login";
+// RegulaOne backend — owns auth/me, login and logout. Port 8080.
+const API_BASE_URL = `${REGULAONE_API_URL}/api`;
 
 // After a successful central login, RegulaOne returns the user to this page.
 export const SSO_CALLBACK_URL = `${APP_URL}/auth/sso-callback`;

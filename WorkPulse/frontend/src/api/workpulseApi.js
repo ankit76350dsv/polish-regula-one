@@ -6,8 +6,11 @@
 // { success, data, message }; this helper unwraps `data` (or throws the error
 // message) so pages get clean values.
 
-const WORKPULSE_API =
-  (import.meta.env.VITE_WORKPULSE_API_URL ?? "http://localhost:8085") + "/api";
+// The address follows whatever host the browser used to open WorkPulse, so a teammate on
+// http://<machine-ip>:3005 reaches the backend on that same machine rather than their own.
+import { WORKPULSE_API_URL } from "../config/serviceUrls";
+
+const WORKPULSE_API = `${WORKPULSE_API_URL}/api`;
 
 // Low-level request helper. method/path/body in, unwrapped data out.
 async function request(path, { method = "GET", body } = {}) {

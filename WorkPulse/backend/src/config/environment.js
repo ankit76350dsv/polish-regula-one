@@ -7,6 +7,12 @@ require('dotenv').config();
 const config = {
   // WorkPulse backend listens on 8085 by default (see platform start.sh port map).
   port: parseInt(process.env.PORT, 10) || 8085,
+
+  // Which network connections to answer on. 0.0.0.0 means "all of them", so the API can be
+  // reached both as http://localhost:8085 and as http://<machine-ip>:8085 by the rest of the
+  // team. Set BIND_HOST=127.0.0.1 to keep it private to this computer.
+  bindHost: process.env.BIND_HOST || '0.0.0.0',
+
   nodeEnv: process.env.NODE_ENV || 'development',
 
   mongo: {
@@ -70,7 +76,17 @@ const config = {
 
   cors: {
     // Accept comma-separated origins so several frontends can share the API.
-    origins: (process.env.CORS_ORIGIN || 'http://localhost:3005').split(','),
+    // Trimmed and emptied-out entries dropped, so a stray space or trailing comma in the
+    // .env file cannot create an origin that matches nothing.
+    origins: (process.env.CORS_ORIGIN || 'http://localhost:3005')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+
+    // While developing, also accept the SAME port on this computer or on a private
+    // office/home network, so a teammate opening http://<machine-ip>:3005 is not refused.
+    // Off in production, where the list above is the only answer. See config/corsOptions.js.
+    allowPrivateNetwork: (process.env.NODE_ENV || 'development') !== 'production',
   },
 
   rateLimit: {
