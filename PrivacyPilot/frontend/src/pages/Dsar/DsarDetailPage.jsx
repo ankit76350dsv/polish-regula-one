@@ -1,6 +1,6 @@
 // DSAR workspace — identity verification (proportionate, human-confirmed),
 // collection tasks, and the Art. 12(3) extension with a mandatory reason.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
@@ -12,17 +12,20 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import PageHeader from '../../components/common/PageHeader';
+import ExportMenu from '../../components/common/ExportMenu';
 import { LoadingState, ErrorState } from '../../components/common/States';
 import { StatusBadge, DeadlineBadge } from '../../components/common/StatusBadge';
 import { FormField, Input, Textarea } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchDsars, updateDsar, extendDsar, completeDsar, refuseDsar } from '../../store/slices/dsarsSlice';
+import { fetchSettings } from '../../store/slices/settingsSlice';
 import { dsarDaysLeft } from '../../services/dsarService';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { DSAR_TYPES, labelOf, byId } from '../../lib/gdpr';
 import { failureMessage } from '../../lib/apiErrors';
 import { documentFilename } from '../../lib/documentDownload';
+import { buildDsarCaseFile } from '../../lib/dsarCaseFile';
 import { AiDraftDialog, useAiEnabled } from '../../components/common/AiAssist';
 import { aiDraftDsarReply } from '../../store/slices/aiSlice';
 
@@ -40,6 +43,12 @@ export default function DsarDetailPage() {
   const [refuseReason, setRefuseReason] = useState('');
   const aiEnabled = useAiEnabled();
   const [aiOpen, setAiOpen] = useState(false);
+  // Company + DPO details for the case file's letterhead. Fetched here — above the early
+  // returns below — because a hook may never sit behind a condition.
+  const settings = useSelector((s) => s.settings);
+  useEffect(() => {
+    if (settings.status === 'idle') dispatch(fetchSettings());
+  }, [settings.status, dispatch]);
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={5} />;
   if (status === 'failed') return <ErrorState error={error} onRetry={refetch} />;
@@ -105,6 +114,28 @@ export default function DsarDetailPage() {
       >
         {open && <DeadlineBadge daysLeft={days} overdueLabel={t('common.overdue')} daysLabel={t('common.daysLeft')} />}
         <StatusBadge status={dsar.status} />
+        {/* The case file: what was done, when, and — if refused — on what legal ground. This
+            is the document that answers a complaint to UODO about an ignored request.
+
+            The file name and the document title are built from the request TYPE, never from
+            the requester's name: a name in a file name travels into folders, e-mail
+            attachments and backup indexes, where it is far harder to control than the
+            contents of the file itself. */}
+        <ExportMenu
+          target="dsar_case_file"
+          entityId={dsar.id}
+          formats={['word', 'markdown', 'print']}
+          size="sm"
+          documentTitle={`${t('dsar.docKind')} — ${labelOf(DSAR_TYPES, dsar.type, lang)}`}
+          disabled={!settings.data}
+          build={(format) => ({
+            filename: documentFilename(
+              t('dsar.docKind'), labelOf(DSAR_TYPES, dsar.type, lang), null,
+              format === 'word' ? 'doc' : 'md',
+            ),
+            content: buildDsarCaseFile({ dsar, settings: settings.data, lang, t }),
+          })}
+        />
       </PageHeader>
 
       <div className="grid gap-4">

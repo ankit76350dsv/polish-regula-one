@@ -13,17 +13,21 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import PageHeader from '../../components/common/PageHeader';
+import ExportMenu from '../../components/common/ExportMenu';
 import { LoadingState, ErrorState } from '../../components/common/States';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { FormField, Input, Select, Textarea } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchDpias, updateDpia, signDpia } from '../../store/slices/dpiasSlice';
 import { fetchActivities } from '../../store/slices/activitiesSlice';
+import { fetchSettings } from '../../store/slices/settingsSlice';
 import { useT } from '../../i18n';
 import { useOrgBase } from '../../lib/paths';
 import { can, hasRole, ROLES, ACTIONS, ROLE_LABELS } from '../../lib/permissions';
 import { DPIA_CRITERIA } from '../../lib/dpiaCriteria';
 import { labelOf } from '../../lib/gdpr';
+import { buildDpiaReport } from '../../lib/dpiaReport';
+import { documentFilename } from '../../lib/documentDownload';
 import { AiBadge, AiDisclaimer, useAiEnabled } from '../../components/common/AiAssist';
 import { aiDraftDpiaSection, aiSuggestRisks } from '../../store/slices/aiSlice';
 
@@ -109,6 +113,12 @@ export default function DpiaDetailPage() {
   const [riskDraft, setRiskDraft] = useState(null); // null = closed
   const aiEnabled = useAiEnabled();
   const aiStatus = useSelector((s) => s.ai.status);
+  // Company + DPO details for the exported report's letterhead. Fetched here — above the
+  // early returns below — because a hook may never sit behind a condition.
+  const settings = useSelector((s) => s.settings);
+  useEffect(() => {
+    if (settings.status === 'idle') dispatch(fetchSettings());
+  }, [settings.status, dispatch]);
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={6} />;
   if (status === 'failed') return <ErrorState error={error} onRetry={refetch} />;
@@ -183,6 +193,26 @@ export default function DpiaDetailPage() {
         )}
       >
         <StatusBadge status={dpia.status} />
+        {/* The assessment as a document. Art. 36(3)(e) obliges the controller to provide the
+            DPIA itself to the supervisory authority when prior consultation is needed, and
+            Art. 35(7) fixes what it must contain — neither of which a spreadsheet row can
+            serve. Word and print/PDF are offered alongside Markdown because these documents
+            get attached to e-mails and filed, and Windows often has nothing registered to
+            open a .md file at all. */}
+        <ExportMenu
+          target="dpia_report"
+          entityId={dpia.id}
+          formats={['word', 'markdown', 'print']}
+          size="sm"
+          documentTitle={dpia.title}
+          disabled={!settings.data}
+          build={(format) => ({
+            filename: documentFilename(
+              t('dpia.docKind'), dpia.title, null, format === 'word' ? 'doc' : 'md',
+            ),
+            content: buildDpiaReport({ dpia, activity, settings: settings.data, lang, t }),
+          })}
+        />
       </PageHeader>
 
       {/* The screening criteria carried over from the wizard — the reason this assessment

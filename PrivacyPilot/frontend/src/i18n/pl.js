@@ -160,6 +160,30 @@ export default {
   'access.disabledTitle': 'Twoje konto jest zawieszone',
   'access.disabledBody': 'Twoje konto RegulaOne jest wyłączone, dlatego dostęp do PrivacyPilot został zablokowany. Skontaktuj się z administratorem organizacji.',
   'export.failed': 'Nie udało się zapisać eksportu w rejestrze audytowym, dlatego został anulowany. Spróbuj ponownie.',
+  // Wspólne napisy przycisków eksportu na wszystkich ekranach rejestrów i dokumentów.
+  'export.csv': 'Eksport (CSV)',
+  'export.markdown': 'Markdown',
+  'export.word': 'Word',
+  'export.print': 'Wydruk / PDF',
+  'export.copy': 'Kopiuj',
+  'export.working': 'Eksportowanie…',
+  // Kopia ZOSTAŁA zapisana w rejestrze audytowym, ale przeglądarka jej nie ukończyła —
+  // zwykle z powodu zablokowanego okna wydruku albo braku dostępu do schowka.
+  'export.deliveryFailed': 'Eksport został zapisany w rejestrze audytowym, ale przeglądarka go nie ukończyła. Zezwól na wyskakujące okna lub dostęp do schowka i spróbuj ponownie.',
+  // Przyciski eksportu poszczególnych rejestrów. Każdy wskazuje rejestr, który pobiera —
+  // o kilka z nich organ nadzorczy pyta wprost ich ustawową nazwą.
+  'dpia.exportCsv': 'Eksport rejestru DPIA (CSV)',
+  'vendors.exportCsv': 'Eksport rejestru podmiotów przetwarzających (CSV)',
+  'transfers.exportCsv': 'Eksport rejestru przekazań (CSV)',
+  'breach.exportCsv': 'Eksport rejestru naruszeń (CSV)',
+  'dsar.exportCsv': 'Eksport rejestru żądań (CSV)',
+  'users.exportCsv': 'Eksport listy użytkowników (CSV)',
+  // Rodzaj dokumentu, używany do zbudowania czytelnej nazwy pliku (zob.
+  // lib/documentDownload.js). Celowo bez danych osobowych — nazwa pliku trafia do folderów,
+  // załączników e-mail i kopii zapasowych, gdzie znacznie trudniej ją kontrolować.
+  'dpia.docKind': 'Ocena skutków DPIA',
+  'dsar.docKind': 'Akta sprawy żądania',
+  'ropa.docKind': 'Karta czynności przetwarzania',
   'access.organisationTitle': 'Dostęp Twojej organizacji jest zawieszony',
   'access.organisationBody': 'Twoja organizacja nie jest aktywna w RegulaOne, dlatego PrivacyPilot został zablokowany. Skontaktuj się z administratorem organizacji.',
   'access.packageTitle': 'Twój plan wygasł',
@@ -526,6 +550,15 @@ export default {
   'audit.target.audit_trail': 'Dziennik zdarzeń',
   'audit.target.privacy_notice': 'Klauzula informacyjna',
   'audit.target.breach_report': 'Raport o naruszeniu',
+  'audit.target.register_dpia': 'Rejestr ocen DPIA',
+  'audit.target.register_vendors': 'Rejestr podmiotów przetwarzających (art. 28)',
+  'audit.target.register_transfers': 'Rejestr przekazań',
+  'audit.target.register_breaches': 'Rejestr naruszeń',
+  'audit.target.register_dsar': 'Rejestr żądań osób',
+  'audit.target.register_users': 'Rejestr dostępu użytkowników',
+  'audit.target.dpia_report': 'Ocena skutków DPIA',
+  'audit.target.dsar_case_file': 'Akta sprawy żądania osoby',
+  'audit.target.activity_record': 'Karta czynności przetwarzania',
   'audit.format.csv': 'Arkusz kalkulacyjny (CSV)',
   'audit.format.json': 'JSON',
   'audit.format.markdown': 'Markdown',

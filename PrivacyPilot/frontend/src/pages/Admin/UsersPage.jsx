@@ -1,7 +1,7 @@
 // Users & roles — invitation, role changes and the permission matrix.
 // The matrix shown here is the SAME object that guards routes, buttons and
 // service calls (lib/permissions.js) — displayed, and enforced.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table';
 import PageHeader from '../../components/common/PageHeader';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import ExportMenu from '../../components/common/ExportMenu';
 import { LoadingState, ErrorState } from '../../components/common/States';
 import { FormField, Input, Select } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
@@ -26,9 +27,11 @@ import {
   inviteUser,
   setUserActive,
 } from '../../store/slices/usersSlice';
+import { fetchSettings } from '../../store/slices/settingsSlice';
 import { useT } from '../../i18n';
 import { ROLES, ROLE_LABELS, ACTIONS, permissionCan } from '../../lib/permissions';
 import { failureMessage } from '../../lib/apiErrors';
+import { buildUserCsv, registerFilename } from '../../lib/registersCsv';
 
 const EMPTY_FORM = { name: '', email: '', permissions: [], role: 'ROLE_USER' };
 const ACCOUNT_ROLE_LABELS = {
@@ -44,6 +47,11 @@ export default function UsersPage() {
   const saveStatus = useSelector((s) => s.users.saveStatus);
   const deleteStatus = useSelector((s) => s.users.deleteStatus);
   const { items, status, error, refetch } = useSliceData('users', fetchUsers);
+  // Company + DPO details for the exported list's identity block.
+  const settings = useSelector((s) => s.settings);
+  useEffect(() => {
+    if (settings.status === 'idle') dispatch(fetchSettings());
+  }, [settings.status, dispatch]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
@@ -121,6 +129,19 @@ export default function UsersPage() {
   return (
     <div>
       <PageHeader title={t('users.title')}>
+        {/* Art. 32(1)(b)/(4) requires the controller to make sure only authorised people
+            process personal data. An access review is how that is demonstrated, and the
+            reviewer needs the list outside the app in order to sign it off. */}
+        <ExportMenu
+          target="register_users"
+          label={t('users.exportCsv')}
+          itemCount={items.length}
+          disabled={!settings.data || items.length === 0}
+          build={() => ({
+            filename: registerFilename('users', lang),
+            content: buildUserCsv({ settings: settings.data, users: items, lang }),
+          })}
+        />
         <Button onClick={() => setOpen(true)}><Plus /> {t('users.invite')}</Button>
       </PageHeader>
 

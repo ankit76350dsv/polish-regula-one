@@ -27,23 +27,13 @@ import { recordExport } from '../../store/slices/exportsSlice';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { buildAuditCsv } from '../../lib/auditCsv';
+import { downloadCsv } from '../../lib/csv';
 import { auditActionLabel, auditChangeRows, auditEntityLabel } from '../../lib/auditLabels';
 
 // Includes the two whole-list kinds an EXPORT line can be about, so exports of the
 // register and of the trail itself are filterable here like any other entry.
 const ENTITY_TYPES = ['activity', 'dpia', 'vendor', 'transfer', 'breach', 'dsar', 'notice',
   'user', 'settings', 'register', 'audit_trail'];
-
-// Download a CSV. The leading BOM is what makes Excel read it as UTF-8 (Polish characters).
-function downloadCsv(filename, content) {
-  const blob = new Blob(['﻿' + content], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 /**
  * What changed, one row per field: the field's name, then its value before and after.
@@ -129,6 +119,11 @@ export default function AuditTrailPage() {
   // The file must hold the WHOLE filtered result, not just the page on screen, so the rows
   // are fetched separately as one large page. The recorded line comes back as a receipt and
   // goes into the file's header block, so the evidence names the entry proving who took it.
+  //
+  // This screen keeps its own export flow rather than using the shared ExportMenu: it needs
+  // the audit RECEIPT to write it into the file itself, and it warns when the export could
+  // not hold every matching row. The order is the same — build, record, and only then hand
+  // the file over.
   const exportCsv = async () => {
     setExporting(true);
     try {

@@ -4,11 +4,15 @@
 // the document format is testable on its own. It is written FOR THE READER (a DPO, a lawyer,
 // an auditor, UODO): translated labels rather than codes, article references in the headings,
 // local date format, and the delimiter that language's Excel expects.
+//
+// The "record the export before handing the file over" rule lives in the shared ExportMenu
+// (see components/common/ExportMenu.jsx), which every export screen in the app now uses —
+// this page used to spell that sequence out by hand, along with its own private copy of the
+// BOM download helper.
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { Plus, Download } from 'lucide-react';
-import { toast } from 'sonner';
+import { Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,6 +20,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import PageHeader from '../../components/common/PageHeader';
+import ExportMenu from '../../components/common/ExportMenu';
 import { LoadingState, EmptyState, ErrorState } from '../../components/common/States';
 import { StatusBadge, DpiaVerdictBadge } from '../../components/common/StatusBadge';
 import { Input } from '../../components/common/Field';
@@ -23,7 +28,6 @@ import { Select } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchActivities } from '../../store/slices/activitiesSlice';
 import { fetchSettings } from '../../store/slices/settingsSlice';
-import { recordExport } from '../../store/slices/exportsSlice';
 import { useDispatch } from 'react-redux';
 import { useEffect } from 'react';
 import { useT } from '../../i18n';
@@ -32,16 +36,6 @@ import { useOrgBase } from '../../lib/paths';
 import { activityCompleteness } from '../../lib/completeness';
 import { buildRegisterCsv, registerCsvFilename } from '../../lib/registerCsv';
 import { ART6_BASES, DEPARTMENTS, labelOf } from '../../lib/gdpr';
-
-function download(filename, content, mime = 'text/csv;charset=utf-8') {
-  const blob = new Blob(['﻿' + content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 export default function RegisterPage() {
   const { t, lang } = useT();
@@ -71,40 +65,13 @@ export default function RegisterPage() {
         a.purpose?.toLowerCase().includes(query.toLowerCase()))),
     [items, tab, query, department, basis]);
 
-  // Export the register — but RECORD it first. The register is the single biggest pile of
-  // personal data in the app, so taking a copy must leave an EXPORT line in the audit trail
-  // (GDPR Art. 5(2)). If the recording fails we do NOT hand over the file: no evidence,
-  // no copy. The filter summary tells a later auditor which slice of the register left.
-  const exportCsv = async () => {
-    if (!settings.data) return;
-    const action = await dispatch(recordExport({
-      target: tab === 'processor' ? 'register_processor' : 'register_controller',
-      format: 'csv',
-      itemCount: filtered.length,
-      filterSummary: [
-        `search=${query || 'none'}`,
-        `department=${department}`,
-        `basis=${basis}`,
-      ].join('; '),
-    }));
-    if (action.error) {
-      toast.error(action.error.message === 'FORBIDDEN' ? t('common.notAuthorized') : t('export.failed'));
-      return;
-    }
-    download(
-      registerCsvFilename(tab, lang),
-      buildRegisterCsv({
-        settings: settings.data,
-        activities: filtered,
-        lang,
-        tab,
-        // The translator is passed in so the file's status / DPIA / yes-no wording comes from
-        // the SAME dictionary the screen uses and the two can never drift apart.
-        t,
-        exportedAt: new Date().toISOString(),
-      }),
-    );
-  };
+  // Which slice of the register is leaving — recorded on the audit line so a later auditor
+  // can tell whether the whole register or just one department's part of it was taken.
+  const filterSummary = [
+    `search=${query || 'none'}`,
+    `department=${department}`,
+    `basis=${basis}`,
+  ].join('; ');
 
   if (status === 'failed') return <ErrorState error={error} onRetry={refetch} />;
 
@@ -115,11 +82,29 @@ export default function RegisterPage() {
           line. It is now translated like every other page's, and says something the title
           does not: what this register is FOR. */}
       <PageHeader title={t('ropa.title')} subtitle={t('ropa.subtitle')}>
-        {can(user, ACTIONS.EXPORT_DATA) && (
-          <Button variant="outline" onClick={exportCsv} disabled={!settings.data}>
-            <Download /> {t('ropa.exportCsv')}
-          </Button>
-        )}
+        <ExportMenu
+          target={tab === 'processor' ? 'register_processor' : 'register_controller'}
+          label={t('ropa.exportCsv')}
+          itemCount={filtered.length}
+          filterSummary={filterSummary}
+          disabled={!settings.data}
+          build={() => ({
+            filename: registerCsvFilename(tab, lang),
+            content: buildRegisterCsv({
+              settings: settings.data,
+              activities: filtered,
+              lang,
+              tab,
+              // The translator is passed in so the file's status / DPIA / yes-no wording comes
+              // from the SAME dictionary the screen uses and the two can never drift apart.
+              t,
+              exportedAt: new Date().toISOString(),
+              // So the file itself says which slice of the register it holds, not just the
+              // audit line.
+              filterSummary,
+            }),
+          })}
+        />
         {can(user, ACTIONS.CREATE_ACTIVITY) && (
           <Button onClick={() => navigate(`${base}/register/new`)}>
             <Plus /> {t('ropa.newActivity')}

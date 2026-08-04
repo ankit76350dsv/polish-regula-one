@@ -19,61 +19,14 @@
 //     when it was taken and how many rows it holds
 //
 // Lives in lib/ next to auditCsv.js / breachReport.js / noticeBuilder.js so the document
-// format can be tested on its own.
+// format can be tested on its own. The delimiter, quoting, date and BOM rules that every
+// register export shares now live in csv.js — this file used to carry its own copy of them.
 import {
   ART6_BASES, ART9_CONDITIONS, DATA_CATEGORIES, DATA_SUBJECT_CATEGORIES, DEPARTMENTS,
   RECIPIENT_CATEGORIES, TOMS, labelOf,
 } from './gdpr';
 import { activityCompleteness } from './completeness';
-
-// Several values per cell (data categories, recipients, security measures). A pipe is used
-// rather than a comma or semicolon because the LABELS THEMSELVES contain commas
-// ("Dane identyfikacyjne (imię, nazwisko, PESEL)") and the delimiter may be a semicolon —
-// so anything else would be ambiguous to read.
-const MULTI = ' | ';
-
-/**
- * Which character separates the columns.
- *
- * Polish Excel treats the semicolon as the list separator and will NOT split a
- * comma-separated file into columns; English/US Excel expects the comma. Matching the
- * language is what makes the file open correctly by double-click, with no import wizard.
- */
-function delimiterFor(lang) {
-  return lang === 'pl' ? ';' : ',';
-}
-
-// Quote every cell and double any quote inside it — the standard CSV escape. Quoting
-// unconditionally means a value containing the delimiter or a line break is always safe.
-function cell(value) {
-  return `"${String(value ?? '').replaceAll('"', '""')}"`;
-}
-
-// "30.07.2026" in Polish, "30/07/2026" in English. Blank stays blank rather than becoming
-// "Invalid Date".
-function shortDate(iso, lang) {
-  if (!iso) return '';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString(lang === 'pl' ? 'pl-PL' : 'en-GB');
-}
-
-/**
- * The moment the file was taken, WITH its time zone.
- *
- * The zone matters: this is evidence, and "13:35" on its own is unanswerable if the reader
- * and the exporter are in different countries — which for a Polish company using an
- * EU-hosted service is normal.
- */
-function dateTime(iso, lang) {
-  if (!iso) return '';
-  // The parts are listed individually because `timeZoneName` cannot be combined with the
-  // `dateStyle`/`timeStyle` shorthands — doing so throws.
-  return new Date(iso).toLocaleString(lang === 'pl' ? 'pl-PL' : 'en-GB', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
-  });
-}
+import { MULTI, cell, csvText, dateTime, delimiterFor, shortDate } from './csv';
 
 // Turn a list of codes into readable labels joined for one cell.
 function labels(codes, list, lang) {
@@ -204,9 +157,13 @@ const TEXT = {
  *                                         yes/no) so the export can never disagree with the
  *                                         screen
  * @param {string}   [p.exportedAt] ISO timestamp to stamp the file with
+ * @param {string}   [p.filterSummary] the filters that were on screen, so the file says
+ *                                     which SLICE of the register it holds
  * @returns {string} CSV text (no BOM — the download helper adds it)
  */
-export function buildRegisterCsv({ settings, activities = [], lang, tab, t, exportedAt }) {
+export function buildRegisterCsv({
+  settings, activities = [], lang, tab, t, exportedAt, filterSummary,
+}) {
   const isProcessor = tab === 'processor';
   const w = TEXT[lang === 'pl' ? 'pl' : 'en'];
   const d = delimiterFor(lang);
@@ -227,6 +184,9 @@ export function buildRegisterCsv({ settings, activities = [], lang, tab, t, expo
   lines.push(row([w.register, isProcessor ? w.processorRegister : w.controllerRegister]));
   lines.push(row([w.exportedAt, dateTime(exportedAt ?? new Date().toISOString(), lang)]));
   lines.push(row([w.rowCount, activities.length]));
+  // Which slice of the register this is. Without it, a filtered export is indistinguishable
+  // from the complete register — and a reader would reasonably assume it is complete.
+  lines.push(row([csvText(lang).filters, filterSummary || csvText(lang).none]));
   lines.push('');
 
   if (isProcessor) {

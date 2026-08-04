@@ -35,13 +35,71 @@ public enum ExportTarget {
     AUDIT_TRAIL("audit_trail", AuditEntityType.AUDIT_TRAIL,
             "Audit trail", false),
 
+    /**
+     * The register of impact assessments, Art. 35 — the whole list.
+     *
+     * A supervisory authority may ask to see which processing was assessed and what the
+     * outcome was, so the list is an evidence document in its own right, separate from the
+     * individual assessments below.
+     */
+    REGISTER_DPIA("register_dpia", AuditEntityType.DPIA,
+            "DPIA register (Art. 35)", false),
+
+    /** The register of processors we use, Art. 28 / Art. 30(1)(d) — the whole list. */
+    REGISTER_VENDORS("register_vendors", AuditEntityType.VENDOR,
+            "Processor register (Art. 28)", false),
+
+    /** The register of transfers out of the EEA, Chapter V / Art. 30(1)(e) — the whole list. */
+    REGISTER_TRANSFERS("register_transfers", AuditEntityType.TRANSFER,
+            "Transfer register (Chapter V)", false),
+
+    /**
+     * The breach register, Art. 33(5) — the whole list.
+     *
+     * Art. 33(5) obliges the controller to document EVERY breach and to make that
+     * documentation available to the supervisory authority on request, so being able to
+     * hand the whole register over is a direct legal requirement, not a convenience.
+     */
+    REGISTER_BREACHES("register_breaches", AuditEntityType.BREACH,
+            "Breach register (Art. 33(5))", false),
+
+    /**
+     * The register of data subject requests, Arts. 12 and 15–22 — the whole list.
+     *
+     * This is how a company shows it answered people within the one-month deadline.
+     * It contains the requesters' names, so it is one of the most sensitive exports here.
+     */
+    REGISTER_DSAR("register_dsar", AuditEntityType.DSAR,
+            "Data subject request register (Arts. 12, 15-22)", false),
+
+    /** The list of people who can see this company's data, Art. 32 — the whole list. */
+    REGISTER_USERS("register_users", AuditEntityType.USER,
+            "User access register (Art. 32)", false),
+
     /** One version of one privacy notice, Art. 13/14. */
     PRIVACY_NOTICE("privacy_notice", AuditEntityType.NOTICE,
             "Privacy notice", true),
 
     /** One breach notification report, Art. 33(3) — the document sent to UODO. */
     BREACH_REPORT("breach_report", AuditEntityType.BREACH,
-            "Breach notification report (Art. 33(3))", true);
+            "Breach notification report (Art. 33(3))", true),
+
+    /** One completed impact assessment, Art. 35(7)(a)-(d) — the assessment document. */
+    DPIA_REPORT("dpia_report", AuditEntityType.DPIA,
+            "DPIA report (Art. 35(7))", true),
+
+    /**
+     * The case file for ONE data subject request — the record of how it was handled.
+     *
+     * Careful: this document is about an identified person, so the export line is the
+     * strongest reason of all to record who took a copy.
+     */
+    DSAR_CASE_FILE("dsar_case_file", AuditEntityType.DSAR,
+            "Data subject request case file (Art. 12(3))", true),
+
+    /** One processing activity's full Art. 30 record, as a single record sheet. */
+    ACTIVITY_RECORD("activity_record", AuditEntityType.ACTIVITY,
+            "Processing activity record (Art. 30)", true);
 
     private final String code;
     // Which kind of record the audit line is about, so the trail stays searchable.

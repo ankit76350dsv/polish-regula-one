@@ -163,6 +163,30 @@ export default {
   'access.disabledTitle': 'Your account is suspended',
   'access.disabledBody': 'Your RegulaOne account is disabled, so access to PrivacyPilot is blocked. Contact your organisation administrator.',
   'export.failed': 'The export could not be recorded in the audit trail, so it was cancelled. Please try again.',
+  // Shared wording for the export buttons on every register and document screen.
+  'export.csv': 'Export (CSV)',
+  'export.markdown': 'Markdown',
+  'export.word': 'Word',
+  'export.print': 'Print / PDF',
+  'export.copy': 'Copy',
+  'export.working': 'Exporting…',
+  // The copy WAS recorded, but the browser would not complete it — usually a blocked
+  // pop-up for the print view, or clipboard access denied.
+  'export.deliveryFailed': 'The export was recorded, but your browser did not complete it. Allow pop-ups or clipboard access, then try again.',
+  // Per-register export buttons. Each names the register it takes, because several of these
+  // screens are places an inspector asks for "the register" by its legal name.
+  'dpia.exportCsv': 'Export DPIA register (CSV)',
+  'vendors.exportCsv': 'Export processor register (CSV)',
+  'transfers.exportCsv': 'Export transfer register (CSV)',
+  'breach.exportCsv': 'Export breach register (CSV)',
+  'dsar.exportCsv': 'Export request register (CSV)',
+  'users.exportCsv': 'Export user list (CSV)',
+  // The kind of document, used to build a readable download file name (see
+  // lib/documentDownload.js). Deliberately free of personal data — a file name travels into
+  // folders, e-mail attachments and backups, where it is far harder to control.
+  'dpia.docKind': 'DPIA report',
+  'dsar.docKind': 'Request case file',
+  'ropa.docKind': 'Processing activity record',
   'access.organisationTitle': 'Your organisation’s access is suspended',
   'access.organisationBody': 'Your organisation is not active in RegulaOne, so PrivacyPilot is blocked. Contact your organisation administrator.',
   'access.packageTitle': 'Your plan has expired',
@@ -529,6 +553,15 @@ export default {
   'audit.target.audit_trail': 'Audit trail',
   'audit.target.privacy_notice': 'Privacy notice',
   'audit.target.breach_report': 'Breach report',
+  'audit.target.register_dpia': 'DPIA register',
+  'audit.target.register_vendors': 'Processor register (Art. 28)',
+  'audit.target.register_transfers': 'Transfer register',
+  'audit.target.register_breaches': 'Breach register',
+  'audit.target.register_dsar': 'Data subject request register',
+  'audit.target.register_users': 'User access register',
+  'audit.target.dpia_report': 'DPIA report',
+  'audit.target.dsar_case_file': 'Data subject request case file',
+  'audit.target.activity_record': 'Processing activity record',
   'audit.format.csv': 'Spreadsheet (CSV)',
   'audit.format.json': 'JSON',
   'audit.format.markdown': 'Markdown',

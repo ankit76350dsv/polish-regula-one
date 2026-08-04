@@ -3,14 +3,21 @@ package com.privacypilot.backend.service;
 import com.privacypilot.backend.dto.export.ExportRequest;
 import com.privacypilot.backend.model.document.AuditEntry;
 import com.privacypilot.backend.model.document.Breach;
+import com.privacypilot.backend.model.document.Dpia;
+import com.privacypilot.backend.model.document.Dsar;
 import com.privacypilot.backend.model.document.PrivacyNotice;
+import com.privacypilot.backend.model.document.ProcessingActivity;
 import com.privacypilot.backend.model.enums.audit.AuditAction;
 import com.privacypilot.backend.model.enums.audit.AuditEntityType;
+import com.privacypilot.backend.model.enums.dsar.DsarType;
 import com.privacypilot.backend.model.enums.export.ExportFormat;
 import com.privacypilot.backend.model.enums.export.ExportTarget;
 import com.privacypilot.backend.model.enums.notice.NoticeAudience;
 import com.privacypilot.backend.repository.BreachRepository;
+import com.privacypilot.backend.repository.DpiaRepository;
+import com.privacypilot.backend.repository.DsarRepository;
 import com.privacypilot.backend.repository.PrivacyNoticeRepository;
+import com.privacypilot.backend.repository.ProcessingActivityRepository;
 import com.privacypilot.backend.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,6 +55,9 @@ class ExportServiceTest {
 
     private PrivacyNoticeRepository notices;
     private BreachRepository breaches;
+    private DpiaRepository dpias;
+    private DsarRepository dsars;
+    private ProcessingActivityRepository activities;
     private AuditService auditService;
     private ExportService service;
     private AuthenticatedUser caller;
@@ -56,8 +66,11 @@ class ExportServiceTest {
     void setUp() {
         notices = mock(PrivacyNoticeRepository.class);
         breaches = mock(BreachRepository.class);
+        dpias = mock(DpiaRepository.class);
+        dsars = mock(DsarRepository.class);
+        activities = mock(ProcessingActivityRepository.class);
         auditService = mock(AuditService.class);
-        service = new ExportService(notices, breaches, auditService);
+        service = new ExportService(notices, breaches, dpias, dsars, activities, auditService);
         caller = new AuthenticatedUser("user-1", "Anna Kowalska", "anna@example.com",
                 "ROLE_USER", TENANT, "ABC sp. z o.o.", "ACTIVE",
                 List.of("PRIVACYPILOT_ADMIN"));
@@ -117,7 +130,138 @@ class ExportServiceTest {
     @DisplayName("a whole-list export never touches the record repositories")
     void wholeListExportDoesNotLookUpRecords() {
         service.record(caller, request(ExportTarget.REGISTER_PROCESSOR, ExportFormat.CSV), CTX);
-        verifyNoInteractions(notices, breaches);
+        verifyNoInteractions(notices, breaches, dpias, dsars, activities);
+    }
+
+    /**
+     * Every whole-list register is filed under its OWN kind of record, so an auditor can
+     * filter the trail to "processor register" or "breach register" and see just those
+     * copies — rather than all of them landing in one undifferentiated bucket.
+     */
+    @Test
+    @DisplayName("each whole-list register export is filed under its own entity type")
+    void wholeListRegistersUseTheirOwnEntityType() {
+        Map<ExportTarget, AuditEntityType> expected = Map.of(
+                ExportTarget.REGISTER_DPIA, AuditEntityType.DPIA,
+                ExportTarget.REGISTER_VENDORS, AuditEntityType.VENDOR,
+                ExportTarget.REGISTER_TRANSFERS, AuditEntityType.TRANSFER,
+                ExportTarget.REGISTER_BREACHES, AuditEntityType.BREACH,
+                ExportTarget.REGISTER_DSAR, AuditEntityType.DSAR,
+                ExportTarget.REGISTER_USERS, AuditEntityType.USER);
+
+        expected.forEach((target, entityType) -> {
+            AuditService fresh = mock(AuditService.class);
+            when(fresh.record(any(), any(), any(), any(), any(), any(), any()))
+                    .thenReturn(new AuditEntry());
+            ExportService svc =
+                    new ExportService(notices, breaches, dpias, dsars, activities, fresh);
+
+            svc.record(caller, request(target, ExportFormat.CSV), CTX);
+
+            // No id is claimed, and the line is filed under the register's own record kind.
+            verify(fresh).record(eq(CTX), eq(AuditAction.EXPORT), eq(entityType),
+                    eq(null), any(), eq(null), any());
+        });
+    }
+
+    @Test
+    @DisplayName("exporting the breach register records how many breaches left")
+    void recordsBreachRegisterExport() {
+        ExportRequest r = request(ExportTarget.REGISTER_BREACHES, ExportFormat.CSV);
+        r.setItemCount(7);
+
+        service.record(caller, r, CTX);
+
+        Map<String, Object> values =
+                captureAudit(AuditAction.EXPORT, AuditEntityType.BREACH).getValue();
+        assertEquals("register_breaches", values.get("target"));
+        assertEquals(7, values.get("itemCount"));
+    }
+
+    @Test
+    @DisplayName("downloading a DPIA report records which assessment it was")
+    void recordsDpiaReportExport() {
+        Dpia dpia = new Dpia();
+        dpia.setId("dpia-2");
+        dpia.setTitle("Monitoring of company e-mail");
+        when(dpias.findByIdAndTenantIdAndDeletedFalse("dpia-2", TENANT))
+                .thenReturn(Optional.of(dpia));
+
+        ExportRequest r = request(ExportTarget.DPIA_REPORT, ExportFormat.WORD);
+        r.setEntityId("dpia-2");
+
+        service.record(caller, r, CTX);
+
+        ArgumentCaptor<String> label = ArgumentCaptor.forClass(String.class);
+        verify(auditService).record(eq(CTX), eq(AuditAction.EXPORT), eq(AuditEntityType.DPIA),
+                eq("dpia-2"), label.capture(), any(), any());
+        assertTrue(label.getValue().contains("Monitoring of company e-mail"), label.getValue());
+    }
+
+    @Test
+    @DisplayName("a DSAR case file is described the same way as every other DSAR audit line")
+    void recordsDsarCaseFileExport() {
+        Dsar dsar = new Dsar();
+        dsar.setId("dsar-5");
+        dsar.setType(DsarType.ACCESS);
+        dsar.setRequesterName("Jan Nowak");
+        when(dsars.findByIdAndTenantIdAndDeletedFalse("dsar-5", TENANT))
+                .thenReturn(Optional.of(dsar));
+
+        ExportRequest r = request(ExportTarget.DSAR_CASE_FILE, ExportFormat.PRINT);
+        r.setEntityId("dsar-5");
+
+        service.record(caller, r, CTX);
+
+        ArgumentCaptor<String> label = ArgumentCaptor.forClass(String.class);
+        verify(auditService).record(eq(CTX), eq(AuditAction.EXPORT), eq(AuditEntityType.DSAR),
+                eq("dsar-5"), label.capture(), any(), any());
+        assertTrue(label.getValue().contains("ACCESS — Jan Nowak"), label.getValue());
+    }
+
+    @Test
+    @DisplayName("downloading one activity's record sheet names the activity")
+    void recordsActivityRecordExport() {
+        ProcessingActivity activity = new ProcessingActivity();
+        activity.setId("act-8");
+        activity.setName("Payroll");
+        when(activities.findByIdAndTenantIdAndDeletedFalse("act-8", TENANT))
+                .thenReturn(Optional.of(activity));
+
+        ExportRequest r = request(ExportTarget.ACTIVITY_RECORD, ExportFormat.MARKDOWN);
+        r.setEntityId("act-8");
+
+        service.record(caller, r, CTX);
+
+        ArgumentCaptor<String> label = ArgumentCaptor.forClass(String.class);
+        verify(auditService).record(eq(CTX), eq(AuditAction.EXPORT), eq(AuditEntityType.ACTIVITY),
+                eq("act-8"), label.capture(), any(), any());
+        assertTrue(label.getValue().contains("Payroll"), label.getValue());
+    }
+
+    /**
+     * The same tenant-isolation rule as for notices and breaches, on every new
+     * single-document target: a record the caller's company does not own is a 404, and no
+     * audit line may be written about it.
+     */
+    @Test
+    @DisplayName("cannot record a single-document export of another company's record")
+    void refusesForeignSingleDocuments() {
+        when(dpias.findByIdAndTenantIdAndDeletedFalse("other", TENANT)).thenReturn(Optional.empty());
+        when(dsars.findByIdAndTenantIdAndDeletedFalse("other", TENANT)).thenReturn(Optional.empty());
+        when(activities.findByIdAndTenantIdAndDeletedFalse("other", TENANT)).thenReturn(Optional.empty());
+
+        for (ExportTarget target : List.of(ExportTarget.DPIA_REPORT,
+                ExportTarget.DSAR_CASE_FILE, ExportTarget.ACTIVITY_RECORD)) {
+            ExportRequest r = request(target, ExportFormat.MARKDOWN);
+            r.setEntityId("other");
+
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                    () -> service.record(caller, r, CTX), target.getCode());
+
+            assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode(), target.getCode());
+        }
+        verifyNoInteractions(auditService);
     }
 
     @Test

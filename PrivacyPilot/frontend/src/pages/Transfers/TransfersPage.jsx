@@ -1,7 +1,7 @@
 // International transfers (Chapter V) — destination country, mechanism and
 // TIA documentation per transfer. A non-adequacy transfer without a TIA is
 // flagged (Schrems II / EDPB Recommendations 01/2020).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
 import { Plus } from 'lucide-react';
@@ -15,14 +15,17 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import PageHeader from '../../components/common/PageHeader';
+import ExportMenu from '../../components/common/ExportMenu';
 import { LoadingState, EmptyState, ErrorState } from '../../components/common/States';
 import { FormField, Input, Select } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchTransfers, createTransfer, updateTransfer } from '../../store/slices/transfersSlice';
 import { fetchVendors } from '../../store/slices/vendorsSlice';
+import { fetchSettings } from '../../store/slices/settingsSlice';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { TRANSFER_MECHANISMS, ADEQUACY_COUNTRIES, labelOf } from '../../lib/gdpr';
+import { buildTransferCsv, registerFilename } from '../../lib/registersCsv';
 import { failureMessage } from '../../lib/apiErrors';
 
 // Does the typed country have an EU adequacy decision? Compared loosely so "japan" and
@@ -46,6 +49,11 @@ export default function TransfersPage() {
   const { items, status, error, refetch } = useSliceData('transfers', fetchTransfers);
   // Processors, so a transfer can be linked to one instead of typing the recipient.
   const { items: vendors } = useSliceData('vendors', fetchVendors);
+  // Company + DPO details for the exported register's identity block.
+  const settings = useSelector((s) => s.settings);
+  useEffect(() => {
+    if (settings.status === 'idle') dispatch(fetchSettings());
+  }, [settings.status, dispatch]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
@@ -106,6 +114,20 @@ export default function TransfersPage() {
   return (
     <div>
       <PageHeader title={t('transfers.title')} subtitle={t('transfers.subtitle')}>
+        {/* Chapter V evidence: which data leaves the EEA, under which mechanism, and whether
+            a transfer impact assessment backs it up (Schrems II / EDPB 01/2020). */}
+        <ExportMenu
+          target="register_transfers"
+          label={t('transfers.exportCsv')}
+          itemCount={items.length}
+          disabled={!settings.data || items.length === 0}
+          build={() => ({
+            filename: registerFilename('transfers', lang),
+            content: buildTransferCsv({
+              settings: settings.data, transfers: items, vendors, lang,
+            }),
+          })}
+        />
         {canManage && <Button onClick={() => setOpen(true)}><Plus /> {t('transfers.add')}</Button>}
       </PageHeader>
 

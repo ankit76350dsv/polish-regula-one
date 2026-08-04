@@ -1,6 +1,6 @@
 // Activity detail — the full Art. 30 record with permission-gated actions
 // (edit, approve, archive, start DPIA). Archive replaces hard delete.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import PageHeader from '../../components/common/PageHeader';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import ExportMenu from '../../components/common/ExportMenu';
 import { LoadingState, ErrorState } from '../../components/common/States';
 import { StatusBadge, DpiaVerdictBadge } from '../../components/common/StatusBadge';
 import { useSliceData } from '../../hooks/useSliceData';
@@ -19,6 +20,9 @@ import {
 import { createDpiaForActivity, fetchDpias } from '../../store/slices/dpiasSlice';
 import { fetchVendors } from '../../store/slices/vendorsSlice';
 import { fetchTransfers } from '../../store/slices/transfersSlice';
+import { fetchSettings } from '../../store/slices/settingsSlice';
+import { buildActivityRecord } from '../../lib/activityRecord';
+import { documentFilename } from '../../lib/documentDownload';
 import { useT } from '../../i18n';
 import { can, ACTIONS } from '../../lib/permissions';
 import { useOrgBase } from '../../lib/paths';
@@ -62,6 +66,12 @@ export default function ActivityDetailPage() {
   const { items: transfers } = useSliceData('transfers', fetchTransfers);
   const { items: dpias } = useSliceData('dpias', fetchDpias);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  // Company + DPO details for the record sheet's letterhead. Fetched here — above the early
+  // returns below — because a hook may never sit behind a condition.
+  const settings = useSelector((s) => s.settings);
+  useEffect(() => {
+    if (settings.status === 'idle') dispatch(fetchSettings());
+  }, [settings.status, dispatch]);
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={6} />;
   if (status === 'failed') return <ErrorState error={error} onRetry={refetch} />;
@@ -113,6 +123,27 @@ export default function ActivityDetailPage() {
         title={activity.name}
         subtitle={`${labelOf(DEPARTMENTS, activity.department, lang)} · ${t('ropa.owner')}: ${activity.ownerName}`}
       >
+        {/* This one activity as a standalone record sheet. The register CSV is the right
+            thing to hand an inspector who asks for the whole register, but a great deal of
+            real work happens one activity at a time — the owning department reviews its own
+            entry, the DPO attaches a single record to an approval e-mail. Sending a
+            twenty-column spreadsheet so someone can read one row of it does not serve that. */}
+        <ExportMenu
+          target="activity_record"
+          entityId={activity.id}
+          formats={['word', 'markdown', 'print']}
+          size="sm"
+          documentTitle={activity.name}
+          disabled={!settings.data}
+          build={(format) => ({
+            filename: documentFilename(
+              t('ropa.docKind'), activity.name, null, format === 'word' ? 'doc' : 'md',
+            ),
+            content: buildActivityRecord({
+              activity, settings: settings.data, vendors, transfers, lang, t,
+            }),
+          })}
+        />
         {can(user, ACTIONS.EDIT_ACTIVITY) && (
           <Button variant="outline" onClick={() => navigate(`${base}/register/${activity.id}/edit`)}>
             <Pencil /> {t('common.edit')}

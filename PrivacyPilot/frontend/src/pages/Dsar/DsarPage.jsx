@@ -1,5 +1,5 @@
 // DSAR queue — Arts. 15–22 with real deadlines (1 month, +2 on extension).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
@@ -13,16 +13,19 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import PageHeader from '../../components/common/PageHeader';
+import ExportMenu from '../../components/common/ExportMenu';
 import { LoadingState, EmptyState, ErrorState } from '../../components/common/States';
 import { StatusBadge, DeadlineBadge } from '../../components/common/StatusBadge';
 import { FormField, Input, Select, Textarea } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchDsars, createDsar } from '../../store/slices/dsarsSlice';
+import { fetchSettings } from '../../store/slices/settingsSlice';
 import { dsarDaysLeft } from '../../services/dsarService';
 import { useT } from '../../i18n';
 import { useOrgBase } from '../../lib/paths';
 import { can, ACTIONS } from '../../lib/permissions';
 import { DSAR_TYPES, labelOf, byId } from '../../lib/gdpr';
+import { buildDsarCsv, registerFilename } from '../../lib/registersCsv';
 import { failureMessage } from '../../lib/apiErrors';
 
 const EMPTY_FORM = { type: 'access', requesterName: '', requesterEmail: '', relation: '', notes: '', receivedAt: '' };
@@ -33,6 +36,11 @@ export default function DsarPage() {
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
   const { items, status, error, refetch } = useSliceData('dsars', fetchDsars);
+  // Company + DPO details for the exported register's identity block.
+  const settings = useSelector((s) => s.settings);
+  useEffect(() => {
+    if (settings.status === 'idle') dispatch(fetchSettings());
+  }, [settings.status, dispatch]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
@@ -71,6 +79,19 @@ export default function DsarPage() {
   return (
     <div>
       <PageHeader title={t('dsar.title')} subtitle={t('dsar.subtitle')}>
+        {/* How the company shows it answered people within the Art. 12(3) month. The file
+            names the requesters, so it is one of the most sensitive exports in the product —
+            which is exactly why every copy of it lands in the audit trail. */}
+        <ExportMenu
+          target="register_dsar"
+          label={t('dsar.exportCsv')}
+          itemCount={items.length}
+          disabled={!settings.data || items.length === 0}
+          build={() => ({
+            filename: registerFilename('dsar', lang),
+            content: buildDsarCsv({ settings: settings.data, dsars: items, lang, t }),
+          })}
+        />
         {can(user, ACTIONS.MANAGE_DSAR) && (
           <Button onClick={() => setOpen(true)}><Plus /> {t('dsar.new')}</Button>
         )}

@@ -3,11 +3,17 @@ package com.privacypilot.backend.service;
 import com.privacypilot.backend.dto.export.ExportRequest;
 import com.privacypilot.backend.model.document.AuditEntry;
 import com.privacypilot.backend.model.document.Breach;
+import com.privacypilot.backend.model.document.Dpia;
+import com.privacypilot.backend.model.document.Dsar;
 import com.privacypilot.backend.model.document.PrivacyNotice;
+import com.privacypilot.backend.model.document.ProcessingActivity;
 import com.privacypilot.backend.model.enums.audit.AuditAction;
 import com.privacypilot.backend.model.enums.export.ExportTarget;
 import com.privacypilot.backend.repository.BreachRepository;
+import com.privacypilot.backend.repository.DpiaRepository;
+import com.privacypilot.backend.repository.DsarRepository;
 import com.privacypilot.backend.repository.PrivacyNoticeRepository;
+import com.privacypilot.backend.repository.ProcessingActivityRepository;
 import com.privacypilot.backend.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -52,6 +58,9 @@ public class ExportService {
     // caller's own records, so a client cannot write an audit line about someone else's.
     private final PrivacyNoticeRepository noticeRepository;
     private final BreachRepository breachRepository;
+    private final DpiaRepository dpiaRepository;
+    private final DsarRepository dsarRepository;
+    private final ProcessingActivityRepository activityRepository;
     private final AuditService auditService;
 
     /**
@@ -117,9 +126,29 @@ public class ExportService {
                     .findByIdAndTenantIdAndDeletedFalse(entityId, tenantId)
                     .map(Breach::getTitle)
                     .orElseThrow(() -> notFound("Breach not found"));
+            case DPIA_REPORT -> dpiaRepository
+                    .findByIdAndTenantIdAndDeletedFalse(entityId, tenantId)
+                    .map(Dpia::getTitle)
+                    .orElseThrow(() -> notFound("DPIA not found"));
+            // The same "TYPE — requester" wording DsarService writes on every other DSAR
+            // audit line, so a reader sees one request described one way all down the trail.
+            case DSAR_CASE_FILE -> dsarRepository
+                    .findByIdAndTenantIdAndDeletedFalse(entityId, tenantId)
+                    .map(ExportService::dsarLabel)
+                    .orElseThrow(() -> notFound("Request not found"));
+            case ACTIVITY_RECORD -> activityRepository
+                    .findByIdAndTenantIdAndDeletedFalse(entityId, tenantId)
+                    .map(ProcessingActivity::getName)
+                    .orElseThrow(() -> notFound("Activity not found"));
             // Whole-list targets never reach here (requiresEntityId is false for them).
             default -> throw notFound("Unsupported export target");
         };
+    }
+
+    // "ACCESS — Anna Kowalska", matching DsarService's own audit label.
+    private static String dsarLabel(Dsar d) {
+        String type = (d.getType() == null) ? "?" : d.getType().name();
+        return type + " — " + (d.getRequesterName() == null ? "?" : d.getRequesterName());
     }
 
     // "employees v3" reads better in the trail than a raw id.

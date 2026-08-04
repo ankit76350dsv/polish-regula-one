@@ -1,6 +1,6 @@
 // Breach register — ALL breaches documented (Art. 33(5)), with a live 72h
 // notification clock on the ones that must go to UODO.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
@@ -13,12 +13,15 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import PageHeader from '../../components/common/PageHeader';
+import ExportMenu from '../../components/common/ExportMenu';
 import { LoadingState, EmptyState, ErrorState } from '../../components/common/States';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { FormField, Input, Select, Textarea } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { useNow, formatCountdown } from '../../hooks/useNow';
 import { fetchBreaches, createBreach } from '../../store/slices/breachesSlice';
+import { fetchSettings } from '../../store/slices/settingsSlice';
+import { buildBreachCsv, registerFilename } from '../../lib/registersCsv';
 import { useT } from '../../i18n';
 import { useOrgBase } from '../../lib/paths';
 import { can, ACTIONS } from '../../lib/permissions';
@@ -82,6 +85,11 @@ export default function BreachesPage() {
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
   const { items, status, error, refetch } = useSliceData('breaches', fetchBreaches);
+  // Company + DPO details for the exported register's identity block.
+  const settings = useSelector((s) => s.settings);
+  useEffect(() => {
+    if (settings.status === 'idle') dispatch(fetchSettings());
+  }, [settings.status, dispatch]);
   const now = useNow(1000);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -126,6 +134,20 @@ export default function BreachesPage() {
   return (
     <div>
       <PageHeader title={t('breach.title')} subtitle={t('breach.subtitle')}>
+        {/* Art. 33(5) obliges the controller to document EVERY breach and to make that
+            documentation available to the supervisory authority on request — so being able to
+            hand over the whole register, including the "notified within 72 h?" answer for each
+            entry, is a legal requirement rather than a convenience. */}
+        <ExportMenu
+          target="register_breaches"
+          label={t('breach.exportCsv')}
+          itemCount={items.length}
+          disabled={!settings.data || items.length === 0}
+          build={() => ({
+            filename: registerFilename('breaches', lang),
+            content: buildBreachCsv({ settings: settings.data, breaches: items, lang, t }),
+          })}
+        />
         {can(user, ACTIONS.MANAGE_BREACHES) && (
           <Button onClick={() => setOpen(true)}><Plus /> {t('breach.report')}</Button>
         )}

@@ -4,7 +4,7 @@
 //
 // Archiving (never hard delete) is Admin-only and is refused while an activity or a
 // transfer still points at the processor, so no Art. 28 link is ever left dangling.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'sonner';
 import { Archive, Plus, Pencil } from 'lucide-react';
@@ -19,12 +19,15 @@ import {
 } from '@/components/ui/table';
 import PageHeader from '../../components/common/PageHeader';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import ExportMenu from '../../components/common/ExportMenu';
 import { LoadingState, EmptyState, ErrorState } from '../../components/common/States';
 import { FormField, Input, Select } from '../../components/common/Field';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchVendors, createVendor, updateVendor, archiveVendor } from '../../store/slices/vendorsSlice';
+import { fetchSettings } from '../../store/slices/settingsSlice';
 import { useT } from '../../i18n';
 import { can, hasRole, ACTIONS, ROLES } from '../../lib/permissions';
+import { buildVendorCsv, registerFilename } from '../../lib/registersCsv';
 import { cn } from '@/lib/utils';
 // Shared with the transfers page: one place that turns a failed request into a message a
 // person can act on (see lib/apiErrors.js).
@@ -48,6 +51,13 @@ export default function VendorsPage() {
   const dispatch = useDispatch();
   const user = useSelector((s) => s.auth.user);
   const { items, status, error, refetch } = useSliceData('vendors', fetchVendors);
+  // The company + DPO details that head the exported register. Without them the file would
+  // open with a blank "Controller:" line, which for a compliance document is a defect — so
+  // the export button stays disabled until they have loaded.
+  const settings = useSelector((s) => s.settings);
+  useEffect(() => {
+    if (settings.status === 'idle') dispatch(fetchSettings());
+  }, [settings.status, dispatch]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(() => emptyForm(lang));
   const [formError, setFormError] = useState(null);
@@ -121,6 +131,18 @@ export default function VendorsPage() {
   return (
     <div>
       <PageHeader title={t('vendors.title')} subtitle={t('vendors.subtitle')}>
+        {/* The Art. 28 processor register is one of the lists an auditor asks for by name —
+            especially to check which suppliers have no signed agreement. */}
+        <ExportMenu
+          target="register_vendors"
+          label={t('vendors.exportCsv')}
+          itemCount={items.length}
+          disabled={!settings.data || items.length === 0}
+          build={() => ({
+            filename: registerFilename('vendors', lang),
+            content: buildVendorCsv({ settings: settings.data, vendors: items, lang, t }),
+          })}
+        />
         {canManage && (
           <Button onClick={openCreate}><Plus /> {t('vendors.add')}</Button>
         )}

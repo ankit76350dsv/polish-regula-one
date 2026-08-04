@@ -1,28 +1,56 @@
 // Data protection impact assessments — all of them, with their Art. 35 lifecycle state.
+//
+// The register exports to CSV: a supervisory authority may ask which processing was assessed
+// and what the outcome was, so the list is evidence in its own right (separate from the
+// individual assessment reports, which the detail screen exports as documents).
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import PageHeader from '../../components/common/PageHeader';
+import ExportMenu from '../../components/common/ExportMenu';
 import { LoadingState, EmptyState, ErrorState } from '../../components/common/States';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { useSliceData } from '../../hooks/useSliceData';
 import { fetchDpias } from '../../store/slices/dpiasSlice';
 import { fetchActivities } from '../../store/slices/activitiesSlice';
+import { fetchSettings } from '../../store/slices/settingsSlice';
 import { useT } from '../../i18n';
 import { useOrgBase } from '../../lib/paths';
+import { buildDpiaCsv, registerFilename } from '../../lib/registersCsv';
 
 export default function DpiaListPage() {
   const base = useOrgBase();
-  const { t } = useT();
+  const { t, lang } = useT();
+  const dispatch = useDispatch();
   const { items, status, error, refetch } = useSliceData('dpias', fetchDpias);
   const { items: activities } = useSliceData('activities', fetchActivities);
+  // Company + DPO details for the exported register's identity block.
+  const settings = useSelector((s) => s.settings);
+  useEffect(() => {
+    if (settings.status === 'idle') dispatch(fetchSettings());
+  }, [settings.status, dispatch]);
 
   if (status === 'loading' || status === 'idle') return <LoadingState rows={4} />;
   if (status === 'failed') return <ErrorState error={error} onRetry={refetch} />;
 
   return (
     <div>
-      <PageHeader title={t('dpia.title')} subtitle={t('dpia.subtitle')} />
+      <PageHeader title={t('dpia.title')} subtitle={t('dpia.subtitle')}>
+        <ExportMenu
+          target="register_dpia"
+          label={t('dpia.exportCsv')}
+          itemCount={items.length}
+          disabled={!settings.data || items.length === 0}
+          build={() => ({
+            filename: registerFilename('dpia', lang),
+            content: buildDpiaCsv({
+              settings: settings.data, dpias: items, activities, lang, t,
+            }),
+          })}
+        />
+      </PageHeader>
 
       {items.length === 0 ? (
         // An explicit title, or EmptyState falls back to the generic "Nothing here yet" and
