@@ -35,6 +35,29 @@ export const ROLE_LABELS = {
   PRIVACYPILOT_EMPLOYEE:           { en: 'Employee',           pl: 'Pracownik' },
 };
 
+/**
+ * The RegulaOne ACCOUNT role, in words — a different vocabulary from the PrivacyPilot
+ * permissions above, and stored in the same `actorRole` field on an audit entry.
+ */
+export const ACCOUNT_ROLE_LABELS = {
+  ROLE_USER:        { en: 'User',        pl: 'Użytkownik' },
+  ROLE_ADMIN:       { en: 'Admin',       pl: 'Administrator' },
+  ROLE_SUPER_ADMIN: { en: 'Super Admin', pl: 'Superadministrator' },
+};
+
+/**
+ * Any stored role code → words a non-technical reader understands.
+ *
+ * WHY BOTH TABLES ARE TRIED: an audit entry's `actorRole` is whichever the person had —
+ * their PrivacyPilot permission if they hold one, otherwise their RegulaOne account role
+ * (see services/api.js). Exported evidence must never print "PRIVACYPILOT_ADMIN" at an
+ * auditor; falling back to the raw code is a last resort, not the normal path.
+ */
+export function roleLabel(code, lang) {
+  if (!code) return '';
+  return ROLE_LABELS[code]?.[lang] ?? ACCOUNT_ROLE_LABELS[code]?.[lang] ?? code;
+}
+
 // Actions — named after what they do, checked with can(user, ACTIONS.X).
 export const ACTIONS = {
   VIEW_REGISTER: 'VIEW_REGISTER',

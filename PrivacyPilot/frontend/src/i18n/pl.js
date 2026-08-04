@@ -537,6 +537,10 @@ export default {
   'audit.field.extended': 'Przedłużony termin',
   'audit.field.version': 'Wersja',
   'audit.field.dpiaVerdict': 'Wynik oceny DPIA',
+  // Ogólna nazwa, bo zapisane pole „name” należy do dowolnego rekordu — podmiotu
+  // przetwarzającego, użytkownika, czynności. Wcześniej pożyczało etykietę „Nazwa czynności”
+  // z rejestru, więc dziennik i jego eksport opisywały nazwę PODMIOTU jako nazwę czynności.
+  'audit.field.name': 'Nazwa',
   'audit.field.dpoName': 'Imię i nazwisko IOD',
   'audit.field.dpoEmail': 'E-mail IOD',
   'audit.field.dpoPhone': 'Telefon IOD',

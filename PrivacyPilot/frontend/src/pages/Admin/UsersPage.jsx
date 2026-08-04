@@ -29,16 +29,13 @@ import {
 } from '../../store/slices/usersSlice';
 import { fetchSettings } from '../../store/slices/settingsSlice';
 import { useT } from '../../i18n';
-import { ROLES, ROLE_LABELS, ACTIONS, permissionCan } from '../../lib/permissions';
+import {
+  ROLES, ROLE_LABELS, ACCOUNT_ROLE_LABELS, ACTIONS, permissionCan,
+} from '../../lib/permissions';
 import { failureMessage } from '../../lib/apiErrors';
 import { buildUserCsv, registerFilename } from '../../lib/registersCsv';
 
 const EMPTY_FORM = { name: '', email: '', permissions: [], role: 'ROLE_USER' };
-const ACCOUNT_ROLE_LABELS = {
-  ROLE_USER: { en: 'User', pl: 'Użytkownik' },
-  ROLE_ADMIN: { en: 'Admin', pl: 'Administrator' },
-  ROLE_SUPER_ADMIN: { en: 'Super Admin', pl: 'Superadministrator' },
-};
 
 export default function UsersPage() {
   const { t, lang } = useT();

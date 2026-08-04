@@ -17,7 +17,10 @@ import {
 // exactly the way the screen that changed it does. Anything not listed falls back to
 // humanise() below, so a new field never shows up as an error — just less polished.
 const FIELD_KEYS = {
-  name: 'ropa.name',
+  // Generic on purpose: a stored "name" belongs to whatever record changed — a processor, a
+  // user, an activity. Pointing it at the register's "Activity name" made the trail (and its
+  // export) describe a processor's name as an activity's.
+  name: 'audit.field.name',
   purpose: 'ropa.purpose',
   status: 'common.status',
   lawfulBasis: 'ropa.lawfulBasis',

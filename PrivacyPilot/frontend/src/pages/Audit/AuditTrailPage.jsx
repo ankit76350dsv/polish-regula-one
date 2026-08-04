@@ -158,6 +158,10 @@ export default function AuditTrailPage() {
           receipt: action.payload,
           filterSummary,
           exportedAt: new Date().toISOString(),
+          // The language and the translator are passed in so the file's headings, action
+          // names and changed-field labels are the SAME words the screen shows.
+          lang,
+          t,
         }),
       );
       // Be honest when the export could not hold everything that matched.

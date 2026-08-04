@@ -28,8 +28,8 @@
 import {
   DATA_CATEGORIES, DSAR_TYPES, TRANSFER_MECHANISMS, byId, labelOf,
 } from './gdpr';
-import { DPIA_CRITERIA } from './dpiaCriteria';
-import { ROLE_LABELS } from './permissions';
+import { DPIA_CRITERIA, riskScoreLabel } from './dpiaCriteria';
+import { roleLabel } from './permissions';
 import {
   MULTI, csvFilename, delimiterFor, joinCsv, orNotSet, provenanceLines,
   rowOf, shortDate, dateTime,
@@ -56,6 +56,15 @@ const TEXT = {
     onTime: 'Tak — w terminie',
     late: 'NIE — po terminie',
     pending: 'jeszcze nie',
+    // Wording for the small counts and markers that would otherwise read as bare numbers
+    // or as a yes/no answering the wrong question.
+    doneMark: 'wykonano',
+    pendingMark: 'w toku',
+    none: 'brak',
+    noTasks: 'brak zadań',
+    noMeasures: 'brak zapisanych środków',
+    noRisks: 'nie zidentyfikowano ryzyk',
+    of: 'z',
     dpiaHeaders: [
       'Lp.',
       'Tytuł oceny',
@@ -65,15 +74,15 @@ const TEXT = {
       'Systematyczny opis (art. 35 ust. 7 lit. a)',
       'Niezbędność i proporcjonalność (art. 35 ust. 7 lit. b)',
       'Liczba zidentyfikowanych ryzyk (art. 35 ust. 7 lit. c)',
-      'Najwyższe ryzyko pierwotne (praw. x waga)',
-      'Najwyższe ryzyko szczątkowe',
+      'Najwyższe ryzyko pierwotne (prawdopodobieństwo × waga, skala 1-25)',
+      'Najwyższe ryzyko szczątkowe (po zastosowaniu środków)',
       'Środki zaradcze (art. 35 ust. 7 lit. d)',
       'Opinia IOD (art. 35 ust. 2)',
       'Wymagane uprzednie konsultacje z UODO (art. 36)',
       'Podpisy zatwierdzające',
       'Zatwierdzono przez',
       'Ostatnia aktualizacja',
-      'Identyfikator systemowy',
+      'Numer referencyjny w systemie',
     ],
     vendorHeaders: [
       'Lp.',
@@ -85,7 +94,7 @@ const TEXT = {
       'Dalsi przetwarzający (art. 28 ust. 2 i 4)',
       'Data ostatniego przeglądu',
       'Ostatnia aktualizacja',
-      'Identyfikator systemowy',
+      'Numer referencyjny w systemie',
     ],
     transferHeaders: [
       'Lp.',
@@ -97,7 +106,7 @@ const TEXT = {
       'Ocena skutków przekazania (TIA) udokumentowana',
       'Sygnatura oceny TIA',
       'Ostatnia aktualizacja',
-      'Identyfikator systemowy',
+      'Numer referencyjny w systemie',
     ],
     breachHeaders: [
       'Lp.',
@@ -118,7 +127,7 @@ const TEXT = {
       'Uzasadnienie oceny ryzyka (art. 33 ust. 5)',
       'Środki zaradcze (art. 33 ust. 3 lit. d)',
       'Ostatnia aktualizacja',
-      'Identyfikator systemowy',
+      'Numer referencyjny w systemie',
     ],
     dsarHeaders: [
       'Lp.',
@@ -140,7 +149,7 @@ const TEXT = {
       'Zadania zbierania danych (wykonane / wszystkie)',
       'Uwagi',
       'Ostatnia aktualizacja',
-      'Identyfikator systemowy',
+      'Numer referencyjny w systemie',
     ],
     userHeaders: [
       'Lp.',
@@ -150,7 +159,7 @@ const TEXT = {
       'Rola konta',
       'Konto aktywne',
       'Ma dostęp do PrivacyPilot',
-      'Identyfikator systemowy',
+      'Numer referencyjny w systemie',
     ],
   },
   en: {
@@ -166,6 +175,13 @@ const TEXT = {
     onTime: 'Yes — within the deadline',
     late: 'NO — after the deadline',
     pending: 'not yet',
+    doneMark: 'done',
+    pendingMark: 'in progress',
+    none: 'none',
+    noTasks: 'no tasks recorded',
+    noMeasures: 'no measures recorded',
+    noRisks: 'no risks identified',
+    of: 'of',
     dpiaHeaders: [
       'No.',
       'Assessment title',
@@ -175,15 +191,15 @@ const TEXT = {
       'Systematic description (Art. 35(7)(a))',
       'Necessity and proportionality (Art. 35(7)(b))',
       'Number of identified risks (Art. 35(7)(c))',
-      'Highest inherent risk (likelihood x severity)',
-      'Highest residual risk',
+      'Highest inherent risk (likelihood × severity, scale 1-25)',
+      'Highest residual risk (after the measures)',
       'Mitigation measures (Art. 35(7)(d))',
       'DPO advice (Art. 35(2))',
       'Prior consultation with UODO required (Art. 36)',
       'Approval signatures',
       'Approved by',
       'Last updated',
-      'System identifier',
+      'System reference number',
     ],
     vendorHeaders: [
       'No.',
@@ -195,7 +211,7 @@ const TEXT = {
       'Sub-processors (Art. 28(2) and (4))',
       'Last reviewed',
       'Last updated',
-      'System identifier',
+      'System reference number',
     ],
     transferHeaders: [
       'No.',
@@ -207,7 +223,7 @@ const TEXT = {
       'Transfer impact assessment (TIA) documented',
       'TIA reference',
       'Last updated',
-      'System identifier',
+      'System reference number',
     ],
     breachHeaders: [
       'No.',
@@ -228,7 +244,7 @@ const TEXT = {
       'Risk decision rationale (Art. 33(5))',
       'Measures taken (Art. 33(3)(d))',
       'Last updated',
-      'System identifier',
+      'System reference number',
     ],
     dsarHeaders: [
       'No.',
@@ -250,7 +266,7 @@ const TEXT = {
       'Data collection tasks (done / total)',
       'Notes',
       'Last updated',
-      'System identifier',
+      'System reference number',
     ],
     userHeaders: [
       'No.',
@@ -260,17 +276,9 @@ const TEXT = {
       'Account role',
       'Account active',
       'Has access to PrivacyPilot',
-      'System identifier',
+      'System reference number',
     ],
   },
-};
-
-// The account-level role, in words. Mirrors ACCOUNT_ROLE_LABELS on the users screen — kept
-// here too because the export must not depend on a page's local constant.
-const ACCOUNT_ROLES = {
-  ROLE_USER: { en: 'User', pl: 'Użytkownik' },
-  ROLE_ADMIN: { en: 'Admin', pl: 'Administrator' },
-  ROLE_SUPER_ADMIN: { en: 'Super Admin', pl: 'Superadministrator' },
 };
 
 /**
@@ -286,7 +294,16 @@ function toolkit(lang) {
     row: (values) => rowOf(values, d),
     yesNo: (value) => (value ? w.yes : w.no),
     orNotSet: (value) => orNotSet(value, lang),
-    date: (iso) => shortDate(iso, lang),
+    /**
+     * An em dash for a value that is legitimately absent.
+     *
+     * Two different blanks must not look alike in a compliance document: `orNotSet` says
+     * "this SHOULD have been filled in and was not" (a finding), while a dash says "there is
+     * nothing here and that is fine" — an optional note, a reference that does not exist yet.
+     * An empty cell says neither, and leaves the reader guessing which one it is.
+     */
+    dash: (value) => (value == null || value === '' ? '—' : value),
+    date: (iso) => shortDate(iso, lang) || '—',
     stamp: (iso) => dateTime(iso, lang),
     // "Legitimate interest (Art. 6(1)(f))" — the meaning plus the citation an auditor looks
     // for. The reference comes from the shared list's own `ref`, so citations are written
@@ -296,7 +313,16 @@ function toolkit(lang) {
       if (!entry) return code ?? '';
       return entry.ref ? `${entry[lang] ?? code} (${entry.ref})` : (entry[lang] ?? code);
     },
-    labels: (codes, list) => (codes ?? []).map((c) => labelOf(list, c, lang)).join(MULTI),
+    /**
+     * A list of codes as readable labels in one cell.
+     *
+     * An EMPTY list says "brak" / "none" rather than leaving the cell blank: "no categories
+     * of data were affected" is a real answer to an inspector's question, and a blank cell
+     * cannot be told apart from one nobody got round to filling in.
+     */
+    labels: (codes, list) => ((codes ?? []).length > 0
+      ? (codes ?? []).map((c) => labelOf(list, c, lang)).join(MULTI)
+      : w.none),
   };
 }
 
@@ -331,13 +357,23 @@ export function buildDpiaCsv({ settings, dpias = [], activities = [], lang, t, f
     const risks = dpia.risks ?? [];
     const approvals = dpia.approvals ?? [];
     const signed = approvals.filter((a) => a.approvedAt);
-    // The worst risk is the number a reader looks for first — working it out from a list of
-    // likelihood/severity pairs by hand is exactly where mistakes creep in.
-    const worst = (pairs) => (pairs.length === 0 ? '' : Math.max(...pairs));
+    /**
+     * The worst risk is the number a reader looks for first — working it out from a list of
+     * likelihood/severity pairs by hand is exactly where mistakes creep in.
+     *
+     * The score is written WITH its meaning ("20 (wysokie)"), because "20" on its own is not
+     * an answer to "how bad is this?" for anyone who does not know the scale.
+     */
+    const worst = (pairs) => {
+      if (pairs.length === 0) return k.w.noRisks;
+      const score = Math.max(...pairs);
+      return `${score} (${riskScoreLabel(score, lang)})`;
+    };
     return k.row([
       i + 1,
       dpia.title,
-      activity?.name ?? '',
+      // An assessment not yet tied to a register entry is a real state, not a blank.
+      k.dash(activity?.name),
       t(`status.${dpia.status}`),
       k.labels(dpia.criteriaMatched, DPIA_CRITERIA),
       k.orNotSet(dpia.description),
@@ -345,14 +381,17 @@ export function buildDpiaCsv({ settings, dpias = [], activities = [], lang, t, f
       risks.length,
       worst(risks.map((r) => (r.likelihood ?? 0) * (r.severity ?? 0))),
       worst(risks.map((r) => (r.residualLikelihood ?? 0) * (r.residualSeverity ?? 0))),
-      (dpia.measures ?? []).join(MULTI),
+      (dpia.measures ?? []).length > 0 ? (dpia.measures ?? []).join(MULTI) : k.w.noMeasures,
       k.orNotSet(dpia.dpoAdvice),
       k.yesNo(dpia.priorConsultation),
-      `${signed.length} / ${approvals.length}`,
+      // "1 z 2" / "1 of 2" reads as a sentence; "1 / 2" reads as a fraction or a date.
+      `${signed.length} ${k.w.of} ${approvals.length}`,
       // Who signed and when — the evidence that the assessment was actually approved,
-      // rather than just a count.
-      signed.map((a) => `${ROLE_LABELS[a.role]?.[lang] ?? a.role}: ${a.name} (${k.date(a.approvedAt)})`)
-        .join(MULTI),
+      // rather than just a count. The role is spelled out, never the stored permission code.
+      signed.length > 0
+        ? signed.map((a) => `${roleLabel(a.role, lang)}: ${a.name} (${k.date(a.approvedAt)})`)
+          .join(MULTI)
+        : k.w.pending,
       k.date(dpia.updatedAt),
       dpia.id,
     ]);
@@ -376,8 +415,10 @@ export function buildVendorCsv({ settings, vendors = [], lang, t, filterSummary,
     // A missing agreement is a real Art. 28(3) finding, so it is spelled out in words
     // rather than left as a code the reader has to interpret.
     t(`vendors.dpa.${v.dpaStatus}`),
-    v.riskLevel ? t(`risk.${v.riskLevel}`) : '',
-    (v.subprocessors ?? []).join(MULTI),
+    v.riskLevel ? t(`risk.${v.riskLevel}`) : k.dash(),
+    // Sub-processors are Art. 28(2)/(4); "none" is a real answer and must not look like a
+    // cell someone forgot to fill in.
+    (v.subprocessors ?? []).length > 0 ? (v.subprocessors ?? []).join(MULTI) : k.w.none,
     k.date(v.lastReviewAt),
     k.date(v.updatedAt),
     v.id,
@@ -400,12 +441,14 @@ export function buildTransferCsv({ settings, transfers = [], vendors = [], lang,
     return k.row([
       i + 1,
       tr.recipient,
-      tr.vendorId ? (vendors.find((v) => v.id === tr.vendorId)?.name ?? tr.vendorId) : '',
+      // No linked processor is normal (the recipient was typed by hand), so it reads as a
+      // dash rather than as a missing entry.
+      tr.vendorId ? (vendors.find((v) => v.id === tr.vendorId)?.name ?? tr.vendorId) : k.dash(),
       k.orNotSet(tr.destinationCountry),
       k.withRef(TRANSFER_MECHANISMS, tr.mechanism),
-      tr.adequacyNote ?? '',
+      k.dash(tr.adequacyNote),
       needsTia ? k.yesNo(tr.tiaDocumented) : k.w.notRequired,
-      tr.tiaRef ?? '',
+      needsTia ? k.dash(tr.tiaRef) : k.w.notRequired,
       k.date(tr.updatedAt),
       tr.id,
     ]);
@@ -443,19 +486,25 @@ export function buildBreachCsv({ settings, breaches = [], lang, t, filterSummary
       b.title,
       k.stamp(b.discoveredAt),
       t(`status.${b.status}`),
-      b.riskLevel ? t(`risk.${b.riskLevel}`) : '',
+      b.riskLevel ? t(`risk.${b.riskLevel}`) : k.dash(),
       k.labels(b.dataCategories, DATA_CATEGORIES),
-      b.subjectsCount ?? '',
-      b.recordsCount ?? '',
+      // A count that was never filled in is NOT the same fact as a count of zero, so an
+      // absent number says so rather than leaving the cell blank.
+      k.orNotSet(b.subjectsCount),
+      k.orNotSet(b.recordsCount),
       k.orNotSet(b.description),
       k.yesNo(b.uodoNotificationRequired),
-      k.stamp(b.uodoNotifiedAt),
+      k.stamp(b.uodoNotifiedAt) || k.dash(),
       within,
-      b.uodoReference ?? '',
+      k.dash(b.uodoReference),
       k.yesNo(b.subjectsNotificationRequired),
-      k.stamp(b.subjectsNotifiedAt),
+      k.stamp(b.subjectsNotifiedAt) || k.dash(),
       k.orNotSet(b.riskRationale),
-      remediation.map((r) => `${r.text} [${r.done ? k.w.yes : k.w.no}]`).join(MULTI),
+      // "[wykonano]" / "[w toku]", not "[Tak]" / "[Nie]" — a yes/no here reads as an answer
+      // to "is this a measure?" rather than to "has it been done?".
+      remediation.length > 0
+        ? remediation.map((r) => `${r.text} [${r.done ? k.w.doneMark : k.w.pendingMark}]`).join(MULTI)
+        : k.w.noMeasures,
       k.date(b.updatedAt),
       b.id,
     ]);
@@ -489,22 +538,28 @@ export function buildDsarCsv({ settings, dsars = [], lang, t, filterSummary, exp
     return k.row([
       i + 1,
       r.requesterName,
-      r.requesterEmail ?? '',
-      r.relation ?? '',
+      k.dash(r.requesterEmail),
+      k.dash(r.relation),
       k.withRef(DSAR_TYPES, r.type),
       k.date(r.receivedAt),
       k.date(r.dueAt),
       k.yesNo(r.extended),
-      r.extensionReason ?? '',
+      // Only asked for when the deadline was actually extended — an empty reason beside a
+      // "No" reads as a missing answer rather than as "not applicable".
+      r.extended ? k.orNotSet(r.extensionReason) : k.w.notRequired,
       t(`status.${r.status}`),
       k.date(r.completedAt),
       within,
-      r.refusalReason ?? '',
+      r.status === 'refused' ? k.orNotSet(r.refusalReason) : k.dash(r.refusalReason),
       k.date(r.refusedAt),
       k.yesNo(r.identityVerified),
-      r.identityMethod ?? '',
-      `${tasks.filter((task) => task.done).length} / ${tasks.length}`,
-      r.notes ?? '',
+      k.dash(r.identityMethod),
+      // "0 / 0" is not readable — it looks like a fraction or a score. When there are no
+      // tasks at all, say so in words.
+      tasks.length > 0
+        ? `${tasks.filter((task) => task.done).length} ${k.w.of} ${tasks.length}`
+        : k.w.noTasks,
+      k.dash(r.notes),
       k.date(r.updatedAt),
       r.id,
     ]);
@@ -531,8 +586,12 @@ export function buildUserCsv({ settings, users = [], lang, filterSummary, export
     i + 1,
     u.name,
     u.email,
-    (u.privacyPermissions ?? []).map((p) => ROLE_LABELS[p]?.[lang] ?? p).join(MULTI),
-    ACCOUNT_ROLES[u.accountRole]?.[lang] ?? u.accountRole ?? '',
+    // Both role vocabularies go through the shared roleLabel, so an access reviewer never
+    // has to decode "PRIVACYPILOT_COMPLIANCE_OFFICER" or "ROLE_ADMIN".
+    (u.privacyPermissions ?? []).length > 0
+      ? (u.privacyPermissions ?? []).map((p) => roleLabel(p, lang)).join(MULTI)
+      : k.w.none,
+    roleLabel(u.accountRole, lang) || k.dash(),
     k.yesNo(u.active),
     k.yesNo(u.hasAccess),
     u.id,

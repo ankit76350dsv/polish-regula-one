@@ -27,6 +27,24 @@ const fmt = (iso, pl) => (iso ? new Date(iso).toLocaleString(pl ? 'pl-PL' : 'en-
 const orDash = (v) => (v == null || v === '' ? '—' : v);
 
 /**
+ * The risk rating in words.
+ *
+ * The document used to print the STORED CODE here — "high" — in a report submitted to UODO,
+ * and in the Polish version it printed the English word. The rating is the field the
+ * authority reads first, so it must be written in the report's own language.
+ */
+function riskWord(riskLevel, pl) {
+  const words = {
+    high: { pl: 'wysokie', en: 'high' },
+    medium: { pl: 'średnie', en: 'medium' },
+    low: { pl: 'niskie', en: 'low' },
+  };
+  const entry = words[riskLevel];
+  if (!entry) return orDash(riskLevel);
+  return pl ? entry.pl : entry.en;
+}
+
+/**
  * @returns {string} a Markdown document ready to copy/download.
  */
 export function buildBreachReport({ breach, settings, lang }) {
@@ -101,7 +119,7 @@ export function buildBreachReport({ breach, settings, lang }) {
     `## ${T.breach}`,
     `${T.title}: ${orDash(breach.title)}`,
     `${T.discovered}: ${fmt(breach.discoveredAt, pl)}`,
-    `${T.risk}: ${orDash(breach.riskLevel)}`,
+    `${T.risk}: ${riskWord(breach.riskLevel, pl)}`,
     '',
     `### ${T.nature}`,
     `${orDash(breach.description)}`,

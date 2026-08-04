@@ -540,6 +540,10 @@ export default {
   'audit.field.extended': 'Deadline extended',
   'audit.field.version': 'Version',
   'audit.field.dpiaVerdict': 'DPIA outcome',
+  // Generic, because a stored "name" belongs to whatever record changed — a processor, a
+  // user, an activity. It used to borrow the register's "Activity name", so the audit trail
+  // and its export described a PROCESSOR's name as an activity's.
+  'audit.field.name': 'Name',
   'audit.field.dpoName': 'DPO name',
   'audit.field.dpoEmail': 'DPO e-mail',
   'audit.field.dpoPhone': 'DPO phone',

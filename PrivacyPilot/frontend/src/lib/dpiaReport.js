@@ -16,23 +16,13 @@
 // Structured exactly like breachReport.js (its sibling), so the two documents this product
 // produces for a regulator read alike.
 import { labelOf } from './gdpr';
-import { DPIA_CRITERIA } from './dpiaCriteria';
-import { ROLE_LABELS } from './permissions';
+// riskScoreLabel keeps the matrix thresholds in ONE place, shared with the exported DPIA
+// register, so the words in the document and the colours on screen can never disagree.
+import { DPIA_CRITERIA, riskScoreLabel } from './dpiaCriteria';
+import { roleLabel } from './permissions';
 
 const orDash = (v) => (v == null || v === '' ? '—' : v);
 const fmtDate = (iso, pl) => (iso ? new Date(iso).toLocaleDateString(pl ? 'pl-PL' : 'en-GB') : '—');
-
-/**
- * A plain-language reading of a risk score (likelihood x severity, each 1-5).
- *
- * The matrix thresholds are the same ones the DPIA screen colours by, so the words in the
- * document and the colours on screen can never tell the reader different things.
- */
-function riskBand(score, pl) {
-  if (score >= 15) return pl ? 'wysokie' : 'high';
-  if (score >= 8) return pl ? 'średnie' : 'medium';
-  return pl ? 'niskie' : 'low';
-}
 
 /**
  * @param {object}   p
@@ -131,9 +121,9 @@ export function buildDpiaReport({ dpia, activity, settings, lang, t }) {
         const residual = (r.residualLikelihood ?? 0) * (r.residualSeverity ?? 0);
         return [
           `### ${T.riskCol} ${i + 1}: ${orDash(r.description)}`,
-          `- **${T.inherent}:** ${r.likelihood} x ${r.severity} = ${score} (${riskBand(score, pl)})`,
+          `- **${T.inherent}:** ${r.likelihood} x ${r.severity} = ${score} (${riskScoreLabel(score, lang)})`,
           `- **${T.mitigation}:** ${orDash(r.mitigation)}`,
-          `- **${T.residual}:** ${r.residualLikelihood} x ${r.residualSeverity} = ${residual} (${riskBand(residual, pl)})`,
+          `- **${T.residual}:** ${r.residualLikelihood} x ${r.residualSeverity} = ${residual} (${riskScoreLabel(residual, lang)})`,
         ].join('\n');
       }).join('\n\n')
     : T.noRisks;
@@ -144,7 +134,7 @@ export function buildDpiaReport({ dpia, activity, settings, lang, t }) {
 
   const approvals = (dpia.approvals ?? []).length > 0
     ? (dpia.approvals ?? []).map((a) => {
-        const role = ROLE_LABELS[a.role]?.[lang] ?? a.role;
+        const role = roleLabel(a.role, lang);
         return a.approvedAt
           ? `- ${role}: ${a.name} — ${fmtDate(a.approvedAt, pl)}`
           : `- ${role}: ${T.pending}`;

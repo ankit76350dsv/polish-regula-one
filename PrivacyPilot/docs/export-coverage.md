@@ -143,3 +143,110 @@ so the builder checks above were one-off and are not committed as regression tes
   allowed to read the data could call the read APIs and assemble their own copy. Closing that
   fully means generating exports server-side, which needs the bilingual register labels that
   today live only in the frontend.
+
+---
+
+# Round 2 — making every export readable by a non-technical reader
+
+Date: 2026-08-04
+
+Follow-up pass: every cell in every CSV must be words a DPO, lawyer or UODO inspector can act
+on, with no stored codes, no JSON, and no blank cells whose meaning is ambiguous.
+
+## 1. Files modified
+
+`lib/auditCsv.js` (rewritten), `lib/registersCsv.js`, `lib/registerCsv.js`, `lib/auditLabels.js`,
+`lib/permissions.js`, `lib/dpiaCriteria.js`, `lib/dpiaReport.js`, `lib/breachReport.js`,
+`pages/Audit/AuditTrailPage.jsx`, `pages/Admin/UsersPage.jsx`, `i18n/en.js`, `i18n/pl.js`
+
+## 2. Old behaviour → new behaviour
+
+**The audit-trail CSV was the worst offender.** Before / after:
+
+| Was | Now |
+|---|---|
+| `{"retentionPeriod":"5 years","status":"approved"}` | `Retention: 5 years → 10 years \| Status: Draft → Approved` |
+| `UPDATE` | `Changed` / `Zmieniono` |
+| `audit_trail`, `activity` | `Audit trail`, `Processing activity` |
+| `PRIVACYPILOT_ADMIN` | `PrivacyPilot Admin` / `Administrator PrivacyPilot` |
+| `2026-07-01T08:00:00Z` | `01.07.2026, 09:00 GMT+2` |
+| `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 …` | `Google Chrome (Windows)` (raw string kept in a final column marked technical) |
+| English headings, always comma-delimited | Bilingual headings, semicolon for Polish Excel |
+
+It now reuses `auditLabels.js` — the same translator the on-screen "what changed" panel uses —
+so the export and the screen can never describe the same entry differently. An EXPORT line now
+reads `What was exported: Breach register | File format: Spreadsheet (CSV) | Records included: 7`.
+A one-line legend explains the `→` and the `—`, once.
+
+**Codes that were still leaking:**
+- The UODO breach report (Art. 33(3)) printed the stored `high` as the risk level — and printed
+  the English word in the Polish document. It is the field the authority reads first.
+- The DPIA register printed the actor's stored permission code in the "approved by" column.
+- The audit trail described a **processor's** name as "Activity name", because `auditLabels`
+  mapped the generic `name` field to the register's `ropa.name`. Now a generic "Name"/"Nazwa"
+  (the row already has a "Type of record" column saying which kind it is). This fixes the
+  on-screen panel too.
+
+**Numbers that needed their meaning:**
+- Risk scores were bare (`20`). Now `20 (wysokie)` / `20 (high)` — "20" is not an answer to
+  "how bad is this?" for anyone who does not know the scale. Headings now name the scale:
+  "Najwyższe ryzyko pierwotne (prawdopodobieństwo × waga, skala 1-25)".
+- `0 / 0` tasks read as a fraction. Now "brak zadań" / "no tasks recorded".
+- `1 / 2` approvals → `1 z 2` / `1 of 2`.
+- Remediation `[Tak]`/`[Nie]` answered the wrong question. Now `[wykonano]`/`[w toku]`.
+
+**Blank cells, which were the subtlest problem.** A compliance reader cannot tell an
+oversight from a legitimate absence, so the two are now different words:
+- `orNotSet` → "nie uzupełniono" / "not provided" — should have been filled in (**a finding**)
+- `dash` → "—" — legitimately absent (an optional note, a reference that does not exist yet)
+- empty lists → "brak" / "none" — "no recipients" is a real Art. 30 answer
+- `notRequired` → "nie wymagane" — e.g. a TIA reference on an adequacy-decision transfer,
+  where "No" would read as a finding when nothing is missing
+- absent counts stay "nie uzupełniono", because a missing count is not the same fact as zero
+
+**Two bugs found by testing sparse records:** `k.w.none` was referenced but never defined in
+`registersCsv.js`'s wording table (so the sub-processor and permissions columns came out
+blank), and empty label lists rendered as blank in both register builders.
+
+## 3. Deduplication
+
+- `ACCOUNT_ROLE_LABELS` existed in `UsersPage.jsx` and again in `registersCsv.js`. Now one
+  copy in `permissions.js`, plus a shared `roleLabel(code, lang)` that resolves BOTH
+  vocabularies (PrivacyPilot permission or RegulaOne account role) — `actorRole` can be either.
+- The DPIA risk-matrix thresholds (`>=15` high, `>=8` medium) existed in `dpiaReport.js` and in
+  `DpiaDetailPage`'s `riskTone`. Now `riskScoreBand` / `riskScoreLabel` in `dpiaCriteria.js`,
+  used by the report and the register. (`riskTone` on the DPIA screen still has its own copy —
+  it maps to colours, not words; worth pointing at the shared helper in a later pass.)
+
+## 4. Security / compliance impact
+
+No change to what is exported, who may export, or what is recorded — this pass only changes how
+values are *worded*. Compliance improves: documents handed to UODO no longer contain untranslated
+internal codes, and the audit-trail export is now legible to the auditor it exists for.
+
+The timestamp change deserves a note. The old ISO-8601-UTC was chosen so a time could never be
+misread; the new format keeps that guarantee by NAMING the zone ("01.07.2026, 09:00 GMT+2")
+rather than by leaving the reader to convert.
+
+## 5. Testing performed
+
+- `npm run build` clean; i18n key parity between `en.js`/`pl.js` verified; unused-import scan clean.
+- Audit CSV exercised against all four entry shapes the real trail contains: an UPDATE with a
+  before/after diff, a CREATE (no "before"), an EXPORT line, and an action with no value change.
+  Both languages inspected.
+- Every register CSV re-run with deliberately SPARSE records (no country, no sub-processors, no
+  tasks, absent counts, no permissions) — this is what surfaced the two bugs above. No blank
+  cells remain in any export.
+- `deviceSummary` checked against Chrome/Windows, Safari/macOS, `curl/8.4.0` (unknown → returned
+  honestly as-is) and empty input.
+- UODO breach report risk line verified for high/medium/low in both languages.
+- Backend untouched this round (74 tests still green from round 1).
+
+## 6. Potential risks / side effects
+
+- **`buildAuditCsv` now requires `lang` and `t`.** Its only caller passes them. Without them the
+  headings would fall back to English and action names would print as raw keys.
+- The audit CSV's column set changed (12 columns, row numbers first, entry id moved to the end).
+  Anything parsing it by position would need updating; it is written for humans.
+- `deviceSummary` is a deliberately conservative heuristic. Unrecognised agents return the raw
+  string rather than a guess, and the full string is always kept in its own column.

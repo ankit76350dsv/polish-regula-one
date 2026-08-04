@@ -29,7 +29,12 @@ import { activityCompleteness } from './completeness';
 import { MULTI, cell, csvText, dateTime, delimiterFor, shortDate } from './csv';
 
 // Turn a list of codes into readable labels joined for one cell.
+//
+// An EMPTY list says "brak" / "none" rather than leaving the cell blank: "no recipients" is a
+// real answer in an Art. 30 register, and a blank cell cannot be told apart from one nobody
+// got round to filling in.
 function labels(codes, list, lang) {
+  if ((codes ?? []).length === 0) return csvText(lang).none;
   return (codes ?? []).map((code) => labelOf(list, code, lang)).join(MULTI);
 }
 
@@ -75,7 +80,7 @@ const TEXT = {
       'Wynik oceny DPIA (art. 35)',
       'Kompletność wpisu',
       'Ostatnia aktualizacja',
-      'Identyfikator systemowy',
+      'Numer referencyjny w systemie',
     ],
     processorHeaders: [
       'Lp.',
@@ -90,7 +95,7 @@ const TEXT = {
       'Środki techniczne i organizacyjne (art. 32 / art. 30 ust. 2 lit. d)',
       'Kompletność wpisu',
       'Ostatnia aktualizacja',
-      'Identyfikator systemowy',
+      'Numer referencyjny w systemie',
     ],
   },
   en: {
@@ -124,7 +129,7 @@ const TEXT = {
       'DPIA outcome (Art. 35)',
       'Record completeness',
       'Last updated',
-      'System identifier',
+      'System reference number',
     ],
     processorHeaders: [
       'No.',
@@ -139,7 +144,7 @@ const TEXT = {
       'Technical and organisational measures (Art. 32 / Art. 30(2)(d))',
       'Record completeness',
       'Last updated',
-      'System identifier',
+      'System reference number',
     ],
   },
 };

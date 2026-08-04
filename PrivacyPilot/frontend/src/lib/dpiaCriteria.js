@@ -185,3 +185,28 @@ export function suggestCriteria({ dataCategories = [], dataSubjects = [] }) {
   }
   return [...suggested];
 }
+
+// ── Reading a risk score ─────────────────────────────────────────────────────────────
+// A DPIA risk is scored as likelihood x severity, each 1-5, so the product runs 1-25.
+//
+// WHY THESE LIVE HERE: the number on its own means nothing to a lawyer or an auditor —
+// "20" is not an answer to "how bad is this?". Every place that shows a score (the DPIA
+// screen's colours, the exported report, the exported register) must agree on where the
+// boundaries are, so the thresholds are defined once.
+
+/** 'high' | 'medium' | 'low' for a likelihood x severity product. */
+export function riskScoreBand(score) {
+  if (score >= 15) return 'high';
+  if (score >= 8) return 'medium';
+  return 'low';
+}
+
+/** The band in words, e.g. riskScoreLabel(20, 'pl') → "wysokie". */
+export function riskScoreLabel(score, lang) {
+  const words = {
+    high: { en: 'high', pl: 'wysokie' },
+    medium: { en: 'medium', pl: 'średnie' },
+    low: { en: 'low', pl: 'niskie' },
+  };
+  return words[riskScoreBand(score)][lang === 'pl' ? 'pl' : 'en'];
+}
