@@ -14,15 +14,7 @@ import {
   Cell,
 } from "recharts";
 import { fetchDashboard } from "../store/slices/dashboardSlice";
-import { fetchCompanies } from "../store/slices/companySlice";
-import {
-  Card,
-  Loader,
-  AlertBanner,
-  Badge,
-  EmptyState,
-  Button,
-} from "../components/common";
+import { Card, Loader, AlertBanner, Badge, Button } from "../components/common";
 import {
   WASTE_CATEGORIES,
   MONTH_NAMES,
@@ -90,6 +82,11 @@ const icons = {
       <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
+  calendar: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" strokeLinecap="round" />
+    </svg>
+  ),
 };
 
 // ── Metric card ───────────────────────────────────────────────────────────────
@@ -115,6 +112,122 @@ function MetricCard({ icon, label, value, hint, accent = "emerald" }) {
           {hint && <div className="mt-1 text-xs text-slate-400">{hint}</div>}
         </div>
         <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${a.chip}`}>{icon}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── BDO filing deadline banner ────────────────────────────────────────────────
+//
+// The Polish annual waste report (sprawozdanie) is due 15 MARCH and covers the
+// PREVIOUS calendar year. That is a different year from the one in the picker
+// above, so this banner is deliberately separate from everything else on the page
+// — mixing them up is how a legal filing gets missed.
+//
+// The backend decides the state (see utils/bdoDeadlines.js); this only draws it.
+function FilingDeadlineBanner({ obligation, canOpenReports }) {
+  if (!obligation) return null;
+
+  const {
+    coversYear,
+    deadline,
+    daysRemaining,
+    submitted,
+    generated,
+    overdue,
+    predatesAccount,
+    annualFee,
+  } = obligation;
+
+  // Show the deadline as a plain readable date.
+  const dueDate = new Date(`${deadline}T00:00:00`).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  // Four states, worst first. "Generated" is NOT the same as filed: producing the
+  // XML here does nothing until someone uploads it to the BDO portal and marks it
+  // submitted, so a generated-but-unfiled report still counts as outstanding.
+  let tone;
+  let headline;
+  let detail;
+
+  if (overdue) {
+    tone = {
+      wrap: "border-red-200 bg-red-50",
+      chip: "bg-red-100 text-red-600",
+      title: "text-red-800",
+      body: "text-red-700",
+    };
+    headline = `The ${coversYear} report is overdue`;
+    detail = generated
+      ? `It was due on ${dueDate} (${Math.abs(daysRemaining)} days ago). The report has been generated but not yet marked as submitted to the BDO portal.`
+      : `It was due on ${dueDate} (${Math.abs(daysRemaining)} days ago) and has not been generated yet.`;
+  } else if (submitted) {
+    tone = {
+      wrap: "border-emerald-200 bg-emerald-50",
+      chip: "bg-emerald-100 text-emerald-600",
+      title: "text-emerald-800",
+      body: "text-emerald-700",
+    };
+    headline = `The ${coversYear} report has been filed`;
+    detail = `Nothing outstanding. The next report is due ${dueDate}.`;
+  } else if (daysRemaining <= 45) {
+    tone = {
+      wrap: "border-amber-200 bg-amber-50",
+      chip: "bg-amber-100 text-amber-600",
+      title: "text-amber-800",
+      body: "text-amber-700",
+    };
+    headline = `The ${coversYear} report is due in ${daysRemaining} ${daysRemaining === 1 ? "day" : "days"}`;
+    detail = `It must be filed in the BDO portal by ${dueDate}.${
+      generated ? " It has been generated — mark it submitted once it is filed." : ""
+    }`;
+  } else {
+    tone = {
+      wrap: "border-slate-200 bg-white",
+      chip: "bg-slate-100 text-slate-500",
+      title: "text-slate-800",
+      body: "text-slate-500",
+    };
+    headline = `Next BDO report: ${coversYear}`;
+    detail = `Due ${dueDate} — ${daysRemaining} days away.`;
+    // Explain the long gap: we skipped the earlier year on purpose because this
+    // account did not exist then, rather than because nothing is owed.
+    if (predatesAccount) {
+      detail +=
+        " Earlier years are not shown because they are from before this account was set up — check them directly in the BDO portal if you need to.";
+    }
+  }
+
+  return (
+    <div className={`rounded-2xl border p-5 shadow-sm ${tone.wrap}`}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone.chip}`}>
+            {icons.calendar}
+          </span>
+          <div>
+            <div className={`text-sm font-semibold ${tone.title}`}>{headline}</div>
+            <div className={`mt-0.5 text-xs ${tone.body}`}>{detail}</div>
+            {/* The register fee is a separate yearly obligation. WasteSync cannot
+                see payments, so this is a reminder and never a status. */}
+            <div className="mt-1.5 text-xs text-slate-400">
+              Separately, the annual register fee (opłata roczna) is due by{" "}
+              {new Date(`${annualFee.deadline}T00:00:00`).toLocaleDateString(undefined, {
+                day: "numeric",
+                month: "long",
+              })}
+              . WasteSync does not track payments.
+            </div>
+          </div>
+        </div>
+        {canOpenReports && !submitted && (
+          <Link to="/reports" className="shrink-0">
+            <Button variant={overdue ? "danger" : "primary"}>Go to reports</Button>
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -149,59 +262,30 @@ function ChartTooltip({ active, payload, label }) {
 export default function Dashboard() {
   const dispatch = useDispatch();
   const { data, loading, error } = useSelector((state) => state.dashboard);
-  const { list: companies } = useSelector((state) => state.companies);
 
   const [year, setYear] = useState(new Date().getFullYear());
-  // "all" means every company; otherwise a specific company id.
-  const [scope, setScope] = useState("all");
 
-  // Three parts of this page depend on what the user may do:
+  // Two parts of this page depend on what the user may do:
   //   - the "Recent activity" panel is the audit trail, so only people who may read
   //     the audit trail see it (the backend also leaves the data out for everyone
   //     else, so for HR the list would arrive empty anyway),
-  //   - the "Recent reports" links only help someone who may open a report,
-  //   - the "add your first company" button only helps someone who may add one.
+  //   - the "Recent reports" links only help someone who may open a report.
   const { can, CAPABILITIES } = useCapabilities();
   const canReadAudit = can(CAPABILITIES.AUDIT_READ);
   const canReadReports = can(CAPABILITIES.REPORT_READ);
-  const canAddCompany = can(CAPABILITIES.COMPANY_WRITE);
 
+  // Reload the dashboard whenever the year changes. There is no company scope any
+  // more: one customer has one company, so there was never anything to choose.
   useEffect(() => {
-    dispatch(fetchCompanies());
-  }, [dispatch]);
-
-  // Reload the dashboard whenever the year or company scope changes.
-  useEffect(() => {
-    const companyId = scope === "all" ? undefined : scope;
-    dispatch(fetchDashboard({ year, companyId }));
-  }, [dispatch, year, scope]);
+    dispatch(fetchDashboard({ year }));
+  }, [dispatch, year]);
 
   if (loading && !data) return <Loader label="Loading dashboard…" />;
 
-  // No companies at all — guide the user to set one up first.
-  if (!loading && companies.length === 0) {
-    return (
-      <div>
-        <EmptyState
-          title="Welcome to WasteSync"
-          message={
-            canAddCompany
-              ? "Start by adding the company you report packaging waste for."
-              : "No companies have been set up yet, so there is nothing to show. Someone who manages company records needs to add one first."
-          }
-          action={
-            canAddCompany ? (
-              <Link to="/companies/new">
-                <Button>+ Add your company</Button>
-              </Link>
-            ) : null
-          }
-        />
-      </div>
-    );
-  }
-
   const m = data?.metrics || {};
+  // The company name comes straight from RegulaOne. It is null only when
+  // RegulaOne was unreachable — the figures below are still correct either way.
+  const companyName = data?.company?.name;
 
   // Shape the category totals for the bar chart.
   const categoryData = WASTE_CATEGORIES.map((c) => ({
@@ -237,27 +321,13 @@ export default function Dashboard() {
             </div>
             <h1 className="mt-3 text-3xl font-bold tracking-tight">Dashboard</h1>
             <p className="mt-1 text-sm text-emerald-100">
+              {companyName ? `${companyName} · ` : ""}
               Reporting overview for {data?.year ?? year}
             </p>
           </div>
 
-          {/* Scope + year controls, styled for the dark hero background. */}
+          {/* Year control, styled for the dark hero background. */}
           <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm">
-              <span className="text-emerald-100">Scope</span>
-              <select
-                value={scope}
-                onChange={(e) => setScope(e.target.value)}
-                className="rounded-lg border border-white/25 bg-white/15 px-3 py-2 text-sm text-white backdrop-blur transition focus:outline-none focus:ring-2 focus:ring-white/50 [&>option]:text-slate-900"
-              >
-                <option value="all">All companies</option>
-                {companies.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label className="flex items-center gap-2 text-sm">
               <span className="text-emerald-100">Year</span>
               <select
@@ -278,14 +348,19 @@ export default function Dashboard() {
 
       {error && <AlertBanner level="error">{error}</AlertBanner>}
 
-      {/* ── Key metrics ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <MetricCard
-          icon={icons.building}
-          label="Companies"
-          value={fmt(m.totalCompanies)}
-          accent="blue"
-        />
+      {/* ── The 15 March filing deadline ─────────────────────────────────────
+          Placed directly under the hero, above the charts, because it is the one
+          thing on this page with a legal date attached. It is about the PREVIOUS
+          year, not the year selected above. */}
+      <FilingDeadlineBanner
+        obligation={data?.filingObligation}
+        canOpenReports={canReadReports}
+      />
+
+      {/* ── Key metrics ──────────────────────────────────────────────────────
+          The old "Companies" tile was removed: it always said 1. One customer has
+          one company, so counting them told the user nothing. */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard
           icon={icons.clipboard}
           label="Entries this year"
@@ -413,28 +488,32 @@ export default function Dashboard() {
           )}
         </Card>
 
+        {/* Reporting status is now a single row, not a list: there is one company
+            and one answer — has this year been reported or not. */}
         <Card className="p-5">
           <SectionTitle icon={icons.check}>Reporting status ({data?.year})</SectionTitle>
-          {(!data?.reportingStatus || data.reportingStatus.length === 0) ? (
-            <p className="text-sm text-slate-500">No companies in scope.</p>
+          {!data?.reportingStatus ? (
+            <p className="text-sm text-slate-500">Nothing to report on yet.</p>
           ) : (
-            <div className="divide-y divide-slate-100">
-              {data.reportingStatus.map((s) => (
-                <div
-                  key={s.companyId}
-                  className="flex items-center justify-between py-2.5"
-                >
-                  <div>
-                    <div className="text-sm font-medium text-slate-800">{s.companyName}</div>
-                    <div className="font-mono text-xs text-slate-400">{s.bdoRegistrationNumber}</div>
+            <div className="flex items-center justify-between py-2.5">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                  {icons.building}
+                </span>
+                <div>
+                  <div className="text-sm font-medium text-slate-800">
+                    {data.reportingStatus.companyName || "Your company"}
                   </div>
-                  {s.reported ? (
-                    <Badge tone="green">Reported</Badge>
-                  ) : (
-                    <Badge tone="amber">Not reported</Badge>
-                  )}
+                  <div className="font-mono text-xs text-slate-400">
+                    {data.reportingStatus.bdoRegistrationNumber || "No BDO number set"}
+                  </div>
                 </div>
-              ))}
+              </div>
+              {data.reportingStatus.reported ? (
+                <Badge tone="green">Reported</Badge>
+              ) : (
+                <Badge tone="amber">Not reported</Badge>
+              )}
             </div>
           )}
         </Card>
@@ -475,7 +554,7 @@ export default function Dashboard() {
                     <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                       {icons.report}
                     </span>
-                    {r.year} · {r.companyName || r.companyId?.name}
+                    {r.year} · {r.companyName || "—"}
                   </span>
                   <span className="text-xs text-slate-400">
                     {new Date(r.createdAt).toLocaleDateString()}

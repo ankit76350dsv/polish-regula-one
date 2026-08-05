@@ -1,4 +1,4 @@
-const companyService = require('../services/companyService');
+const companyProfileService = require('../services/companyProfileService');
 const { sendSuccess, sendError } = require('../utils/responseHelper');
 const { logAudit } = require('../middleware/auditLogger');
 
@@ -15,52 +15,62 @@ const buildActor = (req) => ({
   userAgent: req.headers['user-agent'],
 });
 
-const listCompanies = async (req, res, next) => {
+// GET /api/companies/profile
+//
+// The Company page. Reads the company live from RegulaOne and merges in the one
+// value WasteSync owns: the 9-digit BDO registration number.
+//
+// There is no "create company" or "edit company" endpoint. The company is
+// registered once in RegulaOne when the customer signs up, so WasteSync only
+// reads it — a second copy typed in here could disagree with the legal record,
+// and those details are printed on reports filed with a government register.
+const getCompanyProfile = async (req, res, next) => {
   try {
-    const companies = await companyService.listCompanies(req.tenantId);
-    return sendSuccess(res, { count: companies.length, companies }, 'Companies fetched');
-  } catch (err) {
-    if (err.status) return sendError(res, err.message, err.status);
-    next(err);
-  }
-};
-
-const getCompany = async (req, res, next) => {
-  try {
-    const company = await companyService.getCompanyById(req.params.id, req.tenantId);
+    const company = await companyProfileService.getCompanyProfile(req, req.tenantId);
 
     // Fire-and-forget VIEW audit — reads must not block on the audit write.
     logAudit({
       ...buildActor(req),
-      action: 'COMPANY_VIEWED',
+      action: 'COMPANY_PROFILE_VIEWED',
       resource: 'Company',
-      resourceId: req.params.id,
+      resourceId: req.tenantId,
     });
 
-    return sendSuccess(res, company, 'Company retrieved');
+    return sendSuccess(
+      res,
+      {
+        company,
+        // Tells the page whether it must still ask for the BDO number before
+        // reports can be generated.
+        bdoRegistrationMissing: !company.bdoRegistrationNumber,
+      },
+      'Company profile loaded'
+    );
   } catch (err) {
     if (err.status) return sendError(res, err.message, err.status);
     next(err);
   }
 };
 
-const createCompany = async (req, res, next) => {
+// PUT /api/companies/profile/bdo
+// Sets or corrects the 9-digit BDO registration number — the only company field
+// WasteSync owns. Everything else comes from RegulaOne and is read-only here.
+const updateBdoRegistration = async (req, res, next) => {
   try {
-    // Strip any tenantId the client may have sent — we always use the session's.
-    const { tenantId: _ignored, ...data } = req.body;
-    const company = await companyService.createCompany(data, buildActor(req));
-    return sendSuccess(res, company, 'Company created', 201);
-  } catch (err) {
-    if (err.status) return sendError(res, err.message, err.status);
-    next(err);
-  }
-};
+    const settings = await companyProfileService.saveBdoRegistrationNumber(
+      req.body.bdoRegistrationNumber,
+      buildActor(req)
+    );
 
-const updateCompany = async (req, res, next) => {
-  try {
-    const { tenantId: _ignored, ...data } = req.body;
-    const company = await companyService.updateCompany(req.params.id, data, buildActor(req));
-    return sendSuccess(res, company, 'Company updated');
+    // Return the whole profile, not just the settings row, so the page can
+    // re-render from one answer without a second round-trip.
+    const company = await companyProfileService.getCompanyProfile(req, req.tenantId);
+
+    return sendSuccess(
+      res,
+      { company, bdoRegistrationMissing: !settings.bdoRegistrationNumber },
+      'BDO registration number saved'
+    );
   } catch (err) {
     if (err.status) return sendError(res, err.message, err.status);
     next(err);
@@ -68,8 +78,6 @@ const updateCompany = async (req, res, next) => {
 };
 
 module.exports = {
-  listCompanies,
-  getCompany,
-  createCompany,
-  updateCompany,
+  getCompanyProfile,
+  updateBdoRegistration,
 };

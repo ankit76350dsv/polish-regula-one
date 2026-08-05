@@ -1,49 +1,27 @@
 const { body } = require('express-validator');
 
-// Validation rules for creating / updating a company.
-// These run BEFORE the controller (via the validate middleware), so by the time
-// the controller runs, the input is guaranteed to be clean. We never trust the
-// frontend to validate for us.
+// Validation rules for the one company field WasteSync still owns.
+//
+// WHY THIS FILE SHRANK
+// It used to validate a whole company form (name, NIP, REGON, address, contact
+// details) because companies were created and edited here. They are not any
+// more: the company is registered in the central RegulaOne platform and copied
+// down from GET /api/tenant/info, so those fields are validated where they are
+// entered — in RegulaOne — and are read-only in WasteSync.
+//
+// What is left is the BDO registration number, which RegulaOne does not store.
+//
+// These rules run BEFORE the controller (via the validate middleware), so by the
+// time the controller runs the input is guaranteed to be clean. We never trust
+// the frontend to validate for us.
 
-const companyRules = [
-  body('name')
-    .trim()
-    .notEmpty()
-    .withMessage('Company name is required')
-    .isLength({ max: 200 })
-    .withMessage('Company name is too long'),
-
+const bdoRegistrationRules = [
   // The BDO number must be exactly 9 digits. We allow spaces in the input
   // (people type "123 456 789") and strip them before checking.
   body('bdoRegistrationNumber')
     .customSanitizer((value) => String(value ?? '').replace(/\s/g, ''))
     .matches(/^\d{9}$/)
     .withMessage('BDO registration number must be exactly 9 digits'),
-
-  // NIP is the 10-digit Polish tax number. Optional, but if given must be valid.
-  body('nip')
-    .optional({ checkFalsy: true })
-    .customSanitizer((value) => String(value ?? '').replace(/\s|-/g, ''))
-    .matches(/^\d{10}$/)
-    .withMessage('NIP must be 10 digits'),
-
-  // REGON is 9 or 14 digits. Optional.
-  body('regon')
-    .optional({ checkFalsy: true })
-    .customSanitizer((value) => String(value ?? '').replace(/\s|-/g, ''))
-    .matches(/^(\d{9}|\d{14})$/)
-    .withMessage('REGON must be 9 or 14 digits'),
-
-  body('contactEmail')
-    .optional({ checkFalsy: true })
-    .isEmail()
-    .withMessage('Contact email is not valid')
-    .normalizeEmail(),
-
-  body('address.postalCode')
-    .optional({ checkFalsy: true })
-    .matches(/^\d{2}-\d{3}$/)
-    .withMessage('Postal code must be in the Polish format NN-NNN'),
 ];
 
-module.exports = { companyRules };
+module.exports = { bdoRegistrationRules };

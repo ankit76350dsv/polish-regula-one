@@ -6,6 +6,10 @@ const mongoose = require('mongoose');
 //
 // Reports can be regenerated (e.g. after a correction), so we keep a version
 // number and never delete old report documents — important for audits.
+//
+// Scoped by tenantId ONLY. The old companyId pointed at a local Company
+// collection that no longer exists: one customer has exactly one company, so
+// tenantId already identifies it.
 const annualReportSchema = new mongoose.Schema(
   {
     tenantId: {
@@ -13,20 +17,18 @@ const annualReportSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    companyId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'WasteSync_Company',
-      required: true,
-      index: true,
-    },
 
     // The reporting year this summary covers.
     year: { type: Number, required: true },
 
-    // A snapshot of the company's BDO number AT THE TIME the report was made,
-    // so the stored report stays correct even if the company record changes.
+    // A snapshot of the company's identity AT THE TIME the report was made.
+    // These matter more than ever now: the live details come from RegulaOne and
+    // can change there, but a filed report must always show exactly what was
+    // filed. This is the searchable copy; the XML and PDF in S3 are the originals.
     bdoRegistrationNumber: { type: String, required: true },
     companyName: { type: String },
+    nip: { type: String },
+    regon: { type: String },
 
     // Total kilograms per category, e.g. { PAPER: 1200, PLASTIC: 300, ... }.
     categoryTotals: {
@@ -88,8 +90,8 @@ const annualReportSchema = new mongoose.Schema(
   }
 );
 
-// Quick lookup of all report versions for a company/year, newest first.
-annualReportSchema.index({ tenantId: 1, companyId: 1, year: 1, version: -1 });
+// Quick lookup of all report versions for a year, newest first.
+annualReportSchema.index({ tenantId: 1, year: 1, version: -1 });
 
 module.exports =
   mongoose.models.AnnualReport || mongoose.model('AnnualReport', annualReportSchema);

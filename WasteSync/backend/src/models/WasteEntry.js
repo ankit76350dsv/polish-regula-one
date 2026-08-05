@@ -21,6 +21,11 @@ const wasteItemSchema = new mongoose.Schema(
 
 // A WasteEntry is the packaging-waste figures a company recorded for ONE month.
 //
+// Scoped by tenantId ONLY. There used to be a companyId here as well, pointing at
+// a local Company collection. That collection is gone: one customer has exactly
+// one company, registered in RegulaOne, so tenantId already identified it and
+// companyId was a second name for the same thing.
+//
 // Append-only design (this is the heart of the "never overwrite" rule):
 //   - We never edit an existing entry. When a company corrects a month, we save
 //     a BRAND NEW document with version + 1 and flip the old one's isLatest to
@@ -29,15 +34,10 @@ const wasteItemSchema = new mongoose.Schema(
 //     history is always available for a government audit.
 const wasteEntrySchema = new mongoose.Schema(
   {
-    // Tenant + company this entry belongs to (tenant isolation).
+    // The tenant (= the company) this entry belongs to. Tenant isolation: every
+    // query filters on this, so one customer can never see another's figures.
     tenantId: {
       type: String,
-      required: true,
-      index: true,
-    },
-    companyId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'WasteSync_Company',
       required: true,
       index: true,
     },
@@ -102,10 +102,10 @@ wasteEntrySchema.pre(['updateOne', 'findOneAndUpdate', 'updateMany'], function (
 });
 
 // Fast lookups for the most common queries:
-//   - the current value of every month in a year for a company
-wasteEntrySchema.index({ tenantId: 1, companyId: 1, year: 1, month: 1, isLatest: 1 });
+//   - the current value of every month in a year
+wasteEntrySchema.index({ tenantId: 1, year: 1, month: 1, isLatest: 1 });
 //   - the full version history of one specific month
-wasteEntrySchema.index({ companyId: 1, year: 1, month: 1, version: -1 });
+wasteEntrySchema.index({ tenantId: 1, year: 1, month: 1, version: -1 });
 
 module.exports =
   mongoose.models.WasteEntry || mongoose.model('WasteEntry', wasteEntrySchema);

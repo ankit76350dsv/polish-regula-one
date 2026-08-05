@@ -1,19 +1,15 @@
-const mongoose = require('mongoose');
 const WasteEntry = require('../models/WasteEntry');
-const Company = require('../models/Company');
 const { logAudit } = require('../middleware/auditLogger');
 
-// Makes sure the company exists AND belongs to the caller's tenant before we
-// store any waste data against it. This stops a user adding data to another
-// tenant's company by guessing its id.
-const assertCompanyInTenant = async (companyId, tenantId) => {
-  if (!mongoose.Types.ObjectId.isValid(companyId)) {
-    throw { status: 400, message: 'Valid companyId is required' };
-  }
-  const company = await Company.findOne({ _id: companyId, tenantId, deletedAt: null });
-  if (!company) throw { status: 404, message: 'Company not found' };
-  return company;
-};
+// Waste figures are scoped by tenantId alone.
+//
+// WHAT CHANGED: every function here used to take a companyId and call
+// assertCompanyInTenant() first, to prove the company existed and belonged to the
+// caller. That check is gone because the thing it protected against is now
+// impossible: there is no company id to guess. The tenant id comes from the
+// verified session, never from the client, so a caller can only ever touch their
+// own figures. One fewer database round-trip on every read, and one fewer way to
+// get tenant isolation wrong.
 
 // Combines duplicate categories in the incoming items so the same category can
 // never appear twice. e.g. two PAPER lines of 10 and 5 become one PAPER of 15.
@@ -26,15 +22,12 @@ const mergeItemsByCategory = (items = []) => {
   return Array.from(totals, ([category, weightKg]) => ({ category, weightKg }));
 };
 
-// Returns the CURRENT figures for every month of a year for one company.
+// Returns the CURRENT figures for every month of a year.
 // Only the latest version of each month is returned (isLatest: true), so the
 // caller sees corrected values, while old versions remain in the database.
-const getMonthlyEntries = async (tenantId, companyId, year) => {
-  await assertCompanyInTenant(companyId, tenantId);
-
+const getMonthlyEntries = async (tenantId, year) => {
   return WasteEntry.find({
     tenantId,
-    companyId,
     year: Number(year),
     isLatest: true,
   }).sort({ month: 1 });
@@ -42,12 +35,9 @@ const getMonthlyEntries = async (tenantId, companyId, year) => {
 
 // Returns the FULL version history for one specific month, newest version first.
 // This is what an auditor uses to see how a figure changed over time.
-const getEntryHistory = async (tenantId, companyId, year, month) => {
-  await assertCompanyInTenant(companyId, tenantId);
-
+const getEntryHistory = async (tenantId, year, month) => {
   return WasteEntry.find({
     tenantId,
-    companyId,
     year: Number(year),
     month: Number(month),
   }).sort({ version: -1 });
@@ -61,16 +51,13 @@ const getEntryHistory = async (tenantId, companyId, year, month) => {
 //     version + 1, point it back at the old one (supersedesEntryId), and flip
 //     the old one's isLatest to false. The old figures stay forever.
 const recordMonthlyEntry = async (data, actor) => {
-  const { companyId, year, month, items, notes } = data;
-
-  await assertCompanyInTenant(companyId, actor.tenantId);
+  const { year, month, items, notes } = data;
 
   const mergedItems = mergeItemsByCategory(items);
 
   // Is there already a current entry for this exact month?
   const existing = await WasteEntry.findOne({
     tenantId: actor.tenantId,
-    companyId,
     year: Number(year),
     month: Number(month),
     isLatest: true,
@@ -79,7 +66,6 @@ const recordMonthlyEntry = async (data, actor) => {
   // Create the new version document.
   const newEntry = await WasteEntry.create({
     tenantId: actor.tenantId,
-    companyId,
     year: Number(year),
     month: Number(month),
     items: mergedItems,

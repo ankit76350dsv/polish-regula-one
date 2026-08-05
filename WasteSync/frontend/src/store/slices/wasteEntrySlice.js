@@ -2,11 +2,13 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import * as wasteEntryApi from "../../api/wasteEntryApi";
 import { getErrorMessage } from "../../api/axiosClient";
 
+// No companyId anywhere: the backend scopes every call to the tenant it reads
+// from the session, and one tenant has exactly one company.
 export const fetchMonthlyEntries = createAsyncThunk(
   "wasteEntries/fetchMonthly",
-  async ({ companyId, year }, { rejectWithValue }) => {
+  async ({ year }, { rejectWithValue }) => {
     try {
-      return await wasteEntryApi.fetchMonthlyEntries({ companyId, year });
+      return await wasteEntryApi.fetchMonthlyEntries({ year });
     } catch (err) {
       return rejectWithValue(getErrorMessage(err, "Failed to load waste entries"));
     }
@@ -15,9 +17,9 @@ export const fetchMonthlyEntries = createAsyncThunk(
 
 export const fetchEntryHistory = createAsyncThunk(
   "wasteEntries/fetchHistory",
-  async ({ companyId, year, month }, { rejectWithValue }) => {
+  async ({ year, month }, { rejectWithValue }) => {
     try {
-      return await wasteEntryApi.fetchEntryHistory({ companyId, year, month });
+      return await wasteEntryApi.fetchEntryHistory({ year, month });
     } catch (err) {
       return rejectWithValue(getErrorMessage(err, "Failed to load history"));
     }

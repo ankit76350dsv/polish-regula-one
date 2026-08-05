@@ -24,11 +24,12 @@ export const fetchReport = createAsyncThunk(
   }
 );
 
+// Only the year is sent — the backend reads the company from RegulaOne itself.
 export const generateReport = createAsyncThunk(
   "reports/generate",
-  async ({ companyId, year }, { rejectWithValue }) => {
+  async ({ year }, { rejectWithValue }) => {
     try {
-      return await reportApi.generateReport({ companyId, year });
+      return await reportApi.generateReport({ year });
     } catch (err) {
       return rejectWithValue(getErrorMessage(err, "Failed to generate report"));
     }

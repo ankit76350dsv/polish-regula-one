@@ -7,7 +7,7 @@ const {
 } = require('../middleware/authMiddleware');
 const { requireWasteSyncModule } = require('../middleware/moduleGuard');
 const { validate } = require('../middleware/validate');
-const { companyRules } = require('../validators/companyValidator');
+const { bdoRegistrationRules } = require('../validators/companyValidator');
 const { CAPABILITIES } = require('../config/permissions');
 
 const router = express.Router();
@@ -46,31 +46,37 @@ const router = express.Router();
 // To change what a job title may do, edit that table — not these routes.
 router.use(isAuthenticatedUser, requireWasteSyncModule, authorizePermissions());
 
-// GET  /api/companies        — list all companies for the tenant
-// POST /api/companies        — create a new company (validated)
+// ── There is no company CRUD here, on purpose ────────────────────────────────
 //
-// Creating a company sets its BDO registration number, which is printed on every
-// report the authority receives. That makes it a write, so auditors cannot do it.
-router
-  .route('/')
-  .get(authorizeCapability(CAPABILITIES.COMPANY_READ), companyController.listCompanies)
-  .post(
-    authorizeCapability(CAPABILITIES.COMPANY_WRITE),
-    companyRules,
-    validate,
-    companyController.createCompany
-  );
+// REMOVED: GET/POST /api/companies, GET/PUT /api/companies/:id.
+//
+// They managed a local Company collection that duplicated the customer's company
+// record in RegulaOne. One customer has exactly one company, registered in
+// RegulaOne at sign-up, so the copy could only ever agree with the original or
+// disagree with it — and those details are printed on reports filed with a
+// government register, where a mismatch is a filing error.
+//
+// Waste entries and reports are now scoped by tenantId, which the auth middleware
+// resolves from the verified session, so there is no company id to fetch, pass
+// around, or accidentally leak between tenants.
 
-// GET /api/companies/:id     — one company
-// PUT /api/companies/:id     — update a company (validated)
+// GET /api/companies/profile     — the company, read live from RegulaOne
 router
-  .route('/:id')
-  .get(authorizeCapability(CAPABILITIES.COMPANY_READ), companyController.getCompany)
+  .route('/profile')
+  .get(authorizeCapability(CAPABILITIES.COMPANY_READ), companyController.getCompanyProfile);
+
+// PUT /api/companies/profile/bdo — set/correct the 9-digit BDO number
+//
+// This is the ONLY company value WasteSync stores, because RegulaOne does not
+// hold it. It is printed on every report the authority receives, so it is a
+// write: auditors may read the profile but never change this number.
+router
+  .route('/profile/bdo')
   .put(
     authorizeCapability(CAPABILITIES.COMPANY_WRITE),
-    companyRules,
+    bdoRegistrationRules,
     validate,
-    companyController.updateCompany
+    companyController.updateBdoRegistration
   );
 
 module.exports = router;

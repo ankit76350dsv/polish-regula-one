@@ -1,25 +1,9 @@
 import { recentYears } from "../../utils/constants";
 
-// A dropdown to choose which company the page is working with.
-export function CompanySelector({ companies, value, onChange, className = "" }) {
-  return (
-    <label className={`flex items-center gap-2 text-sm ${className}`}>
-      <span className="text-slate-500">Company</span>
-      <select
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-slate-300 px-2 py-1.5 text-sm bg-white"
-      >
-        {companies.length === 0 && <option value="">No companies</option>}
-        {companies.map((c) => (
-          <option key={c._id} value={c._id}>
-            {c.name} ({c.bdoRegistrationNumber})
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
+// CompanySelector used to live here — a dropdown for choosing which company a
+// page was working with. It was removed because there is nothing to choose
+// between: one customer has exactly one company, registered in RegulaOne, and
+// every page is now scoped by the tenant the backend reads from the session.
 
 // A dropdown to choose the reporting year.
 export function YearSelector({ value, onChange, className = "" }) {

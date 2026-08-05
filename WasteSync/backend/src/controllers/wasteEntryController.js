@@ -10,16 +10,19 @@ const buildActor = (req) => ({
   userAgent: req.headers['user-agent'],
 });
 
-// GET /api/waste-entries?companyId=&year=
-// Returns the current figures for each month of the year for one company.
+// GET /api/waste-entries?year=
+// Returns the current figures for each month of the year.
+//
+// companyId is no longer accepted or needed: the tenant owns exactly one company
+// and the tenant is taken from the verified session, never from the client.
 const getMonthlyEntries = async (req, res, next) => {
   try {
-    const { companyId, year } = req.query;
-    if (!companyId || !year) {
-      return sendError(res, 'companyId and year are required', 400);
+    const { year } = req.query;
+    if (!year) {
+      return sendError(res, 'year is required', 400);
     }
 
-    const entries = await wasteEntryService.getMonthlyEntries(req.tenantId, companyId, year);
+    const entries = await wasteEntryService.getMonthlyEntries(req.tenantId, year);
     return sendSuccess(res, { count: entries.length, entries }, 'Waste entries fetched');
   } catch (err) {
     if (err.status) return sendError(res, err.message, err.status);
@@ -27,23 +30,23 @@ const getMonthlyEntries = async (req, res, next) => {
   }
 };
 
-// GET /api/waste-entries/history?companyId=&year=&month=
+// GET /api/waste-entries/history?year=&month=
 // Returns every version of one month so an auditor can see the full history.
 const getEntryHistory = async (req, res, next) => {
   try {
-    const { companyId, year, month } = req.query;
-    if (!companyId || !year || !month) {
-      return sendError(res, 'companyId, year and month are required', 400);
+    const { year, month } = req.query;
+    if (!year || !month) {
+      return sendError(res, 'year and month are required', 400);
     }
 
-    const history = await wasteEntryService.getEntryHistory(req.tenantId, companyId, year, month);
+    const history = await wasteEntryService.getEntryHistory(req.tenantId, year, month);
 
     // Viewing history is an auditable read.
     logAudit({
       ...buildActor(req),
       action: 'WASTE_ENTRY_HISTORY_VIEWED',
       resource: 'WasteEntry',
-      newValue: { companyId, year, month },
+      newValue: { year, month },
     });
 
     return sendSuccess(res, { count: history.length, history }, 'History fetched');

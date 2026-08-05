@@ -21,6 +21,42 @@ export const recentYears = () => {
   return [now, now - 1, now - 2, now - 3, now - 4];
 };
 
+// Today's date in Poland, as { year, month, day } with month 1-12.
+// We ask for the Warsaw date explicitly rather than using the browser's own
+// clock, because BDO deadlines are Polish legal dates — someone opening the app
+// from another country must still see the Polish filing year.
+const todayInPoland = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Warsaw",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (type) => Number(parts.find((p) => p.type === type).value);
+  return { year: get("year"), month: get("month"), day: get("day") };
+};
+
+// Which year should a work page open on?
+//
+// The BDO annual report is due 15 MARCH and covers the PREVIOUS calendar year.
+// So between 1 January and 15 March the job in front of the user is finishing
+// LAST year — checking its months are complete and filing it. Opening those
+// pages on the current year during that window meant the user had to notice the
+// mismatch and change the dropdown themselves, which is exactly the kind of
+// quiet mistake that ends in a late filing.
+//
+// Outside that window there is nothing to file yet, so the current year (the one
+// being recorded month by month) is the useful default.
+//
+// The backend works the deadline out independently in utils/bdoDeadlines.js and
+// is the authority on whether anything is actually overdue — this is only which
+// year the picker starts on.
+export const defaultReportingYear = () => {
+  const { year, month, day } = todayInPoland();
+  const beforeFilingDeadline = month < 3 || (month === 3 && day <= 15);
+  return beforeFilingDeadline ? year - 1 : year;
+};
+
 // Colours used by the charts so every chart looks consistent.
 export const CATEGORY_COLORS = {
   PAPER: "#2563eb",

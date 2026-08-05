@@ -1,24 +1,22 @@
 import axiosClient, { unwrap } from "./axiosClient";
 
-// All company API calls. The backend reads the tenant from the session, so we
-// never send a tenantId from here.
+// The company is registered once in the central RegulaOne platform. WasteSync
+// only READS it — there is no create, no edit, no list. The backend fetches it
+// live from RegulaOne's /api/tenant/info on every call.
+//
+// The single value WasteSync stores is the 9-digit BDO registration number,
+// which RegulaOne does not hold.
+//
+// The backend takes the tenant from the session, so we never send an id.
 
-export const fetchCompanies = async () => {
-  const res = await axiosClient.get("/companies");
-  return unwrap(res); // { count, companies }
-};
-
-export const fetchCompany = async (id) => {
-  const res = await axiosClient.get(`/companies/${id}`);
+// Returns { company, bdoRegistrationMissing }.
+export const fetchCompanyProfile = async () => {
+  const res = await axiosClient.get("/companies/profile");
   return unwrap(res);
 };
 
-export const createCompany = async (data) => {
-  const res = await axiosClient.post("/companies", data);
-  return unwrap(res);
-};
-
-export const updateCompany = async (id, data) => {
-  const res = await axiosClient.put(`/companies/${id}`, data);
+// Saves the 9-digit BDO number. Returns the same shape as fetchCompanyProfile.
+export const updateBdoNumber = async (bdoRegistrationNumber) => {
+  const res = await axiosClient.put("/companies/profile/bdo", { bdoRegistrationNumber });
   return unwrap(res);
 };

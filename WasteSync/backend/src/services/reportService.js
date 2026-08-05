@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 const WasteEntry = require('../models/WasteEntry');
-const Company = require('../models/Company');
 const AnnualReport = require('../models/AnnualReport');
 const WasteThreshold = require('../models/WasteThreshold');
 const { logAudit } = require('../middleware/auditLogger');
@@ -10,15 +9,12 @@ const { generateAnnualReportXml } = require('./xmlGeneratorService');
 const { generateAnnualReportPdf } = require('./pdfGeneratorService');
 const { buildReportKey, uploadBuffer, generateDownloadUrl } = require('../utils/s3');
 
-// Loads a company and confirms it belongs to the caller's tenant.
-const assertCompanyInTenant = async (companyId, tenantId) => {
-  if (!mongoose.Types.ObjectId.isValid(companyId)) {
-    throw { status: 400, message: 'Valid companyId is required' };
-  }
-  const company = await Company.findOne({ _id: companyId, tenantId, deletedAt: null });
-  if (!company) throw { status: 404, message: 'Company not found' };
-  return company;
-};
+// NOTE: assertCompanyInTenant() used to live here. It loaded a local Company
+// document and checked it belonged to the caller. Both the collection and the
+// check are gone — reports are scoped by tenantId, which the auth middleware
+// resolves from the verified session and the client can never supply. The
+// company's identity now arrives as a plain object read live from RegulaOne (see
+// services/companyProfileService.js) and is passed in by the controller.
 
 // Builds the configured legal thresholds for a tenant + year. A tenant-specific
 // row wins over the platform default (tenantId = null) for the same category.
@@ -40,13 +36,12 @@ const loadThresholds = async (tenantId, year) => {
   return Array.from(byCategory.values());
 };
 
-// Aggregates the LATEST monthly entries for a company/year into the numbers a
-// report needs: per-category totals, the grand total, a 12-month breakdown, and
-// the list of months that had no data.
-const aggregateYear = async (tenantId, companyId, year) => {
+// Aggregates the LATEST monthly entries for a year into the numbers a report
+// needs: per-category totals, the grand total, a 12-month breakdown, and the
+// list of months that had no data.
+const aggregateYear = async (tenantId, year) => {
   const entries = await WasteEntry.find({
     tenantId,
-    companyId,
     year: Number(year),
     isLatest: true,
   });
@@ -82,14 +77,28 @@ const aggregateYear = async (tenantId, companyId, year) => {
 // Generates the full annual report: builds the figures, runs the threshold
 // check, renders the XML + PDF, stores both in S3, and saves an AnnualReport
 // document. Each call creates a NEW version, so previous reports are kept.
-const generateAnnualReport = async ({ companyId, year }, actor) => {
-  const company = await assertCompanyInTenant(companyId, actor.tenantId);
+//
+// `company` is the live profile the controller read from RegulaOne (name, NIP,
+// REGON, address) with our BDO number merged in. It is passed in rather than
+// loaded here so this service never has to know about HTTP requests or tokens.
+const generateAnnualReport = async ({ company, year }, actor) => {
+  // The BDO registration number identifies the company to the government
+  // register and is printed on both the XML and the PDF. RegulaOne does not hold
+  // this number, so a tenant that has not set it yet has none. Refuse here rather
+  // than produce a report with an empty registration number — an invalid filing.
+  if (!company?.bdoRegistrationNumber) {
+    throw {
+      status: 400,
+      message:
+        'Add your 9-digit BDO registration number on the Company page before generating a report',
+    };
+  }
 
   const { categoryTotals, grandTotalKg, monthlyBreakdown, missingMonths, entryCount } =
-    await aggregateYear(actor.tenantId, companyId, year);
+    await aggregateYear(actor.tenantId, year);
 
   if (entryCount === 0) {
-    throw { status: 400, message: 'There is no waste data for this company and year yet' };
+    throw { status: 400, message: 'There is no waste data for this year yet' };
   }
 
   // Run the configured legal threshold check.
@@ -116,33 +125,35 @@ const generateAnnualReport = async ({ companyId, year }, actor) => {
     generatedAt,
   });
 
-  // Work out the next version number for this company/year.
+  // Work out the next version number for this year.
   const previous = await AnnualReport.findOne({
     tenantId: actor.tenantId,
-    companyId,
     year: Number(year),
   }).sort({ version: -1 });
   const version = previous ? previous.version + 1 : 1;
 
   // Store both files in the private, EEA S3 bucket.
   const xmlKey = await uploadBuffer({
-    key: buildReportKey({ tenantId: actor.tenantId, companyId, year, fileName: `annual-report-v${version}.xml` }),
+    key: buildReportKey({ tenantId: actor.tenantId, year, fileName: `annual-report-v${version}.xml` }),
     body: Buffer.from(xmlString, 'utf-8'),
     contentType: 'application/xml',
   });
   const pdfKey = await uploadBuffer({
-    key: buildReportKey({ tenantId: actor.tenantId, companyId, year, fileName: `annual-report-v${version}.pdf` }),
+    key: buildReportKey({ tenantId: actor.tenantId, year, fileName: `annual-report-v${version}.pdf` }),
     body: pdfBuffer,
     contentType: 'application/pdf',
   });
 
-  // Save the report record.
+  // Save the report record. The company identity fields are a SNAPSHOT of what
+  // RegulaOne said at this moment, so the filed report stays truthful even if the
+  // company is later renamed or moved.
   const report = await AnnualReport.create({
     tenantId: actor.tenantId,
-    companyId,
     year: Number(year),
     bdoRegistrationNumber: company.bdoRegistrationNumber,
     companyName: company.name,
+    nip: company.nip,
+    regon: company.regon,
     categoryTotals,
     grandTotalKg,
     monthlyBreakdown,
@@ -170,15 +181,17 @@ const generateAnnualReport = async ({ companyId, year }, actor) => {
   return report;
 };
 
-// Lists generated reports for the tenant (optionally filtered by company/year).
+// Lists generated reports for the tenant (optionally filtered by year).
+//
+// The old .populate('companyId', ...) is gone with the Company collection. It is
+// not missed: each report already stores its own companyName and BDO number as a
+// snapshot, which is the correct thing to show anyway — a list of filings should
+// display what was filed, not today's company details.
 const listReports = async (tenantId, filters = {}) => {
   const query = { tenantId };
-  if (filters.companyId && mongoose.Types.ObjectId.isValid(filters.companyId)) {
-    query.companyId = filters.companyId;
-  }
   if (filters.year) query.year = Number(filters.year);
 
-  return AnnualReport.find(query).sort({ year: -1, version: -1 }).populate('companyId', 'name bdoRegistrationNumber');
+  return AnnualReport.find(query).sort({ year: -1, version: -1 });
 };
 
 // Returns one report (scoped to the tenant).
@@ -186,10 +199,7 @@ const getReportById = async (reportId, tenantId) => {
   if (!mongoose.Types.ObjectId.isValid(reportId)) {
     throw { status: 400, message: 'Valid report id is required' };
   }
-  const report = await AnnualReport.findOne({ _id: reportId, tenantId }).populate(
-    'companyId',
-    'name bdoRegistrationNumber'
-  );
+  const report = await AnnualReport.findOne({ _id: reportId, tenantId });
   if (!report) throw { status: 404, message: 'Report not found' };
   return report;
 };

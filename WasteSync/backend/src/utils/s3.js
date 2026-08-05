@@ -21,12 +21,18 @@ const s3Client = new S3Client({
 });
 
 // Builds the S3 "folder path" (key) for a generated report file.
-// Layout: wastesync/{tenantId}/{companyId}/reports/{year}/{timestamp}_{name}
-// Organising by tenant then company keeps every customer's data clearly
-// separated inside the bucket, which helps audits and access reviews.
-const buildReportKey = ({ tenantId, companyId, year, fileName }) => {
+// Layout: wastesync/{tenantId}/reports/{year}/{timestamp}_{name}
+// Organising by tenant keeps every customer's data clearly separated inside the
+// bucket, which helps audits and access reviews.
+//
+// The old layout had a {companyId} folder between the tenant and "reports". It
+// was dropped with the Company collection: one tenant has one company, so that
+// folder level always had exactly one child and told a reader nothing.
+// Previously uploaded files keep their old keys and still download correctly —
+// the key is stored on each report document, never rebuilt from scratch.
+const buildReportKey = ({ tenantId, year, fileName }) => {
   const safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
-  return `wastesync/${tenantId}/${companyId}/reports/${year}/${Date.now()}_${safeName}`;
+  return `wastesync/${tenantId}/reports/${year}/${Date.now()}_${safeName}`;
 };
 
 // Uploads a file we generated on the server (XML or PDF report) straight to S3.

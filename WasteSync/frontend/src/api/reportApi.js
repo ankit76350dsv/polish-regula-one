@@ -1,6 +1,6 @@
 import axiosClient, { unwrap } from "./axiosClient";
 
-// List generated reports (optionally filtered by company / year).
+// List generated reports (optionally filtered by year).
 export const fetchReports = async (filters = {}) => {
   const res = await axiosClient.get("/reports", { params: filters });
   return unwrap(res); // { count, reports }
@@ -13,8 +13,9 @@ export const fetchReport = async (id) => {
 };
 
 // Generate a new annual report (server builds XML + PDF and stores them in S3).
-export const generateReport = async ({ companyId, year }) => {
-  const res = await axiosClient.post("/reports/generate", { companyId, year });
+// The company is read from RegulaOne by the backend, so only the year is sent.
+export const generateReport = async ({ year }) => {
+  const res = await axiosClient.post("/reports/generate", { year });
   return unwrap(res); // the saved report
 };
 

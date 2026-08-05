@@ -11,7 +11,6 @@ import HomeRoute from "./HomeRoute";
 import { CAPABILITIES } from "../config/capabilities";
 
 import Companies from "../pages/Companies";
-import CompanyForm from "../pages/CompanyForm";
 import WasteEntries from "../pages/WasteEntries";
 import Reports from "../pages/Reports";
 import ReportDetail from "../pages/ReportDetail";
@@ -55,18 +54,18 @@ const router = createBrowserRouter([
               { index: true, element: <HomeRoute /> },
 
               {
-                // Viewing the companies we report waste for.
+                // The company we report waste for. The details are registered in
+                // RegulaOne and only READ here, so one page covers everything and
+                // COMPANY_READ is enough to open it.
+                //
+                // The "companies/new" and "companies/:id/edit" routes were removed
+                // with the add/edit form: a company typed a second time in
+                // WasteSync could disagree with the legal record in RegulaOne, and
+                // those details are printed on reports filed with a government
+                // register. The one field this page can still change (the BDO
+                // number) is guarded inside the page by COMPANY_WRITE.
                 element: <RequireCapability capability={CAPABILITIES.COMPANY_READ} />,
                 children: [{ path: "companies", element: <Companies /> }],
-              },
-              {
-                // Adding or editing a company is a write, so auditors cannot open
-                // these two pages at all.
-                element: <RequireCapability capability={CAPABILITIES.COMPANY_WRITE} />,
-                children: [
-                  { path: "companies/new", element: <CompanyForm /> },
-                  { path: "companies/:id/edit", element: <CompanyForm /> },
-                ],
               },
               {
                 // The waste figures page shows the 12-month grid to everyone who may

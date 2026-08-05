@@ -2,13 +2,11 @@ const { body } = require('express-validator');
 const { WASTE_CATEGORY_KEYS } = require('../utils/wasteCategories');
 
 // Validation rules for recording a month of waste data.
+//
+// companyId was removed from this list along with the Company collection. The
+// entry belongs to the tenant, which the auth middleware takes from the verified
+// session — a value the client cannot supply and therefore cannot get wrong.
 const wasteEntryRules = [
-  body('companyId')
-    .notEmpty()
-    .withMessage('companyId is required')
-    .isMongoId()
-    .withMessage('companyId is not a valid id'),
-
   body('year')
     .isInt({ min: 2000, max: new Date().getFullYear() + 1 })
     .withMessage('year must be a valid 4-digit year'),

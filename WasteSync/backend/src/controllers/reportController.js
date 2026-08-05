@@ -1,4 +1,5 @@
 const reportService = require('../services/reportService');
+const companyProfileService = require('../services/companyProfileService');
 const { sendSuccess, sendError } = require('../utils/responseHelper');
 const { logAudit } = require('../middleware/auditLogger');
 
@@ -11,10 +12,21 @@ const buildActor = (req) => ({
 });
 
 // POST /api/reports/generate — build XML + PDF, store in S3, save the report.
+//
+// The controller reads the company LIVE from RegulaOne first and hands it to the
+// service. Doing it here keeps the report service free of HTTP concerns, and it
+// means every report carries the company's current legal identity — name, NIP,
+// REGON and address as the register holds them at the moment of filing.
+//
+// If RegulaOne is unreachable, getCompanyProfile throws 503 and no report is
+// produced. That is deliberate: a filing with guessed company details is worse
+// than no filing.
 const generateReport = async (req, res, next) => {
   try {
-    const { companyId, year } = req.body;
-    const report = await reportService.generateAnnualReport({ companyId, year }, buildActor(req));
+    const { year } = req.body;
+    const company = await companyProfileService.getCompanyProfile(req, req.tenantId);
+
+    const report = await reportService.generateAnnualReport({ company, year }, buildActor(req));
     return sendSuccess(res, report, 'Annual report generated', 201);
   } catch (err) {
     if (err.status) return sendError(res, err.message, err.status);
@@ -22,11 +34,11 @@ const generateReport = async (req, res, next) => {
   }
 };
 
-// GET /api/reports?companyId=&year= — list generated reports.
+// GET /api/reports?year= — list generated reports.
 const listReports = async (req, res, next) => {
   try {
-    const { companyId, year } = req.query;
-    const reports = await reportService.listReports(req.tenantId, { companyId, year });
+    const { year } = req.query;
+    const reports = await reportService.listReports(req.tenantId, { year });
     return sendSuccess(res, { count: reports.length, reports }, 'Reports fetched');
   } catch (err) {
     if (err.status) return sendError(res, err.message, err.status);

@@ -3,6 +3,9 @@ const ErrorHandler = require('../utils/ErrorHandler');
 const catchAsyncError = require('../utils/catchAsyncError');
 const config = require('../config/environment');
 const { User } = require('../models/User');
+// Every call to the central RegulaOne backend goes through one small client, so
+// credential forwarding and error handling are written once, not per caller.
+const { fetchCurrentUser } = require('../services/regulaOneClient');
 const {
   ALLOWED_PERMISSIONS,
   normalizePermissions,
@@ -32,32 +35,6 @@ function resolveTenantIdFromUser(tenant) {
   if (tenant.$id) return tenant.$id.toString(); // DBRef — Java RegulaOne path
   if (tenant._id) return tenant._id.toString(); // populated Mongoose document
   return tenant.toString(); // plain ObjectId or string
-}
-
-// Asks the central RegulaOne backend "who is this logged-in user?" by calling
-// GET /api/auth/me. We forward the SAME credentials the client sent us — the
-// shared cookie (normal browser path) and/or the Bearer token (Postman/mobile)
-// — so RegulaOne identifies exactly the same user and returns the authoritative
-// tenantId. Returns null on any failure so the caller can use the fallback.
-async function fetchRegulaOneUser(req, token) {
-  const headers = {};
-  if (req.headers.cookie) headers.cookie = req.headers.cookie;
-  if (token) headers.authorization = `Bearer ${token}`;
-
-  try {
-    const response = await fetch(`${config.regulaOne.baseUrl}/api/auth/me`, {
-      method: 'GET',
-      headers,
-    });
-    if (!response.ok) return null;
-
-    const json = await response.json();
-    // RegulaOne wraps responses as { success, message, data: UserResponse }.
-    return json?.data?.user ?? json?.data ?? json;
-  } catch (error) {
-    // Network error / RegulaOne down — let the caller use the local fallback.
-    return null;
-  }
 }
 
 // Finds the login token for this request. We look in TWO places, in order:
@@ -122,12 +99,18 @@ exports.isAuthenticatedUser = catchAsyncError(async (req, res, next) => {
   req.user = user;
   req.cognitoUser = decoded;
 
+  // Keep the verified token on the request. Later handlers (for example the
+  // company-profile endpoint, which asks RegulaOne for the tenant's details)
+  // need to forward the caller's OWN credentials, and must never use a
+  // service account that could reach across tenants.
+  req.authToken = token;
+
   // ── Resolve the tenant id ONCE, here, for the whole request ────────────────
   // Single source of truth: ask RegulaOne /api/auth/me who this user is and use
   // the tenantId it returns. The frontend never sends a tenant id — the backend
   // always derives it from the authenticated session. This is what enforces
   // tenant isolation (a client can never request another tenant's data).
-  const regulaUser = await fetchRegulaOneUser(req, token);
+  const regulaUser = await fetchCurrentUser(req, token);
   req.regulaUser = regulaUser;
   // Prefer RegulaOne's tenantId; fall back to the local user document only if
   // the /me call failed, so a brief RegulaOne outage doesn't lock everyone out.

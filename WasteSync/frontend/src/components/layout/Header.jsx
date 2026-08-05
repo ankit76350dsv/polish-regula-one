@@ -16,7 +16,8 @@ import { CAPABILITIES } from "../../config/capabilities";
 // address by hand gets a person nowhere.
 const navItems = [
   { to: "/", label: "Dashboard", end: true, capability: CAPABILITIES.DASHBOARD_READ },
-  { to: "/companies", label: "Companies", capability: CAPABILITIES.COMPANY_READ },
+  // One company per customer, read from RegulaOne — so the link is singular.
+  { to: "/companies", label: "Company", capability: CAPABILITIES.COMPANY_READ },
   { to: "/waste-entries", label: "Waste Entries", capability: CAPABILITIES.WASTE_ENTRY_READ },
   { to: "/reports", label: "Reports", capability: CAPABILITIES.REPORT_READ },
   { to: "/thresholds", label: "Thresholds", capability: CAPABILITIES.THRESHOLD_READ },

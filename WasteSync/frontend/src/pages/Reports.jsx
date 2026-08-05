@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchCompanies, setActiveCompany } from "../store/slices/companySlice";
 import { fetchReports, generateReport, clearGenerateError } from "../store/slices/reportSlice";
 import {
   PageHeader,
@@ -12,15 +11,17 @@ import {
   Badge,
   EmptyState,
 } from "../components/common";
-import { CompanySelector, YearSelector } from "../components/common/Selectors";
+import { YearSelector } from "../components/common/Selectors";
+import { defaultReportingYear } from "../utils/constants";
 import { useCapabilities } from "../hooks/useCapabilities";
 
 export default function Reports() {
   const dispatch = useDispatch();
-  const { list: companies, activeCompanyId } = useSelector((state) => state.companies);
   const { list, loading, generating, generateError } = useSelector((state) => state.reports);
 
-  const [year, setYear] = useState(new Date().getFullYear());
+  // Opens on the year that is actually due, not simply "this year". The annual
+  // report covers the PREVIOUS calendar year and is due 15 March.
+  const [year, setYear] = useState(defaultReportingYear);
 
   // Building a report creates new records and new files, so it is a write. An
   // auditor may read every report but not produce one — otherwise the person
@@ -29,14 +30,14 @@ export default function Reports() {
   const canGenerate = can(CAPABILITIES.REPORT_GENERATE);
 
   useEffect(() => {
-    dispatch(fetchCompanies());
     dispatch(fetchReports());
   }, [dispatch]);
 
-  // Generate a report for the chosen company + year, then refresh the list.
+  // Generate a report for the chosen year, then refresh the list. The company
+  // comes from RegulaOne on the server, so there is nothing to pick here.
   const onGenerate = async () => {
     dispatch(clearGenerateError());
-    const result = await dispatch(generateReport({ companyId: activeCompanyId, year }));
+    const result = await dispatch(generateReport({ year }));
     if (generateReport.fulfilled.match(result)) {
       dispatch(fetchReports());
     }
@@ -53,17 +54,11 @@ export default function Reports() {
         }
         actions={
           <div className="flex items-center gap-3">
-            {/* The company and year pickers stay for everyone: a read-only user
-                still needs them to choose which report to look for. Only the
-                "Generate" button is hidden. */}
-            <CompanySelector
-              companies={companies}
-              value={activeCompanyId}
-              onChange={(id) => dispatch(setActiveCompany(id))}
-            />
+            {/* The year picker stays for everyone: a read-only user still needs it
+                to choose which report to look for. Only "Generate" is hidden. */}
             <YearSelector value={year} onChange={setYear} />
             {canGenerate && (
-              <Button onClick={onGenerate} disabled={generating || !activeCompanyId}>
+              <Button onClick={onGenerate} disabled={generating}>
                 {generating ? "Generating…" : "Generate report"}
               </Button>
             )}
@@ -84,7 +79,7 @@ export default function Reports() {
           title="No reports yet"
           message={
             canGenerate
-              ? "Choose a company and year above, then generate your first annual report."
+              ? "Choose a year above, then generate your first annual report."
               : "No annual reports have been generated yet, so there is nothing to review here."
           }
         />
@@ -108,7 +103,9 @@ export default function Reports() {
                 {list.map((r) => (
                   <tr key={r._id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3 font-semibold">{r.year}</td>
-                    <td className="px-4 py-3">{r.companyName || r.companyId?.name || "—"}</td>
+                    {/* The snapshot taken when the report was filed — not
+                        today's company details. That is what an audit needs. */}
+                    <td className="px-4 py-3">{r.companyName || "—"}</td>
                     <td className="px-4 py-3 font-mono">{r.bdoRegistrationNumber}</td>
                     <td className="px-4 py-3 text-right">{r.grandTotalKg}</td>
                     <td className="px-4 py-3">

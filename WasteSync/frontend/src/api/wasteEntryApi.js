@@ -1,15 +1,18 @@
 import axiosClient, { unwrap } from "./axiosClient";
 
-// Current monthly figures for a company + year.
-export const fetchMonthlyEntries = async ({ companyId, year }) => {
-  const res = await axiosClient.get("/waste-entries", { params: { companyId, year } });
+// The backend scopes every call to the tenant it reads from the session, and one
+// tenant has one company — so companyId is no longer sent or needed.
+
+// Current monthly figures for a year.
+export const fetchMonthlyEntries = async ({ year }) => {
+  const res = await axiosClient.get("/waste-entries", { params: { year } });
   return unwrap(res); // { count, entries }
 };
 
 // Full version history of one month (for audits).
-export const fetchEntryHistory = async ({ companyId, year, month }) => {
+export const fetchEntryHistory = async ({ year, month }) => {
   const res = await axiosClient.get("/waste-entries/history", {
-    params: { companyId, year, month },
+    params: { year, month },
   });
   return unwrap(res); // { count, history }
 };

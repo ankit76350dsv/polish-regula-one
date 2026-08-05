@@ -1,14 +1,24 @@
-const mongoose = require('mongoose');
-const Company = require('../models/Company');
 const WasteEntry = require('../models/WasteEntry');
 const AnnualReport = require('../models/AnnualReport');
 const AuditLog = require('../models/AuditLog');
 const { WASTE_CATEGORY_KEYS } = require('../utils/wasteCategories');
+const { resolveFilingObligation } = require('../utils/bdoDeadlines');
 
 // Builds everything the dashboard needs in a SINGLE response, so the frontend
-// makes one call. Everything is scoped to the tenant. An optional companyId
-// narrows the figures to one company; otherwise we cover all of the tenant's
-// companies. The year defaults to the current year.
+// makes one call. Everything is scoped to the tenant, and the year defaults to
+// the current year.
+//
+// WHAT CHANGED AND WHY
+// This used to loop over a list of Company documents, group figures per company,
+// and accept a companyId to narrow the view. All of that assumed a tenant could
+// own several companies. It cannot: one customer = one company, registered in
+// RegulaOne. So the per-company grouping was work that always produced exactly
+// one group, and the "scope" filter always had one choice.
+//
+// The figures are now aggregated straight from tenantId. The company's NAME and
+// BDO number are no longer read from the database at all — the caller passes in
+// the live profile it already fetched from RegulaOne, so the dashboard shows the
+// current legal name rather than a stale copy.
 //
 // includeAuditActivity says whether this caller is allowed to see the audit trail.
 // It defaults to FALSE so a caller that forgets to pass it gets LESS data, never
@@ -16,28 +26,16 @@ const { WASTE_CATEGORY_KEYS } = require('../utils/wasteCategories');
 // person is a privacy incident.
 const getOverview = async (
   tenantId,
-  { companyId, year, includeAuditActivity = false } = {}
+  { year, company = null, includeAuditActivity = false } = {}
 ) => {
   const reportingYear = Number(year) || new Date().getFullYear();
 
-  // Which companies are we covering?
-  const companyFilter = { tenantId, deletedAt: null };
-  if (companyId && mongoose.Types.ObjectId.isValid(companyId)) {
-    companyFilter._id = companyId;
-  }
-  const companies = await Company.find(companyFilter).select('_id name bdoRegistrationNumber');
-  const companyIds = companies.map((c) => c._id);
-
-  // Base match for waste queries — limited to the chosen companies + year.
-  const wasteMatch = {
+  // ── Year summary: per-category totals + grand total ────────────────────────
+  const entries = await WasteEntry.find({
     tenantId,
     year: reportingYear,
     isLatest: true,
-  };
-  if (companyIds.length) wasteMatch.companyId = { $in: companyIds };
-
-  // ── Year summary: per-category totals + grand total ────────────────────────
-  const entries = await WasteEntry.find(wasteMatch);
+  });
 
   const categoryTotals = {};
   for (const key of WASTE_CATEGORY_KEYS) categoryTotals[key] = 0;
@@ -47,7 +45,7 @@ const getOverview = async (
   const monthsWithData = new Set();
 
   for (const entry of entries) {
-    monthsWithData.add(`${entry.companyId}-${entry.month}`);
+    monthsWithData.add(entry.month);
     monthlyTrend[entry.month - 1].totalKg += entry.totalWeightKg;
     for (const item of entry.items) {
       categoryTotals[item.category] = (categoryTotals[item.category] || 0) + item.weightKg;
@@ -56,68 +54,76 @@ const getOverview = async (
   const grandTotalKg = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
 
   // ── Missing monthly entries ────────────────────────────────────────────────
-  // For each company we expect 12 months. We count how many (company, month)
-  // pairs are missing so far this year, and list them for the alert panel.
-  const missingByCompany = [];
-  for (const company of companies) {
-    const missing = [];
-    for (let m = 1; m <= 12; m += 1) {
-      if (!monthsWithData.has(`${company._id}-${m}`)) missing.push(m);
-    }
-    if (missing.length) {
-      missingByCompany.push({
-        companyId: company._id,
-        companyName: company.name,
-        missingMonths: missing,
-      });
-    }
+  // We expect 12 months in a full year. List the ones with no data yet so the
+  // alert panel can show them.
+  const missingMonths = [];
+  for (let m = 1; m <= 12; m += 1) {
+    if (!monthsWithData.has(m)) missingMonths.push(m);
   }
-  const missingMonthsCount = missingByCompany.reduce((sum, c) => sum + c.missingMonths.length, 0);
 
   // ── Reports + reporting status ──────────────────────────────────────────────
-  const reportMatch = { tenantId, year: reportingYear };
-  if (companyIds.length) reportMatch.companyId = { $in: companyIds };
-  const reportsThisYear = await AnnualReport.find(reportMatch).sort({ version: -1 });
+  const reportsThisYear = await AnnualReport.find({ tenantId, year: reportingYear }).sort({
+    version: -1,
+  });
 
-  // A company is "reported" if it has at least one generated report this year.
-  const reportedCompanyIds = new Set(reportsThisYear.map((r) => r.companyId.toString()));
-  const reportingStatus = companies.map((c) => ({
-    companyId: c._id,
-    companyName: c.name,
-    bdoRegistrationNumber: c.bdoRegistrationNumber,
-    reported: reportedCompanyIds.has(c._id.toString()),
-  }));
+  // The company is "reported" for this year once at least one report exists.
+  // reportsThisYear is sorted newest version first, so [0] is the current one.
+  const latestReport = reportsThisYear[0] || null;
+  const reportingStatus = {
+    // Prefer the live name from RegulaOne; fall back to the snapshot on the last
+    // report so the panel still says something useful if RegulaOne is unreachable.
+    companyName: company?.name || latestReport?.companyName || null,
+    bdoRegistrationNumber:
+      company?.bdoRegistrationNumber || latestReport?.bdoRegistrationNumber || null,
+    reported: Boolean(latestReport),
+  };
 
   // ── Compliance alerts ───────────────────────────────────────────────────────
-  // Combine threshold breaches from the latest reports with the missing-data
-  // warnings, so the dashboard shows one clear list of things to fix.
+  // Combine threshold breaches from the LATEST report with the missing-data
+  // warning, so the dashboard shows one clear list of things to fix.
   const complianceAlerts = [];
-  for (const report of reportsThisYear) {
-    if (report.version === Math.max(...reportsThisYear.filter((r) => r.companyId.toString() === report.companyId.toString()).map((r) => r.version))) {
-      for (const breach of report.thresholdValidation?.breaches || []) {
-        complianceAlerts.push({
-          level: breach.type === 'OVER_MAX' ? 'error' : 'warning',
-          companyName: report.companyName,
-          message: breach.message,
-        });
-      }
-    }
-  }
-  for (const c of missingByCompany) {
+  const companyLabel = reportingStatus.companyName || 'Your company';
+
+  for (const breach of latestReport?.thresholdValidation?.breaches || []) {
     complianceAlerts.push({
-      level: 'info',
-      companyName: c.companyName,
-      message: `${c.missingMonths.length} month(s) of ${reportingYear} have no waste data yet`,
+      level: breach.type === 'OVER_MAX' ? 'error' : 'warning',
+      companyName: companyLabel,
+      message: breach.message,
     });
   }
 
+  if (missingMonths.length) {
+    complianceAlerts.push({
+      level: 'info',
+      companyName: companyLabel,
+      message: `${missingMonths.length} month(s) of ${reportingYear} have no waste data yet`,
+    });
+  }
+
+  // ── The legally-due annual report ───────────────────────────────────────────
+  // The dashboard's year picker shows how the CURRENT year is going, but the
+  // report the law actually wants right now is for the year BEFORE, due 15 March.
+  // Those are two different years, and confusing them is how a filing gets
+  // missed — so this block is worked out independently of the selected year.
+  const filingObligation = await resolveFilingObligation({
+    // A customer who joined this year is not told last year's report is late —
+    // we have no data for a year before their account existed.
+    activeSinceYear: company?.registeredAt
+      ? new Date(company.registeredAt).getFullYear()
+      : null,
+    lookupYear: async (targetYear) => {
+      const reports = await AnnualReport.find({ tenantId, year: targetYear }).select('status');
+      return {
+        generated: reports.length > 0,
+        submitted: reports.some((r) => r.status === 'SUBMITTED'),
+      };
+    },
+  });
+
   // ── Recent reports (across all years) and recent audit activity ─────────────
-  const recentReportMatch = { tenantId };
-  if (companyIds.length) recentReportMatch.companyId = { $in: companyIds };
-  const recentReports = await AnnualReport.find(recentReportMatch)
+  const recentReports = await AnnualReport.find({ tenantId })
     .sort({ createdAt: -1 })
-    .limit(5)
-    .populate('companyId', 'name bdoRegistrationNumber');
+    .limit(5);
 
   // The "recent activity" list is the audit trail. Only callers who are allowed to
   // read the audit trail get it — for everyone else we return an empty list and do
@@ -134,17 +140,28 @@ const getOverview = async (
 
   return {
     year: reportingYear,
+    // The company these figures belong to. null when RegulaOne was unreachable —
+    // the figures are still correct, we just cannot name the company.
+    company: company
+      ? {
+          name: company.name,
+          bdoRegistrationNumber: company.bdoRegistrationNumber,
+          nip: company.nip,
+        }
+      : null,
     metrics: {
-      totalCompanies: companies.length,
       totalEntriesThisYear: entries.length,
       reportsGeneratedThisYear: reportsThisYear.length,
-      missingMonthsCount,
+      missingMonthsCount: missingMonths.length,
       grandTotalKg,
     },
     yearSummary: { categoryTotals, grandTotalKg },
     monthlyTrend,
     reportingStatus,
-    missingByCompany,
+    // The 15 March obligation — always about the previous year, never the year
+    // chosen in the picker above.
+    filingObligation,
+    missingMonths,
     complianceAlerts,
     recentReports,
     recentAuditLogs,
