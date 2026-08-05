@@ -13,14 +13,22 @@ import {
   selectCompanyOverviewStatus,
 } from '../../slices/companyOverviewSlice';
 import {
-  attentionLabel, cardStatusLabel, formatDate, formatMetric, metricLabel,
-  moduleLabel, moneyMetricLabel, text,
+  fetchMyOverview,
+  selectMyOverview,
+  selectMyOverviewError,
+  selectMyOverviewIsInitialLoad,
+  selectMyOverviewLoadedAt,
+  selectMyOverviewStatus,
+} from '../../slices/myOverviewSlice';
+import {
+  attentionLabel, cardStatusLabel, documentTypeLabel, formatDate, formatMetric,
+  metricLabel, moduleLabel, moneyMetricLabel, statusValueLabel, text,
 } from '../../lib/dashboardLabels';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import {
-  Building2, Users, ReceiptText, Activity, ShieldCheck, Clock, FileText, CheckSquare, Loader2,
+  Building2, Users, Activity, ShieldCheck, Clock, FileText, CheckSquare, Loader2,
   AlertTriangle, ArrowUpRight, CalendarClock, Lock, RefreshCw, ShieldOff, TriangleAlert,
 } from 'lucide-react';
 import {
@@ -624,92 +632,410 @@ function AdminView() {
   );
 }
 
-function UserView() {
-  const { user } = useAuthStore();
-  const name = user?.displayName ?? 'there';
+// ─── Personal (any signed-in member) "My Workspace" dashboard ───────────────
+//
+// OLD MOCK REMOVED. Until now this view showed hardcoded tasks ("Submit June waste
+// report by 30.06"), invented document expiry dates and a fixed "08:00–16:00" shift.
+// Those had to go for the same reason the admin mocks did, only with sharper
+// consequences: this is the screen an employee looks at to decide whether they may
+// legally start work. A made-up "Medical Certificate — VALID" row tells somebody
+// they are cleared to work when their certificate may in fact have lapsed, which is
+// a Kodeks pracy art. 229 §4 breach for the employer and an uninsured shift for the
+// employee.
+//
+// Everything below now comes from ONE server call, GET /api/me/overview, held in the
+// myOverview Redux slice. The server resolves the person from the session token,
+// filters every query to that person's own records, and works out every date — the
+// 30-day document warning, the yearly 150-hour overtime cap, the whistleblower
+// clocks. This component only formats what it is handed; it never computes a
+// deadline and never adds figures up.
 
-  const stats = [
-    { title: 'Pending Tasks', value: '3', icon: CheckSquare, trend: '1 urgent', trendColor: 'text-amber-500' },
-    { title: 'Invoices (Jun)', value: '12', icon: ReceiptText, trend: 'All submitted', trendColor: 'text-emerald-500' },
-    { title: 'Compliance Status', value: 'OK', icon: ShieldCheck, trend: 'Valid until Aug', trendColor: 'text-red-500' },
-    { title: 'Shift Today', value: '08:00–16:00', icon: Clock, trend: 'Clocked in', trendColor: 'text-emerald-500' },
-  ];
+// The tone the server puts on a document state, as panel classes.
+const DOC_TONE = {
+  VALID: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  EXPIRING: 'bg-amber-50 text-amber-700 border-amber-100',
+  EXPIRED: 'bg-rose-50 text-rose-700 border-rose-100',
+  MISSING: 'bg-rose-50 text-rose-700 border-rose-100',
+  NOT_REQUIRED: 'bg-slate-50 text-slate-500 border-slate-100',
+};
+
+// The colour the headline "may I work today?" tile gets.
+const DOC_STATUS_COLOR = {
+  COMPLIANT: 'text-emerald-500',
+  EXPIRING: 'text-amber-500',
+  NO_PROFILE: 'text-amber-500',
+};
+
+/**
+ * One of the person's own documents, with its real expiry date.
+ *
+ * The days-remaining line is what makes this useful: "valid until 30.11.2026" is
+ * information, "62 days left" is a prompt to book an appointment. A negative number
+ * from the server means the document already lapsed, and is shown as days overdue.
+ */
+function DocumentRow({ doc }) {
+  const tone = DOC_TONE[doc.status] ?? DOC_TONE.NOT_REQUIRED;
+  const days = doc.daysRemaining;
+
+  return (
+    <div className={`flex items-start justify-between gap-3 px-3 py-2.5 rounded-lg border ${tone}`}>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold">{documentTypeLabel(doc.type)}</p>
+        <p className="text-[10px] opacity-80">
+          {doc.status === 'NOT_REQUIRED'
+            ? text('myNotRequired')
+            : doc.expiryDate
+              ? <>{text('myExpiresOn')} {formatDate(doc.expiryDate)}</>
+              : text('myNoDate')}
+          {/* Only shown when the server actually gave a date to count from. */}
+          {days !== null && days !== undefined && doc.status !== 'NOT_REQUIRED' && (
+            <> · {days >= 0
+              ? `${days} ${text('myDaysLeft')}`
+              : `${Math.abs(days)} ${text('myDaysAgo')}`}</>
+          )}
+        </p>
+        {/* The rule behind the date, so it is clear this is a legal duty. */}
+        {doc.legalRef && <p className="text-[9px] opacity-60 mt-0.5">{doc.legalRef}</p>}
+      </div>
+      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border border-current/20 bg-white/60 flex-shrink-0">
+        {statusValueLabel(doc.status)}
+      </span>
+    </div>
+  );
+}
+
+/** One line in the "my rights" panel. */
+function RightsRow({ icon: Icon, title, value, legalRef, to, linkLabel }) {
+  return (
+    <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-slate-100">
+      <Icon className="h-4 w-4 text-slate-300 flex-shrink-0 mt-0.5" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold text-slate-700">{title}</p>
+        <p className="text-[11px] text-slate-500 break-words">{value}</p>
+        <p className="text-[9px] text-slate-400 mt-0.5">{legalRef}</p>
+      </div>
+      {to && (
+        <Link
+          to={to}
+          className="text-[10px] font-bold uppercase tracking-wider text-red-600 hover:underline inline-flex items-center gap-0.5 flex-shrink-0"
+        >
+          {linkLabel} <ArrowUpRight className="h-3 w-3" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function UserView() {
+  const dispatch = useDispatch();
+  const { tenantId } = useParams();
+
+  const overview = useSelector(selectMyOverview);
+  const status = useSelector(selectMyOverviewStatus);
+  const error = useSelector(selectMyOverviewError);
+  const loadedAt = useSelector(selectMyOverviewLoadedAt);
+  const isInitialLoad = useSelector(selectMyOverviewIsInitialLoad);
+
+  // Load once when the screen opens; the slice keeps the snapshot afterwards.
+  useEffect(() => {
+    if (status === 'idle') dispatch(fetchMyOverview());
+  }, [dispatch, status]);
+
+  // ── First load: nothing to show yet ──────────────────────────────────────
+  if (isInitialLoad) {
+    return (
+      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-3">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+        <p className="text-xs text-slate-400 font-medium">{text('myTitle')}…</p>
+      </div>
+    );
+  }
+
+  // ── Failed with nothing cached ───────────────────────────────────────────
+  if (!overview) {
+    return (
+      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-4">
+        <AlertTriangle className="h-6 w-6 text-rose-400" />
+        <p className="text-sm text-slate-600 font-medium">{error?.message ?? text('myLoadFailed')}</p>
+        <Button
+          onClick={() => dispatch(fetchMyOverview())}
+          className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2"
+        >
+          <RefreshCw className="h-3.5 w-3.5 mr-2" /> {text('refresh')}
+        </Button>
+      </div>
+    );
+  }
+
+  const { me, headline, modules, attention, documents, rights, recentActivity } = overview;
+  const isRefreshing = status === 'loading';
+
+  // The company id in the URL is display-only; the server always answers for the
+  // signed-in person's own company. Falling back to what the response reported
+  // keeps the links working if the screen is opened without one.
+  const companyBase = `/company/${tenantId ?? me?.companyId ?? 'platform'}`;
+  const moduleBase = `${companyBase}/modules`;
+
+  // Somebody not yet linked to a company gets an explanation, not an error page.
+  if (!me?.companyId) {
+    return (
+      <div className="max-w-3xl mx-auto py-24 flex flex-col items-center gap-4 text-center">
+        <Building2 className="h-6 w-6 text-slate-300" />
+        <h1 className="text-xl font-bold text-slate-900">{text('myTitle')}</h1>
+        <p className="text-sm text-slate-500 max-w-md">{text('myNoCompany')}</p>
+      </div>
+    );
+  }
+
+  // Documents worth listing. NOT_REQUIRED rows are kept on purpose: knowing a
+  // certificate is not needed for your role is an answer, and hiding it looks
+  // like a missing record.
+  const hasDocuments = documents?.length > 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
-      <div className="flex items-end justify-between">
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">My Workspace</h1>
-          <p className="text-sm text-slate-500 font-medium">Welcome back, {name}. Here's your compliance snapshot.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{text('myTitle')}</h1>
+          <p className="text-sm text-slate-500 font-medium">
+            {text('myGreeting')}, {me.name || me.email}
+            {me.companyName && <> · {me.companyName}</>}
+          </p>
+          <p className="text-[10px] text-slate-400 mt-1">{text('myScopeNote')}</p>
         </div>
-        <Button variant="outline" className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2">
-          <FileText className="h-3.5 w-3.5 mr-2" /> My Reports
-        </Button>
+        <div className="flex flex-col items-end gap-1.5">
+          <Button
+            variant="outline"
+            onClick={() => dispatch(fetchMyOverview())}
+            disabled={isRefreshing}
+            className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} /> {text('refresh')}
+          </Button>
+          {loadedAt && (
+            <span className="text-[10px] text-slate-400">
+              {text('updatedAt')} {formatDate(loadedAt, true)}
+            </span>
+          )}
+        </div>
       </div>
 
+      {/* A failed refresh keeps the previous figures but says so, rather than
+          passing yesterday's document status off as today's. */}
+      {status === 'failed' && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium bg-amber-50 text-amber-700 border-amber-100">
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+          {text('staleWarning')}
+        </div>
+      )}
+
+      {/* ── The one thing that stops work ───────────────────────────────── */}
+      {/* Placed above everything else because it is not a statistic: it means the
+          person may not legally be on shift today. */}
+      {headline.blockedFromWork && (
+        <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl border bg-rose-50 text-rose-800 border-rose-200">
+          <ShieldOff className="h-5 w-5 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold">{text('myBlockedTitle')}</p>
+            <p className="text-xs mt-1 leading-relaxed">{text('myBlockedBody')}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Headline figures ────────────────────────────────────────────── */}
+      {/* Each tile is left out when the person has no access to the module behind
+          it. Showing a zero instead would read as "nothing to worry about". */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, i) => (
-          <Card key={i} className="bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all rounded-xl">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{stat.title}</CardTitle>
-              <stat.icon className="h-4 w-4 text-slate-300" />
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <div className="text-2xl font-bold text-slate-900 tracking-tight">{stat.value}</div>
-                <span className={`text-[10px] font-bold ${stat.trendColor}`}>{stat.trend}</span>
-              </div>
-            </CardContent>
-          </Card>
+        {headline.shiftStatusToday && (
+          <StatCard
+            title={text('myShiftToday')}
+            value={statusValueLabel(headline.shiftStatusToday)}
+            icon={Clock}
+          />
+        )}
+        {headline.workedHoursThisMonth != null && (
+          <StatCard
+            title={text('myHoursThisMonth')}
+            value={formatMetric({ value: headline.workedHoursThisMonth, unit: 'HOURS' })}
+            icon={CalendarClock}
+            note={headline.overtimeHoursThisMonth != null
+              ? `+${formatMetric({ value: headline.overtimeHoursThisMonth, unit: 'HOURS' })} ${text('myOvertimeNote')}`
+              : undefined}
+            noteColor={Number(headline.overtimeHoursThisMonth) > 0 ? 'text-amber-500' : 'text-slate-400'}
+          />
+        )}
+        {headline.documentStatus && (
+          <StatCard
+            title={text('myDocumentStatus')}
+            value={statusValueLabel(headline.blockedFromWork ? 'BLOCKED' : headline.documentStatus)}
+            icon={ShieldCheck}
+            note={statusValueLabel(headline.documentStatus)}
+            noteColor={headline.blockedFromWork
+              ? 'text-rose-500'
+              : DOC_STATUS_COLOR[headline.documentStatus] ?? 'text-rose-500'}
+          />
+        )}
+        <StatCard
+          title={text('myOpenActions')}
+          value={headline.openActions}
+          icon={CheckSquare}
+          note={headline.overdueActions > 0
+            ? `${headline.overdueActions} ${text('overdueOf')}`
+            : undefined}
+          noteColor="text-rose-500"
+        />
+        <StatCard
+          title={text('myModulesNote')}
+          value={`${headline.modulesAvailable} / ${headline.modulesEntitled}`}
+          icon={ShieldCheck}
+        />
+      </div>
+
+      {/* ── My to-do list ──────────────────────────────────────────────── */}
+      <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
+        <CardHeader className="border-b border-slate-50 py-4">
+          <CardTitle className="text-sm font-bold text-slate-800">{text('myTodo')}</CardTitle>
+        </CardHeader>
+        <CardContent className="py-4 space-y-2">
+          {attention.length === 0 ? (
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium bg-emerald-50 text-emerald-700 border-emerald-100">
+              <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />
+              {text('myAllClear')}
+            </div>
+          ) : (
+            attention.map((item) => (
+              <Link
+                key={`${item.module}-${item.type}`}
+                to={`${companyBase}${item.to}`}
+                className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium hover:brightness-[0.98] transition ${TONE_PANEL[item.tone] ?? TONE_PANEL.NEUTRAL}`}
+              >
+                <span className="font-bold tabular-nums flex-shrink-0 min-w-[1.5rem]">{item.count}</span>
+                <span className="flex-1 min-w-0">
+                  {attentionLabel(item.type)}
+                  {item.legalRef && (
+                    <span className="block text-[9px] font-normal opacity-70 mt-0.5">{item.legalRef}</span>
+                  )}
+                </span>
+                <span className="text-[9px] font-bold uppercase tracking-wider opacity-60 flex-shrink-0">
+                  {item.module}
+                </span>
+              </Link>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── My documents + my rights ───────────────────────────────────── */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
+          <CardHeader className="border-b border-slate-50 py-4">
+            <CardTitle className="text-sm font-bold text-slate-800">{text('myDocuments')}</CardTitle>
+            {/* Says plainly that no health findings are held here, so nobody fears
+                their medical results are on a dashboard (GDPR Art. 9). */}
+            <p className="text-[10px] text-slate-400 mt-0.5">{text('myDocumentsNote')}</p>
+          </CardHeader>
+          <CardContent className="py-4 space-y-2.5">
+            {hasDocuments ? (
+              documents.map((doc) => <DocumentRow key={doc.type} doc={doc} />)
+            ) : (
+              <p className="px-3 py-6 text-xs text-slate-400 text-center">{text('myDocumentsEmpty')}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* What the company owes THIS PERSON in the way of information. Shown to
+            every employee because these are their own rights, not module features
+            somebody has to be granted. */}
+        <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
+          <CardHeader className="border-b border-slate-50 py-4">
+            <CardTitle className="text-sm font-bold text-slate-800">{text('myRights')}</CardTitle>
+            <p className="text-[10px] text-slate-400 mt-0.5">{text('myRightsNote')}</p>
+          </CardHeader>
+          <CardContent className="py-4 space-y-2.5">
+            <RightsRow
+              icon={FileText}
+              title={text('myPrivacyNotices')}
+              value={rights.privacyNoticesAvailable > 0
+                ? `${rights.privacyNoticesAvailable}${rights.latestNoticeAt ? ` · ${text('myLatestNotice')} ${formatDate(rights.latestNoticeAt)}` : ''}`
+                : '—'}
+              legalRef={text('myPrivacyNoticesLegal')}
+              to={rights.privacyRoute ? `${companyBase}${rights.privacyRoute}` : null}
+              linkLabel={text('myOpenLink')}
+            />
+            <RightsRow
+              icon={ShieldCheck}
+              title={text('myDpo')}
+              value={rights.dpoName || rights.dpoEmail
+                ? [rights.dpoName, rights.dpoEmail].filter(Boolean).join(' · ')
+                : text('myDpoNone')}
+              legalRef={text('myDpoLegal')}
+            />
+            <RightsRow
+              icon={Lock}
+              title={text('myWhistleblowing')}
+              value={rights.whistleblowingChannelAvailable
+                ? text('myWhistleblowingAvailable')
+                : text('myWhistleblowingNone')}
+              legalRef={text('myWhistleblowingLegal')}
+              to={rights.whistleblowingRoute ? `${companyBase}${rights.whistleblowingRoute}` : null}
+              linkLabel={text('myOpenLink')}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── One card per module, my own figures ─────────────────────────── */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {modules.map((card) => (
+          <ModuleCard key={card.module} card={card} moduleBase={moduleBase} />
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
-          <CardHeader className="border-b border-slate-50">
-            <CardTitle className="text-sm font-bold text-slate-800">My Tasks</CardTitle>
-          </CardHeader>
-          <CardContent className="py-4 space-y-3">
-            {[
-              { label: 'Submit June waste report by 30.06', done: false, urgent: true },
-              { label: 'Sign updated GDPR consent form', done: false, urgent: false },
-              { label: 'BHP refresher training scheduled', done: false, urgent: false },
-              { label: 'April invoices reviewed', done: true, urgent: false },
-              { label: 'Clock-out submitted for 13.06', done: true, urgent: false },
-            ].map((task, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors">
-                <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${task.done ? 'bg-emerald-500 border-emerald-500' : task.urgent ? 'border-amber-400' : 'border-slate-200'}`}>
-                  {task.done && <div className="w-2 h-2 rounded-sm bg-white" />}
-                </div>
-                <span className={`text-xs font-medium ${task.done ? 'line-through text-slate-400' : 'text-slate-700'}`}>{task.label}</span>
-                {task.urgent && !task.done && <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded-full">URGENT</span>}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
-          <CardHeader className="border-b border-slate-50">
-            <CardTitle className="text-sm font-bold text-slate-800">My Compliance Documents</CardTitle>
-          </CardHeader>
-          <CardContent className="py-4 space-y-3">
-            {[
-              { label: 'Medical Certificate', expiry: '2026-11-30', status: 'bg-emerald-50 text-emerald-700 border-emerald-100', statusLabel: 'VALID' },
-              { label: 'BHP Training', expiry: '2026-08-15', status: 'bg-emerald-50 text-emerald-700 border-emerald-100', statusLabel: 'VALID' },
-              { label: 'Fire Safety Certificate', expiry: '2026-06-01', status: 'bg-amber-50 text-amber-700 border-amber-100', statusLabel: 'EXPIRING' },
-              { label: 'Data Processing Agreement', expiry: '2027-01-01', status: 'bg-emerald-50 text-emerald-700 border-emerald-100', statusLabel: 'VALID' },
-            ].map((doc, i) => (
-              <div key={i} className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-slate-100 hover:border-slate-200 transition-colors">
-                <div>
-                  <p className="text-xs font-semibold text-slate-700">{doc.label}</p>
-                  <p className="text-[10px] text-slate-400">Expires {doc.expiry}</p>
-                </div>
-                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${doc.status}`}>{doc.statusLabel}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+      {/* ── My own audit trail ─────────────────────────────────────────── */}
+      {/* An employee can check what the system recorded under their name. That is
+          transparency about their own data, not surveillance of anyone else's —
+          the feed is filtered to this person server-side. */}
+      <Card className="bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden">
+        <CardHeader className="border-b border-slate-50 py-4">
+          <h2 className="font-bold text-sm text-slate-800">{text('myActivity')}</h2>
+          <p className="text-[10px] text-slate-400 mt-0.5">{text('myActivityNote')}</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          {recentActivity.length === 0 ? (
+            <p className="px-6 py-8 text-xs text-slate-400 text-center">{text('myActivityEmpty')}</p>
+          ) : (
+            <Table>
+              <TableHeader className="bg-slate-50/50">
+                <TableRow className="hover:bg-transparent border-b border-slate-100">
+                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Action</TableHead>
+                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Record</TableHead>
+                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Module</TableHead>
+                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400 text-right">When</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentActivity.map((log, i) => (
+                  <TableRow key={`${log.module}-${log.at}-${i}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                    <TableCell className="px-6 py-4 text-xs text-slate-600">
+                      {log.action.replace(/_/g, ' ').toLowerCase()}
+                      {!log.success && (
+                        <span className="ml-2 px-2 py-0.5 rounded-full font-bold text-[9px] bg-rose-50 text-rose-600">FAILED</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-6 py-4 text-xs text-slate-400">{log.resource ?? '—'}</TableCell>
+                    <TableCell className="px-6 py-4 text-xs text-slate-500">{log.module}</TableCell>
+                    <TableCell className="px-6 py-4 text-right text-xs text-slate-400 font-medium">
+                      {formatDate(log.at, true)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

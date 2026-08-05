@@ -3,10 +3,13 @@
 // navigation are all managed here so pages stay lean.
 
 import { useMutation } from '@tanstack/react-query';
+import { useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { authService } from '../services/authService';
 import { useAuthStore, mapApiUserToProfile } from '../store/authStore';
+import { clearCompanyOverview } from '../slices/companyOverviewSlice';
+import { clearMyOverview } from '../slices/myOverviewSlice';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -185,6 +188,23 @@ export function useChangePassword() {
 
 export function useLogout() {
   const { ssoLogout } = useAuthStore();
+  const dispatch = useDispatch();
+
+  /**
+   * Drop every dashboard snapshot held in Redux before the session ends.
+   *
+   * WHY THIS IS NEEDED: the dashboards keep a server snapshot in the store, and
+   * "My Workspace" holds PERSONAL data — the signed-in person's own medical
+   * certificate and BHP training expiry dates. ssoLogout() redirects the browser,
+   * which throws the store away anyway, but the redirect is not guaranteed to
+   * happen (a blocked navigation, or a session dropped by the token-refresh cycle
+   * without a redirect). Clearing first means one person's own dates can never be
+   * left in memory for whoever signs in next on a shared machine.
+   */
+  const clearDashboards = () => {
+    dispatch(clearMyOverview());
+    dispatch(clearCompanyOverview());
+  };
 
   return useMutation({
     // ssoLogout calls POST /api/sso/logout which clears Domain=.regulaone.eu cookies,
@@ -192,11 +212,13 @@ export function useLogout() {
     mutationFn: () => authService.ssoLogout(),
 
     onSuccess: (data) => {
+      clearDashboards();
       ssoLogout(data?.logoutUrl);
     },
 
     onError: () => {
       // API call failed (token already expired) — still clear local state
+      clearDashboards();
       ssoLogout();
     },
   });

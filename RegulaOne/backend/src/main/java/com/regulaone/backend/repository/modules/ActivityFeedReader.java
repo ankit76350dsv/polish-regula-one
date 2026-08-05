@@ -56,31 +56,39 @@ public class ActivityFeedReader extends ModuleMetricsSupport {
             String actorField,
             String actionField,
             String resourceField,
-            String successField) {
+            String successField,
+            // The field holding the ACTING USER'S ID. Used by {@link #readForActor}
+            // to show a person only the lines recorded under their own name. Matching
+            // on the id rather than on the displayed actor is deliberate: names and
+            // e-mail addresses can change, an id cannot, and two colleagues can share
+            // a display name.
+            String actorIdField) {
     }
 
     private static final List<AuditSource> SOURCES = List.of(
             // KSeFFlow (Java) — stamps its own "timestamp" and has no success flag;
             // a written KSeF audit line always represents a completed action.
             new AuditSource("KSEFFLOW", "ksef_audit_logs",
-                    "timestamp", "userEmail", "action", "targetEntityType", null),
+                    "timestamp", "userEmail", "action", "targetEntityType", null, "userId"),
 
-            // PrivacyPilot (Java) — Spring auditing fills createdAt/createdBy.
+            // PrivacyPilot (Java) — Spring auditing fills createdAt/createdBy, so the
+            // acting user's id lives in "createdBy" while "actorName" is the snapshot
+            // of the name they had at the time.
             new AuditSource("PRIVACYPILOT", "privacypilot_audit_log",
-                    "createdAt", "actorName", "action", "entityType", null),
+                    "createdAt", "actorName", "action", "entityType", null, "createdBy"),
 
             // WorkPulse (Node) — Mongoose timestamps plus an explicit success flag.
             new AuditSource("WORKPULSE", "workplus_auditlogs",
-                    "createdAt", "userEmail", "action", "resource", "success"),
+                    "createdAt", "userEmail", "action", "resource", "success", "userId"),
 
             // SafeWork (Node) — its model does not name a collection, so Mongoose
             // uses the pluralised default "auditlogs".
             new AuditSource("SAFEWORK", "auditlogs",
-                    "createdAt", "userEmail", "action", "resource", "success"),
+                    "createdAt", "userEmail", "action", "resource", "success", "userId"),
 
             // WasteSync (Node) — keeps a dedicated, hyphenated collection name.
             new AuditSource("WASTESYNC", "WasteSync-auditlogs",
-                    "createdAt", "userEmail", "action", "resource", "success"));
+                    "createdAt", "userEmail", "action", "resource", "success", "userId"));
 
     public ActivityFeedReader(MongoTemplate mongo) {
         super(mongo);
@@ -107,7 +115,7 @@ public class ActivityFeedReader extends ModuleMetricsSupport {
             if (!visibleModules.contains(source.module())) continue;
 
             try {
-                merged.addAll(readSource(tenantId, source, perModuleLimit));
+                merged.addAll(readSource(tenantId, source, perModuleLimit, null));
             } catch (RuntimeException ex) {
                 // One unreadable audit collection (e.g. a module never deployed in
                 // this environment) must not blank the whole timeline.
@@ -125,20 +133,79 @@ public class ActivityFeedReader extends ModuleMetricsSupport {
     }
 
     /**
+     * Newest audit lines recorded under ONE PERSON'S OWN name, newest first.
+     *
+     * WHAT IT IS FOR: the personal "My Workspace" dashboard. An employee is entitled
+     * to see what has been recorded about them (GDPR Art. 15), and being able to spot
+     * an entry they do not recognise is a genuine security control. They are shown
+     * their OWN lines only — never a colleague's — so this is the same feed as
+     * {@link #read} with one extra filter and no wider access.
+     *
+     * A module whose audit collection does not record an acting user id is skipped
+     * rather than shown unfiltered, because "unfiltered" would mean the whole
+     * company's activity.
+     *
+     * @param tenantId       the company, resolved from the verified session
+     * @param actorUserId    the caller's own RegulaOne user id
+     * @param visibleModules module codes this person may see
+     * @param perModuleLimit how many lines to take from each module
+     * @param totalLimit     how many lines to return after merging
+     */
+    public List<ActivityEntry> readForActor(String tenantId,
+                                            String actorUserId,
+                                            Set<String> visibleModules,
+                                            int perModuleLimit,
+                                            int totalLimit) {
+
+        // No id means no way to narrow the feed to one person. Returning nothing is
+        // the only safe answer; returning everything would expose the whole company.
+        if (actorUserId == null || actorUserId.isBlank()) return List.of();
+
+        List<ActivityEntry> merged = new ArrayList<>();
+
+        for (AuditSource source : SOURCES) {
+            if (!visibleModules.contains(source.module())) continue;
+            if (source.actorIdField() == null) continue;
+
+            try {
+                merged.addAll(readSource(tenantId, source, perModuleLimit, actorUserId));
+            } catch (RuntimeException ex) {
+                // One unreadable audit collection must not blank the whole timeline.
+                continue;
+            }
+        }
+
+        merged.sort(Comparator.comparing(
+                ActivityEntry::at,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+
+        return merged.size() > totalLimit ? merged.subList(0, totalLimit) : merged;
+    }
+
+    /**
      * Read one module's newest audit lines.
      *
      * The projection lists the wanted fields explicitly, so the change payloads
      * ({@code oldValue} / {@code newValue}) are never transferred out of MongoDB.
+     *
+     * @param actorUserId when given, only lines recorded under that user id are
+     *                    returned; when null, the whole company's lines are read
      */
-    private List<ActivityEntry> readSource(String tenantId, AuditSource source, int limit) {
+    private List<ActivityEntry> readSource(String tenantId, AuditSource source, int limit,
+                                           String actorUserId) {
         Document projection = new Document(source.timeField(), 1)
                 .append(source.actorField(), 1)
                 .append(source.actionField(), 1);
         if (source.resourceField() != null) projection.append(source.resourceField(), 1);
         if (source.successField() != null) projection.append(source.successField(), 1);
 
+        Document match = new Document("tenantId", tenantId);
+        if (actorUserId != null && source.actorIdField() != null) {
+            match.append(source.actorIdField(), actorUserId);
+        }
+
         List<Document> pipeline = List.of(
-                new Document("$match", new Document("tenantId", tenantId)),
+                new Document("$match", match),
                 new Document("$sort", new Document(source.timeField(), -1)),
                 new Document("$limit", limit),
                 new Document("$project", projection));

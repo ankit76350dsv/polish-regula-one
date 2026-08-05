@@ -83,6 +83,16 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                         .requestMatchers("/api/superadmin/**").hasAuthority("ROLE_SUPER_ADMIN")
 
+                        // Added: the personal "my own data" area (GET /api/me/overview).
+                        // Open to EVERY signed-in role on purpose — these endpoints
+                        // answer only for the caller's own records, which the server
+                        // resolves from the session token and never from the URL. This
+                        // line changes no behaviour (anyRequest below already requires
+                        // authentication); it is here so the intent is explicit and a
+                        // future reader does not mistake the absence of a rule for an
+                        // oversight.
+                        .requestMatchers("/api/me/**").authenticated()
+
                         .anyRequest().authenticated())
 
                 // ! custom error responses for auth failures
