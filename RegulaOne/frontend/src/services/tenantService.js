@@ -30,11 +30,16 @@ export const tenantService = {
   changeStatus: (id, status) =>
     api.patch(`/api/superadmin/tenant/${id}/status`, { status }),
 
-  // GET /api/superadmin/overview
-  // Returns PlatformOverviewResponse: stat card values, 6-month revenue chart,
-  // and per-module adoption percentages for the SuperAdmin Platform Overview page.
-  getPlatformOverview: () =>
-    api.get('/api/superadmin/overview'),
+  // MOVED — the platform overview call now lives in dashboardService, next to the
+  // company and personal dashboard calls, and is dispatched through the
+  // platformOverview Redux slice.
+  //
+  // Why it moved: this file is about MANAGING tenants (create, update, change status),
+  // while the overview is one of the three read-only dashboard calls. Keeping all
+  // three together means the shared rule — no id in the URL, scope comes from the
+  // session — is stated in one place instead of drifting apart.
+  //
+  //   getPlatformOverview: () => api.get('/api/superadmin/overview'),
 
   // Called by ROLE_ADMIN on first login when tenantId is null.
   // Creates the org and links it to the current admin's account in one step.

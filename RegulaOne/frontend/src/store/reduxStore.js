@@ -2,6 +2,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import passwordRecoveryReducer from '../slices/passwordRecoverySlice';
 import companyOverviewReducer from '../slices/companyOverviewSlice';
 import myOverviewReducer from '../slices/myOverviewSlice';
+import platformOverviewReducer from '../slices/platformOverviewSlice';
 
 // Redux Toolkit owns API lifecycle state for password recovery. The existing
 // Zustand auth store remains the source of truth for the authenticated session.
@@ -15,10 +16,16 @@ import myOverviewReducer from '../slices/myOverviewSlice';
 // a separate slice because the two screens are loaded by different people and must
 // never share one cache: an admin's company figures and an employee's own figures
 // answer different questions.
+//
+// platformOverview holds the SuperAdmin platform dashboard — the commercial position
+// across every customer company. Also its own slice, for the same reason: it answers a
+// third question ("how is the business doing?") and is loaded by the platform
+// operator, not by a customer.
 export const reduxStore = configureStore({
   reducer: {
     passwordRecovery: passwordRecoveryReducer,
     companyOverview: companyOverviewReducer,
     myOverview: myOverviewReducer,
+    platformOverview: platformOverviewReducer,
   },
 });

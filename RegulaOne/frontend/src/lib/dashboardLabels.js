@@ -615,6 +615,104 @@ export const UI_TEXT = {
   },
   myActivityEmpty: { en: 'Nothing has been recorded under your name yet.', pl: 'Jeszcze nic nie zapisano pod Twoim nazwiskiem.' },
   myModulesNote: { en: 'Modules you can open', pl: 'Moduły, które możesz otworzyć' },
+
+  // ── The SuperAdmin "Platform Overview" screen ──────────────────────────────
+  platformTitle: { en: 'Platform Overview', pl: 'Przegląd platformy' },
+  platformSubtitle: { en: 'customer companies across 6 modules', pl: 'firm klienckich w 6 modułach' },
+  platformScopeNote: {
+    en: 'Commercial figures only. This screen holds no customer compliance data — that belongs to each customer and is visible to their own administrator.',
+    pl: 'Tylko dane handlowe. Ten ekran nie zawiera danych zgodności klientów — należą one do klienta i są widoczne dla jego administratora.',
+  },
+  platformLoadFailed: { en: 'Could not load the platform overview.', pl: 'Nie udało się pobrać przeglądu platformy.' },
+
+  // Top row
+  platformCustomers: { en: 'Customer companies', pl: 'Firmy klienckie' },
+  platformActive: { en: 'active', pl: 'aktywnych' },
+  platformNewThisMonth: { en: 'new this month', pl: 'nowych w tym miesiącu' },
+  platformSignupTrend: { en: 'signups vs last month', pl: 'rejestracje vs poprzedni miesiąc' },
+  platformUsers: { en: 'People using the platform', pl: 'Osoby korzystające z platformy' },
+  platformSeats: { en: 'seats sold', pl: 'sprzedanych stanowisk' },
+  platformSeatsNotStated: { en: 'no seat limit set', pl: 'brak ustalonego limitu stanowisk' },
+  platformUtilisation: { en: 'Seat utilisation', pl: 'Wykorzystanie stanowisk' },
+  platformOverSeats: { en: 'over the seats sold', pl: 'powyżej sprzedanych stanowisk' },
+  platformMrr: { en: 'Monthly recurring value', pl: 'Wartość miesięczna powtarzalna' },
+  platformMrrNote: {
+    en: 'Live plans that have not lapsed. Never converted between currencies.',
+    pl: 'Aktywne, nieprzedawnione plany. Bez przeliczania między walutami.',
+  },
+  platformNoRevenue: { en: 'No active priced plan', pl: 'Brak aktywnego płatnego planu' },
+
+  // Subscriptions — what replaced the invented "compliance score"
+  platformPlans: { en: 'Subscriptions', pl: 'Subskrypcje' },
+  platformPlansNote: {
+    en: 'The state of customers’ plans. This is billing, not compliance — whether a customer is compliant is answered on their own dashboard.',
+    pl: 'Stan planów klientów. To rozliczenia, nie zgodność — o zgodności klienta mówi jego własny pulpit.',
+  },
+  platformPlanValid: { en: 'Paid up', pl: 'Opłacone' },
+  platformPlanExpiring: { en: 'Expiring within 30 days', pl: 'Wygasają w ciągu 30 dni' },
+  platformPlanExpired: { en: 'Lapsed', pl: 'Przedawnione' },
+  platformPlanNone: { en: 'No plan at all', pl: 'Brak jakiegokolwiek planu' },
+  platformSuspended: { en: 'Suspended accounts', pl: 'Konta zawieszone' },
+  platformInactive: { en: 'Inactive accounts', pl: 'Konta nieaktywne' },
+
+  // Billings chart
+  platformBillings: { en: 'Billed per month (6 months)', pl: 'Zafakturowano miesięcznie (6 miesięcy)' },
+  platformBillingsNote: {
+    en: 'The value of the paid periods that started in each month. Not the same figure as the recurring value above — an annual plan is billed once, in the month it starts.',
+    pl: 'Wartość okresów rozliczeniowych rozpoczętych w danym miesiącu. To nie ta sama liczba co wartość powtarzalna powyżej — plan roczny jest fakturowany raz, w miesiącu rozpoczęcia.',
+  },
+  platformBillingsEmpty: { en: 'Nothing was billed in this period.', pl: 'W tym okresie nic nie zafakturowano.' },
+
+  // Module adoption
+  platformAdoption: { en: 'Module take-up', pl: 'Wykorzystanie modułów' },
+  platformAdoptionNote: {
+    en: 'Share of active customers whose plan includes the module, and how many people were actually granted it.',
+    pl: 'Udział aktywnych klientów, których plan obejmuje moduł, oraz liczba osób, którym faktycznie go nadano.',
+  },
+  platformAdoptionCustomers: { en: 'customers', pl: 'klientów' },
+  platformAdoptionUsers: { en: 'people granted', pl: 'osób z dostępem' },
+
+  // Watchlist
+  platformWatchlist: { en: 'Customers needing attention', pl: 'Klienci wymagający uwagi' },
+  platformWatchlistNote: {
+    en: 'Plan dates, account status and seat counts. Worst first.',
+    pl: 'Daty planów, status konta i liczba stanowisk. Najpilniejsze na górze.',
+  },
+  platformWatchlistEmpty: {
+    en: 'No customer needs attention — every account is live and paid up.',
+    pl: 'Żaden klient nie wymaga uwagi — wszystkie konta są aktywne i opłacone.',
+  },
+  platformDaysLeft: { en: 'days left', pl: 'dni do końca' },
+  platformDaysOverdue: { en: 'days overdue', pl: 'dni po terminie' },
+  platformOpenCustomer: { en: 'Open', pl: 'Otwórz' },
+};
+
+// ── Why a customer is on the platform watchlist ──────────────────────────────
+//
+// Every reason is commercial — a plan date, an account status or a seat count.
+// Nothing here comes from a customer's module data.
+
+export const WATCHLIST_REASON_LABELS = {
+  TENANT_SUSPENDED: {
+    en: 'Account suspended — the customer cannot use the platform',
+    pl: 'Konto zawieszone — klient nie może korzystać z platformy',
+  },
+  PLAN_EXPIRED: {
+    en: 'Plan has lapsed — filing tools stop working',
+    pl: 'Plan przedawniony — narzędzia do składania przestają działać',
+  },
+  PLAN_EXPIRING: {
+    en: 'Plan expires soon — arrange the renewal',
+    pl: 'Plan wygasa wkrótce — ustal odnowienie',
+  },
+  NO_PLAN: {
+    en: 'Active account with no plan assigned',
+    pl: 'Aktywne konto bez przypisanego planu',
+  },
+  SEATS_EXCEEDED: {
+    en: 'More people enabled than seats sold',
+    pl: 'Więcej aktywnych osób niż sprzedanych stanowisk',
+  },
 };
 
 // ── Lookup + formatting ──────────────────────────────────────────────────────
@@ -643,6 +741,78 @@ export const statusValueLabel = (value) =>
   value === null || value === undefined || value === ''
     ? '—'
     : pick(STATUS_VALUE_LABELS[value], String(value));
+
+export const watchlistReasonLabel = (reason) =>
+  pick(WATCHLIST_REASON_LABELS[reason], reason);
+
+/**
+ * An amount with its currency, in the reader's own locale.
+ *
+ * The currency ALWAYS comes from the server alongside the amount — it is never
+ * assumed. The platform dashboard used to print a hardcoded "€" in front of a total
+ * that had summed PLN and EUR plan prices together, so the symbol was wrong and the
+ * number underneath it was meaningless. `Intl.NumberFormat` also puts the symbol
+ * where the locale expects it, which matters here: Polish writes "1 234,50 zł" after
+ * the number, English writes "€1,234.50" before it.
+ */
+export function formatMoney(amount, currency) {
+  if (amount === null || amount === undefined) return '—';
+  const locale = activeLanguage() === 'pl' ? 'pl-PL' : 'en-GB';
+
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency || 'PLN',
+      maximumFractionDigits: 2,
+    }).format(Number(amount));
+  } catch {
+    // An unknown or malformed currency code must not blank the figure out — show the
+    // number with the code beside it instead.
+    return `${Number(amount).toLocaleString(locale, { maximumFractionDigits: 2 })} ${currency ?? ''}`.trim();
+  }
+}
+
+/**
+ * A compact amount for a stat card: "1,2 mln zł", "82,4 tys. zł", "950 zł".
+ *
+ * Long money strings break a card's layout, so large values are shortened — but the
+ * currency is still taken from the data, never assumed.
+ */
+export function formatMoneyShort(amount, currency) {
+  if (amount === null || amount === undefined) return '—';
+  const locale = activeLanguage() === 'pl' ? 'pl-PL' : 'en-GB';
+  const value = Number(amount);
+
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency || 'PLN',
+      notation: Math.abs(value) >= 10_000 ? 'compact' : 'standard',
+      maximumFractionDigits: 1,
+    }).format(value);
+  } catch {
+    return formatMoney(amount, currency);
+  }
+}
+
+/**
+ * "2026-08" → "Aug 2026" / "sie 2026".
+ *
+ * The server sends the machine value so the month name can be produced in the
+ * reader's language here. The old platform API formatted month names server-side with
+ * Locale.ENGLISH, which pinned the chart to English on a Polish-first product.
+ */
+export function formatMonth(yearMonth) {
+  if (!yearMonth) return '—';
+  const [year, month] = String(yearMonth).split('-');
+  if (!year || !month) return String(yearMonth);
+
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  if (Number.isNaN(date.getTime())) return String(yearMonth);
+
+  const locale = activeLanguage() === 'pl' ? 'pl-PL' : 'en-GB';
+  return date.toLocaleDateString(locale, { month: 'short', year: 'numeric' });
+}
 
 /**
  * Format a metric value for display using the unit the server declared.

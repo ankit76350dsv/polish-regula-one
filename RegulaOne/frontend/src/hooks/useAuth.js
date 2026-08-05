@@ -10,6 +10,7 @@ import { authService } from '../services/authService';
 import { useAuthStore, mapApiUserToProfile } from '../store/authStore';
 import { clearCompanyOverview } from '../slices/companyOverviewSlice';
 import { clearMyOverview } from '../slices/myOverviewSlice';
+import { clearPlatformOverview } from '../slices/platformOverviewSlice';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -193,17 +194,19 @@ export function useLogout() {
   /**
    * Drop every dashboard snapshot held in Redux before the session ends.
    *
-   * WHY THIS IS NEEDED: the dashboards keep a server snapshot in the store, and
-   * "My Workspace" holds PERSONAL data — the signed-in person's own medical
-   * certificate and BHP training expiry dates. ssoLogout() redirects the browser,
-   * which throws the store away anyway, but the redirect is not guaranteed to
-   * happen (a blocked navigation, or a session dropped by the token-refresh cycle
-   * without a redirect). Clearing first means one person's own dates can never be
+   * WHY THIS IS NEEDED: the dashboards keep a server snapshot in the store, and two
+   * of them hold data that must not outlive the session — "My Workspace" carries the
+   * signed-in person's own medical certificate and BHP training expiry dates, and the
+   * platform overview names customer companies and what they pay. ssoLogout()
+   * redirects the browser, which throws the store away anyway, but the redirect is not
+   * guaranteed to happen (a blocked navigation, or a session dropped by the
+   * token-refresh cycle without a redirect). Clearing first means none of it can be
    * left in memory for whoever signs in next on a shared machine.
    */
   const clearDashboards = () => {
     dispatch(clearMyOverview());
     dispatch(clearCompanyOverview());
+    dispatch(clearPlatformOverview());
   };
 
   return useMutation({

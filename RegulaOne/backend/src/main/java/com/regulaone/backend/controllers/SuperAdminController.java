@@ -9,10 +9,13 @@ import com.regulaone.backend.dto.Platform.PlatformOverviewResponse;
 import com.regulaone.backend.dto.Tenant.TeamManagementStatsResponse;
 import com.regulaone.backend.services.PlatformService;
 import com.regulaone.backend.services.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,11 +29,36 @@ public class SuperAdminController {
     private final UserService     userService;
     private final PlatformService platformService;
 
+    /**
+     * The platform operator's business overview across every customer company.
+     *
+     * WHY THIS READ IS AUDITED (it was not before):
+     *   Every other dashboard already writes an audit entry when it is opened, and this
+     *   is the one that reaches across ALL customers. RegulaOne is a processor of its
+     *   customers' data (GDPR Art. 28), and a processor has to be able to show what its
+     *   own staff looked at — that is the point of Art. 5(2) accountability and of the
+     *   audit clauses in a data-processing agreement. A customer asking "who at DSV
+     *   looked at our account?" must get an answer from the trail, not from memory.
+     *
+     *   The entry carries no tenantId, because the read belongs to no single customer.
+     *   That is what marks it as a platform-wide access in the trail.
+     *
+     * The audit write itself lives in PlatformService, which is where the other two
+     * dashboards do theirs — the controller stays thin and does not reach for a
+     * repository to resolve who is asking.
+     *
+     * The response holds commercial facts only — see PlatformOverviewResponse.
+     */
     @GetMapping("/overview")
-    public ResponseEntity<AppResponse<PlatformOverviewResponse>> getPlatformOverview() {
+    public ResponseEntity<AppResponse<PlatformOverviewResponse>> getPlatformOverview(
+            @AuthenticationPrincipal Jwt jwt,
+            HttpServletRequest request) {
+
+        // jwt.getSubject() is the Cognito "sub" of the already-validated token — the
+        // only identity input this endpoint accepts.
         return ResponseEntity.ok(AppResponse.success(
                 "Platform overview loaded",
-                platformService.getPlatformOverview()));
+                platformService.getPlatformOverview(jwt.getSubject(), request)));
     }
 
     @GetMapping("/team-management")

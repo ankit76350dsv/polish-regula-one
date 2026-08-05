@@ -1,9 +1,19 @@
 import { useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
-import { tenantService } from '../../services/tenantService';
+// NOTE: @tanstack/react-query and tenantService are no longer imported here. The
+// SuperAdmin view used to fetch through useQuery(tenantService.getPlatformOverview),
+// which kept the response outside Redux and left its error state unread. All three
+// dashboards now load through their own Redux Toolkit slice.
+import {
+  fetchPlatformOverview,
+  selectPlatformOverview,
+  selectPlatformOverviewError,
+  selectPlatformOverviewIsInitialLoad,
+  selectPlatformOverviewLoadedAt,
+  selectPlatformOverviewStatus,
+} from '../../slices/platformOverviewSlice';
 import {
   fetchCompanyOverview,
   selectCompanyOverview,
@@ -22,7 +32,8 @@ import {
 } from '../../slices/myOverviewSlice';
 import {
   attentionLabel, cardStatusLabel, documentTypeLabel, formatDate, formatMetric,
-  metricLabel, moduleLabel, moneyMetricLabel, statusValueLabel, text,
+  formatMoney, formatMoneyShort, formatMonth, metricLabel, moduleLabel,
+  moneyMetricLabel, statusValueLabel, text, watchlistReasonLabel,
 } from '../../lib/dashboardLabels';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
@@ -36,6 +47,8 @@ import {
 } from 'recharts';
 
 // ─── Mock data sets per role ───────────────────────────────────────────────
+//
+// All three dashboards now read real server data. Nothing on this page is invented.
 
 // OLD MOCK — SuperAdminView now fetches revenue data from GET /api/superadmin/overview
 // const revenueData = [
@@ -46,6 +59,31 @@ import {
 //   { name: 'May', value: 1890 },
 //   { name: 'Jun', value: 2390 },
 // ];
+
+// OLD MOCK — the "Recent Tenant Activity" table on the platform dashboard.
+//
+// const recentTenantActivity = [
+//   { tenant: 'PolCorp Sp. z o.o.',  action: 'Bulk Invoice Sync',     status: 'SUCCESS', ... },
+//   { tenant: 'Vistula Logistics',   action: 'BDO Waste Report Gen',  status: 'PENDING', ... },
+//   { tenant: 'Amber Tech Group',    action: 'User Permission Edit',  status: 'SUCCESS', ... },
+//   { tenant: 'Nordic Services PL',  action: 'GDPR DPIA Detection',   status: 'FAILURE', ... },
+// ];
+//
+// Why it had to go, and why it was NOT replaced by a real activity feed:
+//
+//   1. The companies and outcomes were invented. On a platform screen that is worse
+//      than elsewhere — a fake "GDPR DPIA Detection — FAILURE" against a named
+//      customer is the kind of line that gets repeated in a customer conversation.
+//
+//   2. A truthful version is not available yet. RegulaOne's own audit trail currently
+//      records only dashboard views, so a real feed would say almost nothing.
+//
+//   3. Even with more entries, watching which customer administrators are logged in is
+//      closer to watching the customer than to running the platform. RegulaOne is a
+//      PROCESSOR of customer data (GDPR Art. 28), not its controller.
+//
+// It is replaced by the server-built WATCHLIST: which customers need a call, and why,
+// from plan dates, account status and seat counts only.
 
 // OLD MOCK — the company-admin (ROLE_ADMIN) dashboard no longer invents figures.
 // AdminView now reads GET /api/admin/overview through the companyOverview Redux
@@ -59,13 +97,6 @@ import {
 // are worse than no numbers at all — they hide real missed deadlines (a rejected
 // KSeF invoice, an expired medical certificate, a breach past its 72-hour UODO
 // window) behind a reassuring green dashboard.
-
-const recentTenantActivity = [
-  { tenant: 'PolCorp Sp. z o.o.', action: 'Bulk Invoice Sync', status: 'SUCCESS', mod: 'KSeFFlow', time: '2m ago' },
-  { tenant: 'Vistula Logistics', action: 'BDO Waste Report Gen', status: 'PENDING', mod: 'WasteSync', time: '14m ago' },
-  { tenant: 'Amber Tech Group', action: 'User Permission Edit', status: 'SUCCESS', mod: 'RBAC System', time: '28m ago' },
-  { tenant: 'Nordic Services PL', action: 'GDPR DPIA Detection', status: 'FAILURE', mod: 'PrivacyPilot', time: '1h ago' },
-];
 
 // ─── Sub-views ─────────────────────────────────────────────────────────────
 
@@ -86,182 +117,398 @@ function trendColor(t) {
   return 'text-rose-500';
 }
 
-// Formats a raw BigDecimal MRR number as "€82.4k" or "€950".
-function fmtRevenue(val) {
-  const n = Number(val ?? 0);
-  if (n >= 1000) return `€${(n / 1000).toFixed(1)}k`;
-  return `€${n.toFixed(0)}`;
+// Bar colour for each module in the take-up chart. Matches MODULE_COLORS by index of
+// intent: same module, same hue as the dot used elsewhere on the page.
+const MODULE_BARS = {
+  KSEFFLOW:     'bg-blue-500',
+  WORKPULSE:    'bg-green-500',
+  SAFEWORK:     'bg-amber-500',
+  SAFEVOICE:    'bg-orange-500',
+  WASTESYNC:    'bg-rose-500',
+  PRIVACYPILOT: 'bg-red-500',
+};
+
+// OLD HELPER REMOVED — fmtRevenue(val) printed a hardcoded "€" in front of whatever
+// number it was given:
+//
+//   function fmtRevenue(val) {
+//     const n = Number(val ?? 0);
+//     if (n >= 1000) return `€${(n / 1000).toFixed(1)}k`;
+//     return `€${n.toFixed(0)}`;
+//   }
+//
+// Two things were wrong. The symbol was assumed rather than read from the data, and
+// the number underneath it had been produced by adding plan prices together across
+// currencies — so on a platform selling in PLN it showed złoty totals labelled as
+// euros. Money is now formatted by formatMoney/formatMoneyShort in dashboardLabels.js,
+// which always take the currency the server sent alongside the amount.
+
+/** One row of the platform watchlist: a customer who needs a call, and why. */
+function WatchRow({ item, onOpen }) {
+  const tone = TONE_PANEL[item.tone] ?? TONE_PANEL.NEUTRAL;
+
+  // Days are only shown when the reason is actually about a date.
+  const days = item.daysRemaining;
+  const dayNote = days === null || days === undefined
+    ? null
+    : days >= 0
+      ? `${days} ${text('platformDaysLeft')}`
+      : `${Math.abs(days)} ${text('platformDaysOverdue')}`;
+
+  return (
+    <div className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium ${tone}`}>
+      <div className="min-w-0 flex-1">
+        <p className="font-bold truncate">{item.tenantName}</p>
+        <p className="font-normal opacity-90">{watchlistReasonLabel(item.reason)}</p>
+        <p className="text-[10px] font-normal opacity-70 mt-0.5">
+          {[dayNote, item.detail].filter(Boolean).join(' · ') || ' '}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => onOpen(item.tenantId)}
+        className="text-[10px] font-bold uppercase tracking-wider hover:underline inline-flex items-center gap-0.5 flex-shrink-0"
+      >
+        {text('platformOpenCustomer')} <ArrowUpRight className="h-3 w-3" />
+      </button>
+    </div>
+  );
 }
 
+// ─── SuperAdmin (ROLE_SUPER_ADMIN) platform dashboard ──────────────────────
+//
+// Everything here comes from ONE server call, GET /api/superadmin/overview, held in
+// the platformOverview Redux slice.
+//
+// WHAT THIS SCREEN MAY AND MAY NOT SHOW: RegulaOne runs the six modules on behalf of
+// its customers, which under GDPR makes each customer the CONTROLLER of the personal
+// data inside them and RegulaOne only the PROCESSOR (Art. 4(7)–(8), Art. 28). So this
+// screen shows the COMMERCIAL position — customers, seats, plans, prices, module
+// take-up — and never a customer's compliance content. Whether a given customer is
+// compliant is answered on that customer's own dashboard, by their own administrator.
+//
+// It also no longer shows a "Compliance Score". That figure was active tenants with an
+// unexpired plan divided by all tenants — a billing ratio wearing a compliance name.
+// The honest subscription counts took its place; see the Plans record on the backend.
+
 function SuperAdminView() {
-  const { data: overview, isLoading } = useQuery({
-    queryKey: ['platform-overview'],
-    queryFn:  tenantService.getPlatformOverview,
-    staleTime: 60_000,
-  });
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
 
-  const stats = [
-    {
-      title: 'Active Tenants',
-      value: isLoading ? '…' : String(overview?.activeTenants ?? '—'),
-      icon: Building2,
-      trend: overview?.tenantTrend ?? '—',
-      trendColor: trendColor(overview?.tenantTrend),
-    },
-    {
-      title: 'Total Users',
-      value: isLoading ? '…' : (overview?.totalUsers?.toLocaleString() ?? '—'),
-      icon: Users,
-      trend: overview?.userTrend ?? '—',
-      trendColor: trendColor(overview?.userTrend),
-    },
-    {
-      title: 'Monthly Revenue',
-      value: isLoading ? '…' : fmtRevenue(overview?.monthlyRevenue),
-      icon: Activity,
-      trend: overview?.revenueTrend ?? '—',
-      trendColor: trendColor(overview?.revenueTrend),
-    },
-    {
-      title: 'Compliance Score',
-      value: isLoading ? '…' : (overview?.complianceScore ?? '—'),
-      icon: ShieldCheck,
-      trend: 'Target: 100%',
-      trendColor: 'text-red-500',
-    },
-  ];
+  const overview = useSelector(selectPlatformOverview);
+  const status = useSelector(selectPlatformOverviewStatus);
+  const error = useSelector(selectPlatformOverviewError);
+  const loadedAt = useSelector(selectPlatformOverviewLoadedAt);
+  const isInitialLoad = useSelector(selectPlatformOverviewIsInitialLoad);
 
-  // Map backend MonthlyRevenueStat[] to recharts data format
-  const chartData = (overview?.revenueByMonth ?? []).map((m) => ({
-    name:  m.month,
-    value: Number(m.value ?? 0),
-  }));
+  // Load once when the screen opens. The slice keeps the snapshot, so navigating away
+  // and back does not refetch until the operator asks for it.
+  useEffect(() => {
+    if (status === 'idle') dispatch(fetchPlatformOverview());
+  }, [dispatch, status]);
+
+  // ── First load: nothing to show yet ──────────────────────────────────────
+  if (isInitialLoad) {
+    return (
+      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-3">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+        <p className="text-xs text-slate-400 font-medium">{text('platformTitle')}…</p>
+      </div>
+    );
+  }
+
+  // ── Failed with nothing cached ───────────────────────────────────────────
+  // The previous version had no error branch at all: react-query's `error` was never
+  // read, so a failed call rendered "—" in every card and the platform looked empty
+  // rather than unreachable.
+  if (!overview) {
+    return (
+      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-4">
+        <AlertTriangle className="h-6 w-6 text-rose-400" />
+        <p className="text-sm text-slate-600 font-medium">
+          {error?.message ?? text('platformLoadFailed')}
+        </p>
+        <Button
+          onClick={() => dispatch(fetchPlatformOverview())}
+          className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2"
+        >
+          <RefreshCw className="h-3.5 w-3.5 mr-2" /> {text('refresh')}
+        </Button>
+      </div>
+    );
+  }
+
+  const {
+    tenants, seats, monthlyRecurring, billingsByMonth, plans, moduleAdoption, watchlist,
+  } = overview;
+  const isRefreshing = status === 'loading';
+
+  // The headline recurring figure. There is one entry per currency, so the card shows
+  // the largest and says how many others there are rather than adding them up.
+  const currencies = monthlyRecurring ?? [];
+  const primary = currencies.length > 0
+    ? currencies.reduce((a, b) => (Number(b.amount) > Number(a.amount) ? b : a))
+    : null;
+
+  // Seat note: utilisation, or that no plan states a limit. Over 100% is left as-is —
+  // it means customers are using more seats than they bought, which is the operator's
+  // problem to act on rather than a number to hide.
+  const overSeats = seats.utilisationPct !== null
+    && seats.utilisationPct !== undefined
+    && seats.utilisationPct > 100;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Platform Overview</h1>
-        <p className="text-sm text-slate-500 font-medium">
-          Monitoring{' '}
-          <span className="font-bold text-slate-700">
-            {isLoading ? '…' : (overview?.activeTenants ?? '—')}
-          </span>{' '}
-          enterprise tenants across 6 modules.
-        </p>
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            {text('platformTitle')}
+          </h1>
+          <p className="text-sm text-slate-500 font-medium">
+            <span className="font-bold text-slate-700">{tenants.active}</span>{' '}
+            {text('platformSubtitle')}
+          </p>
+          {/* States the processor boundary on the screen itself, so the absence of
+              customer compliance data reads as a rule rather than a missing feature. */}
+          <p className="text-[10px] text-slate-400 mt-1 max-w-2xl">{text('platformScopeNote')}</p>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <Button
+            variant="outline"
+            onClick={() => dispatch(fetchPlatformOverview())}
+            disabled={isRefreshing}
+            className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />{' '}
+            {text('refresh')}
+          </Button>
+          {loadedAt && (
+            <span className="text-[10px] text-slate-400">
+              {text('updatedAt')} {formatDate(loadedAt, true)}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* ── Stat cards ──────────────────────────────────────────────────── */}
+      {/* A failed refresh keeps the previous figures on screen but says so. */}
+      {status === 'failed' && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium bg-amber-50 text-amber-700 border-amber-100">
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+          {text('staleWarning')}
+        </div>
+      )}
+
+      {/* ── Headline figures ────────────────────────────────────────────── */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, i) => (
-          <Card key={i} className="bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all rounded-xl">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{stat.title}</CardTitle>
-              <stat.icon className="h-4 w-4 text-slate-300" />
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <div className="text-2xl font-bold text-slate-900 tracking-tight">{stat.value}</div>
-                <span className={`text-[10px] font-bold ${stat.trendColor}`}>{stat.trend}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <StatCard
+          title={text('platformCustomers')}
+          value={tenants.total}
+          icon={Building2}
+          note={`${tenants.active} ${text('platformActive')}`}
+          noteColor="text-emerald-500"
+        />
+        <StatCard
+          title={text('platformUsers')}
+          value={seats.usersEnabled.toLocaleString()}
+          icon={Users}
+          note={seats.seatsContracted != null
+            ? `${seats.seatsContracted.toLocaleString()} ${text('platformSeats')}`
+            : text('platformSeatsNotStated')}
+          noteColor="text-slate-400"
+        />
+        <StatCard
+          title={text('platformUtilisation')}
+          value={seats.utilisationPct != null ? `${seats.utilisationPct}%` : '—'}
+          icon={Activity}
+          note={overSeats ? text('platformOverSeats') : undefined}
+          noteColor="text-rose-500"
+        />
+        {/* The recurring value, in its own currency. When customers pay in more than
+            one currency the card shows the largest and counts the rest — it never
+            adds them together. */}
+        <StatCard
+          title={text('platformMrr')}
+          value={primary ? formatMoneyShort(primary.amount, primary.currency) : text('platformNoRevenue')}
+          icon={CalendarClock}
+          note={currencies.length > 1 ? `+${currencies.length - 1} more currencies` : undefined}
+          noteColor="text-slate-400"
+        />
       </div>
 
-      {/* ── Revenue chart + Module usage ─────────────────────────────────── */}
+      {/* ── New signups this month ──────────────────────────────────────── */}
+      {/* Kept apart from the totals above on purpose. The trend measures the change in
+          the SIGNUP RATE, and the old screen printed it next to the total customer
+          count, where "+12%" read as if the customer base had grown by 12%. */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <StatCard
+          title={`${text('platformCustomers')} — ${text('platformNewThisMonth')}`}
+          value={tenants.newThisMonth}
+          icon={Building2}
+          note={`${tenants.newTrend} ${text('platformSignupTrend')}`}
+          noteColor={trendColor(tenants.newTrend)}
+        />
+        <StatCard
+          title={`${text('platformUsers')} — ${text('platformNewThisMonth')}`}
+          value={seats.newUsersThisMonth}
+          icon={Users}
+          note={`${seats.newTrend} ${text('platformSignupTrend')}`}
+          noteColor={trendColor(seats.newTrend)}
+        />
+      </div>
+
+      {/* ── Subscriptions: what replaced the invented compliance score ──── */}
+      <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
+        <CardHeader className="border-b border-slate-50 py-4">
+          <CardTitle className="text-sm font-bold text-slate-800">{text('platformPlans')}</CardTitle>
+          <p className="text-[10px] text-slate-400 mt-0.5 max-w-2xl">{text('platformPlansNote')}</p>
+        </CardHeader>
+        <CardContent className="py-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { label: text('platformPlanValid'), value: plans.activeWithValidPlan, tone: 'GOOD' },
+              { label: text('platformPlanExpiring'), value: plans.expiringSoon, tone: plans.expiringSoon > 0 ? 'WARN' : 'NEUTRAL' },
+              { label: text('platformPlanExpired'), value: plans.expired, tone: plans.expired > 0 ? 'RISK' : 'NEUTRAL' },
+              { label: text('platformPlanNone'), value: plans.noPlan, tone: plans.noPlan > 0 ? 'RISK' : 'NEUTRAL' },
+              { label: text('platformSuspended'), value: tenants.suspended, tone: tenants.suspended > 0 ? 'RISK' : 'NEUTRAL' },
+              { label: text('platformInactive'), value: tenants.inactive, tone: 'NEUTRAL' },
+            ].map((cell) => (
+              <div
+                key={cell.label}
+                className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium ${TONE_PANEL[cell.tone] ?? TONE_PANEL.NEUTRAL}`}
+              >
+                <span className="min-w-0">{cell.label}</span>
+                <span className="font-bold tabular-nums flex-shrink-0">{cell.value}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Billings + module take-up ───────────────────────────────────── */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
         <Card className="lg:col-span-4 bg-white border-slate-200 shadow-sm rounded-xl">
           <CardHeader className="border-b border-slate-50">
-            <CardTitle className="text-sm font-bold text-slate-800">Platform Revenue Growth</CardTitle>
+            <CardTitle className="text-sm font-bold text-slate-800">{text('platformBillings')}</CardTitle>
+            {/* Says out loud that this is a different quantity from the recurring
+                value above, so the two are never read as one broken number. */}
+            <p className="text-[10px] text-slate-400 mt-0.5">{text('platformBillingsNote')}</p>
           </CardHeader>
           <CardContent className="pt-6">
-            <div className="h-[260px]">
-              {isLoading ? (
-                <div className="h-full flex items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-slate-200" />
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} dy={10} />
-                    <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `€${v}`} />
-                    <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px' }} />
-                    <Line type="monotone" dataKey="value" stroke="#dc2626" strokeWidth={3} dot={{ r: 4, fill: '#dc2626', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+            {(billingsByMonth?.length ?? 0) === 0 ? (
+              <p className="py-16 text-xs text-slate-400 text-center">{text('platformBillingsEmpty')}</p>
+            ) : (
+              // One chart per currency. They are NOT combined into one axis, because
+              // an axis carrying both PLN and EUR would invite reading the sum.
+              <div className="space-y-6">
+                {billingsByMonth.map((series) => (
+                  <div key={series.currency}>
+                    <div className="flex items-baseline justify-between mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {series.currency}
+                      </span>
+                      <span className={`text-[10px] font-bold ${trendColor(series.trend)}`}>
+                        {series.trend}
+                      </span>
+                    </div>
+                    <div className="h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={series.points}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                          <XAxis
+                            dataKey="month"
+                            stroke="#94a3b8"
+                            fontSize={10}
+                            tickLine={false}
+                            axisLine={false}
+                            dy={10}
+                            tickFormatter={formatMonth}
+                          />
+                          <YAxis
+                            stroke="#94a3b8"
+                            fontSize={10}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(v) => formatMoneyShort(v, series.currency)}
+                          />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px' }}
+                            labelFormatter={formatMonth}
+                            formatter={(v) => formatMoney(v, series.currency)}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="value"
+                            stroke="#dc2626"
+                            strokeWidth={3}
+                            dot={{ r: 4, fill: '#dc2626', strokeWidth: 2, stroke: '#fff' }}
+                            activeDot={{ r: 6, strokeWidth: 0 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-3 bg-white border-slate-200 shadow-sm rounded-xl">
           <CardHeader className="border-b border-slate-50">
-            <CardTitle className="text-sm font-bold text-slate-800">Module Usage</CardTitle>
+            <CardTitle className="text-sm font-bold text-slate-800">{text('platformAdoption')}</CardTitle>
+            <p className="text-[10px] text-slate-400 mt-0.5">{text('platformAdoptionNote')}</p>
           </CardHeader>
           <CardContent className="py-6 space-y-5">
-            {isLoading ? (
-              [...Array(6)].map((_, i) => (
-                <div key={i} className="space-y-1.5">
-                  <div className="h-3 w-28 bg-slate-100 rounded animate-pulse" />
-                  <div className="h-1.5 w-full bg-slate-100 rounded-full animate-pulse" />
+            {(moduleAdoption ?? []).map((mod) => (
+              <div key={mod.module}>
+                <div className="flex justify-between items-baseline text-[10px] font-bold mb-1.5 gap-2">
+                  <span className="text-slate-500 tracking-wider truncate">
+                    {moduleLabel(mod.module)}
+                  </span>
+                  <span className="text-slate-900 flex-shrink-0">{mod.tenantsPct}%</span>
                 </div>
-              ))
-            ) : (
-              (overview?.moduleUsage ?? []).map((mod) => (
-                <div key={mod.module}>
-                  <div className="flex justify-between text-[10px] font-bold mb-1.5">
-                    <span className="text-slate-500 tracking-wider">{mod.module}</span>
-                    <span className="text-slate-900">{mod.usagePct}%</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-1.5 rounded-full ${MODULE_COLORS[mod.module] ?? 'bg-slate-400'}`}
-                      style={{ width: `${mod.usagePct}%` }}
-                    />
-                  </div>
+                {/* The bar is a share of ACTIVE CUSTOMERS — a fixed denominator. The
+                    old chart divided by the most popular module, so the leading bar
+                    was always 100% and no bar meant anything on its own. */}
+                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-1.5 rounded-full ${MODULE_BARS[mod.module] ?? 'bg-slate-400'}`}
+                    style={{ width: `${Math.min(mod.tenantsPct, 100)}%` }}
+                  />
                 </div>
-              ))
-            )}
+                <p className="text-[9px] text-slate-400 mt-1">
+                  {mod.tenantsEntitled} {text('platformAdoptionCustomers')} ·{' '}
+                  {mod.usersGranted} {text('platformAdoptionUsers')}
+                </p>
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>
 
-      {/* ── Recent Tenant Activity (mock — audit log API not yet built) ───── */}
-      <Card className="bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden">
+      {/* ── Watchlist (replaces the invented activity table) ────────────── */}
+      <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
         <CardHeader className="border-b border-slate-50 py-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-bold text-sm text-slate-800">Recent Tenant Activity</h2>
-            <span className="text-[10px] text-red-600 font-bold cursor-pointer uppercase tracking-wider hover:underline">View All Audit Logs</span>
-          </div>
+          <CardTitle className="text-sm font-bold text-slate-800">{text('platformWatchlist')}</CardTitle>
+          <p className="text-[10px] text-slate-400 mt-0.5">{text('platformWatchlistNote')}</p>
         </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-slate-50/50">
-              <TableRow className="hover:bg-transparent border-b border-slate-100">
-                <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Tenant</TableHead>
-                <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Action</TableHead>
-                <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Status</TableHead>
-                <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Module</TableHead>
-                <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400 text-right">Time</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recentTenantActivity.map((log, i) => (
-                <TableRow key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                  <TableCell className="px-6 py-4 text-xs font-semibold text-slate-700">{log.tenant}</TableCell>
-                  <TableCell className="px-6 py-4 text-xs text-slate-500">{log.action}</TableCell>
-                  <TableCell className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${log.status === 'SUCCESS' ? 'bg-emerald-50 text-emerald-600' : log.status === 'PENDING' ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'}`}>
-                      {log.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-xs text-slate-500">{log.mod}</TableCell>
-                  <TableCell className="px-6 py-4 text-right text-xs text-slate-400 font-medium">{log.time}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <CardContent className="py-4 space-y-2">
+          {(watchlist?.length ?? 0) === 0 ? (
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium bg-emerald-50 text-emerald-700 border-emerald-100">
+              <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />
+              {text('platformWatchlistEmpty')}
+            </div>
+          ) : (
+            watchlist.map((item) => (
+              <WatchRow
+                key={`${item.tenantId}-${item.reason}`}
+                item={item}
+                onOpen={(tenantId) => navigate(`/company/${tenantId}/overview`)}
+              />
+            ))
+          )}
         </CardContent>
       </Card>
     </div>
