@@ -1,11 +1,27 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useDispatch, useSelector } from 'react-redux';
+import { Link, useParams } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { tenantService } from '../../services/tenantService';
+import {
+  fetchCompanyOverview,
+  selectCompanyOverview,
+  selectCompanyOverviewError,
+  selectCompanyOverviewIsInitialLoad,
+  selectCompanyOverviewLoadedAt,
+  selectCompanyOverviewStatus,
+} from '../../slices/companyOverviewSlice';
+import {
+  attentionLabel, cardStatusLabel, formatDate, formatMetric, metricLabel,
+  moduleLabel, moneyMetricLabel, text,
+} from '../../lib/dashboardLabels';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import {
   Building2, Users, ReceiptText, Activity, ShieldCheck, Clock, FileText, CheckSquare, Loader2,
+  AlertTriangle, ArrowUpRight, CalendarClock, Lock, RefreshCw, ShieldOff, TriangleAlert,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -23,27 +39,24 @@ import {
 //   { name: 'Jun', value: 2390 },
 // ];
 
-const invoiceData = [
-  { name: 'Jan', value: 210 },
-  { name: 'Feb', value: 340 },
-  { name: 'Mar', value: 290 },
-  { name: 'Apr', value: 480 },
-  { name: 'May', value: 390 },
-  { name: 'Jun', value: 520 },
-];
+// OLD MOCK — the company-admin (ROLE_ADMIN) dashboard no longer invents figures.
+// AdminView now reads GET /api/admin/overview through the companyOverview Redux
+// slice, which returns REAL counts and legal deadlines from all six modules.
+//
+// const invoiceData = [ { name: 'Jan', value: 210 }, ... ];          // fake KSeF chart
+// const recentModuleActivity = [ { user: 'anna.kowalska', ... } ];   // fake audit feed
+//
+// Why they had to go: this screen is what a company administrator uses to judge
+// whether the business is compliant. Numbers that look plausible but are invented
+// are worse than no numbers at all — they hide real missed deadlines (a rejected
+// KSeF invoice, an expired medical certificate, a breach past its 72-hour UODO
+// window) behind a reassuring green dashboard.
 
 const recentTenantActivity = [
   { tenant: 'PolCorp Sp. z o.o.', action: 'Bulk Invoice Sync', status: 'SUCCESS', mod: 'KSeFFlow', time: '2m ago' },
   { tenant: 'Vistula Logistics', action: 'BDO Waste Report Gen', status: 'PENDING', mod: 'WasteSync', time: '14m ago' },
   { tenant: 'Amber Tech Group', action: 'User Permission Edit', status: 'SUCCESS', mod: 'RBAC System', time: '28m ago' },
   { tenant: 'Nordic Services PL', action: 'GDPR DPIA Detection', status: 'FAILURE', mod: 'PrivacyPilot', time: '1h ago' },
-];
-
-const recentModuleActivity = [
-  { user: 'anna.kowalska', action: 'Invoice #INV-2026-0847 submitted', status: 'SUCCESS', mod: 'KSeFFlow', time: '5m ago' },
-  { user: 'jan.nowak', action: 'Clock-in recorded', status: 'SUCCESS', mod: 'WorkPulse', time: '22m ago' },
-  { user: 'piotr.wiśniewski', action: 'BHP training expiring in 3 days', status: 'PENDING', mod: 'SafeWork', time: '1h ago' },
-  { user: 'maria.zielińska', action: 'Waste report draft saved', status: 'SUCCESS', mod: 'WasteSync', time: '2h ago' },
 ];
 
 // ─── Sub-views ─────────────────────────────────────────────────────────────
@@ -247,118 +260,364 @@ function SuperAdminView() {
   );
 }
 
+// ─── Company-admin (ROLE_ADMIN) compliance dashboard ───────────────────────
+//
+// Everything on this screen comes from ONE server call, GET /api/admin/overview,
+// held in the companyOverview Redux slice. The server counts the records and works
+// out every legal deadline — the 72-hour breach window, the 7-day whistleblower
+// acknowledgement, the 30-day certificate warning, the 15 March BDO filing date —
+// so this component only formats what it is given. It never adds numbers up and
+// never computes a due date, which is what keeps this screen and each module's own
+// dashboard from quietly disagreeing.
+//
+// The response carries no personal data: only counts, totals and dates. See the
+// backend CompanyOverviewResponse for what is deliberately left out and why.
+
+// Tailwind classes for each tone the server can put on a figure.
+const TONE_TEXT = {
+  RISK: 'text-rose-600',
+  WARN: 'text-amber-600',
+  GOOD: 'text-emerald-600',
+  NEUTRAL: 'text-slate-900',
+};
+
+const TONE_PANEL = {
+  RISK: 'bg-rose-50 text-rose-700 border-rose-100',
+  WARN: 'bg-amber-50 text-amber-700 border-amber-100',
+  GOOD: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  NEUTRAL: 'bg-slate-50 text-slate-700 border-slate-100',
+};
+
+// Why a module card carries no figures — each needs a different icon so the
+// difference between "not bought" and "not granted to you" is obvious at a glance.
+const CARD_STATUS_ICONS = {
+  NOT_IN_PLAN: ShieldOff,
+  NO_ACCESS: Lock,
+  RESTRICTED: Lock,
+  UNAVAILABLE: TriangleAlert,
+};
+
+// One stat card in the top row.
+function StatCard({ title, value, icon: Icon, note, noteColor }) {
+  return (
+    <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all rounded-xl">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-slate-300" />
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-baseline gap-2">
+          <div className="text-2xl font-bold text-slate-900 tracking-tight">{value}</div>
+          {note && <span className={`text-[10px] font-bold ${noteColor ?? 'text-slate-400'}`}>{note}</span>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// One module's card: either its figures, or the reason it has none.
+function ModuleCard({ card, moduleBase }) {
+  const dot = MODULE_COLORS[card.module] ?? 'bg-slate-400';
+
+  if (card.status !== 'OK') {
+    const Icon = CARD_STATUS_ICONS[card.status] ?? TriangleAlert;
+    return (
+      <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
+        <CardHeader className="border-b border-slate-50 py-3">
+          <div className="flex items-center gap-2">
+            <span className={`w-1.5 h-1.5 rounded-full ${dot} opacity-40`} />
+            <CardTitle className="text-xs font-bold text-slate-500">{moduleLabel(card.module)}</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="py-6">
+          <div className="flex items-start gap-2.5 text-xs text-slate-500">
+            <Icon className="h-4 w-4 text-slate-300 flex-shrink-0 mt-px" />
+            <span>{cardStatusLabel(card.status)}</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="bg-white border-slate-200 shadow-sm hover:border-slate-300 transition-all rounded-xl">
+      <CardHeader className="border-b border-slate-50 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+            <CardTitle className="text-xs font-bold text-slate-800">{moduleLabel(card.module)}</CardTitle>
+          </div>
+          <Link
+            to={`${moduleBase}/${card.module.toLowerCase() === 'ksefflow' ? 'ksef' : card.module.toLowerCase()}`}
+            className="text-[10px] font-bold uppercase tracking-wider text-red-600 hover:underline inline-flex items-center gap-0.5"
+          >
+            {text('open')} <ArrowUpRight className="h-3 w-3" />
+          </Link>
+        </div>
+      </CardHeader>
+      <CardContent className="py-3 divide-y divide-slate-50">
+        {card.metrics.map((metric) => (
+          <div key={metric.key} className="flex items-center justify-between gap-4 py-1.5">
+            <div className="min-w-0">
+              <p className="text-xs text-slate-600 truncate">
+                {metric.unit === 'MONEY' ? moneyMetricLabel(metric.key) : metricLabel(metric.key)}
+              </p>
+              {/* The rule this figure exists for, so a number is never just a number. */}
+              {metric.legalRef && (
+                <p className="text-[9px] text-slate-400 truncate" title={metric.legalRef}>{metric.legalRef}</p>
+              )}
+            </div>
+            <span className={`text-xs font-bold tabular-nums flex-shrink-0 ${TONE_TEXT[metric.tone] ?? TONE_TEXT.NEUTRAL}`}>
+              {formatMetric(metric)}
+            </span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function AdminView() {
-  const stats = [
-    { title: 'Active Users', value: '48', icon: Users, trend: '+3 this month', trendColor: 'text-emerald-500' },
-    { title: 'Active Modules', value: '6 / 6', icon: ShieldCheck, trend: 'All enabled', trendColor: 'text-red-500' },
-    { title: 'Invoices (Jun)', value: '1,247', icon: ReceiptText, trend: '+18%', trendColor: 'text-emerald-500' },
-    { title: 'Compliance Score', value: '94.2%', icon: Activity, trend: '▲ from 91%', trendColor: 'text-emerald-500' },
-  ];
+  const dispatch = useDispatch();
+  const { tenantId } = useParams();
+
+  const overview = useSelector(selectCompanyOverview);
+  const status = useSelector(selectCompanyOverviewStatus);
+  const error = useSelector(selectCompanyOverviewError);
+  const loadedAt = useSelector(selectCompanyOverviewLoadedAt);
+  const isInitialLoad = useSelector(selectCompanyOverviewIsInitialLoad);
+
+  // Load once when the screen opens. The slice keeps the snapshot, so navigating
+  // away and back does not refetch until the admin asks for it.
+  useEffect(() => {
+    if (status === 'idle') dispatch(fetchCompanyOverview());
+  }, [dispatch, status]);
+
+  // Where the module links point. The company id in the URL is display-only — the
+  // server always answers for the signed-in user's own company.
+  const moduleBase = `/company/${tenantId ?? overview?.company?.id ?? 'platform'}/modules`;
+
+  // ── First load: nothing to show yet ──────────────────────────────────────
+  if (isInitialLoad) {
+    return (
+      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-3">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+        <p className="text-xs text-slate-400 font-medium">{text('title')}…</p>
+      </div>
+    );
+  }
+
+  // ── Failed with nothing cached ───────────────────────────────────────────
+  if (!overview) {
+    return (
+      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-4">
+        <AlertTriangle className="h-6 w-6 text-rose-400" />
+        <p className="text-sm text-slate-600 font-medium">{error?.message ?? text('loadFailed')}</p>
+        <Button
+          onClick={() => dispatch(fetchCompanyOverview())}
+          className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2"
+        >
+          <RefreshCw className="h-3.5 w-3.5 mr-2" /> {text('refresh')}
+        </Button>
+      </div>
+    );
+  }
+
+  const { company, plan, headline, modules, attention, invoiceVolume, recentActivity } = overview;
+  const isRefreshing = status === 'loading';
+
+  // Plan note: how long is left, or that it has already lapsed. An expired plan is
+  // a compliance risk in itself — filing tools stop working.
+  const planNote = plan?.daysRemaining === null || plan?.daysRemaining === undefined
+    ? text('noExpiry')
+    : plan.expired
+      ? text('planExpired')
+      : `${plan.daysRemaining} ${text('daysLeft')}`;
+
+  const seatsNote = headline.seatsCapacity != null
+    ? `${text('seatsOf')} ${headline.seatsCapacity}`
+    : `${headline.newUsersThisMonth} ${text('newThisMonth')}`;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
-      <div className="flex items-end justify-between">
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Tenant Dashboard</h1>
-          <p className="text-sm text-slate-500 font-medium">PolCorp Sp. z o.o. — Active since Jan 2024</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{text('title')}</h1>
+          <p className="text-sm text-slate-500 font-medium">
+            {company?.name}
+            {company?.nip && <> · {text('subtitleWithNip')} {company.nip}</>}
+            {plan?.packageName && <> · {plan.packageName}</>}
+          </p>
+          <p className="text-[10px] text-slate-400 mt-1">{text('minimisationNote')}</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2">Export Report</Button>
-          <Button className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2 shadow-sm">+ Invite User</Button>
+        <div className="flex flex-col items-end gap-1.5">
+          <Button
+            variant="outline"
+            onClick={() => dispatch(fetchCompanyOverview())}
+            disabled={isRefreshing}
+            className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} /> {text('refresh')}
+          </Button>
+          {loadedAt && (
+            <span className="text-[10px] text-slate-400">
+              {text('updatedAt')} {formatDate(loadedAt, true)}
+            </span>
+          )}
         </div>
       </div>
 
+      {/* A failed refresh keeps the previous figures on screen but says so, rather
+          than silently showing yesterday's compliance position as today's. */}
+      {status === 'failed' && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium bg-amber-50 text-amber-700 border-amber-100">
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+          {text('staleWarning')}
+        </div>
+      )}
+
+      {/* ── Headline figures ────────────────────────────────────────────── */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, i) => (
-          <Card key={i} className="bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all rounded-xl">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{stat.title}</CardTitle>
-              <stat.icon className="h-4 w-4 text-slate-300" />
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <div className="text-2xl font-bold text-slate-900 tracking-tight">{stat.value}</div>
-                <span className={`text-[10px] font-bold ${stat.trendColor}`}>{stat.trend}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <StatCard
+          title={text('headlineActiveUsers')}
+          value={headline.activeUsers}
+          icon={Users}
+          note={seatsNote}
+          noteColor="text-slate-400"
+        />
+        <StatCard
+          title={text('headlineModules')}
+          value={`${headline.modulesVisible} / ${headline.modulesEntitled}`}
+          icon={ShieldCheck}
+          note={company?.status}
+          noteColor={company?.status === 'ACTIVE' ? 'text-emerald-500' : 'text-rose-500'}
+        />
+        <StatCard
+          title={text('headlineOpenActions')}
+          value={headline.openComplianceActions}
+          icon={Activity}
+          note={headline.overdueComplianceActions > 0
+            ? `${headline.overdueComplianceActions} ${text('overdueOf')}`
+            : undefined}
+          noteColor="text-rose-500"
+        />
+        <StatCard
+          title={text('headlinePlan')}
+          value={plan?.packageName ?? '—'}
+          icon={CalendarClock}
+          note={planNote}
+          noteColor={plan?.expired ? 'text-rose-500' : plan?.expiringSoon ? 'text-amber-500' : 'text-emerald-500'}
+        />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-7">
-        <Card className="lg:col-span-4 bg-white border-slate-200 shadow-sm rounded-xl">
+      {/* ── Needs attention: the cross-module to-do list ────────────────── */}
+      <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
+        <CardHeader className="border-b border-slate-50 py-4">
+          <CardTitle className="text-sm font-bold text-slate-800">{text('needsAttention')}</CardTitle>
+        </CardHeader>
+        <CardContent className="py-4 space-y-2">
+          {attention.length === 0 ? (
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium bg-emerald-50 text-emerald-700 border-emerald-100">
+              <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />
+              {text('allClear')}
+            </div>
+          ) : (
+            attention.map((item) => (
+              <Link
+                key={`${item.module}-${item.type}`}
+                to={`/company/${tenantId ?? company?.id}${item.to}`}
+                className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium hover:brightness-[0.98] transition ${TONE_PANEL[item.tone] ?? TONE_PANEL.NEUTRAL}`}
+              >
+                <span className="font-bold tabular-nums flex-shrink-0 min-w-[1.5rem]">{item.count}</span>
+                <span className="flex-1 min-w-0">
+                  {attentionLabel(item.type)}
+                  {/* The legal source, so the admin can see why it is urgent. */}
+                  {item.legalRef && (
+                    <span className="block text-[9px] font-normal opacity-70 mt-0.5">{item.legalRef}</span>
+                  )}
+                </span>
+                <span className="text-[9px] font-bold uppercase tracking-wider opacity-60 flex-shrink-0">
+                  {item.module}
+                </span>
+              </Link>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── KSeF invoice volume ─────────────────────────────────────────── */}
+      {invoiceVolume?.length > 0 && (
+        <Card className="bg-white border-slate-200 shadow-sm rounded-xl">
           <CardHeader className="border-b border-slate-50">
-            <CardTitle className="text-sm font-bold text-slate-800">Invoice Volume (KSeF)</CardTitle>
+            <CardTitle className="text-sm font-bold text-slate-800">{text('invoiceVolume')}</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={invoiceData}>
+                <LineChart data={invoiceVolume}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} dy={10} />
-                  <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} dy={10} />
+                  <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
                   <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px' }} />
-                  <Line type="monotone" dataKey="value" stroke="#dc2626" strokeWidth={3} dot={{ r: 4, fill: '#dc2626', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="count" stroke="#dc2626" strokeWidth={3} dot={{ r: 4, fill: '#dc2626', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
+      )}
 
-        <Card className="lg:col-span-3 bg-white border-slate-200 shadow-sm rounded-xl">
-          <CardHeader className="border-b border-slate-50">
-            <CardTitle className="text-sm font-bold text-slate-800">Compliance Alerts</CardTitle>
-          </CardHeader>
-          <CardContent className="py-4 space-y-3">
-            {[
-              { label: 'BHP training expiry — 2 users', severity: 'bg-amber-50 text-amber-700 border-amber-100' },
-              { label: 'GDPR register review overdue', severity: 'bg-rose-50 text-rose-700 border-rose-100' },
-              { label: 'KSeF certificate renews in 14d', severity: 'bg-blue-50 text-blue-700 border-blue-100' },
-              { label: 'All invoices submitted on time', severity: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-            ].map((alert, i) => (
-              <div key={i} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium ${alert.severity}`}>
-                <div className="w-1.5 h-1.5 rounded-full bg-current opacity-70 flex-shrink-0" />
-                {alert.label}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+      {/* ── One card per module ─────────────────────────────────────────── */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {modules.map((card) => (
+          <ModuleCard key={card.module} card={card} moduleBase={moduleBase} />
+        ))}
       </div>
 
+      {/* ── Recent module activity (accountability, GDPR Art. 5(2)) ─────── */}
       <Card className="bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden">
         <CardHeader className="border-b border-slate-50 py-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-bold text-sm text-slate-800">Recent Module Activity</h2>
-            <span className="text-[10px] text-red-600 font-bold cursor-pointer uppercase tracking-wider hover:underline">View Full Log</span>
-          </div>
+          <h2 className="font-bold text-sm text-slate-800">{text('recentActivity')}</h2>
+          {/* Says out loud why whistleblower activity is absent, so its absence is
+              understood as a legal requirement rather than a missing feature. */}
+          <p className="text-[10px] text-slate-400 mt-0.5">{text('activityNote')}</p>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-slate-50/50">
-              <TableRow className="hover:bg-transparent border-b border-slate-100">
-                <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">User</TableHead>
-                <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Action</TableHead>
-                <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Status</TableHead>
-                <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Module</TableHead>
-                <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400 text-right">Time</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recentModuleActivity.map((log, i) => (
-                <TableRow key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                  <TableCell className="px-6 py-4 text-xs font-semibold text-slate-700 font-mono">{log.user}</TableCell>
-                  <TableCell className="px-6 py-4 text-xs text-slate-500">{log.action}</TableCell>
-                  <TableCell className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${log.status === 'SUCCESS' ? 'bg-emerald-50 text-emerald-600' : log.status === 'PENDING' ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'}`}>
-                      {log.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-xs text-slate-500">{log.mod}</TableCell>
-                  <TableCell className="px-6 py-4 text-right text-xs text-slate-400 font-medium">{log.time}</TableCell>
+          {recentActivity.length === 0 ? (
+            <p className="px-6 py-8 text-xs text-slate-400 text-center">{text('activityEmpty')}</p>
+          ) : (
+            <Table>
+              <TableHeader className="bg-slate-50/50">
+                <TableRow className="hover:bg-transparent border-b border-slate-100">
+                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">User</TableHead>
+                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Action</TableHead>
+                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Record</TableHead>
+                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Module</TableHead>
+                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400 text-right">When</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {recentActivity.map((log, i) => (
+                  <TableRow key={`${log.module}-${log.at}-${i}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                    <TableCell className="px-6 py-4 text-xs font-semibold text-slate-700 font-mono">{log.actor}</TableCell>
+                    <TableCell className="px-6 py-4 text-xs text-slate-500">
+                      {log.action.replace(/_/g, ' ').toLowerCase()}
+                      {!log.success && (
+                        <span className="ml-2 px-2 py-0.5 rounded-full font-bold text-[9px] bg-rose-50 text-rose-600">FAILED</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-6 py-4 text-xs text-slate-400">{log.resource ?? '—'}</TableCell>
+                    <TableCell className="px-6 py-4 text-xs text-slate-500">{log.module}</TableCell>
+                    <TableCell className="px-6 py-4 text-right text-xs text-slate-400 font-medium">
+                      {formatDate(log.at, true)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
