@@ -12,15 +12,18 @@
 // The token lives only inside the HttpOnly cookie, so JavaScript (and any XSS
 // attacker) can never read it. We never use localStorage or Authorization headers.
 
+
+
 // The central RegulaOne backend owns auth/me, login, and logout. Default :8080.
-const API_BASE_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:8080") + "/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL + "/api";
+
+
 
 // This WasteSync app's own address. Default :3003 (see vite.config.js).
-const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:3003";
+const APP_URL = import.meta.env.VITE_APP_URL;
 
 // The central RegulaOne login page we redirect to. Default :3000.
-const CENTRAL_LOGIN_URL =
-  import.meta.env.VITE_CENTRAL_LOGIN_URL ?? "http://localhost:3000/login";
+const CENTRAL_LOGIN_URL = import.meta.env.VITE_CENTRAL_LOGIN_URL;
 
 // After a successful central login, RegulaOne sends the user back to this page.
 export const SSO_CALLBACK_URL = `${APP_URL}/auth/sso-callback`;
