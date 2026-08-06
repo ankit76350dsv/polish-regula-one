@@ -667,6 +667,46 @@
           "response": []
         },
         {
+          "name": "Update User Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"ROLE_ADMIN\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/USER_ID_HERE/role",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "USER_ID_HERE",
+                "role"
+              ]
+            },
+            "description": "Makes a member an administrator (ROLE_ADMIN) or takes that back (ROLE_USER). Only those two values are accepted — a company admin can never grant the platform-operator role. Refused for your own account, the organisation's primary contact, and the last active administrator. Recorded in the audit trail."
+          },
+          "response": []
+        },
+        {
           "name": "Update User Email Notification",
           "request": {
             "method": "PATCH",

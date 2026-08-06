@@ -18,14 +18,14 @@ import {
 } from '@/components/ui/dialog';
 import {
   Users, UserCheck, UserX, UserPlus, AlertTriangle, Loader2, LayoutGrid,
-  ShieldCheck, Trash2, Info,
+  ShieldCheck, Trash2, Info, UserCog,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { packageService } from '../../services/packageService';
 import { formatDate } from '../../lib/dashboardLabels';
 import {
   useTeamStats, useTeamMembers, useInviteUser, useUpdateUserStatus,
-  useUpdateUserModules, useDeleteUser,
+  useUpdateUserModules, useUpdateUserRole, useDeleteUser,
 } from '../../hooks/useTeam';
 
 const ROLE_STYLES = {
@@ -157,6 +157,7 @@ export default function AdminTeam() {
   const inviteUser        = useInviteUser();
   const updateUserStatus  = useUpdateUserStatus();
   const updateUserModules = useUpdateUserModules();
+  const updateUserRole    = useUpdateUserRole();
   const deleteUser        = useDeleteUser();
 
   // ── Dialog state ──────────────────────────────────────────────────────────
@@ -170,6 +171,7 @@ export default function AdminTeam() {
   const [editModules,     setEditModules]     = useState([]);
 
   const [confirmUser,   setConfirmUser]   = useState(null); // pending status change
+  const [confirmRole,   setConfirmRole]   = useState(null); // pending role change
   const [confirmDelete, setConfirmDelete] = useState(null); // pending deletion
 
   const resetInvite = () => {
@@ -226,6 +228,14 @@ export default function AdminTeam() {
     );
   };
 
+  const handleConfirmRole = () => {
+    if (!confirmRole) return;
+    updateUserRole.mutate(
+      { userId: confirmRole.id, role: confirmRole.nextRole },
+      { onSettled: () => setConfirmRole(null) },
+    );
+  };
+
   const handleConfirmDelete = () => {
     if (!confirmDelete) return;
     deleteUser.mutate(confirmDelete.id, { onSettled: () => setConfirmDelete(null) });
@@ -257,6 +267,21 @@ export default function AdminTeam() {
     if (member.id === currentUser?.uid) return 'You cannot change your own account here.';
     if (member.enabled && member.role === 'ROLE_ADMIN' && activeAdminCount <= 1) {
       return 'This is the only active administrator. Add another one first.';
+    }
+    return null;
+  };
+
+  /**
+   * Why this member's role cannot be changed — or null when it can be.
+   *
+   * The same rules the server applies, so the button explains itself instead of failing
+   * after the click. Promoting a member is always allowed; only REMOVING administrator
+   * rights is restricted, which is why the last-admin rule is checked on that direction.
+   */
+  const roleChangeBlockedReason = (member) => {
+    if (member.id === currentUser?.uid) return 'You cannot change your own role.';
+    if (member.role === 'ROLE_ADMIN' && member.enabled && activeAdminCount <= 1) {
+      return 'This is the only active administrator. Make someone else an administrator first.';
     }
     return null;
   };
@@ -414,6 +439,9 @@ export default function AdminTeam() {
                   const isActive      = u.enabled;
                   const isPendingThis = updateUserStatus.isPending && updateUserStatus.variables?.userId === u.id;
                   const locked        = protectedReason(u);
+                  const isAdmin       = u.role === 'ROLE_ADMIN';
+                  const roleLocked    = roleChangeBlockedReason(u);
+                  const roleIsPending = updateUserRole.isPending && updateUserRole.variables?.userId === u.id;
 
                   return (
                     <TableRow key={u.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
@@ -481,6 +509,32 @@ export default function AdminTeam() {
                             <LayoutGrid className="h-3.5 w-3.5 lg:mr-1" aria-hidden="true" />
                             <span className="hidden lg:inline">Modules</span>
                             <span className="sr-only lg:hidden">Modules for {u.name}</span>
+                          </Button>
+
+                          {/* Role — the only action whose label depends on where the
+                              member currently stands. */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs font-bold h-8 px-2 lg:px-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                            onClick={() => setConfirmRole({
+                              id: u.id,
+                              name: u.name,
+                              currentRole: u.role,
+                              nextRole: isAdmin ? 'ROLE_USER' : 'ROLE_ADMIN',
+                            })}
+                            disabled={roleIsPending || !!roleLocked}
+                            title={roleLocked ?? (isAdmin ? 'Remove administrator rights' : 'Make administrator')}
+                          >
+                            {roleIsPending
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                              : <UserCog className="h-3.5 w-3.5 lg:mr-1" aria-hidden="true" />}
+                            <span className="hidden lg:inline">
+                              {isAdmin ? 'Make member' : 'Make admin'}
+                            </span>
+                            <span className="sr-only lg:hidden">
+                              {isAdmin ? `Remove administrator rights from ${u.name}` : `Make ${u.name} an administrator`}
+                            </span>
                           </Button>
 
                           <Button
@@ -698,6 +752,65 @@ export default function AdminTeam() {
               {updateUserStatus.isPending
                 ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden="true" />Saving…</>
                 : confirmUser?.enabled ? 'Suspend' : 'Reactivate'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Change role ────────────────────────────────────────────────────── */}
+      <Dialog
+        open={!!confirmRole}
+        onOpenChange={(open) => { if (!open && !updateUserRole.isPending) setConfirmRole(null); }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 font-bold">
+              {confirmRole?.nextRole === 'ROLE_ADMIN'
+                ? 'Make this person an administrator?'
+                : 'Remove administrator rights?'}
+            </DialogTitle>
+            <DialogDescription className="text-slate-500">
+              {confirmRole?.nextRole === 'ROLE_ADMIN' ? (
+                <>
+                  <strong className="text-slate-700">{confirmRole?.name}</strong> will be able to
+                  invite and remove people, change what everyone can use, and edit the company
+                  profile — the same things you can do.
+                </>
+              ) : (
+                <>
+                  <strong className="text-slate-700">{confirmRole?.name}</strong> will keep their
+                  modules and permissions, but will no longer be able to manage the team or the
+                  company profile.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <p className="flex items-start gap-2 text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2.5 leading-relaxed">
+            <Info className="h-3.5 w-3.5 flex-shrink-0 mt-px text-slate-400" aria-hidden="true" />
+            The change applies the next time they load the application, and is recorded in the
+            audit trail.
+          </p>
+
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setConfirmRole(null)}
+              className="flex-1 text-slate-500 font-bold"
+              disabled={updateUserRole.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmRole}
+              disabled={updateUserRole.isPending}
+              className="flex-1 font-bold text-white bg-red-600 hover:bg-red-700"
+            >
+              {updateUserRole.isPending
+                ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden="true" />Saving…</>
+                : confirmRole?.nextRole === 'ROLE_ADMIN' ? 'Make administrator' : 'Make member'}
             </Button>
           </div>
         </DialogContent>

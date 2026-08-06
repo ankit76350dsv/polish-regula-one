@@ -6,6 +6,7 @@
 //   useTeamMembers()             — GET /api/admin/users/{tenantId}
 //   useInviteUser()              — POST /api/admin/users/invite
 //   useUpdateUserStatus()        — PATCH /api/admin/users/{userId}/status
+//   useUpdateUserRole()          — PATCH /api/admin/users/{userId}/role
 //   useUpdateUserEmailNotification() — PATCH /api/admin/users/{userId}/email-notification
 //
 // ROLE_SUPER_ADMIN (platform-wide) hooks:
@@ -83,6 +84,26 @@ export function useUpdateUserModules() {
       qc.invalidateQueries({ queryKey: TEAM_KEYS.members(tenantId) });
     },
     onError: (err) => toast.error(err.message ?? 'Failed to update module access'),
+  });
+}
+
+// Changes a member's role (administrator ↔ member) and refreshes the list and the
+// stats, because the admin count on the stats card moves with it.
+// Caller passes { userId, role } where role is 'ROLE_ADMIN' or 'ROLE_USER'.
+export function useUpdateUserRole() {
+  const tenantId = useAuthStore((s) => s.user?.tenantId);
+  const qc       = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, role }) => userService.updateUserRole(userId, role),
+    onSuccess: (_, { role }) => {
+      toast.success(role === 'ROLE_ADMIN'
+        ? 'Member is now an administrator'
+        : 'Administrator rights removed');
+      qc.invalidateQueries({ queryKey: TEAM_KEYS.members(tenantId) });
+      qc.invalidateQueries({ queryKey: TEAM_KEYS.stats(tenantId) });
+    },
+    onError: (err) => toast.error(err.message ?? 'Failed to change the role'),
   });
 }
 

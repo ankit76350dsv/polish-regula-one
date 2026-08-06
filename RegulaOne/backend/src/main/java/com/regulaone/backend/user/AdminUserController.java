@@ -6,9 +6,11 @@ import com.regulaone.backend.user.dto.TeamManagementStatsResponse;
 import com.regulaone.backend.user.dto.UpdateEmailNotificationRequest;
 import com.regulaone.backend.user.dto.UpdateModulesRequest;
 import com.regulaone.backend.user.dto.UpdatePermissionsRequest;
+import com.regulaone.backend.user.dto.UpdateRoleRequest;
 import com.regulaone.backend.user.dto.UpdateUserRequest;
 import com.regulaone.backend.user.dto.UpdateUserStatusRequest;
 import com.regulaone.backend.user.dto.UserResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +35,7 @@ import java.util.List;
  *   POST   /api/admin/users/invite                     add a colleague
  *   GET    /api/admin/users/{tenantId}                  the team list
  *   GET    /api/admin/team-management/{tenantId}        the header figures
+ *   PATCH  /api/admin/users/{userId}/role               member ↔ administrator
  *   PATCH  /api/admin/users/{userId}/modules            which apps they may use
  *   PATCH  /api/admin/users/{userId}/permissions        what they may do inside those apps
  *   PATCH  /api/admin/users/{userId}/email-notification whether they get e-mails
@@ -117,6 +120,26 @@ public class AdminUserController {
         return ResponseEntity.ok(AppResponse.success(
                 "User permissions updated successfully",
                 userAdminService.updateUserPermissions(userId, request)));
+    }
+
+    /**
+     * Make a colleague an administrator, or take that back.
+     *
+     * Only ROLE_ADMIN and ROLE_USER may be set here — a company administrator can never
+     * grant the platform-operator role. The service also refuses to change your own role,
+     * the organisation's primary contact, or the last active administrator, and writes the
+     * change to the audit trail. See {@link UserAdminService#updateUserRole}.
+     */
+    @PatchMapping("/users/{userId}/role")
+    public ResponseEntity<AppResponse<UserResponse>> updateUserRole(
+            @PathVariable String userId,
+            @Valid @RequestBody UpdateRoleRequest request,
+            @AuthenticationPrincipal Jwt jwt,
+            HttpServletRequest httpRequest) {
+        return ResponseEntity.ok(AppResponse.success(
+                "User role updated successfully",
+                userAdminService.updateUserRole(
+                        userId, request, jwt != null ? jwt.getSubject() : null, httpRequest)));
     }
 
     // ── Account state ─────────────────────────────────────────────────────────

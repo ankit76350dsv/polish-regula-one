@@ -7,13 +7,16 @@ import com.regulaone.backend.models.Tenant;
 import com.regulaone.backend.models.TenantModule;
 import com.regulaone.backend.models.User;
 import com.regulaone.backend.tenant.TenantRepository;
+import com.regulaone.backend.common.audit.AuditLogService;
 import com.regulaone.backend.user.dto.InviteUserRequest;
 import com.regulaone.backend.user.dto.UpdateEmailNotificationRequest;
 import com.regulaone.backend.user.dto.UpdateModulesRequest;
 import com.regulaone.backend.user.dto.UpdatePermissionsRequest;
+import com.regulaone.backend.user.dto.UpdateRoleRequest;
 import com.regulaone.backend.user.dto.UpdateUserRequest;
 import com.regulaone.backend.user.dto.UpdateUserStatusRequest;
 import com.regulaone.backend.user.dto.UserResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -75,10 +78,20 @@ public class UserAdminService {
      */
     private static final Set<String> PROTECTED_PERMISSIONS = Set.of("KSEF_PLATFORM_ADMIN");
 
+    /**
+     * The only roles a COMPANY administrator may hand out. ROLE_SUPER_ADMIN is missing on
+     * purpose — it belongs to the platform operator, and nothing under /api/admin may
+     * grant it.
+     */
+    private static final Set<String> ASSIGNABLE_ROLES =
+            Set.of(Role.ROLE_ADMIN.name(), Role.ROLE_USER.name());
+
     private final UserRepository userRepository;
     private final TenantRepository tenantRepository;
     private final CognitoService cognitoService;
     private final SafeWorkEmployeeProvisioningService safeWorkEmployeeProvisioningService;
+    // A role change is a privilege change, so it is recorded in the audit trail.
+    private final AuditLogService auditLogService;
 
     // ── Invite ────────────────────────────────────────────────────────────────
 
@@ -232,6 +245,130 @@ public class UserAdminService {
         userRepository.save(user);
 
         return UserResponse.from(user);
+    }
+
+    // ── Role (member ↔ administrator) ─────────────────────────────────────────
+
+    /**
+     * Change what a colleague may do: make them an administrator, or take that back.
+     *
+     * A role change is a PRIVILEGE change, so it is the most closely guarded write in this
+     * class and the only one that is written to the audit trail (GDPR Art. 5(2)
+     * accountability — a company must be able to show who was given control of its
+     * compliance data, and when).
+     *
+     * THE FIVE RULES, and the reason each one exists:
+     *
+     *   1. ONLY ROLE_ADMIN AND ROLE_USER may be set. ROLE_SUPER_ADMIN is the platform
+     *      operator's role; a company administrator granting it — to a colleague or to
+     *      themselves — would be an escalation out of their own organisation entirely.
+     *   2. SAME ORGANISATION ONLY (rule 1 of this class).
+     *   3. NOT YOURSELF. An administrator demoting their own account would lock themselves
+     *      out of the screen they are standing on, and promoting themselves is meaningless.
+     *      Another administrator has to make the change.
+     *   4. NOT THE ORGANISATION'S OWNER. The primary-contact account owns the organisation,
+     *      so it stays an administrator — the same protection suspension and deletion have.
+     *   5. NOT THE LAST ACTIVE ADMINISTRATOR. Demoting them would leave the company with
+     *      nobody who can manage it.
+     *
+     * Authorisation is read from OUR database on every request (see CognitoJwtConverter),
+     * so the new role takes effect on the person's next request — there is nothing to
+     * change in the identity provider.
+     *
+     * @param userId          the member's id
+     * @param actorCognitoSub the acting administrator, from their verified session token
+     * @param request         the live HTTP request, used only to stamp the audit entry
+     */
+    @Transactional
+    public UserResponse updateUserRole(String userId,
+                                       UpdateRoleRequest updateRoleRequest,
+                                       String actorCognitoSub,
+                                       HttpServletRequest request) {
+
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("A user id is required to update a role");
+        }
+        if (updateRoleRequest == null || updateRoleRequest.getRole() == null
+                || updateRoleRequest.getRole().isBlank()) {
+            throw new IllegalArgumentException("role is required");
+        }
+
+        // RULE 1 — an unknown or platform-level role is refused before anything is read.
+        Role newRole = parseAssignableRole(updateRoleRequest.getRole());
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        User actor = requireActor(actorCognitoSub);
+        assertSameOrganisation(actor, targetUser);          // RULE 2
+
+        Role previousRole = targetUser.getRole();
+        if (previousRole == newRole) {
+            // Nothing to do — do not touch updatedAt, and do not write an audit entry for
+            // a change that did not happen.
+            return UserResponse.from(targetUser);
+        }
+
+        if (sameUser(actor, targetUser)) {                  // RULE 3
+            throw new IllegalStateException("You cannot change your own role.");
+        }
+
+        // Rules 4 and 5 only bite when administrator rights are being TAKEN AWAY.
+        if (previousRole == Role.ROLE_ADMIN && newRole != Role.ROLE_ADMIN) {
+            if (isTenantPrimaryContact(targetUser)) {       // RULE 4
+                throw new IllegalStateException(
+                        "This account is the organisation's primary contact and must stay an administrator.");
+            }
+            if (targetUser.isEnabled()) {                   // RULE 5
+                String tenantId = tenantIdOf(targetUser);
+                if (tenantId != null) {
+                    assertNotLastEnabledAdmin(tenantId,
+                            "Cannot remove administrator rights from the last active admin in this organisation.");
+                }
+            }
+        }
+
+        targetUser.setRole(newRole);
+        targetUser.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(targetUser);
+
+        // The trail records WHO changed WHOSE role and in WHICH direction. The target is
+        // named by id, not by e-mail, so the entry carries no more personal data than it
+        // needs (GDPR Art. 5(1)(c)).
+        auditLogService.record(
+                tenantIdOf(actor),
+                actor.getId(),
+                actor.getEmail(),
+                actor.getRole() != null ? actor.getRole().name() : null,
+                "USER_ROLE_CHANGED",
+                "USER",
+                targetUser.getId(),
+                List.of("from=" + previousRole.name(), "to=" + newRole.name()),
+                request);
+
+        log.info("[updateUserRole] Admin [{}] changed user [{}] from {} to {}",
+                actor.getId(), targetUser.getId(), previousRole, newRole);
+
+        return UserResponse.from(targetUser);
+    }
+
+    /**
+     * The role name as a value this endpoint is allowed to set.
+     *
+     * Anything outside the two company-level roles is refused — including ROLE_SUPER_ADMIN
+     * and any future role — so adding a role to the enum can never silently become
+     * grantable by a company administrator.
+     */
+    private Role parseAssignableRole(String roleName) {
+        String normalised = roleName.trim().toUpperCase();
+        if (!normalised.startsWith("ROLE_")) {
+            normalised = "ROLE_" + normalised;
+        }
+        if (!ASSIGNABLE_ROLES.contains(normalised)) {
+            throw new IllegalArgumentException(
+                    "Role must be one of: " + String.join(", ", ASSIGNABLE_ROLES));
+        }
+        return Role.valueOf(normalised);
     }
 
     // ── Status (enable / suspend) ─────────────────────────────────────────────

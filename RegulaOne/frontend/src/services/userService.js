@@ -62,6 +62,14 @@ export const userService = {
   updateUserModules: (userId, moduleIds) =>
     api.patch(`/api/admin/users/${userId}/modules`, { moduleIds }),
 
+  // PATCH /api/admin/users/{userId}/role
+  // Body: { role: 'ROLE_ADMIN' | 'ROLE_USER' } — makes a member an administrator, or
+  // takes that back. Uses the MongoDB document id, like the other admin user endpoints.
+  // The server refuses to change your own role, the organisation's primary contact, or
+  // the last active administrator, and never accepts the platform-operator role.
+  updateUserRole: (userId, role) =>
+    api.patch(`/api/admin/users/${userId}/role`, { role }),
+
   // PATCH /api/admin/users/{userId}/permissions
   // Body: { permissions: string[] } — replaces the user's cross-app permission codes
   // (e.g. KSEF_AUDITOR). Uses MongoDB document id (same field as updateUserModules).
