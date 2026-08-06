@@ -166,13 +166,23 @@ public class AdminUserController {
                         userId, request, jwt != null ? jwt.getSubject() : null)));
     }
 
+    /**
+     * Edit a user's name, e-mail or role, addressed by their Cognito subject.
+     *
+     * Limited to the acting administrator's own organisation, and a role change here obeys
+     * the same rules as the dedicated role endpoint — including that the platform-operator
+     * role can never be granted.
+     */
     @PutMapping("/users/{subId}")
     public ResponseEntity<AppResponse<UserResponse>> updateUser(
             @PathVariable String subId,
-            @RequestBody UpdateUserRequest request) {
+            @RequestBody UpdateUserRequest request,
+            @AuthenticationPrincipal Jwt jwt,
+            HttpServletRequest httpRequest) {
         return ResponseEntity.ok(AppResponse.success(
                 "User updated successfully",
-                userAdminService.updateUser(subId, request)));
+                userAdminService.updateUser(
+                        subId, request, jwt != null ? jwt.getSubject() : null, httpRequest)));
     }
 
     /**

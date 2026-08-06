@@ -1,5 +1,6 @@
 package com.regulaone.backend.common.audit;
 
+import com.regulaone.backend.common.ClientIp;
 import com.regulaone.backend.models.AuditLog;
 import com.regulaone.backend.common.audit.AuditLogRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -62,7 +63,7 @@ public class AuditLogService {
                     .resource(resource)
                     .resourceId(resourceId)
                     .details(details)
-                    .ipAddress(clientIp(request))
+                    .ipAddress(ClientIp.of(request))
                     .userAgent(userAgent(request))
                     .success(true)
                     .timestamp(LocalDateTime.now())
@@ -72,26 +73,6 @@ public class AuditLogService {
             log.error("[audit] could not write audit entry action={} tenant={} user={}: {}",
                     action, tenantId, userEmail, ex.getMessage());
         }
-    }
-
-    /**
-     * The caller's IP address.
-     *
-     * Behind a load balancer or reverse proxy the socket address is the proxy, so
-     * the first entry of X-Forwarded-For is preferred when present. Only the first
-     * entry is taken — the rest of that header is added by intermediate hops and is
-     * not trustworthy. The value is capped so an oversized header cannot bloat the
-     * audit record.
-     */
-    private String clientIp(HttpServletRequest request) {
-        if (request == null) return null;
-
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            String first = forwarded.split(",")[0].trim();
-            return truncate(first, 64);
-        }
-        return truncate(request.getRemoteAddr(), 64);
     }
 
     /** The caller's browser/user-agent string, capped to a sensible length. */

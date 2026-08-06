@@ -33,11 +33,7 @@ public class CognitoJwtConverter implements Converter<Jwt, AbstractAuthenticatio
         String sub = jwt.getSubject();
         String email = jwt.getClaimAsString("email");
 
-        log.info("Subject ID : {}", sub);
-
         List<GrantedAuthority> roles = resolveAuthorities(sub, email);
-
-        log.info("Resolved authority : {}", roles);
 
         //? Spring Security stores this internally for the current request.
         JwtAuthenticationToken authentication = new JwtAuthenticationToken(
@@ -45,36 +41,42 @@ public class CognitoJwtConverter implements Converter<Jwt, AbstractAuthenticatio
                 roles,
                 email != null ? email : sub);
 
-        log.info("Authentication Token: {}", authentication);
+        // WHAT MAY AND MAY NOT BE LOGGED HERE
+        //
+        // This method runs on EVERY authenticated request, so anything logged at INFO
+        // ends up in the log store for every request the platform ever serves. It used to
+        // log the e-mail address and the whole authentication token at INFO, which put a
+        // named person — and their token — into the logs a few times per page load. That
+        // is personal data being processed for no stated purpose, and CLAUDE.md §17
+        // forbids it.
+        //
+        // The SUBJECT ID is logged instead. It identifies the account for support and
+        // incident work, but on its own it names nobody: turning it back into a person
+        // needs access to the user directory. Never add the e-mail, the token or the
+        // claims to these lines.
+        log.debug("Authenticated subject {} with authorities {}", sub, roles);
 
         return authentication;
     }
 
     private List<GrantedAuthority> resolveAuthorities(String sub, String email) {
-        log.info("Looking up MongoDB user by cognitoSub: {}", sub);
 
         Optional<String> roleName = userRepository.findByCognitoSub(sub)
-                .map(user -> {
-                    log.info("Found by cognitoSub → MongoDB role: {}", user.getRole().name());
-                    return user.getRole().name();
-                })
+                .map(user -> user.getRole().name())
                 .or(() -> {
-                    log.warn("Not found by cognitoSub, trying email: {}", email);
-
+                    // The token verified but carries a subject we do not know. Falling back
+                    // to the e-mail covers accounts created before the sub was stored.
+                    log.debug("No user for subject {} — falling back to the e-mail claim", sub);
                     return email != null
-                            ? userRepository.findByEmail(email)
-                                    .map(user -> {
-                                        log.info("Found by email → MongoDB role: {}", user.getRole().name());
-                                        return user.getRole().name();
-                                    })
+                            ? userRepository.findByEmail(email).map(user -> user.getRole().name())
                             : Optional.empty();
                 });
 
-        String role = roleName.orElseGet(() -> {
-            log.warn("User NOT found in MongoDB — defaulting to ROLE_USER");
+        // Worth a warning: a valid token with no account behind it means either a stale
+        // session or a user removed mid-session. Identified by subject, never by e-mail.
+        return List.of(new SimpleGrantedAuthority(roleName.orElseGet(() -> {
+            log.warn("No RegulaOne account for subject {} — defaulting to ROLE_USER", sub);
             return "ROLE_USER";
-        });
-
-        return List.of(new SimpleGrantedAuthority(role));
+        })));
     }
 }

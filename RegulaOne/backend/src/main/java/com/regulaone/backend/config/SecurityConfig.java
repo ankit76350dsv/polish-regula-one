@@ -74,7 +74,13 @@ public class SecurityConfig {
                         // requires X-Service-Token; this route is not browser/user-authenticated.
                         .requestMatchers("/api/email/send").permitAll()
 
-                        // Allow Swagger UI and OpenAPI spec without authentication
+                        // Swagger UI and the OpenAPI document, for local development.
+                        //
+                        // This rule is only reachable when springdoc is ENABLED, and
+                        // application-prod.properties switches it off
+                        // (springdoc.api-docs.enabled=false), so in production these
+                        // paths do not exist at all. Keep it that way: the document
+                        // lists every endpoint and schema in the service.
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",

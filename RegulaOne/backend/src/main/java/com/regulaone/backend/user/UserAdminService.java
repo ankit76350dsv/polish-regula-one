@@ -128,12 +128,21 @@ public class UserAdminService {
                     "User capacity exceeded. To add more users, please request a higher user quota or upgrade the package.");
         }
 
-        UserType cognitoUser = cognitoService.adminCreateUser(request.getName(), request.getEmail(), request.getRole());
+        // The role is checked FIRST, before anything is created: an invite naming a role
+        // this administrator may not grant must be refused while it is still free to
+        // refuse, not after a Cognito account exists and would have to be cleaned up.
+        //
+        // This whitelist closes an escalation: the previous parseRole() accepted ANY value
+        // in the Role enum and quietly fell back to ROLE_USER only for unknown text — so
+        // an invite carrying "SUPER_ADMIN" created a PLATFORM OPERATOR inside the caller's
+        // own company.
+        Role role = parseInvitedRole(request.getRole());
+
+        UserType cognitoUser = cognitoService.adminCreateUser(
+                request.getName(), request.getEmail(), role.name());
 
         Map<String, String> attrs = cognitoUser.attributes().stream()
                 .collect(Collectors.toMap(AttributeType::name, AttributeType::value));
-
-        Role role = parseRole(request.getRole());
 
         // Module access: admin explicitly passes the moduleIds during invite.
         List<TenantModule> moduleIds = request.getModuleIds();
@@ -302,11 +311,31 @@ public class UserAdminService {
         User actor = requireActor(actorCognitoSub);
         assertSameOrganisation(actor, targetUser);          // RULE 2
 
-        Role previousRole = targetUser.getRole();
-        if (previousRole == newRole) {
+        if (targetUser.getRole() == newRole) {
             // Nothing to do — do not touch updatedAt, and do not write an audit entry for
             // a change that did not happen.
             return UserResponse.from(targetUser);
+        }
+
+        applyRoleChange(actor, targetUser, newRole, request);
+
+        targetUser.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(targetUser);
+
+        return UserResponse.from(targetUser);
+    }
+
+    /**
+     * Rules 3 to 5 of a role change, plus the audit entry — shared by BOTH endpoints that
+     * can change a role, so neither can be the lenient one.
+     *
+     * Does nothing when the role is unchanged. The caller saves; this method only decides
+     * whether the change is allowed, applies it to the object, and records it.
+     */
+    private void applyRoleChange(User actor, User targetUser, Role newRole, HttpServletRequest request) {
+        Role previousRole = targetUser.getRole();
+        if (previousRole == newRole) {
+            return;
         }
 
         if (sameUser(actor, targetUser)) {                  // RULE 3
@@ -329,8 +358,6 @@ public class UserAdminService {
         }
 
         targetUser.setRole(newRole);
-        targetUser.setUpdatedAt(LocalDateTime.now());
-        userRepository.save(targetUser);
 
         // The trail records WHO changed WHOSE role and in WHICH direction. The target is
         // named by id, not by e-mail, so the entry carries no more personal data than it
@@ -346,10 +373,8 @@ public class UserAdminService {
                 List.of("from=" + previousRole.name(), "to=" + newRole.name()),
                 request);
 
-        log.info("[updateUserRole] Admin [{}] changed user [{}] from {} to {}",
+        log.info("[role] Admin [{}] changed user [{}] from {} to {}",
                 actor.getId(), targetUser.getId(), previousRole, newRole);
-
-        return UserResponse.from(targetUser);
     }
 
     /**
@@ -516,11 +541,35 @@ public class UserAdminService {
      * Cognito is updated first, so our database never claims a name or address that the
      * identity provider rejected.
      */
-    public UserResponse updateUser(String subId, UpdateUserRequest request) {
+    @Transactional
+    public UserResponse updateUser(String subId,
+                                   UpdateUserRequest request,
+                                   String actorCognitoSub,
+                                   HttpServletRequest httpRequest) {
 
         User user = userRepository.findByCognitoSub(subId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
+        // WHY THESE TWO LINES EXIST (they were missing, and it mattered):
+        // this endpoint takes a COGNITO SUBJECT from the URL and used to edit whoever it
+        // belonged to — with no check that the person belonged to the caller's company.
+        // A company administrator who learned a subject id could rename, re-address and
+        // re-role a user in a DIFFERENT organisation. Every other write in this class was
+        // already tenant-scoped; this one now is too.
+        User actor = requireActor(actorCognitoSub);
+        assertSameOrganisation(actor, user);                                  // RULE 1
+
+        // A role change goes through exactly the same rules as PATCH /users/{id}/role:
+        // only ROLE_ADMIN or ROLE_USER (never the platform-operator role), never your own,
+        // never the organisation's owner, never the last active administrator — and it is
+        // written to the audit trail. Before this, the line was
+        // "user.setRole(Role.valueOf(request.getRole()))", which accepted ROLE_SUPER_ADMIN.
+        if (request.getRole() != null && !request.getRole().isBlank()) {
+            applyRoleChange(actor, user, parseAssignableRole(request.getRole()), httpRequest);
+        }
+
+        // Cognito is updated first, so our database never claims a name or address the
+        // identity provider rejected.
         cognitoService.adminUpdateUserAttributes(
                 user.getEmail(),
                 request.getName(),
@@ -532,10 +581,6 @@ public class UserAdminService {
 
         if (request.getEmail() != null) {
             user.setEmail(request.getEmail());
-        }
-
-        if (request.getRole() != null) {
-            user.setRole(Role.valueOf(request.getRole()));
         }
 
         user.setUpdatedAt(LocalDateTime.now());
@@ -741,19 +786,17 @@ public class UserAdminService {
     }
 
     /**
-     * Read a role name loosely: "admin", "ADMIN" and "ROLE_ADMIN" all mean the same
-     * thing, and anything unrecognised falls back to the least-privileged role.
+     * The role a new colleague is invited with.
+     *
+     * Nothing supplied means the least-privileged role. Anything else must be one of the
+     * two roles a company administrator may grant — "admin", "ADMIN" and "ROLE_ADMIN" all
+     * work, while ROLE_SUPER_ADMIN and unknown text are refused with a clear message
+     * rather than being silently downgraded.
      */
-    private Role parseRole(String roleStr) {
-        if (roleStr == null)
-            return Role.ROLE_USER;
-        String normalized = roleStr.toUpperCase();
-        if (!normalized.startsWith("ROLE_"))
-            normalized = "ROLE_" + normalized;
-        try {
-            return Role.valueOf(normalized);
-        } catch (IllegalArgumentException e) {
+    private Role parseInvitedRole(String roleStr) {
+        if (roleStr == null || roleStr.isBlank()) {
             return Role.ROLE_USER;
         }
+        return parseAssignableRole(roleStr);
     }
 }
