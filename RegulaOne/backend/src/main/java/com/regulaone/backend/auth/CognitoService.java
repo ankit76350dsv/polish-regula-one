@@ -5,7 +5,7 @@ import org.springframework.stereotype.Service;
 
 import com.regulaone.backend.auth.dto.LoginResponse;
 
-import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.*;
@@ -29,11 +29,17 @@ public class CognitoService {
     @Value("${aws.cognito.client-secret:}")
     private String clientSecret;
 
-    @SuppressWarnings("deprecation")
-    public CognitoService(@Value("${aws.cognito.region}") String region) {
+    /**
+     * @param region              which AWS region the user pool lives in
+     * @param credentialsProvider which AWS account to act as — decided centrally by
+     *                            AwsCredentialsConfig, so Cognito and SES always use
+     *                            the same identity
+     */
+    public CognitoService(@Value("${aws.cognito.region}") String region,
+                          AwsCredentialsProvider credentialsProvider) {
         this.cognitoClient = CognitoIdentityProviderClient.builder()
                 .region(Region.of(region))
-                .credentialsProvider(DefaultCredentialsProvider.create())
+                .credentialsProvider(credentialsProvider)
                 .build();
     }
 
