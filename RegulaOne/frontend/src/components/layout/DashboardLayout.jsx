@@ -11,12 +11,10 @@ import {
   SidebarInset, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarGroupContent
 } from '@/components/ui/sidebar';
 import {
-  LayoutDashboard, Building2, ReceiptText, Clock, ShieldAlert, LogOut, Search, Settings,
+  LayoutDashboard, Building2, ReceiptText, Clock, ShieldAlert, LogOut,
   MessageSquare, Trash2, ShieldCheck, Users, Package, Lock, ExternalLink
 } from 'lucide-react';
 import { moduleAppUrl } from '../../config/moduleApps';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import NotificationBell from '../notifications/NotificationBell';
 import ConfirmedLogoutButton from '../common/ConfirmedLogoutButton';
@@ -151,13 +149,16 @@ export default function DashboardLayout() {
               <span className="text-lg font-bold tracking-tight text-white">RegulaOne</span>
             </div>
 
+            {/* Which organisation the screen is showing. It is a label, not a switcher:
+                a person belongs to exactly one organisation, so it no longer styles
+                itself as clickable (it never did anything when clicked). */}
             <div className="mt-3">
-              <div className="bg-red-800/60 rounded-md p-3 flex items-center justify-between cursor-pointer border border-red-600/50 hover:bg-red-800 transition-colors">
-                <div className="flex flex-col">
-                  <span className="text-[10px] uppercase font-bold text-red-300 tracking-wider">Active Tenant</span>
-                  <span className="text-sm text-white font-medium">{tenantLabel}</span>
+              <div className="bg-red-800/60 rounded-md p-3 flex items-center justify-between gap-2 border border-red-600/50">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[10px] uppercase font-bold text-red-300 tracking-wider">Organisation</span>
+                  <span className="text-sm text-white font-medium truncate">{tenantLabel}</span>
                 </div>
-                <Users className="w-3 h-3 text-red-300" />
+                <Users className="w-3 h-3 text-red-300 flex-shrink-0" aria-hidden="true" />
               </div>
             </div>
           </SidebarHeader>
@@ -294,46 +295,42 @@ export default function DashboardLayout() {
         </Sidebar>
 
         <SidebarInset className="flex flex-col bg-slate-50 min-w-0">
-          <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20">
-            <div className="flex items-center gap-6 flex-1">
-              <SidebarTrigger className="text-slate-400 hover:text-slate-600" />
-              <div className="relative w-full max-w-md">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Search across tenants, modules or logs..."
-                  className="w-full bg-slate-50 border-slate-200 rounded-full py-2 pl-10 pr-4 text-xs focus-visible:ring-red-500/20 focus-visible:ring-offset-0 focus-visible:border-red-500"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-6 text-slate-500">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-[11px] font-bold uppercase tracking-wider">EU-CENTRAL-1 ACTIVE</span>
-              </div>
-              <div className="h-4 w-[1px] bg-slate-200"></div>
+          {/*
+            The header carries only controls that DO something.
+
+            Removed, and why:
+              * a search box that was never wired to anything — an input that swallows
+                what you type and answers nothing is worse than no search at all;
+              * a settings gear with no action behind it (account settings live under
+                the profile link in the sidebar footer);
+              * an "EU-CENTRAL-1 ACTIVE" badge with a pulsing green dot. Nothing checked
+                any region's health, so the dot asserted a live status the application
+                does not measure — and a hosting-region claim is exactly the kind of
+                statement a customer would rely on when assessing data residency.
+          */}
+          <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between gap-4 px-4 sm:px-8 sticky top-0 z-20">
+            <SidebarTrigger className="text-slate-400 hover:text-slate-600" />
+            <div className="flex items-center gap-2 text-slate-500">
               <NotificationBell />
-              <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-700">
-                <Settings className="h-5 w-5" />
-              </Button>
             </div>
           </header>
 
           {/* Expiring-soon warning — dismissable, only when plan hasn't expired yet */}
           {user?.planExpiringSoon && user?.role !== 'ROLE_SUPER_ADMIN' && <PlanExpiryBanner />}
 
-          <main className="flex-1 overflow-y-auto p-8 lg:px-12">
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 xl:px-12">
             <Outlet />
           </main>
 
-          <footer className="h-8 bg-white border-t border-slate-200 px-8 flex items-center justify-between text-[10px] text-slate-400 font-medium">
-            <div className="flex gap-4">
-              <span>v4.2.0-stable</span>
-              <span>Build #2026.05.14</span>
-              <span>EEA Compliant</span>
-            </div>
-            <div>
-              © 2026 RegulaOne Platform • Polish Compliance Hub
-            </div>
+          {/*
+            The footer previously showed a hardcoded version and build number that were
+            never updated by any build, next to an "EEA Compliant" badge. Neither was
+            backed by anything: the first was invented, and the second is a claim about
+            hosting and data protection that this application cannot demonstrate on its
+            own. Both are gone; what is left is what is simply true.
+          */}
+          <footer className="min-h-8 py-2 bg-white border-t border-slate-200 px-4 sm:px-8 flex items-center justify-center sm:justify-end text-[10px] text-slate-400 font-medium text-center">
+            © 2026 RegulaOne
           </footer>
         </SidebarInset>
       </div>

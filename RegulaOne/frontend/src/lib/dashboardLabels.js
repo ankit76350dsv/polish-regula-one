@@ -271,6 +271,11 @@ export const STATUS_VALUE_LABELS = {
   MISSING: { en: 'Never provided', pl: 'Brak' },
   NOT_REQUIRED: { en: 'Not required for my role', pl: 'Niewymagane na moim stanowisku' },
 
+  // Company account status
+  ACTIVE: { en: 'Active', pl: 'Aktywna' },
+  INACTIVE: { en: 'Inactive', pl: 'Nieaktywna' },
+  SUSPENDED: { en: 'Suspended', pl: 'Zawieszona' },
+
   // Yes / no, for the boolean metrics above
   YES: { en: 'Yes', pl: 'Tak' },
   NO: { en: 'No', pl: 'Nie' },
@@ -518,6 +523,12 @@ export const UI_TEXT = {
     en: 'Whistleblower activity is not shown here — reports stay confidential to their handlers.',
     pl: 'Aktywność zgłoszeń sygnalistów nie jest tu pokazywana — pozostaje poufna dla prowadzących.',
   },
+  activityUser: { en: 'User', pl: 'Użytkownik' },
+  activityAction: { en: 'Action', pl: 'Czynność' },
+  activityModule: { en: 'Module', pl: 'Moduł' },
+  activityWhen: { en: 'When', pl: 'Kiedy' },
+  activityFailed: { en: 'Failed', pl: 'Niepowodzenie' },
+  opensInNewTab: { en: 'opens in a new tab', pl: 'otwiera się w nowej karcie' },
   headlineActiveUsers: { en: 'Active users', pl: 'Aktywni użytkownicy' },
   headlineModules: { en: 'Modules available to you', pl: 'Dostępne moduły' },
   headlineOpenActions: { en: 'Open compliance actions', pl: 'Otwarte działania zgodności' },
@@ -641,6 +652,7 @@ export const UI_TEXT = {
     pl: 'Aktywne, nieprzedawnione plany. Bez przeliczania między walutami.',
   },
   platformNoRevenue: { en: 'No active priced plan', pl: 'Brak aktywnego płatnego planu' },
+  platformMoreCurrencies: { en: 'more currencies', pl: 'inne waluty' },
 
   // Subscriptions — what replaced the invented "compliance score"
   platformPlans: { en: 'Subscriptions', pl: 'Subskrypcje' },

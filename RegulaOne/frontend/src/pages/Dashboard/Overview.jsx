@@ -45,62 +45,30 @@ import {
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
+import { moduleDestination } from '../../config/moduleApps';
 
-// ─── Mock data sets per role ───────────────────────────────────────────────
+// ─── Shared pieces ─────────────────────────────────────────────────────────
 //
-// All three dashboards now read real server data. Nothing on this page is invented.
+// EVERY FIGURE ON THIS PAGE COMES FROM THE SERVER. There is no sample, placeholder or
+// illustrative data anywhere in this file, and there must never be: this is the screen
+// a company decides from, so an invented number would hide a real missed deadline
+// behind a reassuring green tile. Money is never re-added or re-symbolled here either —
+// it is printed with the currency the server sent beside it.
 
-// OLD MOCK — SuperAdminView now fetches revenue data from GET /api/superadmin/overview
-// const revenueData = [
-//   { name: 'Jan', value: 4000 },
-//   { name: 'Feb', value: 3000 },
-//   { name: 'Mar', value: 2000 },
-//   { name: 'Apr', value: 2780 },
-//   { name: 'May', value: 1890 },
-//   { name: 'Jun', value: 2390 },
-// ];
+/**
+ * The page inside THIS hub for each module, where one still exists.
+ *
+ * KSeFFlow, SafeVoice and PrivacyPilot are absent on purpose: they are separate
+ * applications now, so there is no in-hub page to link to and moduleDestination()
+ * sends people to the application instead.
+ */
+const IN_HUB_MODULE_PATHS = {
+  SAFEWORK:  '/modules/safework',
+  WASTESYNC: '/modules/wastesync',
+  WORKPULSE: '/modules/workpulse',
+};
 
-// OLD MOCK — the "Recent Tenant Activity" table on the platform dashboard.
-//
-// const recentTenantActivity = [
-//   { tenant: 'PolCorp Sp. z o.o.',  action: 'Bulk Invoice Sync',     status: 'SUCCESS', ... },
-//   { tenant: 'Vistula Logistics',   action: 'BDO Waste Report Gen',  status: 'PENDING', ... },
-//   { tenant: 'Amber Tech Group',    action: 'User Permission Edit',  status: 'SUCCESS', ... },
-//   { tenant: 'Nordic Services PL',  action: 'GDPR DPIA Detection',   status: 'FAILURE', ... },
-// ];
-//
-// Why it had to go, and why it was NOT replaced by a real activity feed:
-//
-//   1. The companies and outcomes were invented. On a platform screen that is worse
-//      than elsewhere — a fake "GDPR DPIA Detection — FAILURE" against a named
-//      customer is the kind of line that gets repeated in a customer conversation.
-//
-//   2. A truthful version is not available yet. RegulaOne's own audit trail currently
-//      records only dashboard views, so a real feed would say almost nothing.
-//
-//   3. Even with more entries, watching which customer administrators are logged in is
-//      closer to watching the customer than to running the platform. RegulaOne is a
-//      PROCESSOR of customer data (GDPR Art. 28), not its controller.
-//
-// It is replaced by the server-built WATCHLIST: which customers need a call, and why,
-// from plan dates, account status and seat counts only.
-
-// OLD MOCK — the company-admin (ROLE_ADMIN) dashboard no longer invents figures.
-// AdminView now reads GET /api/admin/overview through the companyOverview Redux
-// slice, which returns REAL counts and legal deadlines from all six modules.
-//
-// const invoiceData = [ { name: 'Jan', value: 210 }, ... ];          // fake KSeF chart
-// const recentModuleActivity = [ { user: 'anna.kowalska', ... } ];   // fake audit feed
-//
-// Why they had to go: this screen is what a company administrator uses to judge
-// whether the business is compliant. Numbers that look plausible but are invented
-// are worse than no numbers at all — they hide real missed deadlines (a rejected
-// KSeF invoice, an expired medical certificate, a breach past its 72-hour UODO
-// window) behind a reassuring green dashboard.
-
-// ─── Sub-views ─────────────────────────────────────────────────────────────
-
-// Dot colours for each module in the Module Usage bar chart.
+/** One colour per module, used for its dot and for its bar. */
 const MODULE_COLORS = {
   KSEFFLOW:     'bg-blue-500',
   WORKPULSE:    'bg-green-500',
@@ -117,31 +85,121 @@ function trendColor(t) {
   return 'text-rose-500';
 }
 
-// Bar colour for each module in the take-up chart. Matches MODULE_COLORS by index of
-// intent: same module, same hue as the dot used elsewhere on the page.
-const MODULE_BARS = {
-  KSEFFLOW:     'bg-blue-500',
-  WORKPULSE:    'bg-green-500',
-  SAFEWORK:     'bg-amber-500',
-  SAFEVOICE:    'bg-orange-500',
-  WASTESYNC:    'bg-rose-500',
-  PRIVACYPILOT: 'bg-red-500',
-};
+/** An action code from a module's audit trail, as a readable sentence. */
+function actionText(code) {
+  const words = String(code ?? '').replace(/_/g, ' ').toLowerCase().trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : '—';
+}
 
-// OLD HELPER REMOVED — fmtRevenue(val) printed a hardcoded "€" in front of whatever
-// number it was given:
-//
-//   function fmtRevenue(val) {
-//     const n = Number(val ?? 0);
-//     if (n >= 1000) return `€${(n / 1000).toFixed(1)}k`;
-//     return `€${n.toFixed(0)}`;
-//   }
-//
-// Two things were wrong. The symbol was assumed rather than read from the data, and
-// the number underneath it had been produced by adding plan prices together across
-// currencies — so on a platform selling in PLN it showed złoty totals labelled as
-// euros. Money is now formatted by formatMoney/formatMoneyShort in dashboardLabels.js,
-// which always take the currency the server sent alongside the amount.
+/**
+ * Wraps its children in whatever is the right thing to click for this module.
+ *
+ * A module that has moved into its own application opens in a new tab; one that still
+ * has a page in this hub navigates normally; and when there is nothing that can be
+ * opened, the content is rendered WITHOUT a link rather than as one that would fail.
+ * That last case is the point of this component — the server still sends in-hub paths
+ * for modules that now live elsewhere, and following them would land on "page not
+ * found".
+ */
+function ModuleTarget({
+  moduleKey, tenantId, companyBase, inHubPath, className, children,
+  hideIfUnavailable = false,
+}) {
+  const destination = moduleDestination(moduleKey, tenantId, inHubPath, companyBase);
+
+  // Nothing to open. Content that only EXISTS to be clicked (an "Open" link) is left
+  // out entirely; content that also carries information (a to-do row) still shows, but
+  // without the hover styling that would promise a click it cannot honour.
+  if (!destination) {
+    if (hideIfUnavailable) return null;
+    return <div className={className}>{children}</div>;
+  }
+
+  const interactive = `${className} hover:brightness-[0.98] focus-visible:brightness-[0.98] transition`;
+
+  if (destination.external) {
+    return (
+      <a
+        href={destination.href}
+        target="_blank"
+        // Without noopener the opened page can navigate this tab through
+        // window.opener (reverse tabnabbing).
+        rel="noopener noreferrer"
+        className={interactive}
+      >
+        {children}
+        <span className="sr-only"> ({text('opensInNewTab')})</span>
+      </a>
+    );
+  }
+
+  return <Link to={destination.to} className={interactive}>{children}</Link>;
+}
+
+/** The spinner every view shows on its very first load. */
+function LoadingPanel({ label }) {
+  return (
+    <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-3" role="status" aria-live="polite">
+      <Loader2 className="h-6 w-6 animate-spin text-slate-300" aria-hidden="true" />
+      <p className="text-xs text-slate-400 font-medium">{label}…</p>
+    </div>
+  );
+}
+
+/** Shown when a view has nothing cached and the call failed. */
+function LoadFailedPanel({ message, onRetry }) {
+  return (
+    <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-4 px-4 text-center" role="alert">
+      <AlertTriangle className="h-6 w-6 text-rose-400" aria-hidden="true" />
+      <p className="text-sm text-slate-600 font-medium">{message}</p>
+      <Button
+        onClick={onRetry}
+        className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2"
+      >
+        <RefreshCw className="h-3.5 w-3.5 mr-2" aria-hidden="true" /> {text('refresh')}
+      </Button>
+    </div>
+  );
+}
+
+/** The "these figures are from the last successful load" strip. */
+function StaleBanner() {
+  return (
+    <div
+      className="flex items-start gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium bg-amber-50 text-amber-700 border-amber-100"
+      role="status"
+      aria-live="polite"
+    >
+      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-px" aria-hidden="true" />
+      {text('staleWarning')}
+    </div>
+  );
+}
+
+/** Refresh button plus the time of the last successful load. */
+function RefreshControl({ onRefresh, isRefreshing, loadedAt }) {
+  return (
+    <div className="flex flex-col items-start sm:items-end gap-1.5">
+      <Button
+        variant="outline"
+        onClick={onRefresh}
+        disabled={isRefreshing}
+        className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2"
+      >
+        <RefreshCw
+          className={`h-3.5 w-3.5 mr-2 ${isRefreshing ? 'animate-spin' : ''}`}
+          aria-hidden="true"
+        />
+        {text('refresh')}
+      </Button>
+      {loadedAt && (
+        <span className="text-[10px] text-slate-400">
+          {text('updatedAt')} {formatDate(loadedAt, true)}
+        </span>
+      )}
+    </div>
+  );
+}
 
 /** One row of the platform watchlist: a customer who needs a call, and why. */
 function WatchRow({ item, onOpen }) {
@@ -209,12 +267,7 @@ function SuperAdminView() {
 
   // ── First load: nothing to show yet ──────────────────────────────────────
   if (isInitialLoad) {
-    return (
-      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-3">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-        <p className="text-xs text-slate-400 font-medium">{text('platformTitle')}…</p>
-      </div>
-    );
+    return <LoadingPanel label={text('platformTitle')} />;
   }
 
   // ── Failed with nothing cached ───────────────────────────────────────────
@@ -223,18 +276,10 @@ function SuperAdminView() {
   // rather than unreachable.
   if (!overview) {
     return (
-      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-4">
-        <AlertTriangle className="h-6 w-6 text-rose-400" />
-        <p className="text-sm text-slate-600 font-medium">
-          {error?.message ?? text('platformLoadFailed')}
-        </p>
-        <Button
-          onClick={() => dispatch(fetchPlatformOverview())}
-          className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2"
-        >
-          <RefreshCw className="h-3.5 w-3.5 mr-2" /> {text('refresh')}
-        </Button>
-      </div>
+      <LoadFailedPanel
+        message={error?.message ?? text('platformLoadFailed')}
+        onRetry={() => dispatch(fetchPlatformOverview())}
+      />
     );
   }
 
@@ -258,12 +303,12 @@ function SuperAdminView() {
     && seats.utilisationPct > 100;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
             {text('platformTitle')}
           </h1>
           <p className="text-sm text-slate-500 font-medium">
@@ -274,30 +319,16 @@ function SuperAdminView() {
               customer compliance data reads as a rule rather than a missing feature. */}
           <p className="text-[10px] text-slate-400 mt-1 max-w-2xl">{text('platformScopeNote')}</p>
         </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <Button
-            variant="outline"
-            onClick={() => dispatch(fetchPlatformOverview())}
-            disabled={isRefreshing}
-            className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />{' '}
-            {text('refresh')}
-          </Button>
-          {loadedAt && (
-            <span className="text-[10px] text-slate-400">
-              {text('updatedAt')} {formatDate(loadedAt, true)}
-            </span>
-          )}
-        </div>
+        <RefreshControl
+          onRefresh={() => dispatch(fetchPlatformOverview())}
+          isRefreshing={isRefreshing}
+          loadedAt={loadedAt}
+        />
       </div>
 
       {/* A failed refresh keeps the previous figures on screen but says so. */}
       {status === 'failed' && (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium bg-amber-50 text-amber-700 border-amber-100">
-          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-          {text('staleWarning')}
-        </div>
+        <StaleBanner />
       )}
 
       {/* ── Headline figures ────────────────────────────────────────────── */}
@@ -332,7 +363,9 @@ function SuperAdminView() {
           title={text('platformMrr')}
           value={primary ? formatMoneyShort(primary.amount, primary.currency) : text('platformNoRevenue')}
           icon={CalendarClock}
-          note={currencies.length > 1 ? `+${currencies.length - 1} more currencies` : undefined}
+          note={currencies.length > 1
+            ? `+${currencies.length - 1} ${text('platformMoreCurrencies')}`
+            : undefined}
           noteColor="text-slate-400"
         />
       </div>
@@ -474,7 +507,7 @@ function SuperAdminView() {
                     was always 100% and no bar meant anything on its own. */}
                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                   <div
-                    className={`h-1.5 rounded-full ${MODULE_BARS[mod.module] ?? 'bg-slate-400'}`}
+                    className={`h-1.5 rounded-full ${MODULE_COLORS[mod.module] ?? 'bg-slate-400'}`}
                     style={{ width: `${Math.min(mod.tenantsPct, 100)}%` }}
                   />
                 </div>
@@ -571,7 +604,7 @@ function StatCard({ title, value, icon: Icon, note, noteColor }) {
 }
 
 // One module's card: either its figures, or the reason it has none.
-function ModuleCard({ card, moduleBase }) {
+function ModuleCard({ card, tenantId, companyBase }) {
   const dot = MODULE_COLORS[card.module] ?? 'bg-slate-400';
 
   if (card.status !== 'OK') {
@@ -602,12 +635,18 @@ function ModuleCard({ card, moduleBase }) {
             <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
             <CardTitle className="text-xs font-bold text-slate-800">{moduleLabel(card.module)}</CardTitle>
           </div>
-          <Link
-            to={`${moduleBase}/${card.module.toLowerCase() === 'ksefflow' ? 'ksef' : card.module.toLowerCase()}`}
-            className="text-[10px] font-bold uppercase tracking-wider text-red-600 hover:underline inline-flex items-center gap-0.5"
+          {/* Where this goes depends on whether the module is its own application —
+              resolved centrally so no card can link to a page that no longer exists. */}
+          <ModuleTarget
+            moduleKey={card.module}
+            tenantId={tenantId}
+            companyBase={companyBase}
+            inHubPath={IN_HUB_MODULE_PATHS[card.module]}
+            hideIfUnavailable
+            className="text-[10px] font-bold uppercase tracking-wider text-red-600 hover:underline focus-visible:underline inline-flex items-center gap-0.5 py-1"
           >
-            {text('open')} <ArrowUpRight className="h-3 w-3" />
-          </Link>
+            {text('open')} <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+          </ModuleTarget>
         </div>
       </CardHeader>
       <CardContent className="py-3 divide-y divide-slate-50">
@@ -648,33 +687,22 @@ function AdminView() {
     if (status === 'idle') dispatch(fetchCompanyOverview());
   }, [dispatch, status]);
 
-  // Where the module links point. The company id in the URL is display-only — the
-  // server always answers for the signed-in user's own company.
-  const moduleBase = `/company/${tenantId ?? overview?.company?.id ?? 'platform'}/modules`;
+  // Prefix for links to pages that still live in this hub. The company id in the URL is
+  // display-only — the server always answers for the signed-in user's own company.
+  const companyBase = `/company/${tenantId ?? overview?.company?.id ?? 'platform'}`;
 
   // ── First load: nothing to show yet ──────────────────────────────────────
   if (isInitialLoad) {
-    return (
-      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-3">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-        <p className="text-xs text-slate-400 font-medium">{text('title')}…</p>
-      </div>
-    );
+    return <LoadingPanel label={text('title')} />;
   }
 
   // ── Failed with nothing cached ───────────────────────────────────────────
   if (!overview) {
     return (
-      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-4">
-        <AlertTriangle className="h-6 w-6 text-rose-400" />
-        <p className="text-sm text-slate-600 font-medium">{error?.message ?? text('loadFailed')}</p>
-        <Button
-          onClick={() => dispatch(fetchCompanyOverview())}
-          className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2"
-        >
-          <RefreshCw className="h-3.5 w-3.5 mr-2" /> {text('refresh')}
-        </Button>
-      </div>
+      <LoadFailedPanel
+        message={error?.message ?? text('loadFailed')}
+        onRetry={() => dispatch(fetchCompanyOverview())}
+      />
     );
   }
 
@@ -694,12 +722,12 @@ function AdminView() {
     : `${headline.newUsersThisMonth} ${text('newThisMonth')}`;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{text('title')}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{text('title')}</h1>
           <p className="text-sm text-slate-500 font-medium">
             {company?.name}
             {company?.nip && <> · {text('subtitleWithNip')} {company.nip}</>}
@@ -707,30 +735,17 @@ function AdminView() {
           </p>
           <p className="text-[10px] text-slate-400 mt-1">{text('minimisationNote')}</p>
         </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <Button
-            variant="outline"
-            onClick={() => dispatch(fetchCompanyOverview())}
-            disabled={isRefreshing}
-            className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} /> {text('refresh')}
-          </Button>
-          {loadedAt && (
-            <span className="text-[10px] text-slate-400">
-              {text('updatedAt')} {formatDate(loadedAt, true)}
-            </span>
-          )}
-        </div>
+        <RefreshControl
+          onRefresh={() => dispatch(fetchCompanyOverview())}
+          isRefreshing={isRefreshing}
+          loadedAt={loadedAt}
+        />
       </div>
 
       {/* A failed refresh keeps the previous figures on screen but says so, rather
           than silently showing yesterday's compliance position as today's. */}
       {status === 'failed' && (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium bg-amber-50 text-amber-700 border-amber-100">
-          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-          {text('staleWarning')}
-        </div>
+        <StaleBanner />
       )}
 
       {/* ── Headline figures ────────────────────────────────────────────── */}
@@ -746,7 +761,7 @@ function AdminView() {
           title={text('headlineModules')}
           value={`${headline.modulesVisible} / ${headline.modulesEntitled}`}
           icon={ShieldCheck}
-          note={company?.status}
+          note={company?.status ? statusValueLabel(company.status) : undefined}
           noteColor={company?.status === 'ACTIVE' ? 'text-emerald-500' : 'text-rose-500'}
         />
         <StatCard
@@ -780,10 +795,13 @@ function AdminView() {
             </div>
           ) : (
             attention.map((item) => (
-              <Link
+              <ModuleTarget
                 key={`${item.module}-${item.type}`}
-                to={`/company/${tenantId ?? company?.id}${item.to}`}
-                className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium hover:brightness-[0.98] transition ${TONE_PANEL[item.tone] ?? TONE_PANEL.NEUTRAL}`}
+                moduleKey={item.module}
+                tenantId={tenantId ?? company?.id}
+                companyBase={companyBase}
+                inHubPath={item.to}
+                className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium ${TONE_PANEL[item.tone] ?? TONE_PANEL.NEUTRAL}`}
               >
                 <span className="font-bold tabular-nums flex-shrink-0 min-w-[1.5rem]">{item.count}</span>
                 <span className="flex-1 min-w-0">
@@ -793,10 +811,10 @@ function AdminView() {
                     <span className="block text-[9px] font-normal opacity-70 mt-0.5">{item.legalRef}</span>
                   )}
                 </span>
-                <span className="text-[9px] font-bold uppercase tracking-wider opacity-60 flex-shrink-0">
-                  {item.module}
+                <span className="text-[9px] font-bold uppercase tracking-wider opacity-60 flex-shrink-0 text-right">
+                  {moduleLabel(item.module)}
                 </span>
-              </Link>
+              </ModuleTarget>
             ))
           )}
         </CardContent>
@@ -827,7 +845,12 @@ function AdminView() {
       {/* ── One card per module ─────────────────────────────────────────── */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {modules.map((card) => (
-          <ModuleCard key={card.module} card={card} moduleBase={moduleBase} />
+          <ModuleCard
+            key={card.module}
+            card={card}
+            tenantId={tenantId ?? company?.id}
+            companyBase={companyBase}
+          />
         ))}
       </div>
 
@@ -846,26 +869,26 @@ function AdminView() {
             <Table>
               <TableHeader className="bg-slate-50/50">
                 <TableRow className="hover:bg-transparent border-b border-slate-100">
-                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">User</TableHead>
-                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Action</TableHead>
-                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Record</TableHead>
-                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Module</TableHead>
-                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400 text-right">When</TableHead>
+                  <TableHead className="px-4 sm:px-6 py-3 text-[10px] uppercase font-bold text-slate-400">{text('activityUser')}</TableHead>
+                  <TableHead className="px-4 sm:px-6 py-3 text-[10px] uppercase font-bold text-slate-400">{text('activityAction')}</TableHead>
+                  <TableHead className="px-4 sm:px-6 py-3 text-[10px] uppercase font-bold text-slate-400">{text('activityModule')}</TableHead>
+                  <TableHead className="px-4 sm:px-6 py-3 text-[10px] uppercase font-bold text-slate-400 text-right">{text('activityWhen')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {recentActivity.map((log, i) => (
                   <TableRow key={`${log.module}-${log.at}-${i}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                    <TableCell className="px-6 py-4 text-xs font-semibold text-slate-700 font-mono">{log.actor}</TableCell>
-                    <TableCell className="px-6 py-4 text-xs text-slate-500">
-                      {log.action.replace(/_/g, ' ').toLowerCase()}
+                    <TableCell className="px-4 sm:px-6 py-4 text-xs font-semibold text-slate-700 break-all">{log.actor}</TableCell>
+                    <TableCell className="px-4 sm:px-6 py-4 text-xs text-slate-500">
+                      {actionText(log.action)}
                       {!log.success && (
-                        <span className="ml-2 px-2 py-0.5 rounded-full font-bold text-[9px] bg-rose-50 text-rose-600">FAILED</span>
+                        <span className="ml-2 px-2 py-0.5 rounded-full font-bold text-[9px] bg-rose-50 text-rose-600 whitespace-nowrap">
+                          {text('activityFailed')}
+                        </span>
                       )}
                     </TableCell>
-                    <TableCell className="px-6 py-4 text-xs text-slate-400">{log.resource ?? '—'}</TableCell>
-                    <TableCell className="px-6 py-4 text-xs text-slate-500">{log.module}</TableCell>
-                    <TableCell className="px-6 py-4 text-right text-xs text-slate-400 font-medium">
+                    <TableCell className="px-4 sm:px-6 py-4 text-xs text-slate-500">{moduleLabel(log.module)}</TableCell>
+                    <TableCell className="px-4 sm:px-6 py-4 text-right text-xs text-slate-400 font-medium whitespace-nowrap">
                       {formatDate(log.at, true)}
                     </TableCell>
                   </TableRow>
@@ -951,23 +974,35 @@ function DocumentRow({ doc }) {
   );
 }
 
-/** One line in the "my rights" panel. */
-function RightsRow({ icon: Icon, title, value, legalRef, to, linkLabel }) {
+/**
+ * One line in the "my rights" panel.
+ *
+ * The link is only rendered when the module behind it can actually be opened — a right
+ * the company has not enabled is stated plainly rather than dressed as a working link.
+ */
+function RightsRow({ icon: Icon, title, value, legalRef, moduleKey, inHubPath, tenantId, companyBase, linkLabel }) {
+  const destination = inHubPath
+    ? moduleDestination(moduleKey, tenantId, inHubPath, companyBase)
+    : null;
+
   return (
     <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-slate-100">
-      <Icon className="h-4 w-4 text-slate-300 flex-shrink-0 mt-0.5" />
+      <Icon className="h-4 w-4 text-slate-300 flex-shrink-0 mt-0.5" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold text-slate-700">{title}</p>
         <p className="text-[11px] text-slate-500 break-words">{value}</p>
         <p className="text-[9px] text-slate-400 mt-0.5">{legalRef}</p>
       </div>
-      {to && (
-        <Link
-          to={to}
-          className="text-[10px] font-bold uppercase tracking-wider text-red-600 hover:underline inline-flex items-center gap-0.5 flex-shrink-0"
+      {destination && (
+        <ModuleTarget
+          moduleKey={moduleKey}
+          tenantId={tenantId}
+          companyBase={companyBase}
+          inHubPath={inHubPath}
+          className="text-[10px] font-bold uppercase tracking-wider text-red-600 hover:underline focus-visible:underline inline-flex items-center gap-0.5 flex-shrink-0 py-1"
         >
-          {linkLabel} <ArrowUpRight className="h-3 w-3" />
-        </Link>
+          {linkLabel} <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+        </ModuleTarget>
       )}
     </div>
   );
@@ -990,27 +1025,16 @@ function UserView() {
 
   // ── First load: nothing to show yet ──────────────────────────────────────
   if (isInitialLoad) {
-    return (
-      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-3">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-        <p className="text-xs text-slate-400 font-medium">{text('myTitle')}…</p>
-      </div>
-    );
+    return <LoadingPanel label={text('myTitle')} />;
   }
 
   // ── Failed with nothing cached ───────────────────────────────────────────
   if (!overview) {
     return (
-      <div className="max-w-7xl mx-auto py-24 flex flex-col items-center gap-4">
-        <AlertTriangle className="h-6 w-6 text-rose-400" />
-        <p className="text-sm text-slate-600 font-medium">{error?.message ?? text('myLoadFailed')}</p>
-        <Button
-          onClick={() => dispatch(fetchMyOverview())}
-          className="bg-red-600 text-white hover:bg-red-700 text-xs font-semibold px-4 py-2"
-        >
-          <RefreshCw className="h-3.5 w-3.5 mr-2" /> {text('refresh')}
-        </Button>
-      </div>
+      <LoadFailedPanel
+        message={error?.message ?? text('myLoadFailed')}
+        onRetry={() => dispatch(fetchMyOverview())}
+      />
     );
   }
 
@@ -1021,7 +1045,6 @@ function UserView() {
   // signed-in person's own company. Falling back to what the response reported
   // keeps the links working if the screen is opened without one.
   const companyBase = `/company/${tenantId ?? me?.companyId ?? 'platform'}`;
-  const moduleBase = `${companyBase}/modules`;
 
   // Somebody not yet linked to a company gets an explanation, not an error page.
   if (!me?.companyId) {
@@ -1040,42 +1063,29 @@ function UserView() {
   const hasDocuments = documents?.length > 0;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">{text('myTitle')}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{text('myTitle')}</h1>
           <p className="text-sm text-slate-500 font-medium">
             {text('myGreeting')}, {me.name || me.email}
             {me.companyName && <> · {me.companyName}</>}
           </p>
           <p className="text-[10px] text-slate-400 mt-1">{text('myScopeNote')}</p>
         </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <Button
-            variant="outline"
-            onClick={() => dispatch(fetchMyOverview())}
-            disabled={isRefreshing}
-            className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} /> {text('refresh')}
-          </Button>
-          {loadedAt && (
-            <span className="text-[10px] text-slate-400">
-              {text('updatedAt')} {formatDate(loadedAt, true)}
-            </span>
-          )}
-        </div>
+        <RefreshControl
+          onRefresh={() => dispatch(fetchMyOverview())}
+          isRefreshing={isRefreshing}
+          loadedAt={loadedAt}
+        />
       </div>
 
       {/* A failed refresh keeps the previous figures but says so, rather than
           passing yesterday's document status off as today's. */}
       {status === 'failed' && (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium bg-amber-50 text-amber-700 border-amber-100">
-          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-          {text('staleWarning')}
-        </div>
+        <StaleBanner />
       )}
 
       {/* ── The one thing that stops work ───────────────────────────────── */}
@@ -1153,10 +1163,13 @@ function UserView() {
             </div>
           ) : (
             attention.map((item) => (
-              <Link
+              <ModuleTarget
                 key={`${item.module}-${item.type}`}
-                to={`${companyBase}${item.to}`}
-                className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium hover:brightness-[0.98] transition ${TONE_PANEL[item.tone] ?? TONE_PANEL.NEUTRAL}`}
+                moduleKey={item.module}
+                tenantId={tenantId ?? me?.companyId}
+                companyBase={companyBase}
+                inHubPath={item.to}
+                className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium ${TONE_PANEL[item.tone] ?? TONE_PANEL.NEUTRAL}`}
               >
                 <span className="font-bold tabular-nums flex-shrink-0 min-w-[1.5rem]">{item.count}</span>
                 <span className="flex-1 min-w-0">
@@ -1165,10 +1178,10 @@ function UserView() {
                     <span className="block text-[9px] font-normal opacity-70 mt-0.5">{item.legalRef}</span>
                   )}
                 </span>
-                <span className="text-[9px] font-bold uppercase tracking-wider opacity-60 flex-shrink-0">
-                  {item.module}
+                <span className="text-[9px] font-bold uppercase tracking-wider opacity-60 flex-shrink-0 text-right">
+                  {moduleLabel(item.module)}
                 </span>
-              </Link>
+              </ModuleTarget>
             ))
           )}
         </CardContent>
@@ -1208,7 +1221,10 @@ function UserView() {
                 ? `${rights.privacyNoticesAvailable}${rights.latestNoticeAt ? ` · ${text('myLatestNotice')} ${formatDate(rights.latestNoticeAt)}` : ''}`
                 : '—'}
               legalRef={text('myPrivacyNoticesLegal')}
-              to={rights.privacyRoute ? `${companyBase}${rights.privacyRoute}` : null}
+              moduleKey="PRIVACYPILOT"
+              inHubPath={rights.privacyRoute}
+              tenantId={tenantId ?? me?.companyId}
+              companyBase={companyBase}
               linkLabel={text('myOpenLink')}
             />
             <RightsRow
@@ -1226,7 +1242,10 @@ function UserView() {
                 ? text('myWhistleblowingAvailable')
                 : text('myWhistleblowingNone')}
               legalRef={text('myWhistleblowingLegal')}
-              to={rights.whistleblowingRoute ? `${companyBase}${rights.whistleblowingRoute}` : null}
+              moduleKey="SAFEVOICE"
+              inHubPath={rights.whistleblowingRoute}
+              tenantId={tenantId ?? me?.companyId}
+              companyBase={companyBase}
               linkLabel={text('myOpenLink')}
             />
           </CardContent>
@@ -1236,7 +1255,12 @@ function UserView() {
       {/* ── One card per module, my own figures ─────────────────────────── */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {modules.map((card) => (
-          <ModuleCard key={card.module} card={card} moduleBase={moduleBase} />
+          <ModuleCard
+            key={card.module}
+            card={card}
+            tenantId={tenantId ?? company?.id}
+            companyBase={companyBase}
+          />
         ))}
       </div>
 
@@ -1256,24 +1280,24 @@ function UserView() {
             <Table>
               <TableHeader className="bg-slate-50/50">
                 <TableRow className="hover:bg-transparent border-b border-slate-100">
-                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Action</TableHead>
-                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Record</TableHead>
-                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400">Module</TableHead>
-                  <TableHead className="px-6 py-3 text-[10px] uppercase font-bold text-slate-400 text-right">When</TableHead>
+                  <TableHead className="px-4 sm:px-6 py-3 text-[10px] uppercase font-bold text-slate-400">{text('activityAction')}</TableHead>
+                  <TableHead className="px-4 sm:px-6 py-3 text-[10px] uppercase font-bold text-slate-400">{text('activityModule')}</TableHead>
+                  <TableHead className="px-4 sm:px-6 py-3 text-[10px] uppercase font-bold text-slate-400 text-right">{text('activityWhen')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {recentActivity.map((log, i) => (
                   <TableRow key={`${log.module}-${log.at}-${i}`} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                    <TableCell className="px-6 py-4 text-xs text-slate-600">
-                      {log.action.replace(/_/g, ' ').toLowerCase()}
+                    <TableCell className="px-4 sm:px-6 py-4 text-xs text-slate-600">
+                      {actionText(log.action)}
                       {!log.success && (
-                        <span className="ml-2 px-2 py-0.5 rounded-full font-bold text-[9px] bg-rose-50 text-rose-600">FAILED</span>
+                        <span className="ml-2 px-2 py-0.5 rounded-full font-bold text-[9px] bg-rose-50 text-rose-600 whitespace-nowrap">
+                          {text('activityFailed')}
+                        </span>
                       )}
                     </TableCell>
-                    <TableCell className="px-6 py-4 text-xs text-slate-400">{log.resource ?? '—'}</TableCell>
-                    <TableCell className="px-6 py-4 text-xs text-slate-500">{log.module}</TableCell>
-                    <TableCell className="px-6 py-4 text-right text-xs text-slate-400 font-medium">
+                    <TableCell className="px-4 sm:px-6 py-4 text-xs text-slate-500">{moduleLabel(log.module)}</TableCell>
+                    <TableCell className="px-4 sm:px-6 py-4 text-right text-xs text-slate-400 font-medium whitespace-nowrap">
                       {formatDate(log.at, true)}
                     </TableCell>
                   </TableRow>

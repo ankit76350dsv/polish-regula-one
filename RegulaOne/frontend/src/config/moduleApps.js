@@ -74,3 +74,38 @@ export function moduleAppUrl(moduleKey, tenantId) {
 export function hasModuleApp(moduleKey) {
   return Boolean(MODULE_APP_URLS[moduleKey]);
 }
+
+/**
+ * Where a link to a module should actually go.
+ *
+ * The server sends in-hub paths with its dashboard figures (e.g. "/modules/ksef" on a
+ * "needs attention" row). For a module that has since moved into its own application
+ * that path no longer exists here, so following it blindly would land the person on a
+ * "page not found" — the dashboard would be pointing at doors that are no longer there.
+ * This function decides the honest destination instead, and every link on the overview
+ * screen goes through it.
+ *
+ * @param {string} moduleKey  e.g. "KSEFFLOW"
+ * @param {string|null} tenantId the signed-in person's company id
+ * @param {string|null} inHubPath the app-relative path the server suggested, e.g. "/modules/safework"
+ * @param {string} companyBase prefix for in-hub routes, e.g. "/company/abc123"
+ * @returns {{external: true, href: string} | {external: false, to: string} | null}
+ *          null means there is nothing safe to open, so the caller renders plain text
+ *          rather than a link that would fail.
+ */
+export function moduleDestination(moduleKey, tenantId, inHubPath, companyBase) {
+  // Its own application: open the app itself. We can only send people to the app's
+  // dashboard — the deep path the server suggested belongs to this hub's old pages and
+  // has no equivalent over there, so it is deliberately not appended.
+  if (hasModuleApp(moduleKey)) {
+    const href = moduleAppUrl(moduleKey, tenantId);
+    return href ? { external: true, href } : null;
+  }
+
+  // Still a page inside this hub.
+  if (inHubPath && companyBase) {
+    return { external: false, to: `${companyBase}${inHubPath}` };
+  }
+
+  return null;
+}
