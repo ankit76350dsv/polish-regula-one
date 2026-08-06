@@ -24,9 +24,9 @@ Rewritten 2026-08-05. Verified against the live development database.
 
 | File | Change |
 |---|---|
-| `dto/Platform/PlatformOverviewResponse.java` | **Rewritten** — records instead of a Lombok bean, matching the other two dashboards. New blocks: `Tenants`, `Seats`, `Money`, `CurrencySeries`, `Plans`, `ModuleAdoption`, `WatchItem`. `complianceScore` removed. |
-| `services/PlatformService.java` | **Rewritten** — currency-aware money, database-side user counting, a real adoption denominator, machine month keys, the watchlist, and the audit write. |
-| `controllers/SuperAdminController.java` | `/overview` now takes the verified JWT and the request so the read can be audited. Other endpoints untouched. |
+| `dashboard/dto/PlatformOverviewResponse.java` | **Rewritten** — records instead of a Lombok bean, matching the other two dashboards. New blocks: `Tenants`, `Seats`, `Money`, `CurrencySeries`, `Plans`, `ModuleAdoption`, `WatchItem`. `complianceScore` removed. |
+| `dashboard/PlatformService.java` | **Rewritten** — currency-aware money, database-side user counting, a real adoption denominator, machine month keys, the watchlist, and the audit write. |
+| `dashboard/DashboardController.java` | `GET /api/superadmin/overview` — takes the verified JWT and the request so the read can be audited. It now sits with the other two dashboards (2026-08-05 backend reorganisation); the URL is unchanged. The remaining `/api/superadmin` user endpoints live in `user/PlatformUserController.java`. |
 
 Tests: `services/PlatformServiceTest.java` (**new**, 10 unit tests, always run) and
 `services/PlatformServiceIT.java` (**new**, 9 live-database tests, opt-in — see §7).

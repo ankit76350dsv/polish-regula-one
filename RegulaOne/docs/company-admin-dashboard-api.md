@@ -15,25 +15,25 @@ Built 2026-08-05. Verified against the live development database (company
 
 | File | Purpose |
 |---|---|
-| `dto/Dashboard/CompanyOverviewResponse.java` | The whole response shape, with the data-minimisation rules stated in the type itself. |
-| `repository/modules/ModuleMetricsSupport.java` | Shared read-only query helpers + the calendar-day helpers (see §9). |
-| `repository/modules/ModuleSnapshot.java` | What one module contributes: `metrics` + `attention`. |
-| `repository/modules/KsefFlowMetricsReader.java` | KSeF invoices, deadlines, UPO, certificates, 12-month volume. |
-| `repository/modules/WorkPulseMetricsReader.java` | Working-time compliance (Kodeks pracy limits). |
-| `repository/modules/SafeWorkMetricsReader.java` | Medical / BHP document validity. |
-| `repository/modules/SafeVoiceMetricsReader.java` | Whistleblower deadlines — aggregate counts only. |
-| `repository/modules/WasteSyncMetricsReader.java` | BDO monthly records + the 15 March annual filing. |
-| `repository/modules/PrivacyPilotMetricsReader.java` | GDPR/RODO registers and deadlines. |
-| `repository/modules/ActivityFeedReader.java` | Cross-module audit timeline (SafeVoice excluded). |
-| `services/CompanyOverviewService.java` | Access gates, parallel module reads, assembly, audit write. |
-| `controllers/CompanyOverviewController.java` | The endpoint. |
-| `configs/DashboardConfig.java` | Six-thread pool for the parallel module reads. |
+| `dashboard/dto/CompanyOverviewResponse.java` | The whole response shape, with the data-minimisation rules stated in the type itself. |
+| `dashboard/reader/ModuleMetricsSupport.java` | Shared read-only query helpers + the calendar-day helpers (see §9). |
+| `dashboard/reader/ModuleSnapshot.java` | What one module contributes: `metrics` + `attention`. |
+| `dashboard/reader/KsefFlowMetricsReader.java` | KSeF invoices, deadlines, UPO, certificates, 12-month volume. |
+| `dashboard/reader/WorkPulseMetricsReader.java` | Working-time compliance (Kodeks pracy limits). |
+| `dashboard/reader/SafeWorkMetricsReader.java` | Medical / BHP document validity. |
+| `dashboard/reader/SafeVoiceMetricsReader.java` | Whistleblower deadlines — aggregate counts only. |
+| `dashboard/reader/WasteSyncMetricsReader.java` | BDO monthly records + the 15 March annual filing. |
+| `dashboard/reader/PrivacyPilotMetricsReader.java` | GDPR/RODO registers and deadlines. |
+| `dashboard/reader/ActivityFeedReader.java` | Cross-module audit timeline (SafeVoice excluded). |
+| `dashboard/CompanyOverviewService.java` | Access gates, parallel module reads, assembly, audit write. |
+| `dashboard/DashboardController.java` | The endpoint. |
+| `config/DashboardConfig.java` | Six-thread pool for the parallel module reads. |
 | `models/AuditLog.java` | RegulaOne's own immutable audit record (new collection). |
-| `repository/AuditLogRepository.java` | Append + read for that trail. |
-| `services/AuditLogService.java` | Append-only audit writer. |
+| `common/audit/AuditLogRepository.java` | Append + read for that trail. |
+| `common/audit/AuditLogService.java` | Append-only audit writer. |
 
-Tests: `repository/modules/ModuleMetricsSupportTest.java` (11 unit tests, run
-always), `repository/modules/ModuleMetricsReaderIT.java` and
+Tests: `dashboard/reader/ModuleMetricsSupportTest.java` (11 unit tests, run
+always), `dashboard/reader/ModuleMetricsReaderIT.java` and
 `services/CompanyOverviewServiceIT.java` (live-database, opt-in — see §8).
 
 ### Frontend — `RegulaOne/frontend`

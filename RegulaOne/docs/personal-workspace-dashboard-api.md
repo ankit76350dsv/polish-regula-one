@@ -25,26 +25,26 @@ Built 2026-08-05. Backend verified against the live development database
 
 | File | Purpose |
 |---|---|
-| `dto/Dashboard/MyOverviewResponse.java` | The response shape. Reuses `Metric` / `ModuleCard` / `AttentionItem` / `ActivityEntry` from `CompanyOverviewResponse` so both screens format with the same browser code. Adds `Me`, `Headline`, `MyDocument`, `Rights`. |
-| `repository/modules/personal/PersonalMetricsSupport.java` | Shared helpers for the personal readers: the `mine(...)` / `mineByObjectId(...)` owner criteria, document-status and days-until calculations. Extends the admin dashboard's `ModuleMetricsSupport`, so no query helper is duplicated. |
-| `repository/modules/personal/PersonalSnapshot.java` | What one module contributes: `metrics` + `attention` + `documents`. |
-| `repository/modules/personal/MyWorkPulseReader.java` | The person's own shifts, breaks, rest periods, overtime, absences. |
-| `repository/modules/personal/MySafeWorkReader.java` | The person's own medical certificate and BHP training — validity dates only. |
-| `repository/modules/personal/MyKsefFlowReader.java` | Only invoices this person created. |
-| `repository/modules/personal/MyWasteSyncReader.java` | Only waste records this person entered. |
-| `repository/modules/personal/MyPrivacyPilotReader.java` | Only GDPR records this person created or handles. |
-| `repository/modules/personal/MySafeVoiceReader.java` | Only reports assigned to this person, and only for an authorised case handler. |
-| `repository/modules/personal/MyRightsReader.java` | Whether privacy notices exist and who the DPO is — no register content. |
-| `services/MyOverviewService.java` | The four access gates, parallel module reads, assembly, audit write. |
-| `controllers/MyOverviewController.java` | The endpoint. |
+| `dashboard/dto/MyOverviewResponse.java` | The response shape. Reuses `Metric` / `ModuleCard` / `AttentionItem` / `ActivityEntry` from `CompanyOverviewResponse` so both screens format with the same browser code. Adds `Me`, `Headline`, `MyDocument`, `Rights`. |
+| `dashboard/reader/personal/PersonalMetricsSupport.java` | Shared helpers for the personal readers: the `mine(...)` / `mineByObjectId(...)` owner criteria, document-status and days-until calculations. Extends the admin dashboard's `ModuleMetricsSupport`, so no query helper is duplicated. |
+| `dashboard/reader/personal/PersonalSnapshot.java` | What one module contributes: `metrics` + `attention` + `documents`. |
+| `dashboard/reader/personal/MyWorkPulseReader.java` | The person's own shifts, breaks, rest periods, overtime, absences. |
+| `dashboard/reader/personal/MySafeWorkReader.java` | The person's own medical certificate and BHP training — validity dates only. |
+| `dashboard/reader/personal/MyKsefFlowReader.java` | Only invoices this person created. |
+| `dashboard/reader/personal/MyWasteSyncReader.java` | Only waste records this person entered. |
+| `dashboard/reader/personal/MyPrivacyPilotReader.java` | Only GDPR records this person created or handles. |
+| `dashboard/reader/personal/MySafeVoiceReader.java` | Only reports assigned to this person, and only for an authorised case handler. |
+| `dashboard/reader/personal/MyRightsReader.java` | Whether privacy notices exist and who the DPO is — no register content. |
+| `dashboard/MyOverviewService.java` | The four access gates, parallel module reads, assembly, audit write. |
+| `dashboard/DashboardController.java` | The endpoint. |
 
 Modified: `configs/SecurityConfig.java` (an explicit `"/api/me/**" → authenticated`
 rule — behaviour unchanged, intent made visible), and
-`repository/modules/ActivityFeedReader.java` (new `readForActor(...)` that filters
+`dashboard/reader/ActivityFeedReader.java` (new `readForActor(...)` that filters
 the existing cross-module audit feed to one person; the company-wide `read(...)`
 is untouched).
 
-Tests: `repository/modules/personal/PersonalMetricsSupportTest.java` (11 unit
+Tests: `dashboard/reader/personal/PersonalMetricsSupportTest.java` (11 unit
 tests, always run) and `services/MyOverviewServiceIT.java` (3 live-database tests,
 opt-in — see §7).
 
