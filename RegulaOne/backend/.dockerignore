@@ -1,0 +1,36 @@
+# =============================================================================
+# What must NOT be copied into the Docker build context.
+#
+# The first rule is the one that matters. On CI the local configuration is absent
+# (it is git-ignored), but a developer building this image on their own machine has
+# a real application-dev.properties on disk holding the database password, the
+# Cognito client secret and an AWS key. Without this file, "COPY src ./src" would
+# bake all three into an image that then gets pushed to a registry.
+#
+# Configuration reaches the container through environment variables at run time,
+# never through the image.
+# =============================================================================
+
+# The DEV configuration only — it is the one holding real credentials.
+#
+# application.properties and application-prod.properties are deliberately NOT excluded:
+# they carry no secrets, and the production image needs them if they are present at
+# build time. (In CI they are absent anyway — all three are git-ignored — so the image
+# ships with no configuration and every setting must arrive as an environment variable.
+# See RegulaOne/docs/backend-configuration.md.)
+src/main/resources/application-dev.properties*
+
+# Build output — the image compiles from source, so a host build is not reused
+target/
+
+# Tooling and local noise
+.mvn/
+mvnw
+mvnw.cmd
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+.DS_Store
+HELP.md
