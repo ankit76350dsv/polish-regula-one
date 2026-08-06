@@ -241,7 +241,7 @@ distinct from the tenant-scoped `KSEF_ADMIN`. It is granted from RegulaOne's **P
 page (super-admin only) → a user's **Permissions** editor — the `KSEF_PLATFORM_ADMIN` option is
 shown **only to a `ROLE_SUPER_ADMIN`** and the save goes through `/api/superadmin/users/{id}/permissions`.
 A **Company Admin cannot see or grant it**: the option is hidden in their view, and the backend
-([`UserService.updateUserPermissions`](../../RegulaOne/backend/src/main/java/com/regulaone/backend/services/UserService.java))
+([`UserAdminService.updateUserPermissions`](../../RegulaOne/backend/src/main/java/com/regulaone/backend/user/UserAdminService.java))
 treats it as a *protected* code — a non-super-admin can neither add nor remove it (the existing value
 is preserved). This prevents cross-tenant privilege escalation.
 
