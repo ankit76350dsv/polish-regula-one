@@ -14,9 +14,16 @@ import {
 import { WASTE_CATEGORIES } from "../utils/constants";
 import { useCapabilities } from "../hooks/useCapabilities";
 import { useTranslation } from "../hooks/useTranslation";
+import { useOrgBase } from "../utils/paths";
 
 export default function ReportDetail() {
+  // Only the report id is read here. The tenantId also sits in the address now, but
+  // we deliberately IGNORE it: the report is fetched with the signed-in session and
+  // the backend decides which company's report may be returned.
   const { id } = useParams();
+
+  // "/company/{tenantId}" — used by the "back to reports" link below.
+  const orgBase = useOrgBase();
   const dispatch = useDispatch();
   const { selected } = useSelector((state) => state.reports);
   const [downloadError, setDownloadError] = useState("");
@@ -218,7 +225,10 @@ export default function ReportDetail() {
             </div>
           </dl>
           <div className="mt-6">
-            <Link to="/reports" className="text-emerald-700 hover:underline text-sm font-medium">
+            <Link
+              to={`${orgBase}/reports`}
+              className="text-emerald-700 hover:underline text-sm font-medium"
+            >
               {t("reportDetail.backToReports")}
             </Link>
           </div>

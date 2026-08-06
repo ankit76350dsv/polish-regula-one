@@ -15,10 +15,14 @@ import { YearSelector } from "../components/common/Selectors";
 import { defaultReportingYear } from "../utils/constants";
 import { useCapabilities } from "../hooks/useCapabilities";
 import { useTranslation } from "../hooks/useTranslation";
+import { useOrgBase } from "../utils/paths";
 
 export default function Reports() {
   const dispatch = useDispatch();
   const { list, loading, generating, generateError } = useSelector((state) => state.reports);
+
+  // "/company/{tenantId}" — every link out of this page stays inside the company.
+  const orgBase = useOrgBase();
 
   // Words and number formatting for the chosen language (Polish by default).
   const { t, formatNumber } = useTranslation();
@@ -128,7 +132,7 @@ export default function Reports() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Link
-                        to={`/reports/${r._id}`}
+                        to={`${orgBase}/reports/${r._id}`}
                         className="text-emerald-700 hover:underline font-medium"
                       >
                         {t("common.open")}

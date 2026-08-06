@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "../hooks/useTranslation";
+import { useOrgHome } from "../utils/paths";
 
 // The opposite of ProtectedRoute: used for the /login page. If the user is
 // already signed in, we send them to the dashboard instead.
@@ -9,6 +10,9 @@ export default function PublicRoute() {
 
   // Same translated "please wait" line as ProtectedRoute, for the same reason.
   const { t } = useTranslation();
+
+  // Their home page: "/company/{tenantId}/home".
+  const orgHome = useOrgHome();
 
   if (authChecking) {
     return (
@@ -19,7 +23,9 @@ export default function PublicRoute() {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    // Send them straight to their home page. "/" would also work (it forwards
+    // there), but going direct saves a second redirect and an address-bar flicker.
+    return <Navigate to={orgHome} replace />;
   }
 
   return <Outlet />;

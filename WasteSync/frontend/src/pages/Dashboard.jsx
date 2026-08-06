@@ -18,6 +18,7 @@ import { Card, Loader, AlertBanner, Badge, Button } from "../components/common";
 import { WASTE_CATEGORIES, CATEGORY_COLORS } from "../utils/constants";
 import { useCapabilities } from "../hooks/useCapabilities";
 import { useTranslation } from "../hooks/useTranslation";
+import { useOrgBase } from "../utils/paths";
 
 // ── Inline icons ─────────────────────────────────────────────────────────────
 // We draw the icons inline as SVG so the dashboard needs no extra icon library.
@@ -123,6 +124,9 @@ function FilingDeadlineBanner({ obligation, canOpenReports }) {
   // matters here more than anywhere else on the page.
   const { t, formatDate } = useTranslation();
 
+  // "/company/{tenantId}" — the "go to reports" button must stay in this company.
+  const orgBase = useOrgBase();
+
   if (!obligation) return null;
 
   const {
@@ -226,7 +230,7 @@ function FilingDeadlineBanner({ obligation, canOpenReports }) {
           </div>
         </div>
         {canOpenReports && !submitted && (
-          <Link to="/reports" className="shrink-0">
+          <Link to={`${orgBase}/reports`} className="shrink-0">
             <Button variant={overdue ? "danger" : "primary"}>{t("filing.goToReports")}</Button>
           </Link>
         )}
@@ -289,6 +293,10 @@ export default function Dashboard() {
   // Words, month names, category names, numbers and dates for the chosen language.
   const { t, monthNames, categoryLabel, formatNumber, formatDate, formatDateTime } =
     useTranslation();
+
+  // "/company/{tenantId}" — the start of every link on this page, so a click never
+  // drops the company out of the address.
+  const orgBase = useOrgBase();
 
   // Reload the dashboard whenever the year changes. There is no company scope any
   // more: one customer has one company, so there was never anything to choose.
@@ -573,7 +581,10 @@ export default function Dashboard() {
           <SectionTitle
             icon={icons.report}
             right={
-              <Link to="/reports" className="text-xs font-medium text-emerald-700 hover:underline">
+              <Link
+                to={`${orgBase}/reports`}
+                className="text-xs font-medium text-emerald-700 hover:underline"
+              >
                 {t("dashboard.recentReports.viewAll")}
               </Link>
             }
@@ -587,7 +598,7 @@ export default function Dashboard() {
               {data.recentReports.map((r) => (
                 <Link
                   key={r._id}
-                  to={`/reports/${r._id}`}
+                  to={`${orgBase}/reports/${r._id}`}
                   className="-mx-2 flex items-center justify-between rounded-lg px-2 py-2.5 transition hover:bg-slate-50"
                 >
                   <span className="flex items-center gap-2 text-sm text-slate-700">
@@ -613,7 +624,10 @@ export default function Dashboard() {
           <SectionTitle
             icon={icons.clock}
             right={
-              <Link to="/audit-logs" className="text-xs font-medium text-emerald-700 hover:underline">
+              <Link
+                to={`${orgBase}/audit-logs`}
+                className="text-xs font-medium text-emerald-700 hover:underline"
+              >
                 {t("dashboard.recentActivity.viewAuditLog")}
               </Link>
             }

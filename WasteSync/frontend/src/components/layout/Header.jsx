@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useCapabilities } from "../../hooks/useCapabilities";
 import { CAPABILITIES } from "../../config/capabilities";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useOrgBase } from "../../utils/paths";
 import LanguageToggle from "./LanguageToggle";
 
 // The main navigation bar shown on every signed-in page.
@@ -23,8 +24,15 @@ import LanguageToggle from "./LanguageToggle";
 // user read an English menu in an app built for the Polish market. Looking the
 // word up while drawing means the menu re-labels itself the moment the PL / EN
 // switch is pressed, with no page reload and no second copy of this list.
+//
+// WHAT CHANGED AND WHY (second change): `to` used to hold the FINISHED address
+// ("/reports"). It now holds only the tail of it, and the "/company/{tenantId}"
+// start is added below when the menu is drawn. Every page moved under the company
+// it belongs to, so a finished address written here would have had to repeat the
+// tenant id in six places — and any one of them left behind would have quietly
+// dropped the user out of their company URL.
 const navItems = [
-  { to: "/", labelKey: "nav.dashboard", end: true, capability: CAPABILITIES.DASHBOARD_READ },
+  { to: "/home", labelKey: "nav.dashboard", end: true, capability: CAPABILITIES.DASHBOARD_READ },
   // One company per customer, read from RegulaOne — so the link is singular.
   { to: "/companies", labelKey: "nav.company", capability: CAPABILITIES.COMPANY_READ },
   { to: "/waste-entries", labelKey: "nav.wasteEntries", capability: CAPABILITIES.WASTE_ENTRY_READ },
@@ -36,6 +44,9 @@ const navItems = [
 export default function Header() {
   const { logout } = useAuth();
   const user = useSelector((state) => state.auth.user);
+
+  // "/company/{tenantId}" for the signed-in user — the start of every menu link.
+  const orgBase = useOrgBase();
 
   // What this user is allowed to do decides which menu items appear.
   const { can } = useCapabilities();
@@ -63,7 +74,11 @@ export default function Header() {
           {items.map((item) => (
             <NavLink
               key={item.to}
-              to={item.to}
+              // Full address = the company base + this item's tail. The `|| "/"`
+              // only matters in the split second before we know the tenant: an
+              // empty address is meaningless, so we point at the app root, which
+              // forwards to the company dashboard as soon as /me answers.
+              to={`${orgBase}${item.to}` || "/"}
               end={item.end}
               className={({ isActive }) =>
                 `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
