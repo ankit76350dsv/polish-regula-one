@@ -79,11 +79,16 @@ export default function DashboardLayout() {
     { title: 'My Plan',        icon: Package,          path: `/company/${tid}/my-plan`,        roles: ['ROLE_ADMIN'] },
   ];
 
-  // All compliance modules with their backend enum key for access control.
+  // All compliance modules, in sidebar order.
+  //
+  // `path` is the page INSIDE this hub, and it exists only for modules that do not yet
+  // have their own application. KSeFFlow, SafeVoice and PrivacyPilot run as separate apps,
+  // so they have no in-hub page to fall back to — their addresses live in
+  // src/config/moduleApps.js instead.
   const ALL_MODULES = [
-    { title: 'KSeFFlow',    icon: ReceiptText,   path: `/company/${tid}/modules/ksef`,         moduleKey: 'KSEFFLOW',     dotColor: 'bg-blue-300' },
-    { title: 'SafeVoice',   icon: MessageSquare, path: `/company/${tid}/modules/safevoice`,    moduleKey: 'SAFEVOICE',    dotColor: 'bg-orange-300' },
-    { title: 'PrivacyPilot',icon: ShieldAlert,   path: `/company/${tid}/modules/privacypilot`, moduleKey: 'PRIVACYPILOT', dotColor: 'bg-emerald-300' },
+    { title: 'KSeFFlow',    icon: ReceiptText,   path: null,                                   moduleKey: 'KSEFFLOW',     dotColor: 'bg-blue-300' },
+    { title: 'SafeVoice',   icon: MessageSquare, path: null,                                   moduleKey: 'SAFEVOICE',    dotColor: 'bg-orange-300' },
+    { title: 'PrivacyPilot',icon: ShieldAlert,   path: null,                                   moduleKey: 'PRIVACYPILOT', dotColor: 'bg-emerald-300' },
     { title: 'SafeWork',    icon: ShieldCheck,   path: `/company/${tid}/modules/safework`,     moduleKey: 'SAFEWORK',     dotColor: 'bg-amber-300' },
     { title: 'WasteSync',   icon: Trash2,        path: `/company/${tid}/modules/wastesync`,    moduleKey: 'WASTESYNC',    dotColor: 'bg-red-300' },
     { title: 'WorkPulse',   icon: Clock,         path: `/company/${tid}/modules/workpulse`,    moduleKey: 'WORKPULSE',    dotColor: 'bg-green-300' },
@@ -111,15 +116,28 @@ export default function DashboardLayout() {
 
   // Every module button, with the one thing that differs between them worked out once:
   // WHERE it goes.
-  //   launchUrl  → the module runs as its own app; open it in a new tab (see config/moduleApps.js)
-  //   otherwise  → the module still lives inside the hub; navigate normally
-  const moduleLinks = ALL_MODULES.map((item) => ({
-    ...item,
-    allowed:   canOpenModule(item.moduleKey),
-    launchUrl: canOpenModule(item.moduleKey)
-      ? moduleAppUrl(item.moduleKey, user?.tenantId)
-      : null,
-  }));
+  //   launchUrl → the module is its own app; open it in a new tab (see config/moduleApps.js)
+  //   path      → the module still lives inside this hub; navigate normally
+  //   neither   → nothing to open, so the button is shown locked
+  //
+  // The last case is not just theory: a platform super-admin belongs to no single company,
+  // so there is no /company/{id}/dashboard to send them to. A module with its own app has
+  // no in-hub page to fall back on, so it must lock rather than navigate to a dead route.
+  const moduleLinks = ALL_MODULES.map((item) => {
+    const allowed   = canOpenModule(item.moduleKey);
+    const launchUrl = allowed ? moduleAppUrl(item.moduleKey, user?.tenantId) : null;
+    return {
+      ...item,
+      allowed,
+      launchUrl,
+      // Why it is locked, so the tooltip can say something true and useful.
+      lockReason: !allowed
+        ? `${item.title} is not enabled for your account. Ask your administrator for access.`
+        : (!launchUrl && !item.path)
+          ? `${item.title} opens for a company. Your account is not linked to one.`
+          : null,
+    };
+  });
 
   return (
     <SidebarProvider>
@@ -176,22 +194,22 @@ export default function DashboardLayout() {
                   )}
 
                   {moduleLinks.map((item) => {
-                    const isActive = location.pathname === item.path;
+                    const isActive = Boolean(item.path) && location.pathname === item.path;
 
                     // ── Locked: shown, explained, and genuinely not clickable ──
                     // A real disabled <button> is used rather than a styled link, so it is
                     // also skipped by keyboard tabbing and ignored by screen readers'
                     // activation — "looks disabled" is not the same as "is disabled".
-                    if (!item.allowed) {
+                    if (item.lockReason) {
                       return (
                         // The explanation sits on the <li>, not on the button: browsers
                         // suppress pointer events on a disabled control, so a title there
                         // would never show a tooltip. The button keeps pointer-events-none
                         // so the hover reaches this wrapper instead.
                         <SidebarMenuItem
-                          key={item.path}
+                          key={item.moduleKey}
                           className="cursor-not-allowed"
-                          title={`${item.title} is not enabled for your account. Ask your administrator for access.`}
+                          title={item.lockReason}
                         >
                           <SidebarMenuButton
                             disabled
@@ -201,7 +219,7 @@ export default function DashboardLayout() {
                             <div className={`w-2 h-2 rounded-full ${item.dotColor} opacity-40`}></div>
                             <span className="font-medium">{item.title}</span>
                             <Lock className="ml-auto h-3 w-3" aria-hidden="true" />
-                            <span className="sr-only">— no access</span>
+                            <span className="sr-only">— unavailable</span>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                       );
@@ -213,7 +231,7 @@ export default function DashboardLayout() {
                     // this tab somewhere of its choosing (reverse tabnabbing).
                     if (item.launchUrl) {
                       return (
-                        <SidebarMenuItem key={item.path}>
+                        <SidebarMenuItem key={item.moduleKey}>
                           <SidebarMenuButton
                             render={
                               <a
@@ -234,9 +252,9 @@ export default function DashboardLayout() {
                       );
                     }
 
-                    // ── Allowed, but the module still lives inside the hub ──
+                    // ── Allowed, and the module still lives inside the hub ──
                     return (
-                      <SidebarMenuItem key={item.path}>
+                      <SidebarMenuItem key={item.moduleKey}>
                         <SidebarMenuButton
                           render={<Link to={item.path} />}
                           isActive={isActive}

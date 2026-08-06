@@ -17,13 +17,14 @@ const schema = z.object({
 });
 
 // Maps a path prefix to a friendly module name for the SSO context banner.
+//
+// Only the modules that still have a page INSIDE this hub are listed. KSeFFlow, SafeVoice
+// and PrivacyPilot are separate applications now, so nothing can arrive here with a
+// /modules/… path for them and their entries were removed.
 const MODULE_LABELS = {
-  '/modules/ksef':         'KSeFFlow',
   '/modules/workpulse':    'WorkPulse',
   '/modules/safework':     'SafeWork',
-  '/modules/safevoice':    'SafeVoice',
   '/modules/wastesync':    'WasteSync',
-  '/modules/privacypilot': 'PrivacyPilot',
 };
 
 function resolveModuleLabel(redirectUri) {

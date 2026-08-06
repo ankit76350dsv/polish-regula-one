@@ -33,7 +33,6 @@ import UserPermissionsPage from './pages/Admin/UserPermissionsPage';
 import AdminPlan        from './pages/Admin/AdminPlan';
 
 // Module pages
-import KSeFFlow          from './pages/Modules/KSeFFlow';
 import WorkPulse         from './pages/Modules/WorkPulse';
 import ModulePlaceholder from './pages/Modules/ModulePlaceholder';
 
@@ -152,12 +151,20 @@ export default function App() {
             </>
           )}
 
-          <Route path="/company/:tenantId/modules/ksef"          element={<KSeFFlow />} />
+          {/*
+            In-hub module pages.
+
+            Only the modules that do NOT yet have their own application are routed here.
+            KSeFFlow, SafeVoice and PrivacyPilot are separate applications now — the sidebar
+            opens them in a new tab (see src/config/moduleApps.js), so their in-hub copies
+            were removed rather than left to drift out of step with the real thing.
+
+            When one of these three gets its own app, delete its route and page here and add
+            the app's URL to src/config/moduleApps.js.
+          */}
           <Route path="/company/:tenantId/modules/workpulse"     element={<WorkPulse />} />
           <Route path="/company/:tenantId/modules/safework"      element={<ModulePlaceholder />} />
-          <Route path="/company/:tenantId/modules/safevoice"     element={<ModulePlaceholder />} />
           <Route path="/company/:tenantId/modules/wastesync"     element={<ModulePlaceholder />} />
-          <Route path="/company/:tenantId/modules/privacypilot"  element={<ModulePlaceholder />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
