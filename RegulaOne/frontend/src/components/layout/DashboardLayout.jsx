@@ -12,8 +12,9 @@ import {
 } from '@/components/ui/sidebar';
 import {
   LayoutDashboard, Building2, ReceiptText, Clock, ShieldAlert, LogOut, Search, Settings,
-  MessageSquare, Trash2, ShieldCheck, Users, Package
+  MessageSquare, Trash2, ShieldCheck, Users, Package, Lock, ExternalLink
 } from 'lucide-react';
+import { moduleAppUrl } from '../../config/moduleApps';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -79,8 +80,6 @@ export default function DashboardLayout() {
   ];
 
   // All compliance modules with their backend enum key for access control.
-  // ROLE_SUPER_ADMIN sees every module regardless of moduleIds.
-  // ROLE_ADMIN and ROLE_USER only see the modules listed in user.moduleIds.
   const ALL_MODULES = [
     { title: 'KSeFFlow',    icon: ReceiptText,   path: `/company/${tid}/modules/ksef`,         moduleKey: 'KSEFFLOW',     dotColor: 'bg-blue-300' },
     { title: 'SafeVoice',   icon: MessageSquare, path: `/company/${tid}/modules/safevoice`,    moduleKey: 'SAFEVOICE',    dotColor: 'bg-orange-300' },
@@ -90,9 +89,37 @@ export default function DashboardLayout() {
     { title: 'WorkPulse',   icon: Clock,         path: `/company/${tid}/modules/workpulse`,    moduleKey: 'WORKPULSE',    dotColor: 'bg-green-300' },
   ];
 
-  const visibleModules = user?.role === 'ROLE_SUPER_ADMIN'
-    ? ALL_MODULES
-    : ALL_MODULES.filter((m) => (user?.moduleIds ?? []).includes(m.moduleKey));
+  // ── Who may open which module ────────────────────────────────────────────
+  //
+  // Every module is now LISTED for everyone; the ones this person was not given are
+  // shown greyed out and cannot be clicked, instead of being hidden. Seeing a locked
+  // KSeFFlow tells someone there is a module to ask their administrator for; a module
+  // that simply is not there tells them nothing.
+  //
+  // The rule itself is unchanged: ROLE_SUPER_ADMIN may open every module, everyone else
+  // only the ones listed in their own moduleIds (set by their administrator, from what
+  // the company's plan includes).
+  //
+  // THIS IS A CONVENIENCE, NOT A SECURITY BOUNDARY. Nothing here protects data — each
+  // module app checks the session and this person's own permissions again on its side,
+  // and the backend refuses anything they were not granted. Greying out a button only
+  // stops someone walking into a door that would be shut in their face anyway.
+  const canOpenModule = (moduleKey) =>
+    user?.role === 'ROLE_SUPER_ADMIN' || (user?.moduleIds ?? []).includes(moduleKey);
+
+  const grantedModuleCount = ALL_MODULES.filter((m) => canOpenModule(m.moduleKey)).length;
+
+  // Every module button, with the one thing that differs between them worked out once:
+  // WHERE it goes.
+  //   launchUrl  → the module runs as its own app; open it in a new tab (see config/moduleApps.js)
+  //   otherwise  → the module still lives inside the hub; navigate normally
+  const moduleLinks = ALL_MODULES.map((item) => ({
+    ...item,
+    allowed:   canOpenModule(item.moduleKey),
+    launchUrl: canOpenModule(item.moduleKey)
+      ? moduleAppUrl(item.moduleKey, user?.tenantId)
+      : null,
+  }));
 
   return (
     <SidebarProvider>
@@ -142,20 +169,85 @@ export default function DashboardLayout() {
               <SidebarGroupLabel className="px-2 text-[10px] uppercase font-bold text-red-300 mb-1 tracking-widest">Enabled Modules</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="space-y-1">
-                  {visibleModules.length === 0 ? (
-                    <p className="px-3 py-2 text-[10px] text-red-400 italic">No modules assigned</p>
-                  ) : visibleModules.map((item) => (
-                    <SidebarMenuItem key={item.path}>
-                      <SidebarMenuButton
-                        render={<Link to={item.path} />}
-                        isActive={location.pathname === item.path}
-                        className={`flex items-center gap-3 px-3 py-1.5 rounded-md text-sm transition-all duration-200 ${location.pathname === item.path ? 'bg-white text-red-700 font-semibold' : 'text-red-100 hover:bg-red-600 hover:text-white'}`}
-                      >
-                        <div className={`w-2 h-2 rounded-full ${item.dotColor}`}></div>
-                        <span className="font-medium">{item.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
+                  {grantedModuleCount === 0 && (
+                    <p className="px-3 pb-1 text-[10px] text-red-300/90 italic leading-snug">
+                      No modules assigned — ask your administrator for access.
+                    </p>
+                  )}
+
+                  {moduleLinks.map((item) => {
+                    const isActive = location.pathname === item.path;
+
+                    // ── Locked: shown, explained, and genuinely not clickable ──
+                    // A real disabled <button> is used rather than a styled link, so it is
+                    // also skipped by keyboard tabbing and ignored by screen readers'
+                    // activation — "looks disabled" is not the same as "is disabled".
+                    if (!item.allowed) {
+                      return (
+                        // The explanation sits on the <li>, not on the button: browsers
+                        // suppress pointer events on a disabled control, so a title there
+                        // would never show a tooltip. The button keeps pointer-events-none
+                        // so the hover reaches this wrapper instead.
+                        <SidebarMenuItem
+                          key={item.path}
+                          className="cursor-not-allowed"
+                          title={`${item.title} is not enabled for your account. Ask your administrator for access.`}
+                        >
+                          <SidebarMenuButton
+                            disabled
+                            aria-disabled="true"
+                            className="flex w-full items-center gap-3 px-3 py-1.5 rounded-md text-sm text-red-300/50 opacity-60 pointer-events-none"
+                          >
+                            <div className={`w-2 h-2 rounded-full ${item.dotColor} opacity-40`}></div>
+                            <span className="font-medium">{item.title}</span>
+                            <Lock className="ml-auto h-3 w-3" aria-hidden="true" />
+                            <span className="sr-only">— no access</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    }
+
+                    // ── Allowed, and the module is its own application: new tab ──
+                    // rel="noopener noreferrer" is required, not cosmetic: without noopener
+                    // the page we open can reach back through window.opener and navigate
+                    // this tab somewhere of its choosing (reverse tabnabbing).
+                    if (item.launchUrl) {
+                      return (
+                        <SidebarMenuItem key={item.path}>
+                          <SidebarMenuButton
+                            render={
+                              <a
+                                href={item.launchUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={`${item.title} (opens in a new tab)`}
+                              />
+                            }
+                            title={`Open ${item.title} in a new tab`}
+                            className="flex items-center gap-3 px-3 py-1.5 rounded-md text-sm transition-all duration-200 text-red-100 hover:bg-red-600 hover:text-white"
+                          >
+                            <div className={`w-2 h-2 rounded-full ${item.dotColor}`}></div>
+                            <span className="font-medium">{item.title}</span>
+                            <ExternalLink className="ml-auto h-3 w-3 opacity-60" aria-hidden="true" />
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    }
+
+                    // ── Allowed, but the module still lives inside the hub ──
+                    return (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          render={<Link to={item.path} />}
+                          isActive={isActive}
+                          className={`flex items-center gap-3 px-3 py-1.5 rounded-md text-sm transition-all duration-200 ${isActive ? 'bg-white text-red-700 font-semibold' : 'text-red-100 hover:bg-red-600 hover:text-white'}`}
+                        >
+                          <div className={`w-2 h-2 rounded-full ${item.dotColor}`}></div>
+                          <span className="font-medium">{item.title}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

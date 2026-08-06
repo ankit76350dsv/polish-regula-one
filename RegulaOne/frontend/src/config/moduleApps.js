@@ -1,0 +1,76 @@
+/**
+ * Where each compliance module actually RUNS.
+ *
+ * Every module (KSeFFlow, SafeVoice, PrivacyPilot, …) is its own application on its own
+ * port/domain, not a page inside RegulaOne. RegulaOne is the hub: it decides who may open
+ * a module and then sends the person there. This file is the one place that knows the
+ * address of each app.
+ *
+ * ── HOW AN ADDRESS IS DECIDED (in order) ────────────────────────────────────────
+ *
+ *   1. An explicit environment variable, e.g. VITE_KSEFFLOW_URL=https://ksefflow.regulaone.eu
+ *      That is how staging and production are configured — no code change.
+ *   2. Otherwise: the SAME host the hub itself was opened on, with the module's dev port.
+ *      So opening RegulaOne at http://localhost:3000 gives http://localhost:3001, and
+ *      opening it at http://192.168.20.38:3000 gives http://192.168.20.38:3001. One dev
+ *      server, works on the machine and over the LAN, no rebuild. This mirrors what
+ *      src/config/sso.js already does for the backend URL, and it matters here for the
+ *      same reason: the session cookie is shared per host, so a module opened on a
+ *      DIFFERENT host than the hub would not be signed in.
+ *
+ * ── ADDING THE REMAINING MODULES ────────────────────────────────────────────────
+ *
+ * Only the three apps that exist today are listed. A module that is NOT listed simply has
+ * no external app yet — the sidebar then keeps its in-hub page instead of trying to open a
+ * window that would 404. To wire one up later, add a line here and an entry in
+ * .env.example. Nothing else needs to change.
+ */
+
+// Same runtime-host resolution as src/config/sso.js — see the note above.
+const _proto = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+const _host  = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const _at = (port) => `${_proto}//${_host}:${port}`;
+
+/**
+ * Module key (the backend's TenantModule enum) → base URL of that application.
+ * Keys must match the values in the /api/auth/me `moduleIds` list exactly.
+ */
+export const MODULE_APP_URLS = {
+  KSEFFLOW:     import.meta.env.VITE_KSEFFLOW_URL     || _at(3001),
+  SAFEVOICE:    import.meta.env.VITE_SAFEVOICE_URL    || _at(1003),
+  PRIVACYPILOT: import.meta.env.VITE_PRIVACYPILOT_URL || _at(3006),
+  // SAFEWORK / WASTESYNC / WORKPULSE: no separate application yet.
+};
+
+/**
+ * The landing page inside a module app for one company.
+ *
+ * Every module app uses the same route shape, so it is written once here. The company id
+ * comes from the signed-in user's own profile (/api/auth/me), never from the address bar —
+ * and the module app checks the session itself, so this URL grants nothing on its own.
+ */
+const dashboardPath = (tenantId) => `/company/${encodeURIComponent(tenantId)}/dashboard`;
+
+/**
+ * The full URL to open for a module, or NULL when there is nothing to open.
+ *
+ * Null means one of two things, and the caller treats both the same way (keep the in-hub
+ * page instead of opening a window):
+ *   * the module has no separate application yet, or
+ *   * the person has no organisation, so there is no company dashboard to land on
+ *     (a platform super-admin belongs to no single company).
+ *
+ * @param {string} moduleKey e.g. "KSEFFLOW"
+ * @param {string|null|undefined} tenantId the signed-in person's company id
+ * @returns {string|null}
+ */
+export function moduleAppUrl(moduleKey, tenantId) {
+  const baseUrl = MODULE_APP_URLS[moduleKey];
+  if (!baseUrl || !tenantId) return null;
+  return `${baseUrl}${dashboardPath(tenantId)}`;
+}
+
+/** True when this module runs as its own application (so it opens in a new tab). */
+export function hasModuleApp(moduleKey) {
+  return Boolean(MODULE_APP_URLS[moduleKey]);
+}
