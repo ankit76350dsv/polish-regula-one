@@ -6,7 +6,7 @@
 //   ROLE_SUPER_ADMIN → no company section (platform-level account, no tenant)
 
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -90,6 +90,12 @@ export default function ProfilePage() {
   const isAdmin   = role === 'ROLE_ADMIN';
   const isSA      = role === 'ROLE_SUPER_ADMIN';
   const hasOrg    = !isSA && !!profile?.tenantId;
+
+  // Every in-app route is nested under the company, so links must carry that prefix.
+  // Falling back to the profile's own tenant (and then to "platform" for a super-admin,
+  // who belongs to no company) keeps the links working however the page was reached.
+  const { tenantId } = useParams();
+  const companyBase = `/company/${tenantId ?? profile?.tenantId ?? 'platform'}`;
 
   const initials = profile?.name
     ? profile.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
@@ -263,7 +269,7 @@ export default function ProfilePage() {
                   <Lock className="h-5 w-5 text-amber-500 flex-shrink-0" />
                   <p className="text-xs text-amber-600 font-medium">
                     Temporary password active.{' '}
-                    <Link to="/change-password" className="underline font-bold hover:text-amber-800">
+                    <Link to={`${companyBase}/change-password`} className="underline font-bold hover:text-amber-800">
                       Change it now
                     </Link>
                     {' '}before you lose access.
@@ -460,7 +466,7 @@ export default function ProfilePage() {
               </div>
             </div>
             <Link
-              to="/change-password"
+              to={`${companyBase}/change-password`}
               className="inline-flex items-center px-4 py-2 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 bg-white hover:border-red-300 hover:text-red-600 transition-colors"
             >
               Change Password

@@ -5,7 +5,7 @@ import { useAuthStore } from '../../store/authStore';
 
 // Shown as a dismissable top-of-page banner when planExpiringSoon = true
 // (plan expires within 7 days but has NOT yet expired).
-// ROLE_ADMIN  → "Manage Plan" link navigates to /my-plan
+// ROLE_ADMIN  → "Manage Plan" link navigates to the company's My Plan page
 // ROLE_USER   → read-only message, no action button
 // ROLE_SUPER_ADMIN → never shown
 export default function PlanExpiryBanner() {
@@ -16,6 +16,10 @@ export default function PlanExpiryBanner() {
   if (dismissed) return null;
 
   const isAdmin = user?.role === 'ROLE_ADMIN';
+
+  // Every in-app page lives under /company/{id}; without that prefix this button
+  // lands on "page not found".
+  const myPlanPath = `/company/${user?.tenantId ?? 'platform'}/my-plan`;
 
   const expiryLabel = user?.planExpiresAt
     ? new Date(user.planExpiresAt).toLocaleDateString('en-GB', {
@@ -36,7 +40,7 @@ export default function PlanExpiryBanner() {
 
       {isAdmin && (
         <button
-          onClick={() => navigate('/my-plan')}
+          onClick={() => navigate(myPlanPath)}
           className="flex items-center gap-1.5 text-xs font-bold text-amber-700 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-3 py-1 rounded-lg transition-colors flex-shrink-0"
         >
           <RefreshCw className="h-3 w-3" />

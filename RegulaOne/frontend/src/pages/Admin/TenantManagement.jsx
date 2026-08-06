@@ -219,7 +219,7 @@ export default function TenantManagement() {
                   <TableRow
                     key={tenant.id}
                     className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer"
-                    onClick={() => navigate(`/tenants/${tenant.id}`)}
+                    onClick={() => navigate(`/company/${tenantId}/tenants/${tenant.id}`)}
                   >
                     <TableCell className="px-6 py-4">
                       <div className="flex items-center gap-3">

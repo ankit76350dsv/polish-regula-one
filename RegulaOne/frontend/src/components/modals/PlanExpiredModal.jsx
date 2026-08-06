@@ -4,7 +4,8 @@ import { useAuthStore } from '../../store/authStore';
 import ConfirmedLogoutButton from '../common/ConfirmedLogoutButton';
 
 // Shown when the tenant's currentPackage.expiringDate is in the past (planExpired = true).
-// ROLE_ADMIN  → "Manage Plan" button navigates to /my-plan (modal is suppressed on that route)
+// ROLE_ADMIN  → "Manage Plan" button navigates to the company's My Plan page
+//               (this modal is suppressed on that route, so it is the way out)
 // ROLE_USER   → read-only message + sign-out only
 // ROLE_SUPER_ADMIN → never shown (they manage the platform, have no tenant plan)
 export default function PlanExpiredModal() {
@@ -12,6 +13,10 @@ export default function PlanExpiredModal() {
   const navigate = useNavigate();
 
   const isAdmin = user?.role === 'ROLE_ADMIN';
+
+  // Every in-app page lives under /company/{id}; without that prefix this button
+  // lands on "page not found".
+  const myPlanPath = `/company/${user?.tenantId ?? 'platform'}/my-plan`;
 
   const expiryLabel = user?.planExpiresAt
     ? new Date(user.planExpiresAt).toLocaleDateString('en-GB', {
@@ -66,7 +71,7 @@ export default function PlanExpiredModal() {
         <div className="px-8 pb-8 flex flex-col gap-3">
           {isAdmin && (
             <button
-              onClick={() => navigate('/my-plan')}
+              onClick={() => navigate(myPlanPath)}
               className="flex items-center justify-center gap-2 w-full bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl transition-colors"
             >
               <RefreshCw className="h-4 w-4" />
