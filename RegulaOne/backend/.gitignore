@@ -32,7 +32,12 @@ build/
 ### VS Code ###
 .vscode/
 
-### Sensitive config ###
-src/main/resources/application.properties
-src/main/resources/application-dev.properties
-src/main/resources/application-prod.properties
+### Application configuration — NEVER commit, no exceptions ###
+# Every application*.properties file stays out of git, including profile files
+# added later (staging, uat, …) and any .example copy. Configuration is supplied
+# per environment: locally by the file you create yourself, in production by
+# environment variables.
+#
+# What the backend needs is documented in docs/backend-configuration.md, which
+# holds names and explanations only — never a value.
+src/main/resources/application*.properties*
