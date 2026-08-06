@@ -6,6 +6,7 @@ import {
   clearSubmitError,
 } from "../store/slices/companySlice";
 import { useCapabilities } from "../hooks/useCapabilities";
+import { useTranslation } from "../hooks/useTranslation";
 import { WASTESYNC_ROLES } from "../config/capabilities";
 import {
   PageHeader,
@@ -138,10 +139,14 @@ const IconBox = (props) => (
 );
 
 // ── Friendly names ────────────────────────────────────────────────────────────
-// RegulaOne sends module and role codes in SHOUTING_CASE. Showing those to a
-// person is unfriendly, so we translate the ones we know about. Anything we do
-// not recognise is shown exactly as it arrived rather than hidden, so a new
-// module or role never disappears from this screen by accident.
+// RegulaOne sends module codes in SHOUTING_CASE. Showing those to a person is
+// unfriendly, so we tidy up the ones we know about. Anything we do not recognise is
+// shown exactly as it arrived rather than hidden, so a new module never disappears
+// from this screen by accident.
+//
+// These stay here rather than moving into the language files, because they are
+// PRODUCT NAMES. "KSeFFlow" is called KSeFFlow in every language, the same way a
+// company name is — translating it would invent a product that does not exist.
 const MODULE_LABELS = {
   KSEFFLOW: "KSeFFlow",
   SAFEVOICE: "SafeVoice",
@@ -151,11 +156,10 @@ const MODULE_LABELS = {
   PRIVACYPILOT: "PrivacyPilot",
 };
 
-const ROLE_LABELS = {
-  WASTESYNC_ADMIN: "WasteSync Admin",
-  WASTESYNC_HR_MANAGER: "WasteSync HR Manager",
-  WASTESYNC_AUDITOR: "WasteSync Auditor",
-};
+// The job-title wording (ROLE_LABELS) used to sit here too. It moved into the
+// language files under `company.roles`, because unlike a product name a job title
+// really does differ between languages — "WasteSync Auditor" is "Audytor WasteSync"
+// in Polish, and a Polish user reading their own permissions should see that.
 
 // ── Building blocks used only by this page ───────────────────────────────────
 
@@ -220,6 +224,9 @@ export default function Companies() {
   const { can, CAPABILITIES } = useCapabilities();
   const canWrite = can(CAPABILITIES.COMPANY_WRITE);
 
+  // Words and date formatting for the chosen language (Polish by default).
+  const { t, formatDate } = useTranslation();
+
   // Local UI state only: is the small BDO form open, and what is typed in it.
   const [editingBdo, setEditingBdo] = useState(false);
   const [bdoInput, setBdoInput] = useState("");
@@ -246,7 +253,7 @@ export default function Companies() {
     // checks the same rule again — the browser check is only for convenience.
     const cleaned = bdoInput.replace(/\s/g, "");
     if (!/^\d{9}$/.test(cleaned)) {
-      setBdoError("The BDO number must be exactly 9 digits.");
+      setBdoError(t("company.bdo.invalid"));
       return;
     }
     setBdoError(null);
@@ -255,7 +262,7 @@ export default function Companies() {
     if (saveBdoNumber.fulfilled.match(result)) setEditingBdo(false);
   };
 
-  if (loading && !profile) return <Loader label="Loading your company…" />;
+  if (loading && !profile) return <Loader label={t("company.loading")} />;
 
   // First letters of the company name, e.g. "DSV Team" → "DT". Shown in the
   // circle at the top, the same way the other RegulaOne apps do it.
@@ -266,16 +273,17 @@ export default function Companies() {
       .map((word) => word[0])
       .join("")
       .slice(0, 2)
-      .toUpperCase() || "—";
+      .toUpperCase() || t("common.empty");
 
-  // Dates arrive as ISO text. Show them day/month/year, which is how dates are
-  // written in Poland and the EU — never month/day/year, which reads as a
-  // different date entirely.
-  const formatDate = (iso) => {
-    if (!iso) return null;
-    const date = new Date(iso);
-    return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString("en-GB");
-  };
+  // WHAT CHANGED AND WHY: this page had its own little formatDate() that always
+  // used "en-GB". That was the right instinct — it guaranteed day/month/year rather
+  // than the American month/day/year, which reads as a completely different date —
+  // but it also meant a Polish user saw 05/08/2026 instead of 05.08.2026.
+  //
+  // The shared formatDate from useTranslation keeps the day-first order in both
+  // languages (pl-PL and en-GB both put the day first) and additionally writes the
+  // separators the way each language does. So nothing was given up and the local
+  // copy is no longer needed.
 
   // The WasteSync job titles this person holds. `permissions` lists roles for
   // every app on the platform, so we keep only the WasteSync ones — a KSeFFlow
@@ -286,12 +294,27 @@ export default function Companies() {
 
   const modules = Array.isArray(user?.moduleIds) ? user.moduleIds : [];
 
+  /**
+   * The readable name of one WasteSync job title.
+   *
+   * If RegulaOne ever sends a role we have no wording for, we show the raw code
+   * rather than nothing at all — a permission the user really holds must never
+   * disappear from this screen just because nobody has translated its name yet.
+   *
+   * @param {string} role e.g. "WASTESYNC_ADMIN"
+   * @returns {string} e.g. "Administrator WasteSync", or the code itself
+   */
+  const roleLabel = (role) => {
+    const key = `company.roles.${role}`;
+    const wording = t(key);
+    // t() hands back the key itself when it finds no wording, which is how we know
+    // this is a role we have not named yet.
+    return wording === key ? role : wording;
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
-      <PageHeader
-        title="Company"
-        subtitle="Your company details come from RegulaOne. Change them there and they update here automatically."
-      />
+      <PageHeader title={t("company.title")} subtitle={t("company.subtitle")} />
 
       {error && (
         <div className="mb-4">
@@ -303,9 +326,7 @@ export default function Companies() {
       {profile && bdoRegistrationMissing && (
         <div className="mb-4">
           <AlertBanner level="warning">
-            {canWrite
-              ? "Add your 9-digit BDO registration number below. Reports cannot be generated without it."
-              : "This company has no BDO registration number yet. Someone who manages company records needs to add it before reports can be generated."}
+            {canWrite ? t("company.bdoMissingWrite") : t("company.bdoMissingRead")}
           </AlertBanner>
         </div>
       )}
@@ -320,23 +341,25 @@ export default function Companies() {
               </div>
               <div className="min-w-0">
                 <h2 className="truncate text-lg font-semibold text-slate-900">
-                  {profile.name || "—"}
+                  {profile.name || t("common.empty")}
                 </h2>
                 <p className="truncate text-sm text-slate-500">
-                  {profile.contactEmail || "—"}
+                  {profile.contactEmail || t("common.empty")}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {profile.isActive ? (
-                    <Badge tone="green">Active</Badge>
+                    <Badge tone="green">{t("common.active")}</Badge>
                   ) : (
-                    <Badge>Inactive</Badge>
+                    <Badge>{t("common.inactive")}</Badge>
                   )}
                   {profile.bdoRegistrationNumber ? (
-                    <Badge tone="blue">BDO {profile.bdoRegistrationNumber}</Badge>
+                    <Badge tone="blue">
+                      {t("company.bdoBadge", { number: profile.bdoRegistrationNumber })}
+                    </Badge>
                   ) : (
-                    <Badge tone="amber">No BDO number</Badge>
+                    <Badge tone="amber">{t("company.noBdoNumber")}</Badge>
                   )}
-                  <Badge>Managed in RegulaOne</Badge>
+                  <Badge>{t("company.managedInRegulaOne")}</Badge>
                 </div>
               </div>
             </div>
@@ -366,31 +389,41 @@ export default function Companies() {
             {/* ── LEFT STACK: the company record, owned by RegulaOne ────────── */}
             <div className="flex flex-col gap-4">
               {/* Legal identity — the values printed on every BDO filing. */}
-              <Section icon={<IconBuilding />} title="Company identity">
+              <Section icon={<IconBuilding />} title={t("company.identity.title")}>
                 <div className="divide-y divide-slate-100">
-                  <Row label="Company name" value={profile.name} />
-                  <Row label="NIP (tax number)" value={profile.nip} mono />
-                  <Row label="REGON" value={profile.regon} mono />
-                  <Row label="Status" value={profile.isActive ? "Active" : "Inactive"} />
-                  <Row label="Registered on" value={formatDate(profile.registeredAt)} />
+                  <Row label={t("company.identity.name")} value={profile.name} />
+                  <Row label={t("company.identity.nip")} value={profile.nip} mono />
+                  <Row label={t("company.identity.regon")} value={profile.regon} mono />
+                  <Row
+                    label={t("common.status")}
+                    value={profile.isActive ? t("common.active") : t("common.inactive")}
+                  />
+                  <Row
+                    label={t("company.identity.registeredOn")}
+                    value={formatDate(profile.registeredAt)}
+                  />
                 </div>
               </Section>
 
               {/* Contact details (owned by RegulaOne). */}
-              <Section icon={<IconMail />} title="Contact">
+              <Section icon={<IconMail />} title={t("company.contact.title")}>
                 <div className="divide-y divide-slate-100">
-                  <Row label="E-mail" value={profile.contactEmail} />
-                  <Row label="Phone" value={profile.contactPhone} mono />
+                  <Row label={t("company.contact.email")} value={profile.contactEmail} />
+                  <Row label={t("company.contact.phone")} value={profile.contactPhone} mono />
                 </div>
               </Section>
 
               {/* Registered address (printed on every report). */}
-              <Section icon={<IconPin />} title="Registered address">
+              <Section icon={<IconPin />} title={t("company.address.title")}>
                 <div className="divide-y divide-slate-100">
-                  <Row label="Street" value={profile.address?.street} />
-                  <Row label="Postal code" value={profile.address?.postalCode} mono />
-                  <Row label="City" value={profile.address?.city} />
-                  <Row label="Country" value={profile.address?.country} />
+                  <Row label={t("company.address.street")} value={profile.address?.street} />
+                  <Row
+                    label={t("company.address.postalCode")}
+                    value={profile.address?.postalCode}
+                    mono
+                  />
+                  <Row label={t("company.address.city")} value={profile.address?.city} />
+                  <Row label={t("company.address.country")} value={profile.address?.country} />
                 </div>
               </Section>
             </div>
@@ -400,19 +433,18 @@ export default function Companies() {
               {/* The one field WasteSync owns — the only editable card here. */}
               <Section
                 icon={<IconHash />}
-                title="BDO registration number"
+                title={t("company.bdo.title")}
                 action={
                   canWrite && !editingBdo ? (
                     <Button variant="secondary" onClick={openBdoForm}>
-                      {profile.bdoRegistrationNumber ? "Change" : "Add number"}
+                      {profile.bdoRegistrationNumber
+                        ? t("common.change")
+                        : t("company.bdo.addNumber")}
                     </Button>
                   ) : null
                 }
               >
-                <p className="text-xs text-slate-500">
-                  The 9-digit number from the Polish BDO register. It is printed on every
-                  report, and RegulaOne does not store it, so it is set here.
-                </p>
+                <p className="text-xs text-slate-500">{t("company.bdo.description")}</p>
 
                 {submitError && (
                   <div className="mt-3">
@@ -433,47 +465,58 @@ export default function Companies() {
                     {bdoError && <p className="text-xs text-red-600">{bdoError}</p>}
                     <div className="flex items-center gap-3">
                       <Button type="submit" disabled={submitting}>
-                        {submitting ? "Saving…" : "Save number"}
+                        {submitting ? t("common.saving") : t("company.bdo.save")}
                       </Button>
                       <Button
                         type="button"
                         variant="secondary"
                         onClick={() => setEditingBdo(false)}
                       >
-                        Cancel
+                        {t("common.cancel")}
                       </Button>
                     </div>
                   </form>
                 ) : (
                   <p className="mt-3 text-lg font-mono text-slate-900">
                     {profile.bdoRegistrationNumber || (
-                      <span className="text-sm font-sans text-slate-400">Not set yet</span>
+                      <span className="text-sm font-sans text-slate-400">
+                        {t("company.bdo.notSetYet")}
+                      </span>
                     )}
                   </p>
                 )}
               </Section>
 
               {/* Subscription — what this customer pays for. */}
-              <Section icon={<IconCard />} title="Subscription">
+              <Section icon={<IconCard />} title={t("company.subscription.title")}>
                 <div className="divide-y divide-slate-100">
                   <div className="flex items-center justify-between gap-3 py-2">
-                    <span className="text-xs text-slate-500">Plan status</span>
+                    <span className="text-xs text-slate-500">
+                      {t("company.subscription.planStatus")}
+                    </span>
+                    {/* These two words come from the subscription group, not the
+                        shared `common` one. In Polish "active" and "expired" change
+                        ending depending on what they describe, and a plan takes a
+                        different ending from a company. */}
                     {user?.planExpired ? (
-                      <Badge tone="red">Expired</Badge>
+                      <Badge tone="red">{t("company.subscription.expired")}</Badge>
                     ) : (
-                      <Badge tone="green">Active</Badge>
+                      <Badge tone="green">{t("company.subscription.active")}</Badge>
                     )}
                   </div>
-                  <Row label="Plan expires" value={formatDate(user?.planExpiresAt)} />
+                  <Row
+                    label={t("company.subscription.planExpires")}
+                    value={formatDate(user?.planExpiresAt)}
+                  />
                 </div>
 
                 <div className="mt-3 border-t border-slate-100 pt-3">
                   <div className="mb-2 flex items-center gap-1.5 text-xs text-slate-500">
-                    <IconBox className="w-3.5 h-3.5" /> Enabled modules
+                    <IconBox className="w-3.5 h-3.5" /> {t("company.subscription.enabledModules")}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {modules.length === 0 ? (
-                      <span className="text-xs text-slate-400">None</span>
+                      <span className="text-xs text-slate-400">{t("common.none")}</span>
                     ) : (
                       modules.map((moduleId) => (
                         <span
@@ -489,32 +532,26 @@ export default function Companies() {
               </Section>
 
               {/* What this person may do here. */}
-              <Section icon={<IconKey />} title="What you can do in WasteSync">
+              <Section icon={<IconKey />} title={t("company.permissions.title")}>
                 {wasteSyncRoles.length === 0 ? (
                   <p className="rounded-lg bg-slate-50 py-3 text-center text-xs text-slate-500">
-                    You have no WasteSync permissions.
+                    {t("company.permissions.none")}
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {wasteSyncRoles.map((role) => (
-                      <PermissionChip key={role}>
-                        {ROLE_LABELS[role] ?? role}
-                      </PermissionChip>
+                      <PermissionChip key={role}>{roleLabel(role)}</PermissionChip>
                     ))}
                   </div>
                 )}
                 <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
-                  Permissions decide what you can see and change in WasteSync. They are
-                  managed by your administrator in RegulaOne.
+                  {t("company.permissions.note")}
                 </p>
               </Section>
             </div>
           </div>
 
-          <p className="mt-4 text-xs text-slate-400">
-            Company details are read from RegulaOne each time this page opens. WasteSync
-            keeps no copy of them, so what you see is always current.
-          </p>
+          <p className="mt-4 text-xs text-slate-400">{t("company.footnote")}</p>
         </>
       )}
     </div>

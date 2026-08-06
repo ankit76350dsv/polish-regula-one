@@ -1,19 +1,39 @@
 // Shared front-end constants. Keeping these in one file mirrors the backend's
-// single-source-of-truth approach and keeps labels consistent across pages.
+// single-source-of-truth approach and keeps the pages consistent.
 
-// The waste categories — MUST match the backend's utils/wasteCategories.js.
+// The waste categories — the KEYS MUST match the backend's utils/wasteCategories.js
+// and the codes used in the BDO XML. The ORDER here is the order every list, form
+// and table on every page shows them in, so the five things always read the same
+// way round.
+//
+// WHAT CHANGED AND WHY: each entry used to carry its own wording, in two fields —
+// `label` (English) and `labelPl` (Polish). That was removed. The problem was that
+// nothing chose between them: the pages all showed `label`, so the Polish wording
+// sat in the file unused, and the Thresholds page printed BOTH one under the other
+// because that was the only way to get the Polish word on screen at all. Adding a
+// third language would have meant a third field and touching every page again.
+//
+// The wording now lives in the language files (i18n/pl.js and i18n/en.js) under
+// `categories`, and a page asks for it with the categoryLabel() helper from
+// useTranslation. This file keeps only what is genuinely a constant — the codes and
+// their order — and the wording follows whichever language the user picked.
 export const WASTE_CATEGORIES = [
-  { key: "PAPER", label: "Paper & cardboard", labelPl: "Papier i tektura" },
-  { key: "PLASTIC", label: "Plastic", labelPl: "Tworzywa sztuczne" },
-  { key: "GLASS", label: "Glass", labelPl: "Szkło" },
-  { key: "METAL", label: "Metal", labelPl: "Metale" },
-  { key: "MIXED", label: "Mixed / multi-material", labelPl: "Wielomateriałowe" },
+  { key: "PAPER" },
+  { key: "PLASTIC" },
+  { key: "GLASS" },
+  { key: "METAL" },
+  { key: "MIXED" },
 ];
 
-export const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+// How many months a reporting year has. Used for the "x of 12 months" counters and
+// the completion bar.
+//
+// The month NAMES used to live here as an English array (MONTH_NAMES). They were
+// removed for the same reason as the category labels above: an English-only list
+// cannot serve a Polish app. The names now come from the language files, as the
+// `monthNames` array returned by useTranslation, so this file only needs to say how
+// many there are.
+export const MONTHS_IN_YEAR = 12;
 
 // A short list of recent years for the year picker (current year and the 4 before).
 export const recentYears = () => {

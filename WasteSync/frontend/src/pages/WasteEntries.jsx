@@ -11,18 +11,15 @@ import {
 import { Card, Button, Loader, AlertBanner, Badge } from "../components/common";
 import {
   WASTE_CATEGORIES,
-  MONTH_NAMES,
+  MONTHS_IN_YEAR,
   CATEGORY_COLORS,
   recentYears,
   defaultReportingYear,
 } from "../utils/constants";
 import { useCapabilities } from "../hooks/useCapabilities";
+import { useTranslation } from "../hooks/useTranslation";
 
 // ── Small helpers ────────────────────────────────────────────────────────────
-
-// Turn a number into a friendly "1,234.5" string so big weights stay readable
-// and a missing value never shows up on screen as "NaN".
-const fmt = (n) => Number(n || 0).toLocaleString();
 
 // Turns an entry's items array into a quick { CATEGORY: weight } lookup.
 const itemsToMap = (items = []) =>
@@ -199,6 +196,12 @@ export default function WasteEntries() {
   const { can, CAPABILITIES } = useCapabilities();
   const canWrite = can(CAPABILITIES.WASTE_ENTRY_WRITE);
 
+  // Words, month names, category names, numbers and dates for the chosen language.
+  // `formatNumber` replaces the page's old fmt() helper: it writes weights the way
+  // the language writes numbers, so a Polish reader sees "1 234,5" and an English
+  // one "1,234.5" — the same figure, written the way each expects it.
+  const { t, monthNames, categoryLabel, formatNumber, formatDateTime } = useTranslation();
+
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: { month: 1, notes: "" },
   });
@@ -222,7 +225,12 @@ export default function WasteEntries() {
   // sent to the server, so the figures the backend reports stay the authority.
   const summary = useMemo(() => {
     const recordedMonths = Object.keys(entryByMonth).map(Number).sort((a, b) => a - b);
-    const missingMonths = MONTH_NAMES.map((_, i) => i + 1).filter((m) => !entryByMonth[m]);
+    // Month NUMBERS (1-12), not names — which months have no figures yet. Working
+    // from the count rather than a list of names keeps this maths independent of
+    // whatever language the screen happens to be in.
+    const missingMonths = Array.from({ length: MONTHS_IN_YEAR }, (_, i) => i + 1).filter(
+      (m) => !entryByMonth[m]
+    );
 
     // Add up every month, both as one grand total and split by category.
     const categoryTotals = {};
@@ -334,7 +342,7 @@ export default function WasteEntries() {
 
   // How much of the year has been filled in, as a percentage, for the bar in the
   // hero. 12 months is a full year, so the maths is deliberately simple.
-  const completionPct = Math.round((summary.recordedCount / MONTH_NAMES.length) * 100);
+  const completionPct = Math.round((summary.recordedCount / MONTHS_IN_YEAR) * 100);
 
   return (
     <div className="space-y-6">
@@ -352,20 +360,20 @@ export default function WasteEntries() {
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/15">
                 {icons.recycle}
               </span>
-              WasteSync · Monthly records
+              {t("wasteEntries.eyebrow")}
             </div>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight">Waste Entries</h1>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight">{t("wasteEntries.title")}</h1>
             <p className="mt-1 max-w-2xl text-sm text-emerald-100">
               {canWrite
-                ? "Record monthly packaging waste. Saved data is never overwritten — corrections create a new version."
-                : "Monthly packaging waste figures, including every past version of each month."}
+                ? t("wasteEntries.subtitleWrite")
+                : t("wasteEntries.subtitleRead")}
             </p>
           </div>
 
           <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center lg:flex-col lg:items-end">
             {/* Year control, styled to sit on the dark green background. */}
             <label className="flex items-center gap-2 text-sm">
-              <span className="text-emerald-100">Year</span>
+              <span className="text-emerald-100">{t("common.year")}</span>
               <select
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value))}
@@ -382,9 +390,9 @@ export default function WasteEntries() {
             {/* How many of the 12 months have figures yet. */}
             <div className="w-56">
               <div className="flex items-center justify-between text-xs text-emerald-100">
-                <span>Months recorded</span>
+                <span>{t("wasteEntries.monthsRecorded")}</span>
                 <span className="font-semibold text-white">
-                  {summary.recordedCount} / {MONTH_NAMES.length}
+                  {summary.recordedCount} / {MONTHS_IN_YEAR}
                 </span>
               </div>
               <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/20">
@@ -404,32 +412,38 @@ export default function WasteEntries() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard
           icon={icons.scale}
-          label={`Total ${year} (kg)`}
-          value={fmt(summary.grandTotal)}
+          label={t("wasteEntries.metrics.totalYear", { year })}
+          value={formatNumber(summary.grandTotal)}
           accent="emerald"
         />
         <MetricCard
           icon={icons.calendarCheck}
-          label="Months recorded"
-          value={`${summary.recordedCount}/12`}
-          hint={`${completionPct}% of the year`}
+          label={t("wasteEntries.metrics.monthsRecorded")}
+          value={`${summary.recordedCount}/${MONTHS_IN_YEAR}`}
+          hint={t("wasteEntries.metrics.pctOfYear", { pct: completionPct })}
           accent="violet"
         />
         <MetricCard
           icon={icons.clock}
-          label="Not recorded yet"
-          value={fmt(summary.missingMonths.length)}
-          hint={summary.missingMonths.length === 0 ? "Full year captured" : "Months still blank"}
+          label={t("wasteEntries.metrics.notRecordedYet")}
+          value={formatNumber(summary.missingMonths.length)}
+          hint={
+            summary.missingMonths.length === 0
+              ? t("wasteEntries.metrics.fullYearCaptured")
+              : t("wasteEntries.metrics.monthsStillBlank")
+          }
           accent={summary.missingMonths.length > 0 ? "amber" : "emerald"}
         />
         <MetricCard
           icon={icons.layers}
-          label="Largest category"
-          value={summary.topCategory ? summary.topCategory.label : "—"}
+          label={t("wasteEntries.metrics.largestCategory")}
+          value={
+            summary.topCategory ? categoryLabel(summary.topCategory.key) : t("common.empty")
+          }
           hint={
             summary.topCategory
-              ? `${fmt(summary.categoryTotals[summary.topCategory.key])} kg`
-              : "No figures yet"
+              ? `${formatNumber(summary.categoryTotals[summary.topCategory.key])} ${t("common.kg")}`
+              : t("wasteEntries.metrics.noFiguresYet")
           }
           accent="blue"
         />
@@ -442,24 +456,30 @@ export default function WasteEntries() {
         <Card className="p-6">
           <SectionTitle
             icon={icons.pencil}
-            hint="a correction is saved as a new version, nothing is overwritten"
+            hint={t("wasteEntries.form.hint")}
             right={
               entryByMonth[selectedMonth] ? (
-                <Badge tone="blue">Current version: v{entryByMonth[selectedMonth].version}</Badge>
+                <Badge tone="blue">
+                  {t("wasteEntries.form.currentVersion", {
+                    version: entryByMonth[selectedMonth].version,
+                  })}
+                </Badge>
               ) : (
-                <Badge tone="amber">Not recorded yet</Badge>
+                <Badge tone="amber">{t("wasteEntries.form.notRecordedYet")}</Badge>
               )
             }
           >
-            Record / correct a month
+            {t("wasteEntries.form.title")}
           </SectionTitle>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div className="flex flex-wrap items-end gap-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">Month</label>
+                <label className="mb-1 block text-xs font-medium text-slate-500">
+                  {t("common.month")}
+                </label>
                 <select className={inputClass + " w-44"} {...register("month")}>
-                  {MONTH_NAMES.map((name, idx) => (
+                  {monthNames.map((name, idx) => (
                     <option key={idx} value={idx + 1}>
                       {name}
                     </option>
@@ -472,7 +492,9 @@ export default function WasteEntries() {
                   hunting through the list to find what is missing. */}
               {summary.missingMonths.length > 0 && (
                 <div className="min-w-0 flex-1">
-                  <div className="mb-1 text-xs font-medium text-slate-500">Still blank</div>
+                  <div className="mb-1 text-xs font-medium text-slate-500">
+                    {t("wasteEntries.form.stillBlank")}
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
                     {summary.missingMonths.map((m) => (
                       <button
@@ -485,7 +507,7 @@ export default function WasteEntries() {
                             : "border-slate-200 bg-white text-slate-500 hover:border-emerald-300 hover:text-emerald-700"
                         }`}
                       >
-                        {MONTH_NAMES[m - 1].slice(0, 3)}
+                        {monthNames[m - 1].slice(0, 3)}
                       </button>
                     ))}
                   </div>
@@ -498,6 +520,9 @@ export default function WasteEntries() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {WASTE_CATEGORIES.map((cat) => {
                 const color = CATEGORY_COLORS[cat.key] || "#64748b";
+                // The name shown on the box comes from the language files; the code
+                // sent to the server is always cat.key.
+                const label = categoryLabel(cat.key);
                 return (
                   <div
                     key={cat.key}
@@ -513,8 +538,8 @@ export default function WasteEntries() {
                       >
                         {CATEGORY_ICONS[cat.key]}
                       </span>
-                      <span className="truncate" title={cat.label}>
-                        {cat.label}
+                      <span className="truncate" title={label}>
+                        {label}
                       </span>
                     </label>
                     <div className="relative">
@@ -524,12 +549,12 @@ export default function WasteEntries() {
                         step="0.01"
                         min="0"
                         placeholder="0"
-                        aria-label={`${cat.label} in kilograms`}
+                        aria-label={t("wasteEntries.form.kgAriaLabel", { category: label })}
                         className={inputClass + " pr-9 text-right font-medium tabular-nums"}
                         {...register(`w_${cat.key}`)}
                       />
                       <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-400">
-                        kg
+                        {t("common.kg")}
                       </span>
                     </div>
                   </div>
@@ -543,12 +568,12 @@ export default function WasteEntries() {
                 className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-500"
               >
                 <span className="text-slate-400">{icons.note}</span>
-                Notes (optional)
+                {t("wasteEntries.form.notes")}
               </label>
               <input
                 id="notes"
                 className={inputClass}
-                placeholder="e.g. corrected after invoice review"
+                placeholder={t("wasteEntries.form.notesPlaceholder")}
                 {...register("notes")}
               />
             </div>
@@ -556,10 +581,13 @@ export default function WasteEntries() {
             <div className="flex items-center gap-3 border-t border-slate-100 pt-4">
               <Button type="submit" disabled={submitting} className="inline-flex items-center gap-2">
                 {submitting ? icons.spinner : icons.save}
-                {submitting ? "Saving…" : "Save month"}
+                {submitting ? t("common.saving") : t("wasteEntries.form.save")}
               </Button>
               <span className="text-xs text-slate-400">
-                Saving {MONTH_NAMES[selectedMonth - 1]} {year}
+                {t("wasteEntries.form.savingHint", {
+                  month: monthNames[selectedMonth - 1],
+                  year,
+                })}
               </span>
             </div>
           </form>
@@ -568,18 +596,20 @@ export default function WasteEntries() {
 
       {/* ── The 12-month grid ───────────────────────────────────────────────── */}
       {loading ? (
-        <Loader label="Loading entries…" />
+        <Loader label={t("wasteEntries.loading")} />
       ) : (
         <Card className="overflow-hidden">
           <div className="border-b border-slate-100 px-5 pt-5">
             <SectionTitle
               icon={icons.grid}
-              hint={`${summary.recordedCount} of 12 months`}
+              hint={t("wasteEntries.table.hint", { count: summary.recordedCount })}
               right={
-                <span className="text-xs text-slate-400">All weights in kilograms</span>
+                <span className="text-xs text-slate-400">
+                  {t("wasteEntries.table.allWeightsInKg")}
+                </span>
               }
             >
-              {year} monthly figures
+              {t("wasteEntries.table.title", { year })}
             </SectionTitle>
           </div>
 
@@ -587,7 +617,9 @@ export default function WasteEntries() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-slate-500">
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Month</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">
+                    {t("common.month")}
+                  </th>
                   {WASTE_CATEGORIES.map((c) => (
                     <th
                       key={c.key}
@@ -600,23 +632,23 @@ export default function WasteEntries() {
                           className="inline-block h-2 w-2 rounded-sm"
                           style={{ background: CATEGORY_COLORS[c.key] || "#64748b" }}
                         />
-                        {c.label}
+                        {categoryLabel(c.key)}
                       </span>
                     </th>
                   ))}
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
-                    Total
+                    {t("common.total")}
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
-                    Status
+                    {t("common.status")}
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
-                    History
+                    {t("wasteEntries.table.history")}
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {MONTH_NAMES.map((name, idx) => {
+                {monthNames.map((name, idx) => {
                   const month = idx + 1;
                   const entry = entryByMonth[month];
                   const map = itemsToMap(entry?.items);
@@ -659,14 +691,14 @@ export default function WasteEntries() {
                           key={c.key}
                           className="px-4 py-3 text-right tabular-nums text-slate-600"
                         >
-                          {entry ? fmt(map[c.key] ?? 0) : "—"}
+                          {entry ? formatNumber(map[c.key] ?? 0) : t("common.empty")}
                         </td>
                       ))}
                       <td className="px-4 py-3 text-right">
                         {entry ? (
                           <div className="inline-flex flex-col items-end gap-1">
                             <span className="font-semibold tabular-nums text-slate-900">
-                              {fmt(entry.totalWeightKg)}
+                              {formatNumber(entry.totalWeightKg)}
                             </span>
                             <span className="block h-1 w-20 overflow-hidden rounded-full bg-slate-100">
                               <span
@@ -676,16 +708,18 @@ export default function WasteEntries() {
                             </span>
                           </div>
                         ) : (
-                          "—"
+                          t("common.empty")
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {entry ? (
                           <Badge tone={entry.version > 1 ? "blue" : "green"}>
-                            {entry.version > 1 ? `Corrected · v${entry.version}` : "Recorded"}
+                            {entry.version > 1
+                              ? t("wasteEntries.table.corrected", { version: entry.version })
+                              : t("wasteEntries.table.recorded")}
                           </Badge>
                         ) : (
-                          <Badge tone="slate">Blank</Badge>
+                          <Badge tone="slate">{t("wasteEntries.table.blank")}</Badge>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -695,10 +729,10 @@ export default function WasteEntries() {
                             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
                           >
                             {icons.clock}
-                            View
+                            {t("common.view")}
                           </button>
                         ) : (
-                          "—"
+                          t("common.empty")
                         )}
                       </td>
                     </tr>
@@ -711,18 +745,18 @@ export default function WasteEntries() {
               <tfoot>
                 <tr className="border-t-2 border-slate-200 bg-slate-50 text-slate-700">
                   <td className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">
-                    Year total
+                    {t("wasteEntries.table.yearTotal")}
                   </td>
                   {WASTE_CATEGORIES.map((c) => (
                     <td
                       key={c.key}
                       className="px-4 py-3 text-right font-semibold tabular-nums"
                     >
-                      {fmt(summary.categoryTotals[c.key])}
+                      {formatNumber(summary.categoryTotals[c.key])}
                     </td>
                   ))}
                   <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-900">
-                    {fmt(summary.grandTotal)}
+                    {formatNumber(summary.grandTotal)}
                   </td>
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3" />
@@ -739,7 +773,10 @@ export default function WasteEntries() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
-          aria-label={`${MONTH_NAMES[historyMonth - 1]} ${year} version history`}
+          aria-label={t("wasteEntries.history.title", {
+            month: monthNames[historyMonth - 1],
+            year,
+          })}
           // Clicking the dark area outside the panel closes it.
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) closeHistory();
@@ -753,16 +790,16 @@ export default function WasteEntries() {
                 </span>
                 <div>
                   <div className="font-semibold text-slate-900">
-                    {MONTH_NAMES[historyMonth - 1]} {year}
+                    {monthNames[historyMonth - 1]} {year}
                   </div>
                   <div className="text-xs text-slate-500">
-                    Every version ever saved for this month
+                    {t("wasteEntries.history.subtitle")}
                   </div>
                 </div>
               </div>
               <button
                 onClick={closeHistory}
-                aria-label="Close version history"
+                aria-label={t("wasteEntries.history.close")}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700"
               >
                 {icons.close}
@@ -771,9 +808,9 @@ export default function WasteEntries() {
 
             <div className="overflow-y-auto p-6">
               {historyLoading ? (
-                <Loader label="Loading history…" />
+                <Loader label={t("wasteEntries.history.loading")} />
               ) : history.length === 0 ? (
-                <p className="text-sm text-slate-500">No history found.</p>
+                <p className="text-sm text-slate-500">{t("wasteEntries.history.none")}</p>
               ) : (
                 // Drawn as a timeline: a line down the left with one dot per
                 // version, newest at the top.
@@ -794,10 +831,10 @@ export default function WasteEntries() {
                       >
                         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                           <Badge tone={v.isLatest ? "green" : "slate"}>
-                            v{v.version} {v.isLatest ? "(current)" : ""}
+                            v{v.version} {v.isLatest ? t("wasteEntries.history.current") : ""}
                           </Badge>
                           <span className="text-xs text-slate-400">
-                            {new Date(v.createdAt).toLocaleString()}
+                            {formatDateTime(v.createdAt)}
                           </span>
                         </div>
 
@@ -806,9 +843,10 @@ export default function WasteEntries() {
                         <div className="flex flex-wrap gap-1.5">
                           {v.items.map((it) => {
                             const color = CATEGORY_COLORS[it.category] || "#64748b";
-                            const label =
-                              WASTE_CATEGORIES.find((c) => c.key === it.category)?.label ||
-                              it.category;
+                            // categoryLabel() falls back to showing the key itself if
+                            // a code arrives that we have no wording for, so a new
+                            // backend category still appears instead of vanishing.
+                            const label = categoryLabel(it.category);
                             return (
                               <span
                                 key={it.category}
@@ -820,7 +858,7 @@ export default function WasteEntries() {
                                 />
                                 {label}
                                 <span className="font-semibold tabular-nums text-slate-900">
-                                  {fmt(it.weightKg)} kg
+                                  {formatNumber(it.weightKg)} {t("common.kg")}
                                 </span>
                               </span>
                             );
@@ -829,7 +867,9 @@ export default function WasteEntries() {
 
                         <div className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-slate-900">
                           <span className="text-emerald-600">{icons.check}</span>
-                          Total: {fmt(v.totalWeightKg)} kg
+                          {t("wasteEntries.history.total", {
+                            kg: formatNumber(v.totalWeightKg),
+                          })}
                         </div>
 
                         {v.notes && (

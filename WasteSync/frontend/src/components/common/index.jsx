@@ -61,12 +61,19 @@ export function AlertBanner({ level = "info", children }) {
 }
 
 // ── Loader — centred spinner used while data loads ────────────────────────────
-export function Loader({ label = "Loading…" }) {
+//
+// WHAT CHANGED AND WHY: `label` used to default to the English word "Loading…".
+// That default was a trap once the app became bilingual: any caller that forgot to
+// pass a label would quietly print English in the middle of a Polish screen, and
+// nobody would notice until a user complained. There is no default now — the
+// caller passes an already-translated label, and if none is given we simply show
+// the spinner on its own, which reads fine in every language.
+export function Loader({ label }) {
   return (
     <div className="flex items-center justify-center py-12">
       <div className="text-center space-y-3">
         <div className="w-8 h-8 mx-auto border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-slate-500 text-sm">{label}</p>
+        {label && <p className="text-slate-500 text-sm">{label}</p>}
       </div>
     </div>
   );

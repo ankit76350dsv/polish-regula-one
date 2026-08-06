@@ -1,4 +1,5 @@
 import { recentYears } from "../../utils/constants";
+import { useTranslation } from "../../hooks/useTranslation";
 
 // CompanySelector used to live here — a dropdown for choosing which company a
 // page was working with. It was removed because there is nothing to choose
@@ -7,9 +8,13 @@ import { recentYears } from "../../utils/constants";
 
 // A dropdown to choose the reporting year.
 export function YearSelector({ value, onChange, className = "" }) {
+  // The word "Year" next to the dropdown follows the chosen language. The year
+  // NUMBERS themselves are never translated — 2026 is 2026 everywhere.
+  const { t } = useTranslation();
+
   return (
     <label className={`flex items-center gap-2 text-sm ${className}`}>
-      <span className="text-slate-500">Year</span>
+      <span className="text-slate-500">{t("common.year")}</span>
       <select
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}

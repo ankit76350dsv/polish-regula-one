@@ -1,6 +1,7 @@
 import { useAuth } from "../context/AuthContext";
 import { ACCESS } from "../config/moduleAccess";
 import { Card, Button } from "../components/common";
+import { useTranslation } from "../hooks/useTranslation";
 
 // AccessRestricted is a full-screen "you cannot use WasteSync right now" page.
 //
@@ -17,53 +18,51 @@ import { Card, Button } from "../components/common";
 // wording, icon and colour to show. We reuse the shared Card/Button so it
 // matches the rest of WasteSync.
 
-// The text and styling for each situation. Keeping this as a small lookup table
-// (instead of lots of if/else in the JSX) makes it easy to read and to add new
+// The styling and wording SOURCE for each situation. Keeping this as a small lookup
+// table (instead of lots of if/else in the JSX) makes it easy to read and to add new
 // cases later if we ever need them.
+//
+// WHAT CHANGED AND WHY: each entry used to hold the finished English sentences
+// (`eyebrow`, `title`, `message`). It now holds a `textKey` instead — the name of a
+// group in the language files that carries those three sentences in every language.
+//
+// This page matters more than most for getting the language right. It is often the
+// FIRST and ONLY screen a blocked user ever sees, and it is the screen that tells
+// them what to do about it ("ask your administrator to..."). Instructions the reader
+// cannot understand are the same as no instructions, so a Polish user seeing an
+// English wall of text here would simply be stuck. What is NOT translated is
+// deliberate too: we still never name the missing permission, in any language,
+// because telling a caller exactly what they lack helps an attacker map the system.
 const VARIANTS = {
   // An administrator switched this account off (/me returns "enabled": false).
   // Nothing in WasteSync works while that is the case, so the wording is final and
   // simply points the person at whoever can turn the account back on.
   [ACCESS.ACCOUNT_SUSPENDED]: {
     accent: "red",
-    eyebrow: "Account Suspended",
-    title: "Your account has been switched off",
-    message:
-      "An administrator has suspended this account, so WasteSync is not available. Please contact your administrator if you think this is a mistake.",
+    textKey: "access.suspended",
     // A "circle with a line through it" (no entry) icon path.
     iconPath:
       "M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636",
   },
   [ACCESS.MODULE_UNAVAILABLE]: {
     accent: "amber",
-    eyebrow: "Access Restricted",
-    title: "WasteSync is not part of your plan",
-    // Simple, friendly explanation for the user.
-    message:
-      "Your account does not include the WasteSync module. Please contact your administrator to have WasteSync added to your organisation's subscription.",
+    textKey: "access.moduleUnavailable",
     // A "shield with exclamation" icon path.
     iconPath:
       "M12 9v3.75m0 3.75h.008v.008H12v-.008zM12 2.25l8.485 3.394A1.5 1.5 0 0121.75 7.05v4.95c0 5.05-3.36 9.44-8.03 10.72a2.25 2.25 0 01-1.44 0C7.61 21.44 4.25 17.05 4.25 12V7.05a1.5 1.5 0 011.265-1.406L12 2.25z",
   },
   [ACCESS.PLAN_EXPIRED]: {
     accent: "red",
-    eyebrow: "Subscription Expired",
-    title: "Your plan has expired",
-    message:
-      "Your organisation's subscription has ended, so WasteSync is temporarily locked. Please contact your administrator to renew the plan and restore access.",
+    textKey: "access.planExpired",
     // A "clock" icon path.
     iconPath: "M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z",
   },
   // The company DOES have WasteSync and the plan is paid, but this user was not
   // given permission to use it. We name the person's administrator as the fix, and
-  // we never say which permission is missing — that is internal detail, and telling
-  // a caller exactly what they lack helps an attacker map the system.
+  // we never say which permission is missing.
   [ACCESS.PERMISSION_DENIED]: {
     accent: "amber",
-    eyebrow: "Access Restricted",
-    title: "You do not have access to WasteSync",
-    message:
-      "Your organisation uses WasteSync, but your account has not been given access to it. Please ask your administrator to grant you a WasteSync role.",
+    textKey: "access.permissionDenied",
     // A "locked padlock" icon path.
     iconPath:
       "M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z",
@@ -72,10 +71,7 @@ const VARIANTS = {
   // cover (for example an HR manager opening Audit Logs).
   [ACCESS.PAGE_NOT_PERMITTED]: {
     accent: "slate",
-    eyebrow: "Not Part Of Your Role",
-    title: "This page is not part of your role",
-    message:
-      "You have WasteSync access, but this particular page is outside what your role covers. Use the menu to go back to the pages you can work with, or ask your administrator if you need more access.",
+    textKey: "access.pageNotPermitted",
     // An "eye with a line through it" icon path.
     iconPath:
       "M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88",
@@ -107,11 +103,17 @@ const ACCENT_CLASSES = {
 
 export default function AccessRestricted({ variant }) {
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
 
   // If an unknown variant is passed, fall back to the "module unavailable"
   // message so the user always sees something sensible.
   const content = VARIANTS[variant] ?? VARIANTS[ACCESS.MODULE_UNAVAILABLE];
   const accent = ACCENT_CLASSES[content.accent] ?? ACCENT_CLASSES.amber;
+
+  // The three sentences for this situation, in the user's language.
+  const eyebrow = t(`${content.textKey}.eyebrow`);
+  const title = t(`${content.textKey}.title`);
+  const message = t(`${content.textKey}.message`);
 
   // "This page is not part of your role" is different from every other case here.
   // The other four mean the person cannot use WasteSync AT ALL, so signing out is
@@ -154,20 +156,18 @@ export default function AccessRestricted({ variant }) {
         <p
           className={`text-xs font-semibold tracking-widest uppercase mb-3 ${accent.eyebrow}`}
         >
-          {content.eyebrow}
+          {eyebrow}
         </p>
 
-        <h1 className="text-2xl font-bold text-slate-900 mb-4">
-          {content.title}
-        </h1>
+        <h1 className="text-2xl font-bold text-slate-900 mb-4">{title}</h1>
 
-        <p className="text-slate-500 mb-6">{content.message}</p>
+        <p className="text-slate-500 mb-6">{message}</p>
 
         {/* Show which account this is, so an admin can help faster. This is only
             the email the user already knows — no sensitive data. */}
         {user?.email && (
           <p className="text-sm text-slate-400 mb-6">
-            Signed in as{" "}
+            {t("access.signedInAs")}{" "}
             <span className="text-slate-600 font-medium">{user.email}</span>
           </p>
         )}
@@ -178,7 +178,7 @@ export default function AccessRestricted({ variant }) {
             menu is still there and the user simply picks another page. */}
         {!isPageLevel && (
           <Button variant="secondary" onClick={logout}>
-            Sign out
+            {t("access.signOut")}
           </Button>
         )}
       </Card>

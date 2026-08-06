@@ -15,18 +15,9 @@ import {
 } from "recharts";
 import { fetchDashboard } from "../store/slices/dashboardSlice";
 import { Card, Loader, AlertBanner, Badge, Button } from "../components/common";
-import {
-  WASTE_CATEGORIES,
-  MONTH_NAMES,
-  CATEGORY_COLORS,
-} from "../utils/constants";
+import { WASTE_CATEGORIES, CATEGORY_COLORS } from "../utils/constants";
 import { useCapabilities } from "../hooks/useCapabilities";
-
-// ── Small helpers ────────────────────────────────────────────────────────────
-
-// Turn a number into a friendly "1,234" string. Used for every weight/count so
-// big numbers stay readable (and never show NaN if the value is missing).
-const fmt = (n) => Number(n || 0).toLocaleString();
+import { useTranslation } from "../hooks/useTranslation";
 
 // ── Inline icons ─────────────────────────────────────────────────────────────
 // We draw the icons inline as SVG so the dashboard needs no extra icon library.
@@ -126,6 +117,12 @@ function MetricCard({ icon, label, value, hint, accent = "emerald" }) {
 //
 // The backend decides the state (see utils/bdoDeadlines.js); this only draws it.
 function FilingDeadlineBanner({ obligation, canOpenReports }) {
+  // Every sentence in this banner is about a legal date, so it must read correctly
+  // in the user's own language. formatDate also writes the date the way that
+  // language writes dates — 15.03.2026 in Polish, 15/03/2026 in English — which
+  // matters here more than anywhere else on the page.
+  const { t, formatDate } = useTranslation();
+
   if (!obligation) return null;
 
   const {
@@ -139,8 +136,8 @@ function FilingDeadlineBanner({ obligation, canOpenReports }) {
     annualFee,
   } = obligation;
 
-  // Show the deadline as a plain readable date.
-  const dueDate = new Date(`${deadline}T00:00:00`).toLocaleDateString(undefined, {
+  // Show the deadline as a plain readable date, written the local way.
+  const dueDate = formatDate(`${deadline}T00:00:00`, {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -160,10 +157,11 @@ function FilingDeadlineBanner({ obligation, canOpenReports }) {
       title: "text-red-800",
       body: "text-red-700",
     };
-    headline = `The ${coversYear} report is overdue`;
-    detail = generated
-      ? `It was due on ${dueDate} (${Math.abs(daysRemaining)} days ago). The report has been generated but not yet marked as submitted to the BDO portal.`
-      : `It was due on ${dueDate} (${Math.abs(daysRemaining)} days ago) and has not been generated yet.`;
+    headline = t("filing.overdueTitle", { year: coversYear });
+    detail = t(generated ? "filing.overdueGenerated" : "filing.overdueNotGenerated", {
+      date: dueDate,
+      days: Math.abs(daysRemaining),
+    });
   } else if (submitted) {
     tone = {
       wrap: "border-emerald-200 bg-emerald-50",
@@ -171,8 +169,8 @@ function FilingDeadlineBanner({ obligation, canOpenReports }) {
       title: "text-emerald-800",
       body: "text-emerald-700",
     };
-    headline = `The ${coversYear} report has been filed`;
-    detail = `Nothing outstanding. The next report is due ${dueDate}.`;
+    headline = t("filing.filedTitle", { year: coversYear });
+    detail = t("filing.filedDetail", { date: dueDate });
   } else if (daysRemaining <= 45) {
     tone = {
       wrap: "border-amber-200 bg-amber-50",
@@ -180,10 +178,15 @@ function FilingDeadlineBanner({ obligation, canOpenReports }) {
       title: "text-amber-800",
       body: "text-amber-700",
     };
-    headline = `The ${coversYear} report is due in ${daysRemaining} ${daysRemaining === 1 ? "day" : "days"}`;
-    detail = `It must be filed in the BDO portal by ${dueDate}.${
-      generated ? " It has been generated — mark it submitted once it is filed." : ""
-    }`;
+    // "1 day" and "5 days" are worded differently in both languages, so there are
+    // two sentences to pick from rather than one with a number glued on.
+    headline = t(daysRemaining === 1 ? "filing.dueSoonTitleOne" : "filing.dueSoonTitle", {
+      year: coversYear,
+      days: daysRemaining,
+    });
+    detail =
+      t("filing.dueSoonDetail", { date: dueDate }) +
+      (generated ? t("filing.dueSoonGeneratedSuffix") : "");
   } else {
     tone = {
       wrap: "border-slate-200 bg-white",
@@ -191,13 +194,12 @@ function FilingDeadlineBanner({ obligation, canOpenReports }) {
       title: "text-slate-800",
       body: "text-slate-500",
     };
-    headline = `Next BDO report: ${coversYear}`;
-    detail = `Due ${dueDate} — ${daysRemaining} days away.`;
+    headline = t("filing.nextTitle", { year: coversYear });
+    detail = t("filing.nextDetail", { date: dueDate, days: daysRemaining });
     // Explain the long gap: we skipped the earlier year on purpose because this
     // account did not exist then, rather than because nothing is owed.
     if (predatesAccount) {
-      detail +=
-        " Earlier years are not shown because they are from before this account was set up — check them directly in the BDO portal if you need to.";
+      detail += t("filing.predatesAccount");
     }
   }
 
@@ -214,18 +216,18 @@ function FilingDeadlineBanner({ obligation, canOpenReports }) {
             {/* The register fee is a separate yearly obligation. WasteSync cannot
                 see payments, so this is a reminder and never a status. */}
             <div className="mt-1.5 text-xs text-slate-400">
-              Separately, the annual register fee (opłata roczna) is due by{" "}
-              {new Date(`${annualFee.deadline}T00:00:00`).toLocaleDateString(undefined, {
-                day: "numeric",
-                month: "long",
+              {t("filing.annualFee", {
+                date: formatDate(`${annualFee.deadline}T00:00:00`, {
+                  day: "numeric",
+                  month: "long",
+                }),
               })}
-              . WasteSync does not track payments.
             </div>
           </div>
         </div>
         {canOpenReports && !submitted && (
           <Link to="/reports" className="shrink-0">
-            <Button variant={overdue ? "danger" : "primary"}>Go to reports</Button>
+            <Button variant={overdue ? "danger" : "primary"}>{t("filing.goToReports")}</Button>
           </Link>
         )}
       </div>
@@ -249,12 +251,22 @@ function SectionTitle({ icon, children, right }) {
 }
 
 // ── Custom chart tooltip — a clean white card instead of Recharts' default ─────
-function ChartTooltip({ active, payload, label }) {
+//
+// `formatNumber` and `unit` are passed IN as props rather than read from
+// useTranslation() inside here. This element is handed to Recharts, which decides
+// how and when to render it — so keeping it a plain component that only uses what it
+// is given means it cannot break if Recharts ever renders it differently. The page
+// below already has both values to hand.
+function ChartTooltip({ active, payload, label, formatNumber, unit }) {
   if (!active || !payload || payload.length === 0) return null;
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
       <div className="text-xs font-medium text-slate-500">{label}</div>
-      <div className="text-sm font-semibold text-slate-900">{fmt(payload[0].value)} kg</div>
+      {/* The weight is written the local way: "1 234,5" for a Polish reader,
+          "1,234.5" for an English one. */}
+      <div className="text-sm font-semibold text-slate-900">
+        {formatNumber(payload[0].value)} {unit}
+      </div>
     </div>
   );
 }
@@ -274,29 +286,36 @@ export default function Dashboard() {
   const canReadAudit = can(CAPABILITIES.AUDIT_READ);
   const canReadReports = can(CAPABILITIES.REPORT_READ);
 
+  // Words, month names, category names, numbers and dates for the chosen language.
+  const { t, monthNames, categoryLabel, formatNumber, formatDate, formatDateTime } =
+    useTranslation();
+
   // Reload the dashboard whenever the year changes. There is no company scope any
   // more: one customer has one company, so there was never anything to choose.
   useEffect(() => {
     dispatch(fetchDashboard({ year }));
   }, [dispatch, year]);
 
-  if (loading && !data) return <Loader label="Loading dashboard…" />;
+  if (loading && !data) return <Loader label={t("dashboard.loading")} />;
 
   const m = data?.metrics || {};
   // The company name comes straight from RegulaOne. It is null only when
   // RegulaOne was unreachable — the figures below are still correct either way.
   const companyName = data?.company?.name;
 
-  // Shape the category totals for the bar chart.
+  // Shape the category totals for the bar chart. The category NAME is looked up in
+  // the language files, so the bars and the legend re-label themselves when the
+  // language is switched; the key stays the backend code.
   const categoryData = WASTE_CATEGORIES.map((c) => ({
-    name: c.label,
+    name: categoryLabel(c.key),
     key: c.key,
     kg: data?.yearSummary?.categoryTotals?.[c.key] ?? 0,
   }));
 
-  // Shape the monthly trend for the line chart.
+  // Shape the monthly trend for the line chart. Three letters is enough for an axis
+  // label and gives the usual short month names in both languages (Jan / sty).
   const trendData = (data?.monthlyTrend || []).map((row) => ({
-    month: MONTH_NAMES[row.month - 1].slice(0, 3),
+    month: monthNames[row.month - 1].slice(0, 3),
     kg: row.totalKg,
   }));
 
@@ -317,19 +336,26 @@ export default function Dashboard() {
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/15">
                 {icons.recycle}
               </span>
-              WasteSync · BDO Reporting
+              {t("dashboard.eyebrow")}
             </div>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight">Dashboard</h1>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight">{t("dashboard.title")}</h1>
             <p className="mt-1 text-sm text-emerald-100">
-              {companyName ? `${companyName} · ` : ""}
-              Reporting overview for {data?.year ?? year}
+              {/* Two whole sentences rather than one with the company name glued on
+                  the front: Polish and English do not put the name in the same
+                  place, so each language decides for itself. */}
+              {companyName
+                ? t("dashboard.subtitleWithCompany", {
+                    company: companyName,
+                    year: data?.year ?? year,
+                  })
+                : t("dashboard.subtitle", { year: data?.year ?? year })}
             </p>
           </div>
 
           {/* Year control, styled for the dark hero background. */}
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm">
-              <span className="text-emerald-100">Year</span>
+              <span className="text-emerald-100">{t("common.year")}</span>
               <select
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value))}
@@ -363,27 +389,31 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard
           icon={icons.clipboard}
-          label="Entries this year"
-          value={fmt(m.totalEntriesThisYear)}
+          label={t("dashboard.metrics.entriesThisYear")}
+          value={formatNumber(m.totalEntriesThisYear)}
           accent="violet"
         />
         <MetricCard
           icon={icons.report}
-          label="Reports generated"
-          value={fmt(m.reportsGeneratedThisYear)}
+          label={t("dashboard.metrics.reportsGenerated")}
+          value={formatNumber(m.reportsGeneratedThisYear)}
           accent="emerald"
         />
         <MetricCard
           icon={icons.alert}
-          label="Missing months"
-          value={fmt(m.missingMonthsCount)}
-          hint={m.missingMonthsCount > 0 ? "Needs attention" : "All caught up"}
+          label={t("dashboard.metrics.missingMonths")}
+          value={formatNumber(m.missingMonthsCount)}
+          hint={
+            m.missingMonthsCount > 0
+              ? t("dashboard.metrics.needsAttention")
+              : t("dashboard.metrics.allCaughtUp")
+          }
           accent={m.missingMonthsCount > 0 ? "amber" : "emerald"}
         />
         <MetricCard
           icon={icons.recycle}
-          label="Total waste (kg)"
-          value={fmt(m.grandTotalKg)}
+          label={t("dashboard.metrics.totalWaste")}
+          value={formatNumber(m.grandTotalKg)}
           accent="emerald"
         />
       </div>
@@ -391,7 +421,7 @@ export default function Dashboard() {
       {/* ── Charts ──────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="p-5">
-          <SectionTitle icon={icons.bars}>Waste by category (kg)</SectionTitle>
+          <SectionTitle icon={icons.bars}>{t("dashboard.charts.byCategory")}</SectionTitle>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={categoryData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eef2f6" vertical={false} />
@@ -406,7 +436,10 @@ export default function Dashboard() {
                 tickLine={false}
                 axisLine={false}
               />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+              <Tooltip
+                content={<ChartTooltip formatNumber={formatNumber} unit={t("common.kg")} />}
+                cursor={{ fill: "rgba(148,163,184,0.08)" }}
+              />
               <Bar dataKey="kg" radius={[6, 6, 0, 0]} maxBarSize={56}>
                 {categoryData.map((entry) => (
                   <Cell key={entry.key} fill={CATEGORY_COLORS[entry.key] || "#64748b"} />
@@ -429,7 +462,7 @@ export default function Dashboard() {
         </Card>
 
         <Card className="p-5">
-          <SectionTitle icon={icons.trend}>Monthly trend (kg)</SectionTitle>
+          <SectionTitle icon={icons.trend}>{t("dashboard.charts.monthlyTrend")}</SectionTitle>
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={trendData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
               <defs>
@@ -451,7 +484,10 @@ export default function Dashboard() {
                 tickLine={false}
                 axisLine={false}
               />
-              <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }} />
+              <Tooltip
+                content={<ChartTooltip formatNumber={formatNumber} unit={t("common.kg")} />}
+                cursor={{ stroke: "#cbd5e1", strokeWidth: 1 }}
+              />
               <Area
                 type="monotone"
                 dataKey="kg"
@@ -469,13 +505,13 @@ export default function Dashboard() {
       {/* ── Alerts + reporting status ───────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="p-5">
-          <SectionTitle icon={icons.shield}>Compliance alerts</SectionTitle>
+          <SectionTitle icon={icons.shield}>{t("dashboard.alerts.title")}</SectionTitle>
           {(!data?.complianceAlerts || data.complianceAlerts.length === 0) ? (
             <div className="flex items-center gap-3 rounded-xl bg-emerald-50 px-4 py-5 text-sm text-emerald-700">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                 {icons.check}
               </span>
-              No issues — everything looks good.
+              {t("dashboard.alerts.none")}
             </div>
           ) : (
             <div className="space-y-2">
@@ -491,9 +527,11 @@ export default function Dashboard() {
         {/* Reporting status is now a single row, not a list: there is one company
             and one answer — has this year been reported or not. */}
         <Card className="p-5">
-          <SectionTitle icon={icons.check}>Reporting status ({data?.year})</SectionTitle>
+          <SectionTitle icon={icons.check}>
+            {t("dashboard.reportingStatus.title", { year: data?.year ?? year })}
+          </SectionTitle>
           {!data?.reportingStatus ? (
-            <p className="text-sm text-slate-500">Nothing to report on yet.</p>
+            <p className="text-sm text-slate-500">{t("dashboard.reportingStatus.nothingYet")}</p>
           ) : (
             <div className="flex items-center justify-between py-2.5">
               <div className="flex items-center gap-3">
@@ -502,17 +540,19 @@ export default function Dashboard() {
                 </span>
                 <div>
                   <div className="text-sm font-medium text-slate-800">
-                    {data.reportingStatus.companyName || "Your company"}
+                    {data.reportingStatus.companyName ||
+                      t("dashboard.reportingStatus.yourCompany")}
                   </div>
                   <div className="font-mono text-xs text-slate-400">
-                    {data.reportingStatus.bdoRegistrationNumber || "No BDO number set"}
+                    {data.reportingStatus.bdoRegistrationNumber ||
+                      t("dashboard.reportingStatus.noBdoNumber")}
                   </div>
                 </div>
               </div>
               {data.reportingStatus.reported ? (
-                <Badge tone="green">Reported</Badge>
+                <Badge tone="green">{t("dashboard.reportingStatus.reported")}</Badge>
               ) : (
-                <Badge tone="amber">Not reported</Badge>
+                <Badge tone="amber">{t("dashboard.reportingStatus.notReported")}</Badge>
               )}
             </div>
           )}
@@ -534,14 +574,14 @@ export default function Dashboard() {
             icon={icons.report}
             right={
               <Link to="/reports" className="text-xs font-medium text-emerald-700 hover:underline">
-                View all
+                {t("dashboard.recentReports.viewAll")}
               </Link>
             }
           >
-            Recent reports
+            {t("dashboard.recentReports.title")}
           </SectionTitle>
           {(!data?.recentReports || data.recentReports.length === 0) ? (
-            <p className="text-sm text-slate-500">No reports generated yet.</p>
+            <p className="text-sm text-slate-500">{t("dashboard.recentReports.none")}</p>
           ) : (
             <div className="space-y-1">
               {data.recentReports.map((r) => (
@@ -554,11 +594,9 @@ export default function Dashboard() {
                     <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                       {icons.report}
                     </span>
-                    {r.year} · {r.companyName || "—"}
+                    {r.year} · {r.companyName || t("common.empty")}
                   </span>
-                  <span className="text-xs text-slate-400">
-                    {new Date(r.createdAt).toLocaleDateString()}
-                  </span>
+                  <span className="text-xs text-slate-400">{formatDate(r.createdAt)}</span>
                 </Link>
               ))}
             </div>
@@ -576,14 +614,14 @@ export default function Dashboard() {
             icon={icons.clock}
             right={
               <Link to="/audit-logs" className="text-xs font-medium text-emerald-700 hover:underline">
-                View audit log
+                {t("dashboard.recentActivity.viewAuditLog")}
               </Link>
             }
           >
-            Recent activity
+            {t("dashboard.recentActivity.title")}
           </SectionTitle>
           {(!data?.recentAuditLogs || data.recentAuditLogs.length === 0) ? (
-            <p className="text-sm text-slate-500">No activity yet.</p>
+            <p className="text-sm text-slate-500">{t("dashboard.recentActivity.none")}</p>
           ) : (
             <div className="space-y-1">
               {data.recentAuditLogs.map((log) => (
@@ -593,11 +631,12 @@ export default function Dashboard() {
                 >
                   <span className="flex items-center gap-2 text-slate-700">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    {/* The action CODE is shown as it was recorded, never
+                        translated. An audit entry must read the same for an
+                        inspector whatever language the screen happens to be in. */}
                     {log.action}
                   </span>
-                  <span className="text-xs text-slate-400">
-                    {new Date(log.createdAt).toLocaleString()}
-                  </span>
+                  <span className="text-xs text-slate-400">{formatDateTime(log.createdAt)}</span>
                 </div>
               ))}
             </div>

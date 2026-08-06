@@ -12,6 +12,7 @@ import { WASTE_CATEGORIES, recentYears } from "../utils/constants";
 import { fetchThresholds, saveThreshold, deleteThreshold } from "../api/thresholdApi";
 import { getErrorMessage } from "../api/axiosClient";
 import { useCapabilities } from "../hooks/useCapabilities";
+import { useTranslation } from "../hooks/useTranslation";
 
 // The Thresholds page lets an administrator set the legal limits that annual
 // reports are checked against. Before this page existed there was NO way to fill
@@ -35,6 +36,9 @@ export default function Thresholds() {
   // question and matches exactly what the backend now enforces.
   const { can, CAPABILITIES } = useCapabilities();
   const canEdit = can(CAPABILITIES.THRESHOLD_WRITE);
+
+  // Words and category names for the chosen language (Polish by default).
+  const { t, categoryLabel } = useTranslation();
 
   const [year, setYear] = useState(recentYears()[0]);
   const [loading, setLoading] = useState(true);
@@ -64,11 +68,16 @@ export default function Thresholds() {
       }
       setRows(byCategory);
     } catch (err) {
-      setError(getErrorMessage(err, "Could not load thresholds"));
+      // getErrorMessage prefers the server's own explanation and only falls back to
+      // the wording we pass in, so it is that fallback which needs translating.
+      setError(getErrorMessage(err, t("thresholds.loadError")));
     } finally {
       setLoading(false);
     }
-  }, [year]);
+    // `t` is in the dependency list because it changes when the language changes.
+    // Without it, an error raised in Polish would keep its Polish wording after the
+    // user switched to English until they reloaded the page.
+  }, [year, t]);
 
   useEffect(() => {
     load();
@@ -106,9 +115,15 @@ export default function Thresholds() {
           maxWeightKg: saved.maxWeightKg ?? "",
         },
       }));
-      setNotice(`Saved the limit for ${category} (${year}).`);
+      // The message names the category the way the user sees it on screen
+      // ("Papier i tektura"), not the internal code ("PAPER").
+      setNotice(
+        t("thresholds.savedNotice", { category: categoryLabel(category), year })
+      );
     } catch (err) {
-      setError(getErrorMessage(err, `Could not save the limit for ${category}`));
+      setError(
+        getErrorMessage(err, t("thresholds.saveError", { category: categoryLabel(category) }))
+      );
     } finally {
       setSavingKey("");
     }
@@ -127,9 +142,13 @@ export default function Thresholds() {
         ...prev,
         [category]: { reportingThresholdKg: "", maxWeightKg: "" },
       }));
-      setNotice(`Removed the limit for ${category} (${year}).`);
+      setNotice(
+        t("thresholds.removedNotice", { category: categoryLabel(category), year })
+      );
     } catch (err) {
-      setError(getErrorMessage(err, `Could not remove the limit for ${category}`));
+      setError(
+        getErrorMessage(err, t("thresholds.removeError", { category: categoryLabel(category) }))
+      );
     } finally {
       setSavingKey("");
     }
@@ -138,17 +157,14 @@ export default function Thresholds() {
   return (
     <div>
       <PageHeader
-        title="Legal Thresholds"
-        subtitle="Set the BDO legal limits each annual report is checked against."
+        title={t("thresholds.title")}
+        subtitle={t("thresholds.subtitle")}
         actions={<YearSelector value={year} onChange={setYear} />}
       />
 
       {!canEdit && (
         <div className="mb-4">
-          <AlertBanner level="info">
-            You can view the configured limits, but only an administrator can change
-            them.
-          </AlertBanner>
+          <AlertBanner level="info">{t("thresholds.readOnlyNotice")}</AlertBanner>
         </div>
       )}
 
@@ -164,23 +180,20 @@ export default function Thresholds() {
       )}
 
       <Card className="p-6">
-        <div className="mb-4 text-sm text-slate-500">
-          Values are in kilograms (kg). Leave a box empty to set no limit for that
-          category. The legal maximum cannot be lower than the reporting threshold.
-        </div>
+        <div className="mb-4 text-sm text-slate-500">{t("thresholds.hint")}</div>
 
         {loading ? (
-          <Loader label="Loading thresholds…" />
+          <Loader label={t("thresholds.loading")} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-slate-500 border-b border-slate-200">
-                  <th className="py-2 pr-4">Category</th>
-                  <th className="py-2 pr-4">Reporting threshold (kg)</th>
-                  <th className="py-2 pr-4">Legal maximum (kg)</th>
-                  <th className="py-2 pr-4">Status</th>
-                  {canEdit && <th className="py-2 text-right">Actions</th>}
+                  <th className="py-2 pr-4">{t("common.category")}</th>
+                  <th className="py-2 pr-4">{t("thresholds.reportingThreshold")}</th>
+                  <th className="py-2 pr-4">{t("thresholds.legalMaximum")}</th>
+                  <th className="py-2 pr-4">{t("common.status")}</th>
+                  {canEdit && <th className="py-2 text-right">{t("common.actions")}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -190,9 +203,15 @@ export default function Thresholds() {
                   const busy = savingKey === c.key;
                   return (
                     <tr key={c.key} className="border-b border-slate-100">
+                      {/* WHAT CHANGED AND WHY: this cell used to print the English
+                          name with the Polish name in small grey text underneath.
+                          That was a workaround for having no language switch — it was
+                          the only way a Polish user could see a Polish word here, and
+                          it cost every user a line of text they could not read. With
+                          a real switch in the header, one name in the user's own
+                          language is both correct and shorter. */}
                       <td className="py-3 pr-4">
-                        <div className="font-medium text-slate-800">{c.label}</div>
-                        <div className="text-xs text-slate-400">{c.labelPl}</div>
+                        <div className="font-medium text-slate-800">{categoryLabel(c.key)}</div>
                       </td>
                       <td className="py-3 pr-4">
                         <input
@@ -224,9 +243,9 @@ export default function Thresholds() {
                       </td>
                       <td className="py-3 pr-4">
                         {isSet ? (
-                          <Badge tone="green">Configured</Badge>
+                          <Badge tone="green">{t("thresholds.configured")}</Badge>
                         ) : (
-                          <Badge tone="amber">Not set</Badge>
+                          <Badge tone="amber">{t("common.notSet")}</Badge>
                         )}
                       </td>
                       {canEdit && (
@@ -237,14 +256,14 @@ export default function Thresholds() {
                             disabled={busy}
                             onClick={() => onSave(c.key)}
                           >
-                            {busy ? "Saving…" : "Save"}
+                            {busy ? t("common.saving") : t("common.save")}
                           </Button>
                           <Button
                             variant="secondary"
                             disabled={busy || !row._id}
                             onClick={() => onDelete(c.key)}
                           >
-                            Clear
+                            {t("common.clear")}
                           </Button>
                         </td>
                       )}

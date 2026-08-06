@@ -3,6 +3,8 @@ import { useSelector } from "react-redux";
 import { useAuth } from "../../context/AuthContext";
 import { useCapabilities } from "../../hooks/useCapabilities";
 import { CAPABILITIES } from "../../config/capabilities";
+import { useTranslation } from "../../hooks/useTranslation";
+import LanguageToggle from "./LanguageToggle";
 
 // The main navigation bar shown on every signed-in page.
 //
@@ -14,14 +16,21 @@ import { CAPABILITIES } from "../../config/capabilities";
 // Hiding a link is only about a tidy menu. Every page is also wrapped in
 // RequireCapability, and the backend refuses the API calls regardless — typing the
 // address by hand gets a person nowhere.
+//
+// WHAT CHANGED AND WHY: each item used to carry a finished English word in
+// `label`. It now carries a `labelKey` instead — the name of an entry in the
+// language files. The old way could only ever produce one language, so a Polish
+// user read an English menu in an app built for the Polish market. Looking the
+// word up while drawing means the menu re-labels itself the moment the PL / EN
+// switch is pressed, with no page reload and no second copy of this list.
 const navItems = [
-  { to: "/", label: "Dashboard", end: true, capability: CAPABILITIES.DASHBOARD_READ },
+  { to: "/", labelKey: "nav.dashboard", end: true, capability: CAPABILITIES.DASHBOARD_READ },
   // One company per customer, read from RegulaOne — so the link is singular.
-  { to: "/companies", label: "Company", capability: CAPABILITIES.COMPANY_READ },
-  { to: "/waste-entries", label: "Waste Entries", capability: CAPABILITIES.WASTE_ENTRY_READ },
-  { to: "/reports", label: "Reports", capability: CAPABILITIES.REPORT_READ },
-  { to: "/thresholds", label: "Thresholds", capability: CAPABILITIES.THRESHOLD_READ },
-  { to: "/audit-logs", label: "Audit Logs", capability: CAPABILITIES.AUDIT_READ },
+  { to: "/companies", labelKey: "nav.company", capability: CAPABILITIES.COMPANY_READ },
+  { to: "/waste-entries", labelKey: "nav.wasteEntries", capability: CAPABILITIES.WASTE_ENTRY_READ },
+  { to: "/reports", labelKey: "nav.reports", capability: CAPABILITIES.REPORT_READ },
+  { to: "/thresholds", labelKey: "nav.thresholds", capability: CAPABILITIES.THRESHOLD_READ },
+  { to: "/audit-logs", labelKey: "nav.auditLogs", capability: CAPABILITIES.AUDIT_READ },
 ];
 
 export default function Header() {
@@ -31,6 +40,9 @@ export default function Header() {
   // What this user is allowed to do decides which menu items appear.
   const { can } = useCapabilities();
   const items = navItems.filter((item) => can(item.capability));
+
+  // t() gives us the words for the language the user picked (Polish by default).
+  const { t } = useTranslation();
 
   return (
     <header className="fixed top-0 inset-x-0 z-40 h-[65px] bg-white border-b border-slate-200">
@@ -42,7 +54,7 @@ export default function Header() {
           </div>
           <div className="leading-tight">
             <div className="font-semibold text-slate-900">WasteSync</div>
-            <div className="text-[11px] text-slate-500">BDO Reporting</div>
+            <div className="text-[11px] text-slate-500">{t("nav.brandTagline")}</div>
           </div>
         </div>
 
@@ -61,21 +73,26 @@ export default function Header() {
                 }`
               }
             >
-              {item.label}
+              {t(item.labelKey)}
             </NavLink>
           ))}
         </nav>
 
-        {/* User + logout */}
+        {/* Language + user + logout */}
         <div className="flex items-center gap-3">
+          {/* The PL / EN switch. It is deliberately NOT hidden on small screens,
+              unlike the e-mail beside it: on a phone the menu collapses away, so
+              this would be the only way left to change language. */}
+          <LanguageToggle />
+
           <span className="hidden sm:block text-sm text-slate-600 max-w-[160px] truncate">
-            {user?.email || user?.name || "Signed in"}
+            {user?.email || user?.name || t("nav.signedIn")}
           </span>
           <button
             onClick={logout}
             className="px-3 py-1.5 rounded-md text-sm font-medium text-slate-700 border border-slate-300 hover:bg-slate-50"
           >
-            Log out
+            {t("nav.logOut")}
           </button>
         </div>
       </div>

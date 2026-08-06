@@ -14,10 +14,14 @@ import {
 import { YearSelector } from "../components/common/Selectors";
 import { defaultReportingYear } from "../utils/constants";
 import { useCapabilities } from "../hooks/useCapabilities";
+import { useTranslation } from "../hooks/useTranslation";
 
 export default function Reports() {
   const dispatch = useDispatch();
   const { list, loading, generating, generateError } = useSelector((state) => state.reports);
+
+  // Words and number formatting for the chosen language (Polish by default).
+  const { t, formatNumber } = useTranslation();
 
   // Opens on the year that is actually due, not simply "this year". The annual
   // report covers the PREVIOUS calendar year and is due 15 March.
@@ -46,12 +50,8 @@ export default function Reports() {
   return (
     <div>
       <PageHeader
-        title="Annual Reports"
-        subtitle={
-          canGenerate
-            ? "Generate BDO annual reports (XML for the portal + PDF for your records)."
-            : "BDO annual reports. Open one to see its figures and download the XML or PDF."
-        }
+        title={t("reports.title")}
+        subtitle={canGenerate ? t("reports.subtitleGenerate") : t("reports.subtitleRead")}
         actions={
           <div className="flex items-center gap-3">
             {/* The year picker stays for everyone: a read-only user still needs it
@@ -59,7 +59,7 @@ export default function Reports() {
             <YearSelector value={year} onChange={setYear} />
             {canGenerate && (
               <Button onClick={onGenerate} disabled={generating}>
-                {generating ? "Generating…" : "Generate report"}
+                {generating ? t("reports.generating") : t("reports.generate")}
               </Button>
             )}
           </div>
@@ -73,14 +73,12 @@ export default function Reports() {
       )}
 
       {loading ? (
-        <Loader label="Loading reports…" />
+        <Loader label={t("reports.loading")} />
       ) : list.length === 0 ? (
         <EmptyState
-          title="No reports yet"
+          title={t("reports.emptyTitle")}
           message={
-            canGenerate
-              ? "Choose a year above, then generate your first annual report."
-              : "No annual reports have been generated yet, so there is nothing to review here."
+            canGenerate ? t("reports.emptyMessageGenerate") : t("reports.emptyMessageRead")
           }
         />
       ) : (
@@ -89,13 +87,13 @@ export default function Reports() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-slate-500 border-b border-slate-200">
-                  <th className="px-4 py-3 font-medium">Year</th>
-                  <th className="px-4 py-3 font-medium">Company</th>
-                  <th className="px-4 py-3 font-medium">BDO number</th>
-                  <th className="px-4 py-3 font-medium text-right">Total (kg)</th>
-                  <th className="px-4 py-3 font-medium">Compliance</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium text-right">Version</th>
+                  <th className="px-4 py-3 font-medium">{t("common.year")}</th>
+                  <th className="px-4 py-3 font-medium">{t("reports.table.company")}</th>
+                  <th className="px-4 py-3 font-medium">{t("reports.table.bdoNumber")}</th>
+                  <th className="px-4 py-3 font-medium text-right">{t("reports.table.totalKg")}</th>
+                  <th className="px-4 py-3 font-medium">{t("reports.table.compliance")}</th>
+                  <th className="px-4 py-3 font-medium">{t("common.status")}</th>
+                  <th className="px-4 py-3 font-medium text-right">{t("reports.table.version")}</th>
                   <th className="px-4 py-3 font-medium text-right"></th>
                 </tr>
               </thead>
@@ -105,21 +103,24 @@ export default function Reports() {
                     <td className="px-4 py-3 font-semibold">{r.year}</td>
                     {/* The snapshot taken when the report was filed — not
                         today's company details. That is what an audit needs. */}
-                    <td className="px-4 py-3">{r.companyName || "—"}</td>
+                    <td className="px-4 py-3">{r.companyName || t("common.empty")}</td>
                     <td className="px-4 py-3 font-mono">{r.bdoRegistrationNumber}</td>
-                    <td className="px-4 py-3 text-right">{r.grandTotalKg}</td>
+                    {/* The weight is written the local way (1 234,5 in Polish) rather
+                        than printed raw, so the column matches every other total in
+                        the app. */}
+                    <td className="px-4 py-3 text-right">{formatNumber(r.grandTotalKg)}</td>
                     <td className="px-4 py-3">
                       {r.thresholdValidation?.passed ? (
-                        <Badge tone="green">Passed</Badge>
+                        <Badge tone="green">{t("reports.passed")}</Badge>
                       ) : (
-                        <Badge tone="red">Breach</Badge>
+                        <Badge tone="red">{t("reports.breach")}</Badge>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       {r.status === "SUBMITTED" ? (
-                        <Badge tone="green">Submitted</Badge>
+                        <Badge tone="green">{t("reports.submitted")}</Badge>
                       ) : (
-                        <Badge tone="amber">Generated</Badge>
+                        <Badge tone="amber">{t("reports.generated")}</Badge>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -130,7 +131,7 @@ export default function Reports() {
                         to={`/reports/${r._id}`}
                         className="text-emerald-700 hover:underline font-medium"
                       >
-                        Open
+                        {t("common.open")}
                       </Link>
                     </td>
                   </tr>
