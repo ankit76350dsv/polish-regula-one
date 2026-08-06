@@ -100,6 +100,32 @@ Provably unreferenced by anything (verified by searching the whole source tree):
 - `KSeFFlow/docs/integration.md` — its link to `UserService.updateUserPermissions` now points
   at `UserAdminService`.
 
+### 1.7 Postman collection
+
+`postman/RegulaOne/RegulaOne.postman_collection.json` says of itself "one folder per
+controller", so the folders were renamed and regrouped to match the new controllers
+(`Admin Controller` → `Admin User Controller`, `Package Controller` →
+`Subscription Controller`, `Notification Ingest` + `Email` → `Internal Messaging Controller`,
+new `Dashboard Controller`, and the org / billing requests moved to the folder that now owns
+their endpoint).
+
+**No URL was edited.** Diffing the file against its previous version shows every pre-existing
+request definition is byte-identical; only the folder each one sits in changed.
+
+While checking it against `api-surface.txt`, four endpoints turned out never to have been in
+the collection at all — pre-existing drift, unrelated to this refactor. They were added:
+
+| Added | Why it matters |
+|---|---|
+| `POST /api/auth/forgot-password` | password recovery was untestable from Postman |
+| `POST /api/auth/forgot-password/confirm` | same |
+| `GET /api/admin/overview` | the company compliance dashboard |
+| `GET /api/me/overview` | the personal workspace dashboard |
+
+The collection now covers **66 of 66** endpoints, with no extras and no duplicates — checked
+programmatically against the golden file, not by eye. A note in the collection description
+points maintainers at `api-surface.txt` as the source of truth.
+
 ---
 
 ## 2. Old behaviour

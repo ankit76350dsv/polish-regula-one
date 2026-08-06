@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "2409fe72-f2bb-4d02-bc6d-d41d5d15e768",
     "name": "RegulaOne",
-    "description": "RegulaOne platform API — one folder per controller. Set collection variables baseUrl and token. Most endpoints require a Cognito JWT: log in via SSO Controller > Login (sets an httpOnly cookie in Postman's cookie jar) or paste a bearer into the {{token}} variable.",
+    "description": "RegulaOne platform API — one folder per controller, matching the backend package layout (auth / user / tenant / billing / dashboard / notification). Set collection variables baseUrl and token. Most endpoints require a Cognito JWT: log in via SSO Controller > Login (sets an httpOnly cookie in Postman's cookie jar) or paste a bearer into the {{token}} variable.\n\nEvery URL here is verified against the backend's own endpoint contract, RegulaOne/backend/src/test/resources/api-surface.txt, which ApiSurfaceTest asserts on each build. If an endpoint changes there, update this collection in the same commit.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "47336508",
     "_collection_link": "https://go.postman.co/collection/47336508-2409fe72-f2bb-4d02-bc6d-d41d5d15e768?source=collection_link"
@@ -10,6 +10,7 @@
   "item": [
     {
       "name": "Auth Controller",
+      "description": "AuthController — registration, the person's own profile, and passwords.",
       "item": [
         {
           "name": "Signup",
@@ -164,6 +165,75 @@
           "response": []
         },
         {
+          "name": "Forgot Password (request code)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jan@acme.pl\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "Starts a password recovery. Always answers the same way whether or not the account exists, so it cannot be used to discover who has an account."
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password Confirm (set new password)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jan@acme.pl\",\n  \"code\": \"123456\",\n  \"newPassword\": \"N3wP@ssw0rd!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/forgot-password/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password",
+                "confirm"
+              ]
+            },
+            "description": "Finishes the recovery with the emailed code. code is 6-64 chars, newPassword 8-256."
+          },
+          "response": []
+        },
+        {
           "name": "Change Password",
           "request": {
             "method": "PUT",
@@ -204,6 +274,7 @@
     },
     {
       "name": "SSO Controller",
+      "description": "SSOController — the cookie-based session: sign in, refresh, sign out.",
       "item": [
         {
           "name": "Initiate SSO (browser redirect)",
@@ -346,46 +417,89 @@
       ]
     },
     {
-      "name": "Admin Controller",
+      "name": "Dashboard Controller",
+      "description": "DashboardController — the three read-only overview screens. Each one is audited.",
       "item": [
         {
-          "name": "Setup Organisation",
+          "name": "Company Overview (admin dashboard)",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
               {
                 "key": "Authorization",
                 "value": "Bearer {{token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
               }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Acme Sp. z o.o.\",\n  \"nip\": \"1234567890\",\n  \"regon\": \"123456789\",\n  \"email\": \"contact@acme.pl\",\n  \"phone\": \"+48 22 000 0000\",\n  \"address\": \"ul. Przykladowa 1\",\n  \"city\": \"Warszawa\",\n  \"postalCode\": \"00-001\",\n  \"status\": \"ACTIVE\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/org/setup",
+              "raw": "{{baseUrl}}/api/admin/overview",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "org",
-                "setup"
+                "overview"
+              ]
+            },
+            "description": "One snapshot of the company's compliance position across all six modules. The company is taken from the session token — there is deliberately no tenantId parameter. Requires ROLE_ADMIN."
+          },
+          "response": []
+        },
+        {
+          "name": "My Overview (personal workspace)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/overview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "overview"
+              ]
+            },
+            "description": "What the signed-in person themselves has to do, across the same six modules. Open to any signed-in user, because it only ever returns the caller's own records."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Platform Overview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/overview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "overview"
               ]
             }
           },
           "response": []
-        },
+        }
+      ]
+    },
+    {
+      "name": "Admin User Controller",
+      "description": "AdminUserController (was AdminController) — team management inside ONE company. Requires ROLE_ADMIN.",
+      "item": [
         {
           "name": "Invite User",
           "request": {
@@ -631,91 +745,6 @@
           "response": []
         },
         {
-          "name": "Get Active Packages",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/packages",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "packages"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get Billing History",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/billing",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "billing"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Update My Org",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Acme Sp. z o.o.\",\n  \"email\": \"contact@acme.pl\",\n  \"phone\": \"+48 22 000 0000\",\n  \"address\": \"ul. Przykladowa 1\",\n  \"city\": \"Warszawa\",\n  \"postalCode\": \"00-001\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/org",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "org"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
           "name": "Update User",
           "request": {
             "method": "PUT",
@@ -781,32 +810,9 @@
       ]
     },
     {
-      "name": "SuperAdmin Controller",
+      "name": "Platform User Controller",
+      "description": "PlatformUserController (was SuperAdminController) — user administration across every company. Requires ROLE_SUPER_ADMIN; the only path that may grant platform-level permission codes.",
       "item": [
-        {
-          "name": "Get Platform Overview",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/superadmin/overview",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "superadmin",
-                "overview"
-              ]
-            }
-          },
-          "response": []
-        },
         {
           "name": "Get Team Management Stats",
           "request": {
@@ -1001,7 +1007,332 @@
       ]
     },
     {
-      "name": "Package Controller",
+      "name": "Tenant User Controller",
+      "description": "TenantUserController (was UserController) — the staff list the other RegulaOne apps read. Any signed-in user.",
+      "item": [
+        {
+          "name": "Get Tenant Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "users"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tenant Controller",
+      "description": "TenantController — the customer organisation. Superadmin CRUD, plus the two self-service routes a company admin uses on their own organisation.",
+      "item": [
+        {
+          "name": "Create Tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Sp. z o.o.\",\n  \"nip\": \"1234567890\",\n  \"regon\": \"123456789\",\n  \"email\": \"contact@acme.pl\",\n  \"phone\": \"+48 22 000 0000\",\n  \"address\": \"ul. Przykladowa 1\",\n  \"city\": \"Warszawa\",\n  \"postalCode\": \"00-001\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/tenant",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "tenant"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Tenant",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Sp. z o.o.\",\n  \"nip\": \"1234567890\",\n  \"regon\": \"123456789\",\n  \"email\": \"contact@acme.pl\",\n  \"phone\": \"+48 22 000 0000\",\n  \"address\": \"ul. Przykladowa 1\",\n  \"city\": \"Warszawa\",\n  \"postalCode\": \"00-001\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/tenant/TENANT_ID_HERE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "tenant",
+                "TENANT_ID_HERE"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Tenant Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SUSPENDED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/tenant/TENANT_ID_HERE/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "tenant",
+                "TENANT_ID_HERE",
+                "status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Tenant",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/tenant/TENANT_ID_HERE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "tenant",
+                "TENANT_ID_HERE"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Tenants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/tenants?search=&status=ACTIVE&page=0&size=10&sortBy=createdAt&sortDir=desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "tenants"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortDir",
+                  "value": "desc"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Tenant Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tenant/info",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "info"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Setup Organisation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Sp. z o.o.\",\n  \"nip\": \"1234567890\",\n  \"regon\": \"123456789\",\n  \"email\": \"contact@acme.pl\",\n  \"phone\": \"+48 22 000 0000\",\n  \"address\": \"ul. Przykladowa 1\",\n  \"city\": \"Warszawa\",\n  \"postalCode\": \"00-001\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/org/setup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "org",
+                "setup"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update My Org",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Sp. z o.o.\",\n  \"email\": \"contact@acme.pl\",\n  \"phone\": \"+48 22 000 0000\",\n  \"address\": \"ul. Przykladowa 1\",\n  \"city\": \"Warszawa\",\n  \"postalCode\": \"00-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/org",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "org"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Subscription Controller",
+      "description": "SubscriptionController (was PackageController) — the plan catalogue and customer subscriptions, plus the two company-admin billing routes.",
       "item": [
         {
           "name": "Create Package",
@@ -1337,153 +1668,9 @@
             }
           },
           "response": []
-        }
-      ]
-    },
-    {
-      "name": "Tenant Controller",
-      "item": [
-        {
-          "name": "Create Tenant",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Acme Sp. z o.o.\",\n  \"nip\": \"1234567890\",\n  \"regon\": \"123456789\",\n  \"email\": \"contact@acme.pl\",\n  \"phone\": \"+48 22 000 0000\",\n  \"address\": \"ul. Przykladowa 1\",\n  \"city\": \"Warszawa\",\n  \"postalCode\": \"00-001\",\n  \"status\": \"ACTIVE\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/superadmin/tenant",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "superadmin",
-                "tenant"
-              ]
-            }
-          },
-          "response": []
         },
         {
-          "name": "Update Tenant",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Acme Sp. z o.o.\",\n  \"nip\": \"1234567890\",\n  \"regon\": \"123456789\",\n  \"email\": \"contact@acme.pl\",\n  \"phone\": \"+48 22 000 0000\",\n  \"address\": \"ul. Przykladowa 1\",\n  \"city\": \"Warszawa\",\n  \"postalCode\": \"00-001\",\n  \"status\": \"ACTIVE\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/superadmin/tenant/TENANT_ID_HERE",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "superadmin",
-                "tenant",
-                "TENANT_ID_HERE"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Change Tenant Status",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"SUSPENDED\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/superadmin/tenant/TENANT_ID_HERE/status",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "superadmin",
-                "tenant",
-                "TENANT_ID_HERE",
-                "status"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Delete Tenant",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/superadmin/tenant/TENANT_ID_HERE",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "superadmin",
-                "tenant",
-                "TENANT_ID_HERE"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get All Tenants",
+          "name": "Get Active Packages",
           "request": {
             "method": "GET",
             "header": [
@@ -1493,47 +1680,21 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/superadmin/tenants?search=&status=ACTIVE&page=0&size=10&sortBy=createdAt&sortDir=desc",
+              "raw": "{{baseUrl}}/api/admin/packages",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "superadmin",
-                "tenants"
-              ],
-              "query": [
-                {
-                  "key": "search",
-                  "value": ""
-                },
-                {
-                  "key": "status",
-                  "value": "ACTIVE"
-                },
-                {
-                  "key": "page",
-                  "value": "0"
-                },
-                {
-                  "key": "size",
-                  "value": "10"
-                },
-                {
-                  "key": "sortBy",
-                  "value": "createdAt"
-                },
-                {
-                  "key": "sortDir",
-                  "value": "desc"
-                }
+                "admin",
+                "packages"
               ]
             }
           },
           "response": []
         },
         {
-          "name": "Get My Tenant Info",
+          "name": "Get Billing History",
           "request": {
             "method": "GET",
             "header": [
@@ -1543,43 +1704,14 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/tenant/info",
+              "raw": "{{baseUrl}}/api/admin/billing",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "tenant",
-                "info"
-              ]
-            }
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "User Controller",
-      "item": [
-        {
-          "name": "Get Tenant Users",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/tenant/users",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "tenant",
-                "users"
+                "admin",
+                "billing"
               ]
             }
           },
@@ -1589,6 +1721,7 @@
     },
     {
       "name": "Notification Controller",
+      "description": "NotificationController — the signed-in person's own notifications. module is mandatory on every data endpoint.",
       "item": [
         {
           "name": "List Notifications",
@@ -1901,7 +2034,8 @@
       ]
     },
     {
-      "name": "Notification Ingest Controller",
+      "name": "Internal Messaging Controller",
+      "description": "InternalMessagingController (was NotificationIngestController + EmailController) — service-to-service only. No user session; guarded by the X-Service-Token header.",
       "item": [
         {
           "name": "Ingest Notification Event",
@@ -1940,12 +2074,7 @@
             }
           },
           "response": []
-        }
-      ]
-    },
-    {
-      "name": "Email Controller",
-      "item": [
+        },
         {
           "name": "Send Email",
           "request": {
@@ -1987,6 +2116,7 @@
     },
     {
       "name": "Health Controller",
+      "description": "HealthController — liveness, and a dev-profile-only database check.",
       "item": [
         {
           "name": "Health Check",
