@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
 // SafeWork backend runs on 8082; RegulaOne (auth) runs on 8080
-const SAFEWORK_API = "http://localhost:8082/api";
+const SAFEWORK_API = import.meta.env.VITE_SAFEWORK_BACKEND_URL + "/api";
 
 // We no longer read a token from localStorage or send an Authorization header.
 // The auth token travels in an HttpOnly cookie, which the browser attaches

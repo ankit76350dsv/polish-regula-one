@@ -14,15 +14,16 @@
 // header anymore.
 
 // RegulaOne backend — owns auth/me, login and logout. Default :8080.
-const API_BASE_URL =
-  (import.meta.env.VITE_API_URL ?? "http://localhost:8080") + "/api";
+const API_BASE_URL =import.meta.env.VITE_API_URL + "/api";
+
+console.log("API_BASE_URL:", API_BASE_URL); // Log the API base URL for debugging
 
 // This SafeWork app's own address. Default :3002 (see vite.config.js).
-const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:3002";
+const APP_URL = import.meta.env.VITE_APP_URL;
 
 // The central RegulaOne login page the user is redirected to. Default :3000.
 const CENTRAL_LOGIN_URL =
-  import.meta.env.VITE_CENTRAL_LOGIN_URL ?? "http://localhost:3000/login";
+  import.meta.env.VITE_CENTRAL_LOGIN_URL;
 
 // After a successful central login, RegulaOne sends the user back to this page.
 export const SSO_CALLBACK_URL = `${APP_URL}/auth/sso-callback`;

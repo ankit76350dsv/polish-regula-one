@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslation } from "../hooks/useTranslation";
+import { useOrgBase } from "../utils/paths";
 import {
   fetchEmployees,
   upsertProfile,
@@ -478,6 +479,10 @@ function AddEmployee() {
   const dispatch  = useDispatch();
   const location  = useLocation();
 
+  // "/company/{tenantId}" — the "cancel" / "done" buttons return to the staff list
+  // inside the same company.
+  const orgBase   = useOrgBase();
+
   const { list: employees, loading: listLoading, submitting, submitError } = useSelector((s) => s.employees);
 
   const [currentStep, setCurrentStep]       = useState(1);
@@ -611,7 +616,7 @@ function AddEmployee() {
                 {t("addEmployee.addAnother")}
               </button>
               <button
-                onClick={() => navigate("/employees")}
+                onClick={() => navigate(`${orgBase}/employees`)}
                 className="rounded-xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20"
               >
                 {t("addEmployee.viewList")}
@@ -641,7 +646,7 @@ function AddEmployee() {
               </p>
             </div>
             <button
-              onClick={() => navigate("/employees")}
+              onClick={() => navigate(`${orgBase}/employees`)}
               className="self-start rounded-xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 transition hover:bg-white/20 lg:self-auto"
             >
               {t("common.backToList")}
@@ -995,7 +1000,7 @@ function AddEmployee() {
           )}
           <div className="flex gap-3">
             <button
-              onClick={() => navigate("/employees")}
+              onClick={() => navigate(`${orgBase}/employees`)}
               className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-500 transition hover:bg-slate-50"
             >
               {t("common.cancel")}

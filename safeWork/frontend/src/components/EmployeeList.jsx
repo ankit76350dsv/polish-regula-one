@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchEmployees } from "../store/slices/employeeSlice";
 import { useCapabilities } from "../hooks/useCapabilities";
 import { useTranslation } from "../hooks/useTranslation";
+import { useOrgBase } from "../utils/paths";
 
 // ─── Status config ─────────────────────────────────────────────────────────────
 // Colours stay here; the WORDS come from the dictionary (labelKey), so a badge
@@ -134,6 +135,10 @@ const SITES = [
 function EmployeeList() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+
+  // "/company/{tenantId}" — every page we move the user to stays inside their own
+  // company, so the address bar never loses which staff list they are looking at.
+  const orgBase = useOrgBase();
   const { list: employees, pagination, summary, loading, error } = useSelector((s) => s.employees);
 
   // Creating an employee profile is a write action, so read-only roles (such as
@@ -204,7 +209,7 @@ function EmployeeList() {
               </p>
             </div>
             {/* <button
-              onClick={() => navigate("/employees/add")}
+              onClick={() => navigate(`${orgBase}/employees/add`)}
               className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-900 transition hover:bg-blue-50"
             >
               + Add Employee
@@ -350,7 +355,7 @@ function EmployeeList() {
                     <tr
                       key={employee._id}
                       className="cursor-pointer bg-slate-50 text-sm transition hover:bg-blue-50"
-                      onClick={() => navigate(`/employees/${employee._id}`)}
+                      onClick={() => navigate(`${orgBase}/employees/${employee._id}`)}
                     >
                       {/* Identity — sourced from e.user (RegulaOne) */}
                       <td className="rounded-l-xl px-3 py-4">
@@ -400,7 +405,7 @@ function EmployeeList() {
                       <td className="rounded-r-xl px-3 py-4 text-right">
                         <div className="flex justify-end gap-2" onClick={(ev) => ev.stopPropagation()}>
                           <button
-                            onClick={() => navigate(`/employees/${employee._id}`)}
+                            onClick={() => navigate(`${orgBase}/employees/${employee._id}`)}
                             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                           >
                             {t("common.view")}
@@ -432,7 +437,7 @@ function EmployeeList() {
                   </p>
                   {canAddEmployee && !searchTerm && selectedDepartment === "All" && selectedSite === "All" && selectedStatus === "All" && (
                     <button
-                      onClick={() => navigate("/employees/add")}
+                      onClick={() => navigate(`${orgBase}/employees/add`)}
                       className="mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"
                     >
                       {t("employees.addFirst")}

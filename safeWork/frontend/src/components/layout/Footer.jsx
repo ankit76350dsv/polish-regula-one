@@ -1,9 +1,14 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useOrgBase } from "../../utils/paths";
 
 export default function Footer() {
   // t() returns the wording for the language the user picked (Polish by default).
   const { t } = useTranslation();
+
+  // "/company/{tenantId}" — these pages live inside the company like every other,
+  // so the footer links carry the company address too.
+  const orgBase = useOrgBase();
 
   return (
     <footer className="border-t border-slate-200 bg-white mt-auto">
@@ -18,9 +23,9 @@ export default function Footer() {
             <span className="text-slate-500 text-sm">{t("footer.rights")}</span>
           </div>
           <div className="flex items-center gap-5 text-sm text-slate-400">
-            <Link to="/privacy" className="hover:text-emerald-600 transition-colors">{t("footer.privacy")}</Link>
-            <Link to="/terms"   className="hover:text-emerald-600 transition-colors">{t("footer.terms")}</Link>
-            <Link to="/contact" className="hover:text-emerald-600 transition-colors">{t("footer.contact")}</Link>
+            <Link to={`${orgBase}/privacy`} className="hover:text-emerald-600 transition-colors">{t("footer.privacy")}</Link>
+            <Link to={`${orgBase}/terms`}   className="hover:text-emerald-600 transition-colors">{t("footer.terms")}</Link>
+            <Link to={`${orgBase}/contact`} className="hover:text-emerald-600 transition-colors">{t("footer.contact")}</Link>
           </div>
         </div>
       </div>

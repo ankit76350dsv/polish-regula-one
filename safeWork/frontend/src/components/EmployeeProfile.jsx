@@ -12,8 +12,10 @@ import {
 } from "../store/slices/employeeSlice";
 import { useCapabilities } from "../hooks/useCapabilities";
 import { useTranslation } from "../hooks/useTranslation";
+import { useOrgBase } from "../utils/paths";
 
-const API_BASE_URL = "http://localhost:8082/api";
+const API_BASE_URL = import.meta.env.VITE_SAFEWORK_BACKEND_URL + "/api";
+
 // We no longer read a token from localStorage or send an Authorization header.
 // The auth token travels in an HttpOnly cookie, which axios attaches
 // automatically when we set `withCredentials: true` on the request.
@@ -744,9 +746,15 @@ function EligibilityTab({ employee }) {
 // ─── Main Component ────────────────────────────────────────────────────────────
 function EmployeeProfile() {
   const { t, language } = useTranslation();
+  // Only the employee id is read here. The tenantId also sits in the address now,
+  // but we deliberately IGNORE it: the record is fetched with the signed-in session
+  // and the backend decides which company's employee may be returned.
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+
+  // "/company/{tenantId}" — the "back to list" buttons stay inside this company.
+  const orgBase = useOrgBase();
 
   const { selected: employee, selectedLoading, selectedError, submitting, submitError } =
     useSelector((s) => s.employees);
@@ -890,7 +898,7 @@ function EmployeeProfile() {
         <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
           <p className="mb-2 font-bold text-red-700">{t("profile.loadFailed")}</p>
           <p className="text-sm text-red-600">{selectedError || t("profile.notFound")}</p>
-          <button onClick={() => navigate("/employees")}
+          <button onClick={() => navigate(`${orgBase}/employees`)}
             className="mt-4 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white">
             {t("common.backToList")}
           </button>
@@ -938,7 +946,7 @@ function EmployeeProfile() {
               </div>
               <div>
                 <button
-                  onClick={() => navigate("/employees")}
+                  onClick={() => navigate(`${orgBase}/employees`)}
                   className="mb-2 text-xs text-white-400 hover:text-white transition-colors"
                 >
                   {t("profile.backToList")}

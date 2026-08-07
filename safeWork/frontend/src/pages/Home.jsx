@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "../hooks/useTranslation";
+import { useOrgBase, useOrgHome } from "../utils/paths";
 
 // The numbers stay the same in every language; only the label under them changes,
 // so we store the label as a translation key and look it up when drawing.
@@ -53,6 +54,11 @@ export default function Home() {
   // t() gives the wording for the chosen language (Polish by default).
   const { t } = useTranslation();
 
+  // "/company/{tenantId}" and "/company/{tenantId}/home" — the buttons below stay
+  // inside the signed-in user's own company.
+  const orgBase = useOrgBase();
+  const orgHome = useOrgHome();
+
   return (
     <div>
       {/* Hero */}
@@ -85,7 +91,7 @@ export default function Home() {
 
             <div className="flex flex-wrap gap-4">
               <Link
-                to="/contact"
+                to={`${orgBase}/contact`}
                 className="inline-flex items-center gap-2 px-7 py-3.5 rounded-2xl bg-white text-emerald-700 font-semibold text-base shadow-xl shadow-emerald-900/20 hover:bg-emerald-50 transition-all duration-200 active:scale-95"
               >
                 {t("home.startTrial")}
@@ -94,7 +100,11 @@ export default function Home() {
                 </svg>
               </Link>
               <Link
-                to="/dashboard"
+                /* "View dashboard" now opens the real compliance dashboard at
+                   …/home. It used to point at "/dashboard", which is the address of
+                   THIS very page — so the button reloaded the page the reader was
+                   already on instead of showing them any figures. */
+                to={orgHome}
                 className="inline-flex items-center gap-2 px-7 py-3.5 rounded-2xl border border-white/30 text-white font-semibold text-base hover:bg-white/10 hover:border-white/50 transition-all duration-200"
               >
                 {t("home.viewDashboard")}

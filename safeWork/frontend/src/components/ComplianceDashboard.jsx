@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchDashboard } from "../store/slices/dashboardSlice";
 import { useCapabilities } from "../hooks/useCapabilities";
 import { useTranslation } from "../hooks/useTranslation";
+import { useOrgBase } from "../utils/paths";
 
 // ── Status badges ─────────────────────────────────────────────────────────────
 // Each status keeps its colours here, but its WORDS come from the dictionary
@@ -285,6 +286,8 @@ const ALERT_LEVEL_KEYS = {
 function ExpiringDocumentsTable({ expiringDocuments = [] }) {
   // "navigate" is the function that changes the page the user is looking at.
   const navigate = useNavigate();
+  // "/company/{tenantId}" — we keep the company in the address when we move.
+  const orgBase = useOrgBase();
   // Only roles that may upload a certificate get the "Upload / Renew" action.
   const { can, CAPABILITIES } = useCapabilities();
   const { t } = useTranslation();
@@ -300,7 +303,7 @@ function ExpiringDocumentsTable({ expiringDocuments = [] }) {
           // page, where they can see every employee and their document status.
           <button
             type="button"
-            onClick={() => navigate("/employees")}
+            onClick={() => navigate(`${orgBase}/employees`)}
             aria-label={t("dashboard.viewAllAria")}
             className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors shadow-sm shadow-emerald-500/20"
           >

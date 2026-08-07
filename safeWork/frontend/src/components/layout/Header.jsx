@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useCapabilities } from "../../hooks/useCapabilities";
 import { CAPABILITIES } from "../../config/capabilities";
 import { useTranslation } from "../../hooks/useTranslation";
+import { HOME_SUBPATH, useOrgBase, useOrgHome } from "../../utils/paths";
 import LanguageToggle from "./LanguageToggle";
 
 // Every menu item says which ONE thing a user must be allowed to do before the
@@ -12,8 +13,16 @@ import LanguageToggle from "./LanguageToggle";
 // of clicking it and being turned away.
 //
 // An item with no `capability` is shown to everyone who can open SafeWork.
+//
+// WHAT CHANGED AND WHY: `path` used to hold the FINISHED address ("/employees").
+// It now holds only the tail of it, and the "/company/{tenantId}" start is added
+// below when the menu is drawn. Every page moved under the company it belongs to,
+// so a finished address written here would have had to repeat the tenant id in
+// every row — and any one row left behind would have quietly dropped the user out
+// of their company URL. The old nameless landing page also got a real name, so the
+// first item points at "/home" instead of "/".
 const NAV_ITEMS = [
-  { labelKey: "nav.home", path: "/", capability: CAPABILITIES.DASHBOARD_READ },
+  { labelKey: "nav.home", path: "/home", capability: CAPABILITIES.DASHBOARD_READ },
   {
     labelKey: "nav.employees",
     path: "/employees",
@@ -53,6 +62,11 @@ export default function Header() {
 
   // t() gives us the words for the language the user picked (Polish by default).
   const { t } = useTranslation();
+
+  // "/company/{tenantId}" — the start of every link in this header, and the full
+  // address of the home page for the logo link.
+  const orgBase = useOrgBase();
+  const orgHome = useOrgHome();
 
   // Keep only the menu items this user's role covers. Items with no capability
   // set are always kept. We work this out once per render of the header, and both
@@ -106,7 +120,8 @@ export default function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link
-            to="/"
+            /* The logo goes home — inside the user's own company. */
+            to={orgHome}
             className="flex items-center gap-3 group flex-shrink-0"
             onClick={() => setMobileOpen(false)}
           >
@@ -187,7 +202,7 @@ export default function Header() {
                           {item.children.map((child) => (
                             <NavLink
                               key={child.path}
-                              to={child.path}
+                              to={`${orgBase}${child.path}`}
                               onClick={() => setOpenDropdown(null)}
                               className={({ isActive }) =>
                                 `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-all duration-150 ${
@@ -209,8 +224,13 @@ export default function Header() {
               ) : (
                 <NavLink
                   key={item.path}
-                  to={item.path}
-                  end={item.path === "/"}
+                  // Full address = the company base + this item's tail.
+                  to={`${orgBase}${item.path}`}
+                  // `end` means "highlight only on an exact match". We want it for
+                  // Home only. The other items keep partial matching on purpose, so
+                  // "Employees" stays highlighted while you read one person's
+                  // profile at …/employees/12.
+                  end={item.path === HOME_SUBPATH}
                   className={({ isActive }) =>
                     `px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                       isActive
@@ -238,7 +258,7 @@ export default function Header() {
             </button>
 
             <Link
-              to="/contact"
+              to={`${orgBase}/contact`}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold shadow-md shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:from-emerald-400 hover:to-teal-400 transition-all duration-200 active:scale-95"
             >
               {t("nav.getStarted")}
@@ -330,7 +350,7 @@ export default function Header() {
                     {item.children.map((child) => (
                       <NavLink
                         key={child.path}
-                        to={child.path}
+                        to={`${orgBase}${child.path}`}
                         onClick={() => {
                           setMobileOpen(false);
                           setMobileExpanded(null);
@@ -353,8 +373,9 @@ export default function Header() {
             ) : (
               <NavLink
                 key={item.path}
-                to={item.path}
-                end={item.path === "/"}
+                // Same address rule as the desktop menu above.
+                to={`${orgBase}${item.path}`}
+                end={item.path === HOME_SUBPATH}
                 onClick={() => setMobileOpen(false)}
                 className={({ isActive }) =>
                   `flex py-3 text-sm font-medium border-b border-slate-100 ${
@@ -388,7 +409,7 @@ export default function Header() {
             </button>
 
             <Link
-              to="/contact"
+              to={`${orgBase}/contact`}
               onClick={() => setMobileOpen(false)}
               className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold text-center shadow-md shadow-emerald-500/20 hover:from-emerald-400 hover:to-teal-400 transition-all"
             >
