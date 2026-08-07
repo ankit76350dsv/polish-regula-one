@@ -86,6 +86,7 @@ public class HealthController {
         body.put("version", version);
         body.put("startedAt", READABLE.format(startedAt.atZone(WARSAW)));
         body.put("uptime", humanUptime(Duration.between(startedAt, Instant.now())));
+        body.put("context", "Working on the https...");
 
         return ResponseEntity.ok(body);
     }
