@@ -31,9 +31,18 @@ COPY src ./src
 RUN mvn -B clean package -DskipTests
 
 # ── Stage 2: run ─────────────────────────────────────────────────────────────
+# APP_VERSION identifies WHICH BUILD this image is. The deployment workflow passes
+# GitHub's run number (--build-arg APP_VERSION=${{ github.run_number }}), so it goes up
+# by one on every deploy with nothing to edit by hand. It is baked into the image rather
+# than passed at "docker run", so the number belongs to the image itself: restart the
+# container by hand and it still reports the build it was made from.
+#
+# "dev" when nobody passed one — a local docker build.
 # A JRE, not a JDK: the compiler and build tools have no business in production, and
 # leaving them out removes them as attack surface. Matches java.version=17 in pom.xml.
 FROM eclipse-temurin:17-jre AS runtime
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
 
 # Run as a normal account. A container process running as root that is broken into
 # is root inside the container, which is a much better starting point for an attacker.
