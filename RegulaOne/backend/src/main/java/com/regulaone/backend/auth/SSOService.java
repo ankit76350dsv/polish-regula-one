@@ -1,6 +1,7 @@
 package com.regulaone.backend.auth;
 
 import com.regulaone.backend.config.SSOConfig;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -8,6 +9,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -162,9 +165,109 @@ public class SSOService {
     }
 
     /**
+     * The URL of the central login page, as seen by THIS caller.
+     *
+     * SIMPLE EXPLANATION OF THE PROBLEM THIS SOLVES:
+     * The configured login address for local work is "http://localhost:3000/login".
+     * "localhost" means "the computer I am using right now". That is correct for a
+     * developer sitting at this machine, but WRONG for a tester on the same Wi-Fi who
+     * opened the platform at, say, http://192.168.20.8:3000 — sending them to
+     * "localhost" points them at their OWN phone or laptop, where nothing is running.
+     * They saw a dead page whenever their session expired or they signed out.
+     *
+     * So for LOCAL addresses we keep the scheme, port and path of the configured URL
+     * and swap in the address the request actually arrived on. A tester is sent back
+     * to the machine they are really using, a developer on localhost still gets
+     * localhost, and neither has to edit any file when the network address changes.
+     *
+     * SAFETY: the swap happens ONLY when BOTH addresses are private/local ones. In
+     * production the configured URL is a real domain (https://app.regulaone.eu/login),
+     * so this method returns it untouched and the browser-supplied Host header can
+     * never be used to redirect a signed-out user to an attacker's site.
+     *
+     * @param request the incoming request, used only to read the address it came in on
+     * @return the login URL to send this particular caller to
+     */
+    public String centralLoginUrlFor(HttpServletRequest request) {
+        String configuredUrl = ssoConfig.getCentralLoginUrl();
+        if (request == null) {
+            return configuredUrl;
+        }
+
+        String requestHost = request.getServerName();
+
+        try {
+            URI configuredUri = new URI(configuredUrl);
+
+            // Only rewrite a local address, and only towards another local address.
+            if (!isLocalAddress(configuredUri.getHost()) || !isLocalAddress(requestHost)) {
+                return configuredUrl;
+            }
+
+            // Same scheme, same port, same path — only the host changes.
+            String rewritten = new URI(
+                    configuredUri.getScheme(),
+                    null,
+                    requestHost,
+                    configuredUri.getPort(),
+                    configuredUri.getPath(),
+                    configuredUri.getQuery(),
+                    configuredUri.getFragment()
+            ).toString();
+
+            if (!rewritten.equals(configuredUrl)) {
+                log.debug("[SSOService] centralLoginUrlFor — local host rewrite {} → {}", configuredUrl, rewritten);
+            }
+            return rewritten;
+
+        } catch (URISyntaxException e) {
+            // A misconfigured value must not break signing out; use it as given.
+            log.warn("[SSOService] centralLoginUrlFor — sso.central-login-url is not a valid URL, using it unchanged");
+            return configuredUrl;
+        }
+    }
+
+    /**
+     * True when a host is this machine or a private office/home network address —
+     * that is, an address that only exists inside the local network.
+     *
+     * These are the ranges reserved for private networks (RFC 1918) plus loopback:
+     * 10.x, 172.16–172.31.x, 192.168.x, 127.x, and the names for "this computer".
+     */
+    private boolean isLocalAddress(String host) {
+        if (host == null || host.isBlank()) {
+            return false;
+        }
+        String lower = host.toLowerCase();
+        if (lower.equals("localhost") || lower.equals("0.0.0.0") || lower.equals("[::1]") || lower.equals("::1")) {
+            return true;
+        }
+        if (lower.startsWith("127.") || lower.startsWith("10.") || lower.startsWith("192.168.")) {
+            return true;
+        }
+        if (lower.startsWith("172.")) {
+            // 172.16.x – 172.31.x is private; 172.32.x and 172.15.x are NOT.
+            String[] parts = lower.split("\\.");
+            if (parts.length > 1) {
+                try {
+                    int secondOctet = Integer.parseInt(parts[1]);
+                    return secondOctet >= 16 && secondOctet <= 31;
+                } catch (NumberFormatException ignored) {
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Builds the URL for the central login page, embedding the originating
      * app's callback URI and state as query parameters so they survive the
      * redirect round-trip.
+     *
+     * The login page address is passed in (see {@link #centralLoginUrlFor}) so the
+     * person is sent to the same address they are already using, rather than to a
+     * fixed "localhost" that is only correct on the developer's own machine.
      *
      * Example result:
      *   http://localhost:3000/login
@@ -172,9 +275,10 @@ public class SSOService {
      *     &redirect_uri=http%3A%2F%2Flocalhost%3A3001%2Fauth%2Fsso-callback
      *     &state=a3NlZmZsb3d8L2ludm9pY2Vz
      */
-    public String buildCentralLoginRedirectUrl(String ssoCallbackUri, String state) {
-        log.info("[SSOService] buildCentralLoginRedirectUrl — callbackUri={} state={}", ssoCallbackUri, state);
-        return ssoConfig.getCentralLoginUrl()
+    public String buildCentralLoginRedirectUrl(String centralLoginUrl, String ssoCallbackUri, String state) {
+        log.info("[SSOService] buildCentralLoginRedirectUrl — loginUrl={} callbackUri={} state={}",
+                centralLoginUrl, ssoCallbackUri, state);
+        return centralLoginUrl
             + "?sso=1"
             + "&redirect_uri=" + encode(ssoCallbackUri)
             + "&state="        + encode(state);

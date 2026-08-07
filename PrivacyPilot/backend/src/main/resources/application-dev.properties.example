@@ -25,11 +25,14 @@ spring.mongodb.uri=mongodb+srv://USERNAME:PASSWORD@YOUR-CLUSTER.mongodb.net/Regu
 regulaone.api.base-url=http://localhost:8080
 
 # ── CORS ─────────────────────────────────────────────────────────────────────────
-# Origins allowed to call this API with the shared session cookie. Add your machine's
-# LAN IP when testing from a phone or another computer on the same Wi-Fi — the cookie
-# is host-specific, so the frontend, RegulaOne and this API must all be reached by the
-# SAME host name or IP.
-privacypilot.cors.allowed-origins=http://localhost:3006,http://192.168.1.10:3006
+# Origins allowed to call this API with the shared session cookie.
+#
+# Do NOT type your machine's network address in here: when the router gives the
+# machine a new address, this file silently stops matching and every request from a
+# tester fails with a CORS error. The platform launcher (start.sh) detects the current
+# address at launch and passes the list in through PRIVACYPILOT_CORS_ORIGINS, which
+# overrides this value — so leave it as the localhost-only fallback.
+privacypilot.cors.allowed-origins=${PRIVACYPILOT_CORS_ORIGINS:http://localhost:3006,http://127.0.0.1:3006}
 
 # ── Rate limiting ────────────────────────────────────────────────────────────────
 # Left ON in development on purpose, so a runaway loop in the UI is caught here

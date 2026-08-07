@@ -12,18 +12,39 @@
  * api.js — only the LOGIN/identity is real SSO.
  */
 
-// Endpoints are configurable via environment variables so one build works on
-// localhost and in the EEA production environment. Defaults match local dev:
-// RegulaOne backend on :8080, central login on :3000, this app on :3006.
-const REGULAONE_API_URL = import.meta.env.VITE_REGULAONE_API_URL ?? 'http://localhost:8080';
+// ── Which addresses do we call? ──────────────────────────────────────────────
+// SIMPLE EXPLANATION:
+// The app can be opened two ways on a developer machine: as "localhost" (on the
+// machine itself) or by the machine's network address like 192.168.20.8 (a tester
+// on the same Wi-Fi). Whichever way the page was opened, every service must be
+// called on THAT SAME address:
+//   * opened as http://localhost:3006          → backend at http://localhost:9004
+//   * opened as http://192.168.20.8:3006       → backend at http://192.168.20.8:9004
+// If we mixed them up, the tester's browser would try to reach a server on their
+// OWN phone/laptop (which does not exist), and the shared login cookie — which the
+// browser ties to the exact address that issued it — would not be sent either.
+//
+// So the host is taken from the page itself and only the PORT is fixed per service.
+// This is the same approach KSeFFlow (src/lib/serviceHosts.js) and SafeVoice already
+// use. It also means nothing needs editing when the router gives this machine a new
+// address: the addresses are worked out again on every page load.
+//
+// A real deployment sets the VITE_* variables to proper domain names, and those
+// always win over this local guessing.
+const pageProtocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+const pageHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+const onPageHost = (port) => `${pageProtocol}//${pageHost}:${port}`;
+
+// The central RegulaOne backend: who-am-I, silent refresh, logout.
+const REGULAONE_API_URL = import.meta.env.VITE_REGULAONE_API_URL ?? onPageHost(8080);
 // PrivacyPilot's OWN backend (the ROPA / GDPR feature API). It runs on a separate
 // port from the RegulaOne auth backend (:9004 in local dev) so the two never clash.
 // The shared-domain idToken cookie is sent to it with every request, and it forwards
 // that cookie to RegulaOne /api/auth/me to resolve the caller and tenant.
-const PRIVACYPILOT_API_URL = import.meta.env.VITE_PRIVACYPILOT_API_URL ?? 'http://localhost:9004';
-const APP_URL = import.meta.env.VITE_APP_URL ?? 'http://localhost:3006';
-const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? 'http://localhost:3000/login';
-const CENTRAL_SIGNUP = import.meta.env.VITE_CENTRAL_SIGNUP_URL ?? 'http://localhost:3000/signup';
+const PRIVACYPILOT_API_URL = import.meta.env.VITE_PRIVACYPILOT_API_URL ?? onPageHost(9004);
+const APP_URL = import.meta.env.VITE_APP_URL ?? onPageHost(3006);
+const CENTRAL_LOGIN = import.meta.env.VITE_CENTRAL_LOGIN_URL ?? `${onPageHost(3000)}/login`;
+const CENTRAL_SIGNUP = import.meta.env.VITE_CENTRAL_SIGNUP_URL ?? `${onPageHost(3000)}/signup`;
 
 // Where the central login sends the browser back after a successful sign-in.
 export const SSO_CALLBACK_URL = `${APP_URL}/auth/sso-callback`;

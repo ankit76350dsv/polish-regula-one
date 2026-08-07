@@ -7,7 +7,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 // Vite refuses requests that arrive under a NAME it does not know (a protection against a
 // trick where a website on the internet points its own name at your computer). Plain IP
-// addresses are always fine, so http://192.168.20.38:3002 works with no setup.
+// addresses are always fine, so http://192.168.x.y:3002 works with no setup.
 //
 // But on a Mac network people often reach a machine by its computer name instead, like
 // "Rohans-Mac-mini.local" — and that WOULD be refused with a "host is not allowed" page.

@@ -2,7 +2,7 @@
 //
 // THE PROBLEM THIS SOLVES: the addresses used to be written down as
 // "http://localhost:8082" — in five different files. "localhost" means "the computer I am
-// running on", so when a teammate opened SafeWork at http://192.168.20.38:3002 their
+// running on", so when a teammate opened SafeWork at http://192.168.x.y:3002 their
 // browser tried to reach a SafeWork backend on THEIR OWN laptop. There was none, so every
 // screen failed to load.
 //
@@ -10,7 +10,7 @@
 // address bar and reuse it for every service, changing only the port number:
 //
 //   opened as http://localhost:3002        → API at http://localhost:8082
-//   opened as http://192.168.20.38:3002    → API at http://192.168.20.38:8082
+//   opened as http://192.168.x.y:3002    → API at http://192.168.x.y:8082
 //
 // The login cookie follows the same rule (a cookie belongs to a host, and ports do not
 // matter to it), so signing in works the same way on both addresses.
@@ -25,7 +25,7 @@ const hostname =
   typeof window !== "undefined" ? window.location.hostname : "localhost";
 
 // Build an address on the current host with a given port, e.g. at(8082) →
-// "http://192.168.20.38:8082".
+// "http://192.168.x.y:8082".
 const at = (port, path = "") => `${protocol}//${hostname}:${port}${path}`;
 
 // An escape hatch: set VITE_FOLLOW_BROWSER_HOST=false to switch the behaviour off and use

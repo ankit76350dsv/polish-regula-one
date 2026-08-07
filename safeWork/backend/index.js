@@ -69,7 +69,7 @@ app.use(errorHandler);
 
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
-// Find this computer's address on the local network (for example 192.168.20.38) so the
+// Find this computer's address on the local network (for example 192.168.x.y) so the
 // startup message can show a link that works from other devices. We skip the internal
 // loopback address, anything that is not IPv4, and the 169.254.x.x range a computer invents
 // for itself when there is no network. Returns an empty string when there is nothing to show.

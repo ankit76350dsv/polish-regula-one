@@ -4,6 +4,7 @@ import com.regulaone.backend.auth.dto.LoginRequest;
 import com.regulaone.backend.auth.dto.LoginResponse;
 import com.regulaone.backend.auth.dto.RespondChallengeRequest;
 import com.regulaone.backend.common.AppResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +59,7 @@ public class SSOController {
     public void initiateSSO(
             @RequestParam(required = false) String redirect_uri,
             @RequestParam(required = false) String state,
+            HttpServletRequest request,
             HttpServletResponse response) throws IOException {
 
         log.info("[SSOController] GET /api/sso/login — redirect_uri={} state={}", redirect_uri, state);
@@ -66,11 +68,16 @@ public class SSOController {
             ? state
             : ssoService.encodeState("unknown", "/");
 
+        // The login page for THIS caller: on a developer machine that is localhost, and
+        // for a tester on the office Wi-Fi it is the network address they opened the
+        // platform on. See SSOService.centralLoginUrlFor for why this matters.
+        String centralLoginUrl = ssoService.centralLoginUrlFor(request);
+
         String callbackUri = (redirect_uri != null && !redirect_uri.isBlank())
             ? redirect_uri
-            : ssoService.getCentralLoginUrl();
+            : centralLoginUrl;
 
-        String loginUrl = ssoService.buildCentralLoginRedirectUrl(callbackUri, resolvedState);
+        String loginUrl = ssoService.buildCentralLoginRedirectUrl(centralLoginUrl, callbackUri, resolvedState);
         log.info("[SSOController] /sso/login — 302 → {}", loginUrl);
         response.sendRedirect(loginUrl);
     }
@@ -192,14 +199,22 @@ public class SSOController {
 
     // ── POST /api/sso/logout ──────────────────────────────────────────────────
 
-    /** End the session here, and tell the browser where the central logout page is. */
+    /**
+     * End the session here, and tell the browser where the central logout page is.
+     *
+     * The address returned is the one the caller is actually using: a tester who signed
+     * in over the office Wi-Fi is sent back to that same address, not to "localhost",
+     * which for them means their own device where nothing is running.
+     */
     @PreAuthorize("isAuthenticated()")
     @PostMapping("/logout")
-    public ResponseEntity<AppResponse<Map<String, String>>> logout(HttpServletResponse response) {
+    public ResponseEntity<AppResponse<Map<String, String>>> logout(
+            HttpServletRequest request,
+            HttpServletResponse response) {
         ssoService.clearSessionCookies(response);
         log.info("[SSOController] /sso/logout — cookies cleared");
         return ResponseEntity.ok(AppResponse.success(
                 "Logged out successfully",
-                Map.of("logoutUrl", ssoService.getCentralLoginUrl())));
+                Map.of("logoutUrl", ssoService.centralLoginUrlFor(request))));
     }
 }

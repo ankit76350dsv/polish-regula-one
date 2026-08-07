@@ -3,7 +3,7 @@
 // WHY THIS FILE EXISTS: the setting used to be a plain list, normally just
 // "http://localhost:3005". A browser tells the API which site it is calling from (the
 // "Origin"), and anything not on the list is refused. That meant a teammate who opened
-// WorkPulse at http://192.168.20.38:3005 was refused every request, because that address
+// WorkPulse at http://192.168.x.y:3005 was refused every request, because that address
 // was not the same text as "localhost:3005" — even though it is the very same app on the
 // very same machine.
 //
@@ -34,7 +34,7 @@ const isPrivateNetworkHost = (host) =>
 
 // The ports our own frontends run on, taken from the configured list so there is only ever
 // one place to change them. "http://localhost:3005" therefore also permits
-// "http://192.168.20.38:3005" while developing — same app, same port, different name.
+// "http://192.168.x.y:3005" while developing — same app, same port, different name.
 const allowedFrontendPorts = new Set(
   config.cors.origins
     .map((origin) => {

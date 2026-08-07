@@ -15,3 +15,4 @@
 - [SafeVoice KMS encryption](safevoice-kms-encryption.md) — 2026-07-09; backend-mediated AWS KMS envelope encryption for report/message content; browser encrypts, no AWS creds in browser; doc in SafeVoice/backend/docs/
 - [SafeVoice RegulaOne username immutable](safevoice-regulaone-username-immutable.md) — RegulaOne user name is the actor identity everywhere (audit/timeline/sender); TODO: make that name non-editable for integrity
 - [PrivacyPilot "Other" category specify field](privacypilot-other-category-specify-field.md) — "Other" data category added but no free-text specify box yet; open decision + parallel RecipientCategory question; full note in repo docs/pending-decisions.md
+- [LAN IP never hardcoded](lan-ip-never-hardcoded.md) — 2026-08-07; start.sh detects the LAN IP and injects it (CORS env + runtime host + Vite/CSP detection); editing an IP by hand IS the bug

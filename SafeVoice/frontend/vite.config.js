@@ -1,6 +1,44 @@
+import os from "node:os";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
+
+// This computer's own addresses on the local network, e.g. ["192.168.20.8"].
+//
+// WHY WE NEED THEM: the strict security policy below (CSP) lists the exact addresses
+// the page may call. A tester on the same Wi-Fi opens SafeVoice by this computer's
+// network address, so that address must be on the list or the browser blocks every
+// request — even though the server would have answered.
+//
+// That address used to be typed into .env by hand, which broke SafeVoice for testers
+// every time the router handed this machine a new one. We now ask the operating
+// system for the current addresses each time the dev server starts, so it is always
+// right. Only private (home/office) ranges are accepted, never a public address.
+// REGULAONE_LAN_IP (set by start.sh) can name one explicitly when a machine has
+// several networks.
+function detectLocalNetworkIPv4s() {
+  const addresses = new Set();
+
+  // An explicitly named address is checked the same way as a detected one, so a
+  // mistyped or public value can never widen the policy.
+  const override = (process.env.REGULAONE_LAN_IP || "").trim();
+  if (override && isLocalNetworkHost(override) && !/^127\./.test(override)) {
+    addresses.add(override);
+  }
+
+  for (const interfaceAddresses of Object.values(os.networkInterfaces())) {
+    for (const address of interfaceAddresses ?? []) {
+      // Skip anything that is not a plain IPv4 address of this machine, and skip
+      // the "only me" loopback address (127.x) — localhost is handled separately.
+      if (address.family !== "IPv4" || address.internal) continue;
+      if (isLocalNetworkHost(address.address) && !/^127\./.test(address.address)) {
+        addresses.add(address.address);
+      }
+    }
+  }
+
+  return [...addresses];
+}
 
 function isLocalNetworkHost(hostname) {
   if (!hostname) return false;
@@ -58,6 +96,17 @@ function buildCsp(
       ...localOriginVariants(safe),
       ...localOriginVariants(safeWs),
     );
+    // DEVELOPMENT ONLY: also allow this computer's own network addresses, so a
+    // tester who opens SafeVoice at http://192.168.20.8:1003 can reach the backends
+    // on that same address. ":*" means "any port on that one address" — it covers
+    // the RegulaOne login API (8080), the SafeVoice API (9003) and hot reload,
+    // without having to list ports that only exist while developing.
+    //
+    // This is never added to the production policy: the branch only runs for the
+    // local dev server, and a deployed build uses real domain names instead.
+    for (const address of detectLocalNetworkIPv4s()) {
+      connectSrc.push(`http://${address}:*`, `ws://${address}:*`);
+    }
   }
 
   return [

@@ -63,15 +63,30 @@ if [ -n "$LAN_IP" ] && ! [[ "$LAN_IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
   LAN_IP=""
 fi
 
-# Build an explicit CORS allowlist for one local frontend. Credentials are used
-# by the platform, so a wildcard origin would be insecure and is not permitted.
+# Build an explicit CORS allowlist for one or more local frontend ports.
+#
+# WHY THIS EXISTS: a browser only lets a page call an API on a different address
+# when the API says "this address is allowed" (CORS). Testers open the apps by this
+# computer's network address (for example http://192.168.x.y:3000), which is a
+# DIFFERENT address than http://localhost:3000 — so that address must be on the
+# list too, or every request is refused.
+#
+# The list is built fresh on every launch from the address detected above, so when
+# the Wi-Fi hands this machine a new address nothing has to be edited by hand.
+# Credentials (the shared login cookie) are used by the platform, so a wildcard
+# origin would be insecure and is deliberately not used.
+#
+# Usage: local_frontend_origins 3000 3001 1003
 local_frontend_origins() {
-  local frontend_port="$1"
-  local origins="http://localhost:${frontend_port},http://127.0.0.1:${frontend_port}"
+  local origins=""
+  local port
 
-  if [ -n "$LAN_IP" ]; then
-    origins="${origins},http://${LAN_IP}:${frontend_port}"
-  fi
+  for port in "$@"; do
+    origins="${origins:+${origins},}http://localhost:${port},http://127.0.0.1:${port}"
+    if [ -n "$LAN_IP" ]; then
+      origins="${origins},http://${LAN_IP}:${port}"
+    fi
+  done
 
   printf '%s' "$origins"
 }
@@ -120,11 +135,19 @@ open_tab() {
 # Some backends are Spring Boot (Java) and some are Node.js (like SafeWork).
 # We look at the files inside the folder to figure out which kind it is,
 # then run the correct command. This way one launcher handles both types.
+# Arguments:
+#   $1 module name        e.g. RegulaOne
+#   $2 backend port       e.g. 8080
+#   $3 directory name     folder under the repo root (defaults to the module name)
+#   $4 CORS variable name the name this backend reads its allowlist from
+#                         (Spring: CORS_ALLOWED_ORIGINS · Node: CORS_ORIGIN)
+#   $5 CORS origins       the allowlist itself, built by local_frontend_origins
 start_backend() {
   local module="$1"   # e.g. RegulaOne
   local port="$2"
   local directory_name="${3:-$module}"
-  local frontend_port="${4:-}"
+  local cors_variable="${4:-}"
+  local cors_origins="${5:-}"
   local dir="${ROOT}/${directory_name}/backend"
 
   if [ ! -d "$dir" ]; then
@@ -134,12 +157,23 @@ start_backend() {
 
   local cmd
 
+  # The allowlist of browser addresses that may call this API, passed in as an
+  # environment variable. Both kinds of backend read it from their environment, so
+  # the current network address is applied at launch and no file needs editing when
+  # that address changes.
+  local cors_env=""
+  if [ -n "$cors_variable" ] && [ -n "$cors_origins" ]; then
+    cors_env="${cors_variable}=${cors_origins}"
+  fi
+
   if [ -f "${dir}/pom.xml" ] || [ -f "${dir}/mvnw" ]; then
     # This is a Spring Boot (Java/Maven) backend.
     # Use the project's own Maven wrapper if it has one, else the system mvn.
+    # Maven passes its own environment down to the server it starts, so the CORS
+    # allowlist set here reaches the running application.
     local mvn_cmd="mvn"
     [ -f "${dir}/mvnw" ] && mvn_cmd="./mvnw"
-    cmd="cd '${dir}' && echo '▶ Starting ${module} backend on :${port}' && ${mvn_cmd} spring-boot:run -Dspring-boot.run.arguments=--server.port=${port} ; exec \$SHELL"
+    cmd="cd '${dir}' && echo '▶ Starting ${module} backend on :${port}' && ${cors_env} ${mvn_cmd} spring-boot:run -Dspring-boot.run.arguments=--server.port=${port} ; exec \$SHELL"
 
   elif [ -f "${dir}/package.json" ]; then
     # This is a Node.js backend (for example SafeWork).
@@ -148,8 +182,8 @@ start_backend() {
     # We pass PORT and BIND_HOST so the Node app listens on the assigned port
     # on every local network interface.
     local runtime_env="BIND_HOST=0.0.0.0 PORT=${port}"
-    if [ -n "$frontend_port" ]; then
-      runtime_env="${runtime_env} CORS_ORIGIN=$(local_frontend_origins "$frontend_port")"
+    if [ -n "$cors_env" ]; then
+      runtime_env="${runtime_env} ${cors_env}"
     fi
     cmd="cd '${dir}' && echo '▶ Starting ${module} backend on :${port}' && { [ -d node_modules ] || npm install ; } && ${runtime_env} npm start ; exec \$SHELL"
 
@@ -184,7 +218,15 @@ start_frontend() {
   # If the dependencies were never installed, install them first so that
   # "npm run dev" can find the vite command and start without crashing.
   # Pass PORT env var; Vite reads it, Express/tsx server reads it too.
-  local cmd="cd '${dir}' && echo '▶ Starting ${module} frontend on :${port}' && { [ -d node_modules ] || npm install ; } && PORT=${port} npm run dev ; exec \$SHELL"
+  #
+  # REGULAONE_LAN_IP is passed on as well. The dev servers find this computer's
+  # network address by themselves, so this is only an override for the case where
+  # the machine has several networks and a specific one must be used.
+  local runtime_env="PORT=${port}"
+  if [ -n "$LAN_IP" ]; then
+    runtime_env="${runtime_env} REGULAONE_LAN_IP=${LAN_IP}"
+  fi
+  local cmd="cd '${dir}' && echo '▶ Starting ${module} frontend on :${port}' && { [ -d node_modules ] || npm install ; } && ${runtime_env} npm run dev ; exec \$SHELL"
   # Stop any old dev server still holding this port before we start a new one.
   free_port "${port}"
   open_tab "${module} Frontend :${port}" "$cmd"
@@ -200,44 +242,50 @@ echo "╚═══════════════════════�
 echo ""
 
 # ── RegulaOne (Auth gateway + shared platform) ──────────────────────────────
+# RegulaOne handles the login for EVERY module, so its allowlist must contain the
+# address of every module's frontend — otherwise signing in from that module fails.
 echo "► RegulaOne"
-start_backend  "RegulaOne" 8080
+start_backend  "RegulaOne" 8080 "RegulaOne" "CORS_ALLOWED_ORIGINS" \
+  "$(local_frontend_origins 3000 3001 3002 3003 3004 3005 3006 1003 1004)"
 start_frontend "RegulaOne" 3000
 sleep 0.4
 
 # ── KSeFFlow (E-invoicing) ───────────────────────────────────────────────────
 echo "► KSeFFlow"
-start_backend  "KSeFFlow" 8081
+start_backend  "KSeFFlow" 8081 "KSeFFlow" "CORS_ALLOWED_ORIGINS" "$(local_frontend_origins 3001)"
 start_frontend "KSeFFlow" 3001
 sleep 0.4
 
 # ── SafeVoice (Whistleblower) ────────────────────────────────────────────────
 echo "► SafeVoice"
-start_backend  "SafeVoice" 9003
+start_backend  "SafeVoice" 9003 "SafeVoice" "CORS_ALLOWED_ORIGINS" "$(local_frontend_origins 1003)"
 start_frontend "SafeVoice" 1003
 sleep 0.4
 
 # ── WasteSync (BDO waste reporting) ─────────────────────────────────────────
 echo "► WasteSync"
-start_backend  "WasteSync" 8083 "WasteSync" 3003
+start_backend  "WasteSync" 8083 "WasteSync" "CORS_ORIGIN" "$(local_frontend_origins 3003)"
 start_frontend "WasteSync" 3003
 sleep 0.4
 
 # ── SafeWork (HR / BHP compliance) ──────────────────────────────────────────
 echo "► SafeWork"
-start_backend  "SafeWork" 8082 "safeWork" 3002
+start_backend  "SafeWork" 8082 "safeWork" "CORS_ORIGIN" "$(local_frontend_origins 3002)"
 start_frontend "SafeWork" 3002 "safeWork"
 sleep 0.4
 
 # ── WorkPulse (Time tracking) ────────────────────────────────────────────────
 echo "► WorkPulse"
-start_backend  "WorkPulse" 8085 "WorkPulse" 3005
+start_backend  "WorkPulse" 8085 "WorkPulse" "CORS_ORIGIN" "$(local_frontend_origins 3005)"
 start_frontend "WorkPulse" 3005
 sleep 0.4
 
 # ── PrivacyPilot (GDPR/RODO) ────────────────────────────────────────────────
+# PrivacyPilot reads its allowlist from its own variable name (see its
+# application-dev.properties), which is why the name differs here.
 echo "► PrivacyPilot"
-start_backend  "PrivacyPilot" 9004
+start_backend  "PrivacyPilot" 9004 "PrivacyPilot" "PRIVACYPILOT_CORS_ORIGINS" \
+  "$(local_frontend_origins 3006)"
 start_frontend "PrivacyPilot" 3006
 sleep 0.4
 
@@ -254,10 +302,20 @@ echo "  PrivacyPilot  → http://localhost:3006"
 echo ""
 
 if [ -n "$LAN_IP" ]; then
+  # Every app is reachable on this address: each backend was started with this
+  # address on its allowlist, and each frontend asks the SAME address it was opened
+  # on for its API. So a tester only needs one of the links below.
   echo "Tester access on this network (${LAN_IP}):"
+  echo "  Platform Hub  → http://${LAN_IP}:3000  (API: http://${LAN_IP}:8080)"
+  echo "  KSeFFlow      → http://${LAN_IP}:3001  (API: http://${LAN_IP}:8081)"
+  echo "  SafeVoice     → http://${LAN_IP}:1003  (API: http://${LAN_IP}:9003)"
   echo "  WasteSync     → http://${LAN_IP}:3003  (API: http://${LAN_IP}:8083)"
   echo "  SafeWork      → http://${LAN_IP}:3002  (API: http://${LAN_IP}:8082)"
   echo "  WorkPulse     → http://${LAN_IP}:3005  (API: http://${LAN_IP}:8085)"
+  echo "  PrivacyPilot  → http://${LAN_IP}:3006  (API: http://${LAN_IP}:9004)"
+  echo ""
+  echo "  Testers must sign in on the Platform Hub link above (NOT on localhost):"
+  echo "  the login cookie is tied to the address it was issued for."
   echo ""
 else
   echo "LAN IP was not detected. Set REGULAONE_LAN_IP before running start.sh"

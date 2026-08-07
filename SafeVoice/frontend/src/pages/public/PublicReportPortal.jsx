@@ -12,7 +12,7 @@ import { firstError, maxLength, minLength, notFutureDate, required } from "../..
 // Can this page lock (encrypt) the report in the browser?
 // The browser only hands out its encryption toolbox on a SECURE page (https://…, or
 // http://localhost while developing). Opened over plain http with a network address —
-// for example http://192.168.20.38:1003 — the toolbox is missing, so the report can
+// for example http://192.168.x.y:1003 — the toolbox is missing, so the report can
 // NEVER be encrypted here. We work this out ONCE, before the form is drawn, because a
 // reporter must not write out a painful account of what happened and only then be told
 // it cannot be sent. Checked at module load: it cannot change while the page is open.

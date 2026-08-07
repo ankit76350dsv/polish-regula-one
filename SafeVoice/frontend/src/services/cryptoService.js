@@ -38,7 +38,7 @@ const IV_BYTES = 12; // 96-bit IV is the standard, recommended size for AES-GCM
 // SIMPLE EXPLANATION:
 // The browser only gives us its encryption toolbox (crypto.subtle) on pages it considers
 // SAFE. A safe page means https://…, or http://localhost while developing. On a plain
-// http:// page opened by its network address (for example http://192.168.20.38:1003) the
+// http:// page opened by its network address (for example http://192.168.x.y:1003) the
 // browser HIDES the toolbox: `crypto.subtle` is simply `undefined`.
 //
 // This is a browser rule we cannot switch off from our code. If we do not check for it, the

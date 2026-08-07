@@ -12,7 +12,7 @@
  *      That is how staging and production are configured — no code change.
  *   2. Otherwise: the SAME host the hub itself was opened on, with the module's dev port.
  *      So opening RegulaOne at http://localhost:3000 gives http://localhost:3001, and
- *      opening it at http://192.168.20.38:3000 gives http://192.168.20.38:3001. One dev
+ *      opening it at http://192.168.x.y:3000 gives http://192.168.x.y:3001. One dev
  *      server, works on the machine and over the LAN, no rebuild. This mirrors what
  *      src/config/sso.js already does for the backend URL, and it matters here for the
  *      same reason: the session cookie is shared per host, so a module opened on a
