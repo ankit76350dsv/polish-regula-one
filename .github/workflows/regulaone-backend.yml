@@ -100,3 +100,7 @@ jobs:
               `#! NOT PASSED — AWS credentials: the app uses the EC2 instance role,` \
               `#   which needs the cognito-idp actions plus ses:SendEmail.` \
               ${{ secrets.DOCKER_USERNAME }}/regulaone-backend:latest
+
+            #* ── DISK CLEANUP ─────────────────────────────────────────────────
+            # Run last: removes old unused images after the new container is running. No --volumes to keep data safe.
+            docker system prune -af
