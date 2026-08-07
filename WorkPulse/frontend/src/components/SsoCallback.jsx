@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "../hooks/useTranslation";
+import { useOrgHome } from "../utils/paths";
 
 /**
  * SSO callback landing page.
@@ -14,6 +15,10 @@ export default function SsoCallback() {
   const { authChecking, isAuthenticated } = useAuth();
   const { t } = useTranslation();
 
+  // The home page for the user who just signed in: "/company/{tenantId}/home".
+  // The tenant id arrives in the /api/auth/me answer we have just received.
+  const orgHome = useOrgHome();
+
   if (authChecking) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -25,5 +30,8 @@ export default function SsoCallback() {
     );
   }
 
-  return <Navigate to={isAuthenticated ? "/" : "/login"} replace />;
+  // Signed in -> straight to their home page, so the first address they see already
+  // carries the company id. If the tenant is somehow missing, useOrgHome() gives us
+  // "/" and the guards decide what to show, instead of a broken URL.
+  return <Navigate to={isAuthenticated ? orgHome : "/login"} replace />;
 }

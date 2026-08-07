@@ -7,6 +7,7 @@ import LanguageToggle from "./LanguageToggle";
 import { useCapabilities } from "../../hooks/useCapabilities";
 import { useTranslation } from "../../hooks/useTranslation";
 import { CAPABILITIES } from "../../config/capabilities";
+import { useOrgBase, useOrgHome } from "../../utils/paths";
 
 // Navigation items. Each one names the ONE thing a person must be allowed to do
 // before the link is shown.
@@ -24,8 +25,18 @@ import { CAPABILITIES } from "../../config/capabilities";
 // label itself is kept short so eight items fit across one row — Polish names are
 // much longer than English ones ("Ewidencja" in the menu, "Ewidencja czasu pracy"
 // as the page heading and tooltip).
+//
+// WHAT CHANGED AND WHY: `path` used to hold the FINISHED address ("/records"), and
+// the Clock item pointed at the nameless app root ("/"). Every page has now moved
+// under the company it belongs to ("/company/{tenantId}/records"), so `path` holds
+// only the TAIL of the address and the "/company/{tenantId}" start is added below
+// when the menu is drawn. Writing the finished address here would have meant
+// repeating the tenant id in eight places, and any one of them left behind would
+// have quietly dropped the user out of their company URL. The Clock item now points
+// at the named "/home" page for the same reason WasteSync does: a page with no name
+// of its own cannot be linked to or highlighted like the others.
 const NAV_ITEMS = [
-  { labelKey: "nav.clock",       titleKey: "nav.clock",         path: "/",             capability: CAPABILITIES.CLOCK_SELF },
+  { labelKey: "nav.clock",       titleKey: "nav.clock",         path: "/home",         capability: CAPABILITIES.CLOCK_SELF },
   { labelKey: "nav.myTimesheet", titleKey: "timesheet.title",   path: "/my-timesheet", capability: CAPABILITIES.TIME_SELF_READ },
   { labelKey: "nav.absences",    titleKey: "absences.title",    path: "/absences",     capability: CAPABILITIES.ABSENCE_SELF, alsoIf: CAPABILITIES.ABSENCE_READ_ALL },
   { labelKey: "nav.timeRecords", titleKey: "records.title",     path: "/records",      capability: CAPABILITIES.TIME_READ_ALL },
@@ -42,6 +53,11 @@ export default function Header() {
 
   // The signed-in person, used to show their name in the corner.
   const user = useSelector((state) => state.auth.user);
+
+  // "/company/{tenantId}" for the signed-in user — the start of every menu link —
+  // and the finished address of their home page, used by the logo.
+  const orgBase = useOrgBase();
+  const orgHome = useOrgHome();
 
   // What this user is allowed to do decides which menu items appear.
   const { can } = useCapabilities();
@@ -87,7 +103,11 @@ export default function Header() {
             at the xl: breakpoint, never by wrapping. */}
         <div className="flex items-center justify-between h-16 gap-2 flex-nowrap">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 group flex-shrink-0" onClick={() => setMobileOpen(false)}>
+          {/* The logo is the "take me back to the start" link, so it points at the
+              user's own home page ("/company/{tenantId}/home") rather than the bare
+              app root — one hop instead of two, and the address bar never flickers
+              through a URL without the company in it. */}
+          <Link to={orgHome} className="flex items-center gap-3 group flex-shrink-0" onClick={() => setMobileOpen(false)}>
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-500/30">
               <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
@@ -112,8 +132,12 @@ export default function Header() {
             {items.map((item) => (
               <NavLink
                 key={item.path}
-                to={item.path}
-                end={item.path === "/"}
+                // Full address = the company base + this item's tail. Before the
+                // tenant is known `orgBase` is empty, which leaves the old flat
+                // address ("/records"); the app forwards that to the company URL as
+                // soon as /api/auth/me answers, so the link is never broken.
+                to={`${orgBase}${item.path}`}
+                end
                 className={linkClass}
                 // The full screen name on hover, since the label is abbreviated.
                 title={t(item.titleKey)}
@@ -176,8 +200,8 @@ export default function Header() {
           {items.map((item) => (
             <NavLink
               key={item.path}
-              to={item.path}
-              end={item.path === "/"}
+              to={`${orgBase}${item.path}`}
+              end
               onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 `flex py-3 text-sm font-medium border-b border-slate-100 ${

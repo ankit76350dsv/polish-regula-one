@@ -14,15 +14,14 @@
 // header.
 
 // RegulaOne backend — owns auth/me, login and logout. Default :8080.
-const API_BASE_URL =
-  (import.meta.env.VITE_API_URL ?? "http://localhost:8080") + "/api";
+const API_BASE_URL =import.meta.env.VITE_API_URL + "/api";
 
 // This WorkPulse app's own address. Default :3005 (see vite.config.js).
-const APP_URL = import.meta.env.VITE_APP_URL ?? "http://localhost:3005";
+const APP_URL = import.meta.env.VITE_APP_URL;
 
 // The central RegulaOne login page the user is redirected to. Default :3000.
 const CENTRAL_LOGIN_URL =
-  import.meta.env.VITE_CENTRAL_LOGIN_URL ?? "http://localhost:3000/login";
+  import.meta.env.VITE_CENTRAL_LOGIN_URL;
 
 // After a successful central login, RegulaOne returns the user to this page.
 export const SSO_CALLBACK_URL = `${APP_URL}/auth/sso-callback`;

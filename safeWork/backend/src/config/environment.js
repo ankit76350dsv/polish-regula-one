@@ -46,8 +46,7 @@ const config = {
     // cannot check permissions and every request is refused.
     baseUrl:
       process.env.REGULAONE_API_URL ||
-      process.env.REGULA_ONE_API_URL ||
-      'http://localhost:8080',
+      process.env.REGULA_ONE_API_URL
   },
 
   // SafeWork access rules.
