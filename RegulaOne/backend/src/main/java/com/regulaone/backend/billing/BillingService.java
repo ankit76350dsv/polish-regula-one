@@ -5,7 +5,6 @@ import com.regulaone.backend.models.AppPackage;
 import com.regulaone.backend.models.Invoice;
 import com.regulaone.backend.models.InvoiceStatus;
 import com.regulaone.backend.models.Tenant;
-import com.regulaone.backend.billing.InvoiceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

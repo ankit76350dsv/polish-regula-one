@@ -2,7 +2,6 @@ package com.regulaone.backend.common.audit;
 
 import com.regulaone.backend.common.ClientIp;
 import com.regulaone.backend.models.AuditLog;
-import com.regulaone.backend.common.audit.AuditLogRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

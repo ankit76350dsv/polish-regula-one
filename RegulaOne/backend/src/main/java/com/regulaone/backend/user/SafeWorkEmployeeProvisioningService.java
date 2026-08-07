@@ -2,7 +2,6 @@ package com.regulaone.backend.user;
 
 import com.mongodb.client.result.UpdateResult;
 import com.regulaone.backend.models.User;
-import com.regulaone.backend.user.SafeWorkEmployeeStubRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;

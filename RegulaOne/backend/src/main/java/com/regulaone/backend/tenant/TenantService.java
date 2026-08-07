@@ -6,7 +6,6 @@ import com.regulaone.backend.tenant.dto.TenantRequest;
 import com.regulaone.backend.tenant.dto.TenantResponse;
 import com.regulaone.backend.models.Tenant;
 import com.regulaone.backend.models.TenantStatus;
-import com.regulaone.backend.tenant.TenantRepository;
 import com.regulaone.backend.common.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
