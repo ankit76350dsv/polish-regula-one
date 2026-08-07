@@ -48,22 +48,14 @@ jobs:
             docker pull ${{ secrets.DOCKER_USERNAME }}/regulaone-backend:latest
 
             #! ── CONFIGURATION ────────────────────────────────────────────────
-            # The image contains NO application*.properties file — they are all
-            # git-ignored, so the checkout CI builds from has none. Every setting
-            # therefore arrives here as an environment variable, named after the
-            # Spring property it sets (Spring's relaxed binding uppercases the
-            # property and turns dots and hyphens into underscores).
+            # No application*.properties files are included because they are git-ignored. 
+            # All Spring settings are passed through environment variables. 
+            # GitHub secret uses MONGODB_URI, but Spring needs SPRING_MONGODB_URI.
+            # Example: MONGODB_URI secret → SPRING_MONGODB_URI environment variable.
             #
-            # That is why the -e names differ from the GitHub secret names:
-            # the secret keeps its short shared name (MONGODB_URI), while the
-            # variable must be what the application reads (SPRING_MONGODB_URI).
+            # AWS credentials are not passed; the app uses the EC2 IAM role for Cognito, SES etc.
             #
-            # AWS credentials are deliberately NOT passed. With none set, the SDK
-            # falls back to the EC2 instance role, which must carry the
-            # cognito-idp actions used by CognitoService plus ses:SendEmail.
-            #
-            # The rate-limit settings are also absent on purpose: their defaults in
-            # code are already the production values (on, 10 requests / 60s).
+            # Rate-limit variables are not passed because production defaults are already set: enabled, 10 requests per 60 seconds.
             docker run -d --name regulaone-backend \
               -p 8080:8080 \
               --restart unless-stopped \
